@@ -18,7 +18,8 @@ pnpm ocean runtime start --profile /absolute/private/profile --json
 Start stays in the foreground and emits a ready status only after exclusive
 SQLite ownership and existing conversation, coding-apply and effect-journal
 recovery succeed. It never reads provider keys or dispatches a provider. A
-restored profile refuses `restore_restricted` before publishing an endpoint;
+restored profile, including a dangling restore-guard symlink, refuses
+`restore_restricted` before publishing an endpoint;
 existing offline restored reads and freshly confirmed text-only behavior are
 unchanged.
 
@@ -50,7 +51,9 @@ security refusals use exit 2, except inherited `restore_restricted` (exit 4).
 ## Endpoint and independent clients
 
 The canonical profile must be an owned 0700 directory without symlink ancestors.
-The existing database privacy checks also apply. The profile identity is SHA-256
+Ancestors must be owned by the current UID or root, with no group/other write
+permission unless sticky; trusted sticky `/tmp` remains supported. The existing
+database privacy checks also apply. The profile identity is SHA-256
 of that canonical absolute path; the runtime instance is a fresh UUID.
 
 Endpoint discovery uses an owned 0700 `XDG_RUNTIME_DIR`, or an owned 0700
@@ -85,8 +88,9 @@ there are no placeholder handlers for future methods. Wrong authentication,
 profile and instance return `authentication_failed`; incompatible protocol returns
 `protocol_mismatch`; requests before hello return `authentication_required`.
 
-Each frame is at most 2MiB excluding the newline. Malformed/invalid UTF-8 and
-oversized frames terminate that connection. The server bounds connections to 64,
+Each frame is at most 2MiB excluding the newline. Invalid request envelopes,
+malformed/invalid UTF-8 and oversized frames terminate that connection; later
+coalesced requests on a rejected stream cannot execute. The server bounds connections to 64,
 requires hello within five seconds and drops observers whose pending output
 exceeds 2MiB. The Node client bounds pending requests to 128 with five-second
 transport timeouts (30 seconds for stop). Contract limits of 200 items per page and 30-second waits are

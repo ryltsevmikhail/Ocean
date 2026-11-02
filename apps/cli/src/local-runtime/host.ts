@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
   closeSync,
-  existsSync,
+  fchmodSync,
   fstatSync,
   fsyncSync,
   lstatSync,
@@ -54,7 +54,7 @@ export async function startLocalRuntime(
   )
     throw Error('invalid_input');
   const paths = localRuntimePaths(options.profile);
-  if (existsSync(join(paths.profile, 'restore-guard.json'))) throw Error('restore_restricted');
+  assertNotRestored(paths.profile);
   const runtime = openOceanProfile(paths.profile);
   let transport: Awaited<ReturnType<typeof listenLocalRuntime>> | undefined;
   let socketOwned: Stats | undefined;
@@ -100,8 +100,9 @@ export async function startLocalRuntime(
             // Node closes/unlinks a listening Unix path. Refuse closing a replaced path.
             if (!socketOwned || !ownsLocalRuntimePath(paths.endpoint, socketOwned))
               throw Error('endpoint_changed');
-            runtime.close();
+            // Fallible endpoint cleanup must retain the database owner and listener on failure.
             if (descriptorOwned) unlinkOwnedLocalRuntimePath(paths.descriptor, descriptorOwned);
+            runtime.close();
             // Stop accepting now; closed resolves once existing transports have drained.
             transport!.server.close(() => resolveClosed());
             for (const client of transport!.clients) {
@@ -131,6 +132,15 @@ export async function startLocalRuntime(
     const temporary = join(paths.directory, '.connection-' + identity.instanceId);
     const fd = openSync(temporary, 'wx', 0o600);
     try {
+      fchmodSync(fd, 0o600);
+      const pinned = fstatSync(fd);
+      if (
+        !pinned.isFile() ||
+        pinned.nlink !== 1 ||
+        pinned.uid !== process.getuid?.() ||
+        (pinned.mode & 0o777) !== 0o600
+      )
+        throw Error('insecure_permissions');
       writeFileSync(fd, JSON.stringify(descriptor) + '\n');
       fsyncSync(fd);
       linkSync(temporary, paths.descriptor);
@@ -169,4 +179,14 @@ async function drainBeforeDeadline(
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+function assertNotRestored(profile: string): void {
+  try {
+    lstatSync(join(profile, 'restore-guard.json'));
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return;
+    throw error;
+  }
+  throw Error('restore_restricted');
 }

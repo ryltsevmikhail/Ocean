@@ -33,7 +33,7 @@ export async function listenLocalRuntime(
       if (stopping) return;
       if (!isLocalRuntimeRequest(value)) {
         socket.destroy();
-        return;
+        return false;
       }
       const { id, method, params } = value;
       const reject = (code: string) => {
@@ -93,6 +93,7 @@ export async function listenLocalRuntime(
         return;
       }
       reject('method_not_found');
+      return;
     });
     socket.on('data', (chunk: Buffer) => {
       try {

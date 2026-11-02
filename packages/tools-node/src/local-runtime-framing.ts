@@ -1,16 +1,17 @@
 import type { Socket } from 'node:net';
 import { LOCAL_RUNTIME_MAX_FRAME } from '@runnets/contracts';
-/** Bounded byte framing, including fragmented UTF-8 and multiple frames in one read. */
+/** Bounded byte framing. A consumer returning false permanently ends this decoder. */
 export class LocalRuntimeFrames {
   private pending = Buffer.alloc(1024);
   private length = 0;
-  private readonly receive: (value: unknown) => void;
-  constructor(receive: (value: unknown) => void) {
+  private ended = false;
+  private readonly receive: (value: unknown) => void | false;
+  constructor(receive: (value: unknown) => void | false) {
     this.receive = receive;
   }
   push(chunk: Buffer): void {
     let offset = 0;
-    while (offset < chunk.length) {
+    while (!this.ended && offset < chunk.length) {
       const newline = chunk.indexOf(10, offset);
       const end = newline < 0 ? chunk.length : newline;
       if (this.length + end - offset > LOCAL_RUNTIME_MAX_FRAME) throw Error('frame_too_large');
@@ -33,7 +34,10 @@ export class LocalRuntimeFrames {
       } catch {
         throw Error('invalid_frame');
       }
-      this.receive(value);
+      if (this.receive(value) === false) {
+        this.ended = true;
+        return;
+      }
       offset = newline + 1;
     }
   }

@@ -12,7 +12,7 @@ import {
   unlinkSync,
   type Stats,
 } from 'node:fs';
-import { isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { localRuntimeRecord, type LocalRuntimeDescriptor } from '@runnets/contracts';
 export interface LocalRuntimePaths {
   readonly profile: string;
@@ -39,7 +39,25 @@ export function assertLocalPrivate(path: string, kind: 'directory' | 'file' | 's
         : s.isSocket())
   )
     fail('insecure_permissions');
+  assertTrustedAncestors(path);
   return s;
+}
+/** Other UIDs must not be able to replace a validated private subtree by renaming its parent. */
+function assertTrustedAncestors(path: string): void {
+  let parent = dirname(path);
+  while (true) {
+    const s = lstatSync(parent);
+    if (
+      !s.isDirectory() ||
+      s.isSymbolicLink() ||
+      (s.uid !== 0 && s.uid !== process.getuid?.()) ||
+      ((s.mode & 0o022) !== 0 && (s.mode & 0o1000) === 0)
+    )
+      fail('insecure_permissions');
+    const next = dirname(parent);
+    if (next === parent) return;
+    parent = next;
+  }
 }
 export function localRuntimePaths(profile: string): LocalRuntimePaths {
   if (!isAbsolute(profile) || profile !== resolve(profile)) fail('insecure_permissions');
@@ -48,6 +66,7 @@ export function localRuntimePaths(profile: string): LocalRuntimePaths {
   const fallback = '/tmp/ocean-' + process.getuid?.();
   let root = process.env['XDG_RUNTIME_DIR'] ?? fallback;
   if (!isAbsolute(root) || resolve(root) !== root) fail('insecure_permissions');
+  assertTrustedAncestors(root);
   if (existsSync(root)) assertLocalPrivate(root, 'directory');
   // Linux sockaddr_un reserves one byte for NUL. Use a short private fallback.
   if (Buffer.byteLength(join(root, 'ocean-' + profileId.slice(0, 24), 'runtime.sock')) > 103) {

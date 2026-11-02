@@ -110,3 +110,34 @@ it.each(['symlink', 'mode', 'hardlink'])(
     expect(() => readLocalRuntimeDescriptor(profile)).toThrow('insecure_permissions');
   },
 );
+
+it.each(['profile', 'runtime'])(
+  'rejects a private %s below a replaceable non-sticky ancestor',
+  (kind) => {
+    const { root, profile } = fixture();
+    const unsafe = join(root, 'unsafe');
+    mkdirSync(unsafe, { mode: 0o777 });
+    chmodSync(unsafe, 0o777);
+    const privateChild = join(unsafe, kind);
+    mkdirSync(privateChild, { mode: 0o700 });
+    if (kind === 'runtime') vi.stubEnv('XDG_RUNTIME_DIR', privateChild);
+    expect(() => localRuntimePaths(kind === 'profile' ? privateChild : profile)).toThrow(
+      'insecure_permissions',
+    );
+  },
+);
+it('preserves a private layout under a trusted sticky temporary ancestor', () => {
+  const { profile } = fixture();
+  const paths = localRuntimePaths(profile);
+  expect(() => prepareLocalRuntimePaths(paths)).not.toThrow();
+});
+it('terminal consumer rejection prevents coalesced and later frame dispatch', () => {
+  const received: unknown[] = [];
+  const frames = new LocalRuntimeFrames((value) => {
+    received.push(value);
+    return false;
+  });
+  frames.push(Buffer.from('{}\n{"method":"stop"}\n'));
+  frames.push(Buffer.from('{"method":"status"}\n'));
+  expect(received).toEqual([{}]);
+});
