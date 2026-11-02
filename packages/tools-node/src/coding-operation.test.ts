@@ -128,7 +128,8 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         { id: 'read', name: 'read_file', arguments: JSON.stringify({ path: 'source' }) },
         new AbortController().signal,
       );
-      const prepared = await session.prepare('approval', edit);
+      const prepared = await session.prepare('approval', edit, 'actual-attempt');
+      expect(prepared.binding.attemptId).toBe('actual-attempt');
       expect(prepared.tool.preview).toContain('before');
       await writeFile(join(root, 'source'), 'owner change');
       await expect(prepared.tool.execute(new AbortController().signal)).rejects.toThrow();

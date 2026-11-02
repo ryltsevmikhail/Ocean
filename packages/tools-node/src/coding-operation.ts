@@ -140,9 +140,9 @@ export async function createCodingOperationSession(
       const prepared = await tools.prepare(call);
       return prepared.execute(signal);
     },
-    prepare(approvalId: string, call: ToolInvocation) {
+    prepare(approvalId: string, call: ToolInvocation, attemptId = fixed.scope.attemptId) {
       return prepareOperation(
-        { ...fixed, approvalId, call, scope: { ...fixed.scope, invocationId: call.id } },
+        { ...fixed, approvalId, call, scope: { ...fixed.scope, attemptId, invocationId: call.id } },
         tools,
       );
     },

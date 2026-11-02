@@ -22,3 +22,11 @@ and deduplicates invocation identities. Raw run_command and extra test arguments
 are refused before preparation. Uncertain results hold the turn instance.
 Regression tests verify preset-only schema/translation and duplicate refusal.
 Production host factory wiring remains pending.
+
+The host factory resolves the authoritative task and ready worktree, verifies
+project-read admission before and after sandbox qualification, uses complete
+Git snapshot manifests, and builds CodingTurnTools over one qualified session.
+Owner sandbox/dependency configuration remains an injected host port.
+Preparation now binds the actual turn attempt ID; a native session assertion
+covers it. Factory injection into runtime/CLI and full direct/group conversation
+qualification remain pending.
