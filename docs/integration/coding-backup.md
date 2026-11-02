@@ -162,6 +162,50 @@ Independent review found no blocking issue in internal closure/materialization.
 At this checkpoint, root check passes 872 tests (41 opt-in skipped), build and
 format pass. The real SIGKILL scenario is qualified separately from that suite.
 
+## Required Git object capture
+
+captureCodingGitObjects captures a bound task's base commit/history and staged
+index object closure into a self-contained Git pack, alongside exact raw index
+bytes and SHA-256 digests. Worktree bytes remain a separate required asset. It
+validates canonical worktree/common/admin paths, .git/back pointers, HEAD and the
+exact task branch base before and after capture. SHA-1 and SHA-256 repositories,
+packed refs and packed objects are covered. Source refs/config/hooks/reflogs and
+unrelated branch objects are not copied into this pack.
+
+Git runs with a newly synthesized private bare config, an inherited pinned index
+and object directory, no host/global/source config, replacement refs or lazy fetch.
+Only fixed local ls-files, rev-list, cat-file and pack-objects commands run. Source
+files/index/refs are never written. Temp config cleanup removes only fixed files
+created by this operation through a pinned scratch directory; unknown contents
+refuse cleanup rather than recursive deletion. Metadata-only object-store walking
+uses Linux O_PATH FDs and own mount IDs before object reads. Alternates, promisor
+layouts, symlinks, multiply-linked objects, child mounts, unsupported names/types
+and changed identities refuse. Unsupported split-index layouts do not return an
+apparently complete capture.
+
+Limits: 16 MiB raw index, 100,000 combined staged/resolve-undo entries and reachable
+objects, 64 MiB per object, 2 GiB aggregate uncompressed selected objects, 256 MiB
+pack output; object-store metadata enumeration is capped at 100,000 names and a
+32 MiB accounting budget. Each fixed Git command has a 60-second timeout and pack
+compression uses one thread. These are bounded trusted host operations, not a
+claim of sandbox/cgroup memory qualification for backup. Errors do not expose raw
+Git stderr through the adapter.
+
+Independent review found missing resolve-undo (REUC) objects in the first version.
+Its regression failed before the fix: current staged entries alone omit earlier
+conflict blobs referenced by the index. Both stage and resolve-undo roots now feed
+the pack. A fresh repository imports the pack/raw index and successfully recreates
+the conflict with checkout -m. Tests also prove unrelated synthetic secret objects
+are absent, a malformed source include config is never consumed, SHA-256 and packed
+storage round trips work, and a changed index refuses without overwriting user
+bytes. FIFO index substitution refuses without a blocking open, and malformed
+branch refs refuse instead of silently normalizing an invalid identity. Missing
+alternate targets are not implicitly traversed. This object-capture foundation
+does not yet select every task/asset or publish a complete backup.
+On Linux x86_64 / Git 2.56.0 / Node 26.13.0, root check passes 885 tests
+(41 opt-in skipped), build and format pass. The source scanner mount primitive
+and interrupted quarantine built-code scenarios are qualified separately.
+
 ## Remaining format-2 work
 
 Build the complete bounded external graph from these references, including all

@@ -44,7 +44,7 @@ function text(value: Buffer): string {
     throw Error('unsupported_coding_asset');
   }
 }
-function mountId(fd: number): string {
+export function codingAssetMount(fd: number): string {
   const info = fs.readFileSync('/proc/self/fdinfo/' + String(fd), 'utf8');
   const value = /^mnt_id:\s+(\d+)$/m.exec(info)?.[1];
   if (!value) throw Error('unsupported_coding_asset');
@@ -78,7 +78,7 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
     states.push([entry.path, codingAssetIdentity(stat)]);
   };
   const verifyPath = (fd: number, relative: string) => {
-    if (mountId(fd) !== rootMount) throw Error('unsupported_coding_asset');
+    if (codingAssetMount(fd) !== rootMount) throw Error('unsupported_coding_asset');
     if (fs.realpathSync(fdPath(fd)) !== (relative ? join(root, relative) : root))
       throw Error('stale_coding_asset');
   };
@@ -197,7 +197,7 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
     }
   };
   try {
-    rootMount = mountId(rootFd);
+    rootMount = codingAssetMount(rootFd);
     same(rootStat, fs.fstatSync(rootFd, { bigint: true }));
     visit(rootFd, '', '', 0);
     same(rootStat, fs.lstatSync(root, { bigint: true }));
