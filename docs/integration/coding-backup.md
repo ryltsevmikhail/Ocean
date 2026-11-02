@@ -1,8 +1,9 @@
 # Ocean 1.1 coding backup development
 
 Status: stage 7 in progress. Validated database inventory and an ownership-held
-capture port are implemented. Complete external-asset manifests, archive copy,
-format-2 publication and full restore are not implemented yet. User-facing
+capture port are implemented. Selected-root manifests and content-addressed archive copy are implemented.
+Complete external-asset graph selection, format-2 publication and full restore
+are not implemented yet. User-facing
 backup still refuses external coding assets with coding_assets_unavailable.
 This boundary must remain until all asset completeness/restore gates pass.
 
@@ -92,9 +93,41 @@ used. Root check passes 846 tests (40 opt-in skipped), build and format pass.
 Independent review confirms the resource-bound fix and mount-check delta.
 
 Asset selection, credential/path policy, external symlink/object closure,
-copy/materialization and full archive verification still belong to the next
-layer. This scanner neither chooses host roots nor publishes a backup, and its
+graph-wide copy/materialization and full profile archive verification still
+belong to the next layer. This scanner neither chooses host roots nor publishes a backup, and its
 symlink records must not be treated as permission to follow those targets.
+
+## Selected-root content archive
+
+archiveCodingAssetTree copies one previously captured root into a new private
+canonical destination. It rechecks the source capture, pins source parents/files,
+compares physical identities before reading and streams exact bytes into private
+SHA-256 named blobs. Equal content is stored once. Directories, modes, hardlinks
+and symlink targets remain manifest data; no archived symlink is activated.
+Raw source identity evidence is not part of the portable archive manifest.
+
+An fsynced .incomplete intent precedes blob writes. Source changes, path swaps,
+existing output or unsupported input refuse; failed newly created output is
+retained for inspection, never recursively removed. Blob and manifest data and
+containing directories are synced before successful return. This is a low-level
+selected-root operation, not atomic publication of an entire profile backup.
+
+verifyCodingAssetArchive accepts only the exact private manifest/blobs layout,
+strict bounded manifest schema and content hash, earlier internal file hardlink
+targets, valid parent directories and normalized paths. It verifies every blob's
+size/hash, owner, regular single-link kind and stable identity without following
+links. Extra/missing blobs, incomplete markers, malformed records, unsupported
+paths and observed mutation refuse. Symlink target text remains inert even if it
+names an external path; completeness policy must resolve or refuse it separately.
+
+Regression tests cover binary copies/deduplication, corrupt and symlink/hardlinked
+blobs, strict paths/structure/limits, source mutation during copy and destination
+replacement. Both copy races retain incomplete output and preserve user bytes.
+On the target Linux notebook, root check passes 858 tests (40 opt-in skipped),
+build and format pass; the separate native child-mount test passes again after
+the scanner change. Independent review found no blocking archive issue.
+This does not yet provide root selection, credential policy, Git object closure,
+restore materialization or a user-facing format-2 backup.
 
 ## Remaining format-2 work
 

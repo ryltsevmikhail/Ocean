@@ -15,3 +15,4 @@ export { validateMounts } from './sandbox-mounts.js';
 export { GitCodingApplyProject } from './coding-apply-project.js';
 export { captureCodingAssetTree, CODING_ASSET_LIMITS } from './coding-asset-scan.js';
 export type { CodingAssetCapture, CodingAssetLimits } from './coding-asset-scan.js';
+export { archiveCodingAssetTree, verifyCodingAssetArchive } from './coding-asset-archive.js';

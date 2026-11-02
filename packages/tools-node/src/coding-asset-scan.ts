@@ -19,8 +19,9 @@ export interface CodingAssetCapture {
   readonly root: string;
   readonly manifest: CodingAssetManifest;
   readonly sourceStateHash: string;
+  readonly sourceEntries: readonly (readonly [string, string])[];
 }
-function signature(stat: fs.BigIntStats): string {
+export function codingAssetIdentity(stat: fs.BigIntStats): string {
   return [
     stat.dev,
     stat.ino,
@@ -34,7 +35,7 @@ function signature(stat: fs.BigIntStats): string {
   ].join(':');
 }
 function same(before: fs.BigIntStats, after: fs.BigIntStats): void {
-  if (signature(before) !== signature(after)) throw Error('stale_coding_asset');
+  if (codingAssetIdentity(before) !== codingAssetIdentity(after)) throw Error('stale_coding_asset');
 }
 function text(value: Buffer): string {
   try {
@@ -70,11 +71,11 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
       throw Error('unsupported_coding_asset');
   };
   const append = (entry: CodingAssetEntry, stat: fs.BigIntStats) => {
-    metadataBytes += Buffer.byteLength(JSON.stringify(entry)) + signature(stat).length;
+    metadataBytes += Buffer.byteLength(JSON.stringify(entry)) + codingAssetIdentity(stat).length;
     if (entries.length + pendingNames >= limits.entries || metadataBytes + pendingBytes > 33554432)
       throw Error('coding_asset_limit');
     entries.push(entry);
-    states.push([entry.path, signature(stat)]);
+    states.push([entry.path, codingAssetIdentity(stat)]);
   };
   const verifyPath = (fd: number, relative: string) => {
     if (mountId(fd) !== rootMount) throw Error('unsupported_coding_asset');
@@ -163,7 +164,7 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
       same(before, fs.fstatSync(file, { bigint: true }));
       verifyPath(file, relative);
       if (previous) {
-        if (previous.state !== signature(before)) throw Error('stale_coding_asset');
+        if (previous.state !== codingAssetIdentity(before)) throw Error('stale_coding_asset');
         same(before, fs.lstatSync(path, { bigint: true }));
         append({ path: relative, kind: 'hardlink', target: previous.path }, before);
         return;
@@ -190,7 +191,7 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
         { path: relative, kind: 'file', mode, bytes: position, sha256: digest.digest('hex') },
         before,
       );
-      inodes.set(key, { path: relative, state: signature(before) });
+      inodes.set(key, { path: relative, state: codingAssetIdentity(before) });
     } finally {
       fs.closeSync(file);
     }
@@ -206,6 +207,7 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
       root,
       manifest: { ...body, hash: hash(JSON.stringify(body)) },
       sourceStateHash: hash(JSON.stringify([root, states])),
+      sourceEntries: states,
     };
   } finally {
     fs.closeSync(rootFd);
