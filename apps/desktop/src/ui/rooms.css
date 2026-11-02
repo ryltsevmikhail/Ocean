@@ -1,0 +1,89 @@
+.rail {
+  display: flex;
+  flex-direction: column;
+  background: var(--rail);
+  border-right: 1px solid var(--line);
+  padding: 20px 12px 12px;
+  min-height: 0;
+}
+.brand,
+.section,
+.person,
+.rail nav button,
+.rail footer,
+.top,
+.room-chip,
+.top-tools,
+.identity,
+.details header {
+  display: flex;
+  align-items: center;
+}
+.brand {
+  gap: 11px;
+  margin: 0 9px 32px;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+}
+.brand .avatar {
+  width: 29px;
+  height: 29px;
+}
+.section,
+.rail footer,
+.details header {
+  justify-content: space-between;
+}
+.section {
+  padding: 0 7px;
+}
+.section h2 {
+  font-size: 15px;
+}
+.rail nav {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.rail nav h3,
+.rail nav > .muted {
+  margin: 20px 8px 8px;
+}
+.rail nav button {
+  width: 100%;
+  gap: 10px;
+  text-align: left;
+  background: transparent;
+  padding: 9px 7px;
+}
+.rail nav button[aria-current='true'],
+.rail nav button:hover:enabled {
+  background: var(--panel);
+}
+.rail nav button span,
+.person div {
+  min-width: 0;
+}
+.rail nav strong,
+.rail nav small,
+.person strong,
+.person small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail footer {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  gap: 6px;
+}
+.rail-close,
+.rooms-toggle {
+  display: none;
+}
+.rail footer button:first-child {
+  padding-inline: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}

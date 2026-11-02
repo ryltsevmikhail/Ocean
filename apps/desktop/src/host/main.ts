@@ -25,6 +25,9 @@ async function open() {
   mkdirSync(workspace, { recursive: true, mode: 0o700 });
   const win = new BrowserWindow({
     width: 1180,
+    autoHideMenuBar: true,
+    backgroundColor: '#111111',
+    icon: join(dist, 'web/marks/ocean.png'),
     height: 800,
     webPreferences: {
       preload: join(dist, 'preload.cjs'),
