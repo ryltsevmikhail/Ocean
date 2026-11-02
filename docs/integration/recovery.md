@@ -69,7 +69,7 @@ separate qualification activity.
 ## Checks
 
 Tests kill actual child Node processes with SIGKILL after admission, after model
-dispatch, after durable preparation and before answer publication. They use the
+dispatch, before and after a synthetic durable tool claim, after durable preparation and before answer publication. They use the
 normal application services with a synthetic provider and inspect the persistent
 database after startup recovery. They establish local crash behavior without
 claiming remote-provider availability. Additional checks cover stale evidence,
