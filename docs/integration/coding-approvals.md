@@ -1,8 +1,8 @@
 # Coding approval development
 
-Status: stage 4 in progress. The domain binding and expiry predicate are
-implemented; durable storage, owner decisions, atomic consumption and host UI
-integration remain pending.
+Status: stage 4 implemented in development source. Domain bindings, durable
+preview/decision storage, atomic one-shot consumption, runtime admission and
+CLI/TUI owner ports are implemented. Conversation integration is stage 5.
 
 An approval binding identifies workspace, task, project and worktree, room,
 bot, run, attempt and invocation, operation kind, exact operation hash, source
@@ -135,3 +135,20 @@ The prepared executable also compares the source against its approved snapshot
 before backend execution. A native regression changes source during executable
 hashing: the pre-fix binding retained the old hash, while the corrected binding
 sees the change and cannot match the approval. Native dispatch tests still pass.
+
+## Stage-4 acceptance
+
+Verified through cfadadd on Omarchy with Node 26.13.0 and pnpm 12.16.1.
+Domain/application tests cover expiry, exact-field mismatch, malformed bindings,
+deny/cancel, restored refusal, one-shot consumption and stale source.
+Memory/SQLite tests cover immutable transitions, rollback, claim ownership,
+migration 7→8, two-connection visibility, reopen persistence and shared-journal
+global holds. Host tests cover escaped exact previews, no TTY, no session
+approval and cancellation. Native public-port integration verifies real approved
+write versus denied write. Independent review identified final source snapshot
+ordering; cfadadd fixes it with a regression observed red then green.
+Root check, build and format checks passed after that change.
+
+Earlier pending statements above describe intermediate checkpoints. The
+remaining host/conversation invocation wiring belongs to stage 5. Full coding
+release acceptance, backup assets and crash reconciliation remain stages 6–7.
