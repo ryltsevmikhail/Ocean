@@ -39,3 +39,10 @@ Coding tools provide task-specific model instructions using run_test preset
 IDs, replacing legacy unrestricted-command instructions for these turns.
 A durable chat regression verifies the injected task instructions reach the
 provider. CLI configuration and full native direct/group flows remain pending.
+
+CLI send now parses and forwards --task with duplicate, empty and misplaced
+option refusal. Legacy send option parsing remains unchanged. Profile opening
+can receive trusted codingTools configuration from the host command API.
+Without that configuration a task send fails closed. Persistent owner-managed
+project/dependency registration and end-user coding start/show commands remain
+pending; no automatic toolchain mount selection was introduced.

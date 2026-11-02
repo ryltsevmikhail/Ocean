@@ -8,9 +8,10 @@ import { createProviderFromEnv } from '../engine/provider.js';
 import { terminalText } from '../tui/approval.js';
 import { canonicalWorkspace, openOceanProfile } from './profile.js';
 import { oceanArguments, required } from './arguments.js';
-import type { Runtime } from '../runtime.js';
+import type { Runtime, RuntimeOptions } from '../runtime.js';
 
 export interface OceanCommandOptions {
+  readonly codingTools?: RuntimeOptions['codingTools'];
   readonly restoredApproval?: () => Promise<boolean>;
   readonly input?: Readable;
   readonly reviewApproval?: ReviewApprovalPort;
@@ -51,7 +52,11 @@ export async function runOceanCommand(
         provider: options.provider,
       });
     }
-    runtime = openOceanProfile(flags.get('profile'), command === 'init');
+    runtime = openOceanProfile(
+      flags.get('profile'),
+      command === 'init',
+      options.codingTools ? { codingTools: options.codingTools } : {},
+    );
     await runtime.ready;
     const requestId = flags.get('request-id') ?? randomUUID();
     const workspaceId = 'ws_ocean';
@@ -160,6 +165,7 @@ export async function runOceanCommand(
           requestId,
           text: required(flags, 'text'),
           to: flags.get('to'),
+          ...(flags.has('task') ? { taskId: required(flags, 'task') } : {}),
           provider:
             options.provider === undefined ? createProviderFromEnv(process.env) : options.provider,
           signal: controller.signal,

@@ -2,10 +2,14 @@ import { existsSync, mkdirSync, openSync, closeSync, realpathSync, statSync } fr
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { assertProfileFiles } from './private-files.js';
-import { createRuntime, type Runtime } from '../runtime.js';
+import { createRuntime, type Runtime, type RuntimeOptions } from '../runtime.js';
 
 /** Open one explicitly persistent profile. Model credentials are never written to it. */
-export function openOceanProfile(profile: string | undefined, initialize = false): Runtime {
+export function openOceanProfile(
+  profile: string | undefined,
+  initialize = false,
+  options: Pick<RuntimeOptions, 'codingTools'> = {},
+): Runtime {
   if (process.env['RUNNE_DB'] !== undefined || process.env['RUNNE_MODE'] !== undefined)
     throw new Error('Select Ocean --profile without RUNNE_DB or RUNNE_MODE');
   const directory = profileDirectory(profile);
@@ -15,7 +19,7 @@ export function openOceanProfile(profile: string | undefined, initialize = false
   if (initialize) mkdirSync(directory, { recursive: true, mode: 0o700 });
   assertProfileFiles(directory);
   if (initialize && !existsSync(path)) closeSync(openSync(path, 'wx', 0o600));
-  return createRuntime({ mode: 'durable', dbPath: path, restoredAccess: true });
+  return createRuntime({ ...options, mode: 'durable', dbPath: path, restoredAccess: true });
 }
 /** The host verifies a real directory before binding its canonical root to the profile. */
 export function canonicalWorkspace(path: string): string {

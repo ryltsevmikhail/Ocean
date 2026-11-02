@@ -8,6 +8,7 @@ export interface OceanArguments {
 }
 const valueFlags = new Set([
   'profile',
+  'task',
   'workspace',
   'handle',
   'name',
@@ -57,6 +58,8 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
       if (key === 'bot') bots.push(value);
     } else positional.push(token);
   }
+  if (flags.has('task') && positional[0] !== 'send') throw new Error('--task requires send');
+  if (flags.has('task') && flags.get('task')!.trim() === '') throw new Error('Missing --task');
   return {
     command: positional[0] ?? '',
     positional: positional.slice(1),
