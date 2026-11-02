@@ -133,7 +133,9 @@ export async function createSandboxBackend(
     throw new ToolError('containment_unavailable', 'sandbox qualification failed');
   if ((await identity()) !== qualifiedIdentity)
     throw new ToolError('containment_unavailable', 'sandbox inputs changed during qualification');
+  let held = false;
   const verify = async () => {
+    if (held) throw new ToolError('effect_uncertain', 'sandbox backend requires reconciliation');
     if ((await identity()) !== qualifiedIdentity)
       throw new ToolError('containment_unavailable', 'sandbox qualification is stale');
   };
@@ -168,7 +170,14 @@ export async function createSandboxBackend(
       );
       if (!preset)
         throw new ToolError('preset_denied', 'only exact owner-registered presets are allowed');
-      const result = await sandboxCommand(options, preset, signal, snapshot);
+      let result: SandboxCommandEvidence;
+      try {
+        result = await sandboxCommand(options, preset, signal, snapshot);
+      } catch (error) {
+        held = true;
+        throw error;
+      }
+      if (!result.cleanupConfirmed) held = true;
       return {
         output: JSON.stringify(result),
         isError:

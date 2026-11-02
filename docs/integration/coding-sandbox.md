@@ -331,3 +331,10 @@ retain evidence and remain uncertain.
 The runtime probe now starts a live detached child before its network canary
 exits. Qualification requires confirmed cgroup cleanup for this descendant-bearing
 execution, in addition to filesystem/network assertions.
+
+Backend acceptance now verifies exact preset refusal and command evidence for
+exit 0 with changed source: sourceUnchanged is false and the result is an
+error. Invocation/dependency digests and before/after snapshots are asserted.
+A native observation-fault test returns unconfirmed cleanup after a real
+command and verifies that the same backend refuses subsequent reads, writes
+and commands. A command observation exception also holds that backend.
