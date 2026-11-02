@@ -27,7 +27,7 @@ it('captures only the selected task owning room and displays frozen diff and cur
       }),
     },
     codingChanges: { capture },
-    codingEvidence: { list: () => [] },
+    codingEvidence: { latestForPreset: () => null },
   } as unknown as Runtime;
   const lines = await codingPanelLines(runtime, 'room', 'task');
   expect(lines.join('\n')).toContain('Changeset hash');

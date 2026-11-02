@@ -1,4 +1,5 @@
 import { RemoteDecisions } from './remote-decisions.js';
+import type { LocalRunSnapshot, LocalTurnReceipt } from '@runnets/contracts';
 import { randomUUID } from 'node:crypto';
 import { RoomSubmission } from './room-submission.js';
 import { visibleControls } from '../tui/decision-panel.js';
@@ -17,6 +18,7 @@ export class RemoteChatRunBook implements RunBookPort {
   readonly #taskId: string | undefined;
   #sync: Promise<void> = Promise.resolve();
   #first = true;
+  #confirmed: { prompt: string; receipt: LocalTurnReceipt } | null = null;
   #redraw: (selection?: ScreenEntry) => void = () => {};
   constructor(connection: RoomConnection, roomId: string, taskId?: string) {
     this.#connection = connection;
@@ -60,26 +62,24 @@ export class RemoteChatRunBook implements RunBookPort {
   async turn(_entry: ScreenEntry, prompt: string): Promise<BookOutcome> {
     const status = await this.#decisions.handle(prompt);
     if (status !== null) return { kind: 'notice', status };
-    const receipt = await this.#submission.submit(prompt);
-    await this.#refresh(false);
-    this.#redraw(this.runs.find((e) => e.taskRunId === receipt.runId));
+    if (this.#confirmed && this.#confirmed.prompt !== prompt) {
+      return {
+        kind: 'notice',
+        status: 'Waiting for room history to confirm message ' + this.#confirmed.receipt.messageId,
+      };
+    }
+    const receipt = this.#confirmed?.receipt ?? (await this.#submission.submit(prompt));
+    this.#confirmed = { prompt, receipt };
+    const selection = this.#view.confirm(receipt);
+    this.#redraw(selection);
     return {
       kind: 'notice',
       status: receipt.runId
         ? 'admitted ' + receipt.runId
-        : 'Message recorded without model dispatch',
+        : 'Message recorded without model dispatch · ' + receipt.messageId,
     };
   }
-  async cancel(entry?: ScreenEntry, submitting = false) {
-    let target = entry?.remote;
-    if (submitting) {
-      const receipt = await this.#submission.active;
-      if (!receipt?.runId) throw Error('Wait for the run receipt before cancelling');
-      target =
-        (await this.#connection.withClient((c) =>
-          c.getRun({ ...this.#view.scope, runId: receipt.runId! }),
-        )) ?? undefined;
-    }
+  async cancel(target?: LocalRunSnapshot) {
     if (!target) throw Error('no admitted run selected');
     const command = {
       ...this.#view.scope,
@@ -91,27 +91,50 @@ export class RemoteChatRunBook implements RunBookPort {
     await this.#refresh(false);
     return 'Cancellation requested';
   }
-  watch(redraw: (selection?: ScreenEntry) => void, fail: (e: unknown) => void) {
+  watch(redraw: (selection?: ScreenEntry) => void) {
     this.#redraw = redraw;
     void this.#observe().catch((e) => {
-      if (!this.#connection.closed) fail(e);
+      if (this.#connection.closed) return;
+      this.#view.observationError(
+        'Room observation stopped: ' + (e instanceof Error ? e.message : 'read failed'),
+      );
+      this.#redraw();
     });
   }
   async #observe() {
     let cursor: string | undefined;
+    let reset = false;
     while (!this.#connection.closed) {
-      const observed = await this.#connection.withClient((c) =>
-        c.observeRoom({ ...this.#view.scope, ...(cursor ? { cursor } : {}), waitMs: 750 }),
-      );
-      if (observed.kind !== 'timeout' || this.#view.active)
-        await this.#refresh(observed.kind === 'resync');
-      cursor = observed.cursor;
+      try {
+        const observed = await this.#connection.withClient((c) =>
+          c.observeRoom({ ...this.#view.scope, ...(cursor ? { cursor } : {}), waitMs: 750 }),
+        );
+        if (observed.kind !== 'timeout' || this.#view.active || this.#confirmed || reset)
+          await this.#refresh(reset || observed.kind === 'resync');
+        cursor = observed.cursor;
+        reset = false;
+      } catch (e) {
+        if (this.#connection.closed) return;
+        if (!(
+          e instanceof Error &&
+          ['invalid_frame', 'runtime_failure', 'resync_required', 'runtime_draining'].includes(
+            e.message,
+          )
+        ))
+          throw e;
+        this.#view.observationError('Room observation failed: ' + e.message + '. Retrying reads.');
+        this.#redraw();
+        reset = true;
+        await this.#connection.pause();
+      }
     }
   }
   #refresh(reset: boolean) {
     const sync = this.#sync.then(async () => {
       await this.#connection.withClient((c) => this.#view.refresh(c, reset));
       await this.#decisions.refresh();
+      this.#view.observationError('');
+      if (this.#confirmed && this.#view.observed(this.#confirmed.receipt)) this.#confirmed = null;
       this.#redraw();
     });
     this.#sync = sync.catch(() => {});

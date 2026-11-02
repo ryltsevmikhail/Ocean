@@ -91,6 +91,9 @@ export function openSqliteStore(options: OpenSqliteStoreOptions): SqliteStore {
 }
 
 function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore {
+  // SQLite indexes equal keys by rowid, so a reverse seek finds the latest matching preset.
+  db.exec(`CREATE INDEX IF NOT EXISTS ocean_evidence_preset
+    ON ocean_coding_test_evidence(task_id,json_extract(payload,'$.presetId'))`);
   const generator = ids ?? createDurableIdGenerator(db);
   const log = new SqliteEventLog(db, generator);
   const dedup = new SqliteCommandDedup(db);

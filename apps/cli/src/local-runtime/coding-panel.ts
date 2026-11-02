@@ -1,11 +1,6 @@
-import {
-  isLocalPanelChunk,
-  MAX_PANEL_LENGTH,
-  PREVIEW_CHUNK,
-  type LocalPanelChunk,
-} from '@runnets/contracts';
+import { isLocalPanelChunk, PREVIEW_CHUNK, type LocalPanelChunk } from '@runnets/contracts';
 import type { Runtime } from '../runtime.js';
-import { codingPanelLines } from '../ocean/coding-panel.js';
+import { codingPanelText } from '../ocean/coding-panel.js';
 import { digest } from './decision-preview.js';
 import type { RuntimeReply } from './queries.js';
 type Frozen = {
@@ -59,11 +54,8 @@ export class CodingPanelQueries {
   }
   async #capture(q: LocalPanelChunk, signal: AbortSignal): Promise<RuntimeReply> {
     try {
-      const text = (await codingPanelLines(this.#runtime, q.roomId, q.taskId, 'inspect')).join(
-        '\n',
-      );
+      const text = await codingPanelText(this.#runtime, q.roomId, q.taskId, 'inspect');
       if (signal.aborted) throw Error('observation_closed');
-      if (text.length > MAX_PANEL_LENGTH) throw Error('changeset_limit');
       const frozen = {
         workspaceId: q.workspaceId,
         roomId: q.roomId,

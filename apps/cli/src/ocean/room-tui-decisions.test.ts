@@ -33,7 +33,7 @@ it('shows every chunk of an actual scoped review decision and refreshes another 
   const runId = turn.value.taskRunId;
   await r.toolJournal!.claim(
     'local-effect',
-    'head\u009b\u202e' + 'X'.repeat(34000) + 'tail-marker',
+    'head\u009b\u202e水🌊' + 'X'.repeat(34000) + 'tail-marker',
     { taskRunId: runId, attemptId: 'owned' },
     'bound',
   );
@@ -57,6 +57,25 @@ it('shows every chunk of an actual scoped review decision and refreshes another 
     expect(cards).toHaveLength(1);
     const card = cards[0]!,
       ref = { workspaceId, roomId, runId, decisionId: card.decisionId };
+    for (const [columns, rows] of [
+      [9, 4000],
+      [128, 2],
+      [1, 1],
+    ] as const) {
+      terminal.resize(columns, rows);
+      const frame = app.frame().split('\n');
+      expect(frame.every((row) => row.length <= columns)).toBe(true);
+      expect(frame.length).toBeLessThanOrEqual(rows);
+      input.write('\x1b[Fy');
+      await app.idle();
+      expect((await peer.getDecision(ref)).status).toBe('pending');
+    }
+    terminal.resize(20, 3);
+    expect(app.frame().split('\n')[0]).toContain('pending v1');
+    input.write('\x1b[Fy');
+    await app.idle();
+    expect((await peer.getDecision(ref)).status).toBe('pending');
+    terminal.resize(128, 16);
     const exact = await peer.decisionPreview(ref);
     expect(exact.length).toBeGreaterThan(32768);
     expect(exact).toContain('head\\u009b\\u202e');
@@ -80,10 +99,11 @@ it('shows every chunk of an actual scoped review decision and refreshes another 
     }
     // These fixture fields and JSON bytes are ASCII after reversible control escaping.
     const rows = [
+      card.kind,
       card.decisionId,
       card.bindingDigest,
       'expires ' + card.expiresAt,
-      ...(exact.match(/.{1,128}/g) ?? []),
+      ...(exact.replace('水🌊', '\\u6c34\\ud83c\\udf0a').match(/.{1,128}/g) ?? []),
     ];
     for (const [page, frame] of screens.entries()) {
       const from = Math.min(page * 14, rows.length - 14);

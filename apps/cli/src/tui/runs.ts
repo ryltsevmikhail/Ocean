@@ -13,7 +13,12 @@ import {
   type ToolService,
   type TaskRunService,
 } from '@runnets/application';
-import type { LocalRunSnapshot, LocalRunEvent, SessionUpdate } from '@runnets/contracts';
+import type {
+  LocalTurnReceipt,
+  LocalRunSnapshot,
+  LocalRunEvent,
+  SessionUpdate,
+} from '@runnets/contracts';
 import { type TaskRunAggregate, type TaskRunId } from '@runnets/domain';
 import type { ProviderPort } from '@runnets/provider-core';
 
@@ -26,6 +31,7 @@ import type { RunViewData } from './view.js';
 
 export interface RunEntry<Id extends TaskRunId | null = TaskRunId> {
   taskRunId: Id;
+  receipt?: LocalTurnReceipt;
   remote?: LocalRunSnapshot;
   performer?: { handle: string; provider: string; model: string };
   aggregate: TaskRunAggregate | null;
@@ -260,11 +266,11 @@ export interface RunBookPort {
     prompt: string,
     emit: (update: SessionUpdate) => void,
   ): Promise<BookOutcome>;
-  cancel(entry?: ScreenEntry, submitting?: boolean): void | Promise<string>;
+  cancel(target?: LocalRunSnapshot): void | Promise<string>;
   detach?(): void;
   readonly decisionPanel?: Pick<DecisionPanel, 'frame' | 'handle' | 'presented'>;
   readonly workspace?: string;
-  watch?(redraw: (selection?: ScreenEntry) => void, fail: (e: unknown) => void): void;
+  watch?(redraw: (selection?: ScreenEntry) => void): void;
   loadChangeset?(entry: ScreenEntry): Promise<void>;
   setReviewApproval?(approval: ReviewApprovalPort): void;
 }

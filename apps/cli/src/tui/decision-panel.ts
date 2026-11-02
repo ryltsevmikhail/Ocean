@@ -40,7 +40,7 @@ export class DecisionPanel {
     }
     if (next.version >= this.#card.version) this.#card = next;
   }
-  handle(key: Key, interactive: boolean): boolean | Promise<void> {
+  handle(key: Key, interactive: boolean, size: Size): boolean | Promise<void> {
     const card = this.#card;
     if (!card) return false;
     if (key.type === 'escape' || key.type === 'ctrl-c') {
@@ -70,7 +70,10 @@ export class DecisionPanel {
           !this.#sending &&
           (key.value === 'n' ||
             (key.value === 'y' &&
-              this.#width > 0 &&
+              this.#width >= 20 &&
+              this.#height > 0 &&
+              this.#width === size.columns &&
+              this.#height === size.rows - 2 &&
               this.#seenThrough === this.#lines.length &&
               this.#offset === last))
         ) {
@@ -98,23 +101,35 @@ export class DecisionPanel {
   frame(size: Size) {
     const card = this.#card;
     if (!card) return null;
-    const width = Math.max(20, size.columns);
-    if (width !== this.#width) {
+    const width = size.columns,
+      height = size.rows - 2;
+    if (width < 20 || height < 1) {
+      this.#width = 0;
+      this.#height = 0;
+      this.#seenThrough = 0;
+      this.#offset = 0;
+      return size.rows > 0 ? fit('Resize to review', width) : '';
+    }
+    if (width !== this.#width || height !== this.#height) {
       this.#lines = wrap(
-        card.decisionId +
+        (
+          card.kind +
+          '\n' +
+          card.decisionId +
           '\n' +
           card.bindingDigest +
           '\nexpires ' +
           card.expiresAt +
           '\n' +
-          this.#preview,
+          this.#preview
+        ).replace(/[^\x20-\x7e\n]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')),
         width,
       );
       this.#width = width;
       this.#offset = 0;
       this.#seenThrough = 0;
     }
-    this.#height = Math.max(1, size.rows - 2);
+    this.#height = height;
     const last = Math.max(0, this.#lines.length - this.#height);
     this.#offset = Math.min(this.#offset, last);
     const footer =
@@ -124,14 +139,14 @@ export class DecisionPanel {
           ? 'y allow once · n deny · Esc close'
           : 'PgDn review complete preview · n deny · Esc close';
     return [
-      fit(card.kind + ' · ' + card.status + ' v' + card.version, width),
+      fit(card.status + ' v' + card.version + ' · ' + card.kind, width),
       ...this.#lines.slice(this.#offset, this.#offset + this.#height),
       fit(footer, width),
     ].join('\n');
   }
   /** Only advance through consecutive pages actually handed to the terminal output. */
   presented() {
-    if (this.#card && this.#offset <= this.#seenThrough)
+    if (this.#card && this.#height > 0 && this.#offset <= this.#seenThrough)
       this.#seenThrough = Math.max(
         this.#seenThrough,
         Math.min(this.#lines.length, this.#offset + this.#height),

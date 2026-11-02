@@ -82,7 +82,9 @@ it('recovers a lost wire receipt for the same group prompt, discovers peer posts
         }),
       { timeout: 4000 },
     );
-    expect(ui.app.frame().split('\n')[0]).toContain('test / @ops / test');
+    await vi.waitFor(() => expect(ui.app.frame().split('\n')[0]).toContain('test / @ops / test'), {
+      timeout: 3000,
+    });
     expect(signals).toHaveLength(1);
     ui.input.end();
     await ui.app.whenExit();

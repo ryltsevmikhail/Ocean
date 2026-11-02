@@ -1,6 +1,6 @@
 /** A single scrollable body, a bottom editor and secondary panels on demand. */
 import type { TaskRunAggregate, TaskRunId } from '@runnets/domain';
-import type { LocalRunSnapshot, LocalRunEvent } from '@runnets/contracts';
+import type { LocalTurnReceipt, LocalRunSnapshot, LocalRunEvent } from '@runnets/contracts';
 import type { UiState } from './state.js';
 import type { Size, StreamLine } from './types.js';
 import { fit, wrap } from './text.js';
@@ -9,6 +9,7 @@ import { details, eventLines, HELP, taskLines } from './panels.js';
 
 export interface RunViewData {
   readonly taskRunId: TaskRunId | null;
+  readonly receipt?: LocalTurnReceipt;
   readonly remote?: LocalRunSnapshot;
   readonly performer?: { handle: string; provider: string; model: string };
   readonly aggregate: TaskRunAggregate | null;
@@ -46,6 +47,7 @@ function status(input: FrameInput): string {
     const run = selected.remote;
     return `${run.runId} · ${run.taskStatus} · ${run.turnStatus} · v${run.version} · ${input.ui.status ?? ''}`;
   }
+  if (selected?.receipt?.runId) return selected.receipt.runId + ' · admitted · awaiting run state';
   if (selected?.taskRunId === null) return 'Room · ' + (input.ui.status ?? 'ready');
   const state = selected?.aggregate;
   const tokens =

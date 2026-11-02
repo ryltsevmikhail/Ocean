@@ -89,6 +89,9 @@ export class RuntimeObservers {
         }
         await delay(Math.min(200, ms), undefined, { signal });
       }
+    } catch (error) {
+      if (signal.aborted) throw Error('observation_closed');
+      throw error;
     } finally {
       if (waiting) {
         this.#waiting--;

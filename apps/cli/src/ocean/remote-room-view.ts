@@ -1,4 +1,5 @@
 import type {
+  LocalTurnReceipt,
   LocalRoomSummary,
   LocalMemberSummary,
   LocalObservedRun,
@@ -37,6 +38,8 @@ export class RemoteRoomView {
   #stream: StreamLine[] = [];
   #seq = 0;
   #roomNotice = '';
+  #receiptNotice = '';
+  #readError = '';
   cards: readonly string[] = [];
   workspace = '';
   model = '';
@@ -90,6 +93,29 @@ export class RemoteRoomView {
       undefined,
     );
   }
+  observed(receipt: LocalTurnReceipt) {
+    return (
+      this.#positions.has(receipt.messageId) &&
+      (!receipt.runId || this.entries.some((e) => e.remote?.runId === receipt.runId))
+    );
+  }
+  confirm(receipt: LocalTurnReceipt) {
+    const entry = this.entries.find((e) => e.taskRunId === receipt.runId) ?? this.draft();
+    entry.taskRunId = receipt.runId ? taskRunId(receipt.runId) : null;
+    entry.receipt = receipt;
+    this.#receiptNotice =
+      'Receipt ' +
+      receipt.requestId +
+      ' · message ' +
+      receipt.messageId +
+      (receipt.runId ? ' · admitted ' + receipt.runId : ' · recorded without model dispatch');
+    this.paint();
+    return entry;
+  }
+  observationError(message: string) {
+    this.#readError = message;
+    this.paint();
+  }
   notice(message: string) {
     this.#roomNotice = message;
     this.paint();
@@ -97,7 +123,7 @@ export class RemoteRoomView {
   paint() {
     const stream = [
       ...this.#stream,
-      ...[this.#roomNotice, ...this.cards]
+      ...[this.#roomNotice, ...this.cards, this.#receiptNotice, this.#readError]
         .filter(Boolean)
         .map((text) => ({ kind: 'text' as const, label: 'Ocean', text })),
     ];

@@ -36,8 +36,8 @@ export interface TerminalOptions {
 }
 
 function dimension(value: number | undefined, fallback: number): number {
-  if (value === undefined || !Number.isFinite(value) || value <= 0) return fallback;
-  return Math.trunc(value);
+  if (value === undefined) return fallback;
+  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
 }
 
 export class Terminal {
@@ -142,11 +142,15 @@ export class Terminal {
   }
 
   /** Current output dimensions, falling back to the injected size. */
-  size(): Size {
+  size(fallback = this.#fallback): Size {
     return {
-      columns: dimension(this.#output.columns, this.#fallback.columns),
-      rows: dimension(this.#output.rows, this.#fallback.rows),
+      columns: dimension(this.#output.columns, fallback.columns),
+      rows: dimension(this.#output.rows, fallback.rows),
     };
+  }
+
+  get decisionSize(): Size {
+    return this.interactive ? this.size({ columns: 0, rows: 0 }) : this.size();
   }
 
   #write(text: string): void {

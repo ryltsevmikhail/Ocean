@@ -7,6 +7,7 @@ const transportErrors = new Set([
   'runtime_unreachable',
   'runtime_absent',
   'observer_busy',
+  'observation_closed',
 ]);
 /** Share reconnection, but never regenerate the operation captured by a caller. */
 export class RoomConnection {
@@ -44,6 +45,9 @@ export class RoomConnection {
         await delay(200, undefined, { signal: this.#closed.signal });
       }
     }
+  }
+  pause() {
+    return delay(250, undefined, { signal: this.#closed.signal });
   }
   close() {
     this.#closed.abort();
