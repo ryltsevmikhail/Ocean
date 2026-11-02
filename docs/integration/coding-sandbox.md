@@ -201,3 +201,11 @@ The added hashing increased startup time, so the native timeout/cancellation
 test uses one second instead of 200 ms to exercise an admitted worker.
 Directory descendant attestation and protection against in-place modification
 after hashing still need qualification.
+
+Read-only file sources now use bubblewrap --ro-bind-data with preserved
+permissions, producing private copies instead of live host inode mounts.
+Hashing uses positional reads so the inherited descriptors remain at offset
+zero. A native test modifies the host file after the sandbox announces
+readiness and confirms that the sandbox still reads the original bytes.
+Directory descendants and the copy-time interval remain open qualification
+items.

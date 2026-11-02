@@ -31,9 +31,11 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
           const hash=crypto.createHash('sha256');
           hash.update(JSON.stringify([String(stat.mode),String(stat.size)]));
           const buffer=Buffer.alloc(65536);
-          let length;
-          while((length=fs.readSync(fd,buffer,0,buffer.length,null))>0)
+          let length, offset=0;
+          while((length=fs.readSync(fd,buffer,0,buffer.length,offset))>0) {
             hash.update(buffer.subarray(0,length));
+            offset+=length;
+          }
           actual.push(hash.digest('hex'));
           const after=fs.fstatSync(fd,{bigint:true});
           if(after.ctimeNs!==stat.ctimeNs || after.mtimeNs!==stat.mtimeNs || after.size!==stat.size)
@@ -42,7 +44,10 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
         if(JSON.stringify(actual)!==JSON.stringify(identities[argv[i+1]]))
           throw Error('mount source changed before opening');
         if(!stat.isFile()&&!stat.isDirectory()) throw Error('unsupported mount source');
-        argv[i]=argv[i]==='--bind'?'--bind-fd':'--ro-bind-fd';
+        if(stat.isFile() && argv[i]==='--ro-bind') {
+          argv.splice(i,1,'--perms',Number(stat.mode&0o777n).toString(8),'--ro-bind-data');
+          i+=2;
+        } else argv[i]=argv[i]==='--bind'?'--bind-fd':'--ro-bind-fd';
         argv[i+1]=String(descriptors.length+2);
         i+=2;
       }
