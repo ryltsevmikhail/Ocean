@@ -30,7 +30,7 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
         if(stat.isFile()) {
           const hash=crypto.createHash('sha256');
           hash.update(JSON.stringify([String(stat.mode),String(stat.size)]));
-          const scratch=fs.mkdtempSync(path.join(os.tmpdir(),'ocean-executable-'));
+          const scratch=fs.mkdtempSync(path.join(process.env.RUNTIME_DIRECTORY || os.tmpdir(),'ocean-executable-'));
           const copyPath=path.join(scratch,'copy');
           const copy=fs.openSync(copyPath,'wx',0o600);
           try {

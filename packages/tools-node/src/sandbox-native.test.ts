@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
+import { stat, mkdir, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -49,6 +49,10 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         expect(result.exitCode, result.output).toBe(0);
         expect(result.output).toContain('isolated');
         expect(result.cgroup).toContain('ocean-worker-');
+        const unit = result.cgroup!.split('/').at(-1)!;
+        await expect(
+          stat('/run/user/' + process.getuid!() + '/' + unit.slice(0, -8)),
+        ).rejects.toMatchObject({ code: 'ENOENT' });
       } finally {
         await rm(root, { recursive: true, force: true });
         await rm(hostHome, { recursive: true, force: true });

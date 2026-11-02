@@ -86,6 +86,8 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
       '--service-type=exec',
       '--unit=' + unit,
       '--property=KillMode=control-group',
+      '--property=RuntimeDirectory=' + unit.slice(0, -8),
+      '--property=RuntimeDirectoryMode=0700',
       '--property=SendSIGKILL=yes',
       '--property=TimeoutStopSec=2s',
       '--property=RuntimeMaxSec=65s',

@@ -219,3 +219,10 @@ immediately before bubblewrap spawn as well as after readiness and verifies
 that the sandbox reads the qualified bytes. Abrupt interruption while staging
 may leave an executable-only scratch directory; crash cleanup remains part of
 the recovery gate.
+
+Supervised units now own a mode-0700 RuntimeDirectory. Executable staging uses
+that directory, so systemd removes bootstrap scratch when the unit terminates.
+A native test verifies the unit runtime directory is absent after confirmed
+cleanup. PrivateTmp was tested but does not fit task roots hosted under /tmp;
+the runtime directory provides staging ownership without masking those roots.
+Directory dependency snapshot qualification remains open.
