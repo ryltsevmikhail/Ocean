@@ -1,3 +1,4 @@
+import { SqliteToolJournal } from './tool-journal.js';
 import { task as decodeTask } from './coding-store.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { CodingApprovalStore, CodingApprovalTransaction } from '@runnets/application';
@@ -10,8 +11,10 @@ import { withImmediateTransaction } from './transaction.js';
 
 export class SqliteCodingApprovalStore implements CodingApprovalStore {
   readonly #db: DatabaseSync;
+  readonly #journal: SqliteToolJournal;
   constructor(db: DatabaseSync) {
     this.#db = db;
+    this.#journal = new SqliteToolJournal(db);
   }
   atomic<T>(work: (tx: CodingApprovalTransaction) => T): T {
     const db = this.#db;
@@ -51,6 +54,25 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
             !stored ||
             stored.status !== 'allowed' ||
             JSON.stringify(stored) !== JSON.stringify(value)
+          )
+            return false;
+          const key = codingApprovalClaimKey(value);
+          if (
+            db
+              .prepare(
+                'SELECT 1 FROM ocean_coding_approval_claims WHERE invocation_key=? OR approval_id=?',
+              )
+              .get(key, value.id)
+          )
+            return false;
+          const b = value.binding;
+          if (
+            !this.#journal.claimNow(
+              b.invocationId,
+              'coding_' + b.operation,
+              { taskRunId: b.runId, attemptId: b.attemptId },
+              JSON.stringify(value),
+            )
           )
             return false;
           return (

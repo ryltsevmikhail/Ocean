@@ -75,3 +75,10 @@ flow exists. Ephemeral runtime refuses coding approvals. Regression coverage
 includes foreign room/bot/worktree, pending effects, lost lease and membership.
 Claim reconciliation across the approval and legacy journal paths still needs
 integration before dispatch can be enabled.
+
+SQLite consumption now records the shared tool journal's started effect in the
+same transaction as its unique approval claim and consumed status. The journal
+offers synchronous claim admission for this transaction while preserving the
+existing asynchronous API. A regression verifies rollback leaves no pending
+effect, successful consumption appears in global inspectPending, and a legacy
+claim is blocked while that coding effect remains unresolved.

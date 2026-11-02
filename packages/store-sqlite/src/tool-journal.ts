@@ -32,6 +32,10 @@ export class SqliteToolJournal implements ToolJournalPort {
     fingerprint: string,
   ): Promise<boolean> {
     await Promise.resolve();
+    return this.claimNow(id, tool, context, fingerprint);
+  }
+  /** Synchronous admission for callers already inside the store transaction. */
+  claimNow(id: string, tool: string, context: ToolEffectContext, fingerprint: string): boolean {
     if (context.taskRunId === '' || context.attemptId === '' || fingerprint === '')
       throw new Error('tool claim requires run, attempt and request identity');
     // Legacy claims lack scope and cannot safely be assigned or replayed.

@@ -1,3 +1,4 @@
+import { SqliteToolJournal } from './tool-journal.js';
 import { afterEach, expect, it } from 'vitest';
 import type { CodingApproval } from '@runnets/domain';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -136,4 +137,38 @@ it('requires the dispatch claim to belong to the consumed approval', () => {
   expect(() => store.atomic((tx) => tx.putApproval({ ...other, status: 'consumed' }))).toThrow(
     'missing',
   );
+});
+
+it('publishes approval consumption and the shared unresolved effect atomically', async () => {
+  const db = new DatabaseSync(':memory:');
+  databases.push(db);
+  initializeSchema(db);
+  const store = new SqliteCodingApprovalStore(db),
+    journal = new SqliteToolJournal(db);
+  const allowed = { ...pending, status: 'allowed' } as const;
+  store.atomic((tx) => tx.putApproval(pending));
+  store.atomic((tx) => tx.putApproval(allowed));
+  expect(() =>
+    store.atomic((tx) => {
+      expect(tx.claimApprovalOperation(allowed)).toBe(true);
+      tx.putApproval({ ...allowed, status: 'consumed' });
+      throw Error('crash');
+    }),
+  ).toThrow('crash');
+  expect(journal.inspectPending()).toEqual([]);
+  store.atomic((tx) => {
+    expect(tx.claimApprovalOperation(allowed)).toBe(true);
+    tx.putApproval({ ...allowed, status: 'consumed' });
+  });
+  expect(journal.inspectPending()).toMatchObject([
+    { id: 'i', taskRunId: 'run', attemptId: 'a', tool: 'coding_write', outcome: 'started' },
+  ]);
+  expect(
+    await journal.claim(
+      'other',
+      'legacy',
+      { taskRunId: 'other', attemptId: 'other' },
+      'fingerprint',
+    ),
+  ).toBe(false);
 });
