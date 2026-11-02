@@ -41,6 +41,21 @@ const keys = [
   'limitsHash',
   'toolchainHash',
 ] as const;
+export function validCodingApprovalBinding(binding: CodingApprovalBinding): boolean {
+  return (
+    Number.isSafeInteger(binding.policyVersion) &&
+    binding.policyVersion > 0 &&
+    ['write', 'test', 'apply'].includes(binding.operation) &&
+    keys.every(
+      (key) =>
+        key === 'policyVersion' ||
+        (typeof binding[key] === 'string' &&
+          binding[key].length > 0 &&
+          binding[key].length <= 4096 &&
+          !binding[key].includes('\0')),
+    )
+  );
+}
 /** A decision expires at its deadline and cannot survive a backwards clock. */
 export function codingApprovalMatches(
   approved: CodingApprovalBinding,
@@ -50,6 +65,8 @@ export function codingApprovalMatches(
   now: number,
 ): boolean {
   return (
+    validCodingApprovalBinding(approved) &&
+    validCodingApprovalBinding(current) &&
     [createdAt, expiresAt, now].every(Number.isSafeInteger) &&
     expiresAt > createdAt &&
     expiresAt - createdAt <= 300000 &&

@@ -122,3 +122,9 @@ leaves it absent with no pending journal effect. Duplicate consumption is
 refused. These fixture tests inject trusted admission; runtime authority has
 separate tests. The ordinary root check passes again in the current workspace,
 along with build and formatting.
+
+Binding validation now rejects empty/oversized/NUL-bearing identity fields,
+invalid operation kinds and nonpositive/nonintegral policy versions. Matching
+two malformed copies does not authorize an operation. Request timestamps must
+also allow a safe-integer expiry. Domain regressions cover malformed equal
+bindings.

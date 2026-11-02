@@ -29,3 +29,11 @@ it.each(Object.keys(binding) as (keyof CodingApprovalBinding)[])('refuses change
   const changed = { ...binding, [key]: key === 'policyVersion' ? 2 : 'different' };
   expect(codingApprovalMatches(binding, changed, 100, 300100, 101)).toBe(false);
 });
+
+it.each([{ runId: '' }, { attemptId: 'bad\0value' }, { policyVersion: NaN }, { policyVersion: 0 }])(
+  'refuses malformed binding even when both copies match %j',
+  (patch) => {
+    const invalid = { ...binding, ...patch };
+    expect(codingApprovalMatches(invalid, invalid, 100, 300100, 101)).toBe(false);
+  },
+);

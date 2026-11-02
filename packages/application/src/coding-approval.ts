@@ -1,5 +1,6 @@
 import {
   codingApprovalMatches,
+  validCodingApprovalBinding,
   codingFailure,
   ok,
   type CodingTask,
@@ -42,7 +43,14 @@ export class CodingApprovalService {
   ): CodingResult<CodingApproval> {
     const input = structuredClone(binding);
     const now = this.deps.now();
-    if (!id || !preview || preview.length > 1048576 || !Number.isSafeInteger(now))
+    if (
+      !id ||
+      !preview ||
+      preview.length > 1048576 ||
+      !Number.isSafeInteger(now) ||
+      !Number.isSafeInteger(now + 300000) ||
+      !validCodingApprovalBinding(input)
+    )
       return codingFailure('invalid_input');
     if (this.deps.restored) return codingFailure('recovery_required');
     return this.deps.store.atomic((tx) => {
