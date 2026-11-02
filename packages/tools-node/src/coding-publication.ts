@@ -12,7 +12,7 @@ import {
 import type { RecoverySource } from './coding-backup-scope-source.js';
 import { decodeRecoveryMain, readRecoveryJsonBytes } from './coding-recovery-evidence.js';
 import { invalidRecovery, type CodingRecoveryIntent } from './coding-recovery-record.js';
-import { bindPublication } from './coding-publication-guard.js';
+import { bindPublication, type BoundJson } from './coding-publication-guard.js';
 
 interface PublicationScope {
   common: string;
@@ -38,10 +38,14 @@ export function classifyPublications(
   const entries = new Map(metadata.manifest.entries.map((e) => [e.path, e]));
   const states = new Map(metadata.sourceEntries);
   const header = entries.get('scope.json');
+  if (header?.kind !== 'file') return invalidRecovery();
+  const mains: BoundJson[] = [];
+  const publications: { id: string; target: string; staged: string; original: string }[] = [];
   const seen = new Set<string>(),
     projects = new Set([scope.project]);
   for (const [name, entry] of entries) {
     if (!name.startsWith('files/') || !name.endsWith('.json')) continue;
+    if (entry.kind !== 'file') return invalidRecovery();
     const id = basename(name, '.json'),
       main = basename(name);
     const bytes = readRecoveryJsonBytes(
@@ -57,6 +61,7 @@ export function classifyPublications(
     checkIntent(intent);
     const digest = createHash('sha256').update(bytes).digest('hex');
     classified.set(name, digest);
+    mains.push({ entry: { ...entry, sha256: digest }, state: states.get(name)! });
     const status = receipts.get(intent.path);
     if (!status || status === 'pending' || seen.has(intent.path)) return invalidRecovery();
     seen.add(intent.path);
@@ -70,22 +75,22 @@ export function classifyPublications(
       entries.has(name + '.next') ||
       entries.has(original) !== !!intent.before ||
       entries.get(staged)?.kind !== 'file' ||
-      header?.kind !== 'file' ||
-      entry.kind !== 'file' ||
       join(scope.project, intent.path).startsWith(metadata.root + '/')
     )
       return invalidRecovery();
-    const stat = fs.lstatSync(join(assetFdPath(source.files.fd), intent.staged), { bigint: true });
-    checkAssetPolicy('coding-worktree', intent.path, stat);
-    const fd = fs.openSync(
-      join(assetFdPath(source.files.fd), intent.staged),
-      0x200000 | fs.constants.O_NOFOLLOW,
-    );
+    publications.push({ id, target: intent.path, staged, original });
+  }
+  if (publications.length !== candidates.size) return invalidRecovery();
+  // Finish classifying the entire scope before any guard can inspect a project target.
+  for (const { id, target, staged, original } of publications) {
+    const at = join(assetFdPath(source.files.fd), basename(staged));
+    checkAssetPolicy('coding-worktree', target, fs.lstatSync(at, { bigint: true }));
+    const fd = fs.openSync(at, 0x200000 | fs.constants.O_NOFOLLOW);
     try {
       const proof = bindPublication(
         {
           ...scope,
-          target: intent.path,
+          target,
           id,
           mount: metadata.sourceMount,
           stagedState: states.get(staged)!,
@@ -94,7 +99,7 @@ export function classifyPublications(
             entry: { ...header, sha256: scope.headerHash },
             state: states.get('scope.json')!,
           },
-          main: { entry: { ...entry, sha256: digest }, state: states.get(name)! },
+          mains,
         },
         fd,
       );
@@ -104,6 +109,5 @@ export function classifyPublications(
       fs.closeSync(fd);
     }
   }
-  if (guards.size !== candidates.size) return invalidRecovery();
   return guards;
 }

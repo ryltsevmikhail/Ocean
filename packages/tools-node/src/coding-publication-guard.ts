@@ -1,5 +1,5 @@
 import * as fs from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { CodingAssetEntry } from '@runnets/domain';
 import { assetFdPath, checkAssetPath } from './coding-asset-io.js';
 import {
@@ -12,7 +12,7 @@ import { observeRecoverySource } from './coding-backup-scope-source.js';
 import { readRecoveryJsonBytes } from './coding-recovery-evidence.js';
 import { withPublicationTarget } from './coding-publication-project.js';
 
-interface BoundJson {
+export interface BoundJson {
   entry: Extract<CodingAssetEntry, { kind: 'file' }>;
   state: string;
 }
@@ -27,7 +27,7 @@ interface PublicationSource {
   stagedState: string;
   originalState: string | undefined;
   header: BoundJson;
-  main: BoundJson;
+  mains: readonly BoundJson[];
 }
 const stale = (): never => {
   throw Error('stale_coding_asset');
@@ -58,7 +58,7 @@ function checkName(
 }
 /** Retain only checked scalar identities and JSON digests. The portable capture never supplies a project read path. */
 export function bindPublication(source: PublicationSource, initialStaged: number) {
-  const { common, slot, project, target, id, mount, header, main } = source;
+  const { common, slot, project, target, id, mount, header, mains } = source;
   const observe = <T>(staged: number, read: (witness: string) => T) =>
     observeRecoverySource(common, slot, (current, binding) => {
       if (!current.leaf || !current.files || binding !== source.witness) return stale();
@@ -73,15 +73,17 @@ export function bindPublication(source: PublicationSource, initialStaged: number
           65536,
           true,
         );
-        readRecoveryJsonBytes(
-          files.fd,
-          files.path,
-          id + '.json',
-          main.entry,
-          main.state,
-          2097152,
-          true,
-        );
+        // Each classified main contributed to the unique receipt-path proof.
+        for (const main of mains)
+          readRecoveryJsonBytes(
+            files.fd,
+            files.path,
+            basename(main.entry.path),
+            main.entry,
+            main.state,
+            2097152,
+            true,
+          );
       };
       const checkPhase = () => {
         if (
@@ -97,22 +99,15 @@ export function bindPublication(source: PublicationSource, initialStaged: number
       };
       checkJson();
       checkPhase();
-      const captured = withPublicationTarget(
-        project,
-        target,
-        staged,
-        mount,
-        (witness, recheckTarget) => {
-          checkJson();
-          recheckTarget();
-          checkPhase();
-          const value = read(witness);
-          checkPhase();
-          return value;
-        },
-      );
-      checkJson();
-      return captured;
+      return withPublicationTarget(project, target, staged, mount, (witness, recheckTarget) => {
+        checkJson();
+        recheckTarget();
+        checkPhase();
+        const value = read(witness);
+        checkJson();
+        checkPhase();
+        return value;
+      });
     });
   const witness = observe(initialStaged, (value) => value);
   const guard: PublicationGuard = {
