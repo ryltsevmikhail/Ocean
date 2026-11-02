@@ -57,3 +57,18 @@ it('refuses missing exact artifact/review parameters before dispatch', async () 
     ).rejects.toThrow();
   expect(apply).not.toHaveBeenCalled();
 });
+
+it('lists application identities without hiding unrelated unresolved effects', async () => {
+  const runtime = {
+    toolJournal: {
+      pending: async () => [
+        { id: 'apply', tool: 'coding_apply', outcome: 'uncertain' },
+        { id: 'write', tool: 'write_file', outcome: 'uncertain' },
+      ],
+    },
+  } as unknown as Runtime;
+  expect(await runCodingCommand(runtime, oceanArguments(['coding', 'pending']), 'list')).toEqual({
+    applications: [{ applicationId: 'apply', outcome: 'uncertain' }],
+    otherEffects: [{ id: 'write', tool: 'write_file', outcome: 'uncertain' }],
+  });
+});

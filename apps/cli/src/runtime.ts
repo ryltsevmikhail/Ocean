@@ -15,6 +15,7 @@ import {
   CodingTaskService,
   CodingReviewService,
   CodingApplyService,
+  CodingApplyInspectionService,
   codingApplyAdmission,
   CodingApprovalService,
   codingApprovalAdmission,
@@ -48,6 +49,7 @@ export interface Runtime {
   readonly coding: CodingTaskService;
   readonly codingReview?: CodingReviewService;
   readonly codingApply?: CodingApplyService;
+  readonly codingApplyInspection?: CodingApplyInspectionService;
   readonly codingEvidence?: CodingTestEvidenceStore;
   readonly codingApprovals: CodingApprovalService;
   readonly codingChanges: CodingChangesetService;
@@ -200,6 +202,11 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       codingApprovals,
       codingEvidence: store.codingEvidence,
       codingApply,
+      codingApplyInspection: new CodingApplyInspectionService(
+        store.codingApplications,
+        new GitCodingApplyProject(),
+        (task) => !codingDeps.restored && task.lease.ownerId === codingDeps.ownerId,
+      ),
       codingReview: new CodingReviewService(
         store.codingReviews,
         (task) =>

@@ -25,6 +25,29 @@ export async function runCodingCommand(
   requestId: string,
   provider: ProviderPort | null = null,
 ): Promise<unknown> {
+  if (args.positional[0] === 'pending') {
+    if (!runtime.toolJournal) throw Error('coding_unavailable');
+    const effects = await runtime.toolJournal.pending();
+    return {
+      applications: effects
+        .filter((effect) => effect.tool === 'coding_apply')
+        .map((effect) => ({ applicationId: effect.id, outcome: effect.outcome })),
+      otherEffects: effects
+        .filter((effect) => effect.tool !== 'coding_apply')
+        .map((effect) => ({ id: effect.id, tool: effect.tool, outcome: effect.outcome })),
+    };
+  }
+  if (args.positional[0] === 'inspect-apply') {
+    const applicationId = args.positional[1];
+    if (!applicationId || !runtime.codingApplyInspection)
+      throw Error('application inspection unavailable');
+    const result = await runtime.codingApplyInspection.inspect({
+      workspaceId: 'ws_ocean',
+      applicationId,
+    });
+    if (!result.ok) throw Error(result.error.code);
+    return result.value;
+  }
   if (args.positional[0] === 'apply') return runCodingApplyCommand(runtime, args, requestId);
   if (['diff', 'review'].includes(args.positional[0] ?? ''))
     return runCodingReviewCommand(runtime, args, requestId, provider);

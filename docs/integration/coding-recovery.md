@@ -1,7 +1,7 @@
 # Ocean 1.1 coding recovery development
 
 Status: stage 7 in progress. Interrupted apply receipt recovery is implemented;
-content reconciliation, complete coding-operation fault qualification,
+owner-confirmed content reconciliation, complete coding-operation fault qualification,
 asset-complete backup/restore and release acceptance remain open.
 
 ## Interrupted application receipts
@@ -22,6 +22,43 @@ to block new external effects; text-only room acknowledgement cannot release it.
 This is uncertainty retention, not content reconciliation. No filesystem bytes
 are automatically repaired, restored, removed or accepted as complete. Retained
 originals and per-file recovery intents are needed for later explicit inspection.
+
+## Owner-local read-only inspection
+
+`ocean coding pending` lists held application IDs from the current profile's
+shared effect journal, including after a crash before an ID was printed. It
+also reports other unresolved effects rather than hiding their global hold.
+`ocean coding inspect-apply RECEIPT_ID` compares actual file entries against
+that receipt's immutable changeset. It reports recorded receipt status plus
+before/after/conflict/unavailable observations, raw-content SHA-256, Git file
+mode and physical kind (file/missing/directory/unavailable). No file content is
+returned. Exact mode changes and declared file/directory refactors are included.
+
+Inspection requires the original non-restored profile owner and exact task,
+workspace, base, artifact and ordered receipt paths. Authority/binding are
+rechecked after observation. It remains usable while the global hold blocks
+execution, even if a mutation lease was lost. Neither command can call a model,
+write/repair project files, change a receipt, settle an effect or grant approval.
+The result explicitly says holdReleased=false; matching after bytes never
+upgrades an uncertain effect to completed.
+
+The Linux adapter walks pinned directory FDs without following links, refuses
+protected paths, hardlinks, special/oversized files, and detects file/parent/root
+changes during observation. Limits: 1,000 paths, 128 KiB per file and 32 MiB
+aggregate observed bytes. Unavailable observations cannot be used as matching
+proof. Per-file results are diagnostic snapshots, not a coherent whole-project
+verification: unrelated/ignored files and extra directory entries are not
+scanned. Directory comparisons only describe declared artifact file entries.
+
+Real temporary Git/SQLite integration checks held after-state inspection,
+mode/content conflicts, symlink refusal, unchanged receipt/journal, CLI ID
+listing and restored-profile refusal. Deterministic read-boundary tests change
+file bytes or move a parent mid-read and require unavailable rather than a
+matching hash. Domain tests distinguish additions/deletions, modes and declared
+refactors. Independent review found no blocking issue in this diagnostic layer.
+`pnpm check` now passes 816 tests (39 opt-in skipped); build and format pass on
+the same qualified Linux/Node/pnpm versions. Owner reconciliation decisions,
+full-tree validation and any explicit hold-release protocol remain open.
 
 ## Process fault evidence
 
