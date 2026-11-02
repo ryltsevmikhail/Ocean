@@ -103,7 +103,7 @@ const review: CodingReviewVerdict = {
   },
 };
 
-it.each(['success', 'failure', 'denied', 'dirty'])(
+it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race'])(
   'records per-file application %s and refuses replay',
   async (mode) => {
     const receipts = new Map<string, CodingApplyReceipt>(),
@@ -139,8 +139,12 @@ it.each(['success', 'failure', 'denied', 'dirty'])(
           }),
       },
       {
-        inspect: async () => ({ clean: mode !== 'dirty', baseCommit: artifact.baseCommit }),
-        sourceTree: async () => artifact.afterTreeHash,
+        inspect: async () => ({
+          clean: mode !== 'dirty' && !(mode === 'base-race' && claims > 0),
+          baseCommit: artifact.baseCommit,
+        }),
+        sourceTree: async () =>
+          mode === 'race' && claims > 0 ? 'changed-after-claim' : artifact.afterTreeHash,
         applyFile: async (_root, file) => {
           expect(
             receipts.get('apply')?.files.find((entry) => entry.path === file.path)?.status,
@@ -172,6 +176,11 @@ it.each(['success', 'failure', 'denied', 'dirty'])(
           { path: 'two', status: 'uncertain' },
         ],
       });
+    } else if (mode === 'race' || mode === 'base-race') {
+      expect(result.ok).toBe(false);
+      expect(claims).toBe(1);
+      expect(receipts.get('apply')?.status).toBe('not_started');
+      expect(effects).toEqual([]);
     } else {
       expect(result.ok).toBe(false);
       expect(claims).toBe(0);
@@ -184,3 +193,80 @@ it.each(['success', 'failure', 'denied', 'dirty'])(
     }
   },
 );
+
+it('refuses a concurrent second apply whose clean checkout observation preceded the first apply', async () => {
+  const receipts = new Map<string, CodingApplyReceipt>();
+  let clean = true,
+    active = false,
+    scans = 0,
+    effects = 0;
+  let release!: () => void, waiting!: () => void;
+  const paused = new Promise<void>((resolve) => {
+    waiting = resolve;
+  });
+  const resume = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const service = new CodingApplyService(
+    {
+      atomic: (work) =>
+        work({
+          task: () => configured,
+          changeset: () => ({
+            ...artifact,
+            files: [
+              {
+                path: 'file',
+                before: null,
+                after: { mode: '100644', text: 'new', sha256: 'hash' },
+              },
+            ],
+          }),
+          verdict: () => review,
+          evidence: () => [evidence],
+          application: (id) => receipts.get(id) ?? null,
+          claimApplication: (receipt) => {
+            if (active) return false;
+            active = true;
+            receipts.set(receipt.id, receipt);
+            return true;
+          },
+          putApplication: (receipt) => {
+            receipts.set(receipt.id, structuredClone(receipt));
+            if (receipt.status !== 'applying') active = false;
+          },
+        }),
+    },
+    {
+      inspect: async () => ({ clean, baseCommit: artifact.baseCommit }),
+      sourceTree: async () => {
+        if (++scans === 2) {
+          waiting();
+          await resume;
+        }
+        return artifact.afterTreeHash;
+      },
+      applyFile: async () => {
+        effects++;
+        clean = false;
+      },
+    },
+    () => true,
+  );
+  const input = {
+    workspaceId: task.workspaceId,
+    taskId: task.id,
+    changesetHash: artifact.hash,
+    reviewRequestId: 'review',
+    expectedBase: artifact.baseCommit,
+  };
+  const second = service.apply({ ...input, id: 'second' }, { confirm: async () => true });
+  await paused;
+  expect((await service.apply({ ...input, id: 'first' }, { confirm: async () => true })).ok).toBe(
+    true,
+  );
+  release();
+  expect((await second).ok).toBe(false);
+  expect(receipts.get('second')?.status).toBe('not_started');
+  expect(effects).toBe(1);
+});

@@ -47,7 +47,7 @@ export interface CodingApplyReceipt {
   readonly changesetHash: string;
   readonly reviewRequestId: string;
   readonly expectedBase: string;
-  readonly status: 'applying' | 'completed' | 'uncertain';
+  readonly status: 'applying' | 'completed' | 'uncertain' | 'not_started';
   readonly files: readonly {
     readonly path: string;
     readonly status: 'pending' | 'started' | 'completed' | 'uncertain';

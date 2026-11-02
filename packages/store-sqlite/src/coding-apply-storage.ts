@@ -67,7 +67,11 @@ export class SqliteCodingApplyStore implements CodingApplyStore {
           if (receipt.status !== 'applying')
             journal.settleNow(
               receipt.id,
-              receipt.status === 'completed' ? 'completed' : 'uncertain',
+              receipt.status === 'completed'
+                ? 'completed'
+                : receipt.status === 'not_started'
+                  ? 'not_started'
+                  : 'uncertain',
               { taskRunId: 'apply-' + receipt.id, attemptId: 'apply' },
             );
         },

@@ -116,3 +116,30 @@ it('rejects skipped file states and settles completed receipt and claim in one t
     store.close();
   }
 });
+
+it('settles an observation refusal without effects and never reopens that receipt', () => {
+  const store = openSqliteStore({ path: ':memory:' });
+  try {
+    store.codingApplications.atomic((tx) => expect(tx.claimApplication(intent)).toBe(true));
+    const refused: CodingApplyReceipt = { ...intent, status: 'not_started' };
+    store.codingApplications.atomic((tx) => tx.putApplication(refused));
+    expect(store.codingApplications.atomic((tx) => tx.claimApplication(intent))).toBe(false);
+    expect(() => store.codingApplications.atomic((tx) => tx.putApplication(intent))).toThrow();
+    expect(
+      store.codingApplications.atomic((tx) => tx.claimApplication({ ...intent, id: 'next' })),
+    ).toBe(true);
+    const started: CodingApplyReceipt = {
+      ...intent,
+      id: 'next',
+      files: [{ path: 'one.ts', status: 'started' }, intent.files[1]!],
+    };
+    store.codingApplications.atomic((tx) => tx.putApplication(started));
+    expect(() =>
+      store.codingApplications.atomic((tx) =>
+        tx.putApplication({ ...started, status: 'not_started' }),
+      ),
+    ).toThrow();
+  } finally {
+    store.close();
+  }
+});

@@ -106,6 +106,12 @@ export class CodingApplyService {
     if (!claimed) return codingFailure('recovery_required');
     let receipt = claimed;
     try {
+      // The shared claim now excludes another runtime writer during observation.
+      if (!(await validProject())) {
+        receipt = { ...receipt, status: 'not_started' };
+        this.#store.atomic((tx) => tx.putApplication(receipt));
+        return codingFailure('project_changed');
+      }
       for (const [index, file] of prepared.changeset.files.entries()) {
         receipt = {
           ...receipt,

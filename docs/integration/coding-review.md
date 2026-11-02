@@ -114,3 +114,10 @@ with a started file preserves the last committed receipt and global unresolved
 effect hold; neither the same application nor another write can replay it.
 Disk-reopen and rollback regressions exercise these boundaries. The concrete
 filesystem application adapter, runtime composition and CLI apply remain pending.
+
+Independent review identified a check/claim race: a concurrent writer or apply
+could finish after the clean/source snapshot but before this operation acquired
+the shared claim. The service now repeats both checks under that claim before
+marking any file started. A mismatch commits a terminal not_started receipt and
+settles the journal without effects. Concurrent deferred-observation regression
+proves a second apply cannot reuse a clean observation from before the first.

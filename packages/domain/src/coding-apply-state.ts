@@ -22,6 +22,8 @@ export function assertCodingApplyTransition(
     )
       throw Error('invalid application file transition');
   }
+  if (next.status === 'not_started' && next.files.some((file) => file.status !== 'pending'))
+    throw Error('application already started');
   if (next.status === 'completed' && next.files.some((file) => file.status !== 'completed'))
     throw Error('application has unfinished files');
 }
