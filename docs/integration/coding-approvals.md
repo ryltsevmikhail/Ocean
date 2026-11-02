@@ -44,3 +44,11 @@ The adapter regression suite covers rollback, duplicate claims and schema 7
 upgrade. Legacy migration tests and format-1 restore now recognize schema 8.
 Runtime admission integration, on-disk reopen/concurrency qualification and
 owner UI remain pending.
+
+On-disk adapter qualification now opens two connections, consumes from one,
+verifies duplicate refusal from the other, closes both and reopens the file
+to verify consumed status and claim persistence. This verifies visibility and
+reopen durability, not simultaneous cross-process lock contention.
+Memory/SQLite parity tests also require that the claim belongs to the exact
+approval ID; memory storage now records that owner instead of only the
+invocation key.

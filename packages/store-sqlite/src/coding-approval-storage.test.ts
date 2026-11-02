@@ -1,11 +1,14 @@
 import { afterEach, expect, it } from 'vitest';
 import type { CodingApproval } from '@runnets/domain';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { initializeSchema } from './schema.js';
 import { SqliteCodingApprovalStore } from './coding-approval-storage.js';
 const databases: DatabaseSync[] = [];
 afterEach(() => {
-  for (const db of databases.splice(0)) db.close();
+  for (const db of databases.splice(0)) if (db.isOpen) db.close();
 });
 function storeFixture() {
   const db = new DatabaseSync(':memory:');
@@ -81,4 +84,56 @@ it('adds approval tables transactionally to schema 7', () => {
     '8',
   );
   expect(db.prepare('SELECT count(*) AS n FROM ocean_coding_approvals').get()?.['n']).toBe(0);
+});
+
+it('preserves consumed status and invocation uniqueness across connections and reopen', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ocean-approval-db-'));
+  try {
+    const path = join(root, 'fixture.sqlite');
+    const first = new DatabaseSync(path);
+    databases.push(first);
+    initializeSchema(first);
+    const a = new SqliteCodingApprovalStore(first);
+    a.atomic((tx) => tx.putApproval(pending));
+    const allowed = { ...pending, status: 'allowed' } as const;
+    a.atomic((tx) => tx.putApproval(allowed));
+    const second = new DatabaseSync(path);
+    databases.push(second);
+    initializeSchema(second);
+    const b = new SqliteCodingApprovalStore(second);
+    expect(b.atomic((tx) => tx.approval(pending.id)?.status)).toBe('allowed');
+    a.atomic((tx) => {
+      expect(tx.claimApprovalOperation(allowed)).toBe(true);
+      tx.putApproval({ ...allowed, status: 'consumed' });
+    });
+    expect(b.atomic((tx) => tx.claimApprovalOperation(allowed))).toBe(false);
+    first.close();
+    second.close();
+    const reopened = new DatabaseSync(path);
+    databases.push(reopened);
+    initializeSchema(reopened);
+    const restored = new SqliteCodingApprovalStore(reopened);
+    expect(restored.atomic((tx) => tx.approval(pending.id)?.status)).toBe('consumed');
+    expect(restored.atomic((tx) => tx.claimApprovalOperation(allowed))).toBe(false);
+    reopened.close();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it('requires the dispatch claim to belong to the consumed approval', () => {
+  const store = storeFixture();
+  store.atomic((tx) => tx.putApproval(pending));
+  const allowed = { ...pending, status: 'allowed' } as const;
+  store.atomic((tx) => tx.putApproval(allowed));
+  store.atomic((tx) => {
+    tx.claimApprovalOperation(allowed);
+    tx.putApproval({ ...allowed, status: 'consumed' });
+  });
+  const other = { ...pending, id: 'other' };
+  store.atomic((tx) => tx.putApproval(other));
+  store.atomic((tx) => tx.putApproval({ ...other, status: 'allowed' }));
+  expect(() => store.atomic((tx) => tx.putApproval({ ...other, status: 'consumed' }))).toThrow(
+    'missing',
+  );
 });

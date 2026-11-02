@@ -8,19 +8,19 @@ import type { CodingApprovalStore, CodingApprovalTransaction } from '@runnets/ap
 /** Copy-on-write transactions publish approval and claim together. */
 export class InMemoryCodingApprovalStore implements CodingApprovalStore {
   #approvals = new Map<string, CodingApproval>();
-  #claims = new Set<string>();
+  #claims = new Map<string, string>();
   #active = false;
   atomic<T>(work: (tx: CodingApprovalTransaction) => T): T {
     if (this.#active) throw Error('nested approval transaction');
     this.#active = true;
     const approvals = structuredClone(this.#approvals),
-      claims = new Set(this.#claims);
+      claims = new Map(this.#claims);
     try {
       const result = work({
         approval: (id) => structuredClone(approvals.get(id) ?? null),
         putApproval: (value) => {
           assertCodingApprovalTransition(approvals.get(value.id) ?? null, value);
-          if (value.status === 'consumed' && !claims.has(codingApprovalClaimKey(value)))
+          if (value.status === 'consumed' && claims.get(codingApprovalClaimKey(value)) !== value.id)
             throw Error('missing approval dispatch claim');
           approvals.set(value.id, structuredClone(value));
         },
@@ -34,7 +34,7 @@ export class InMemoryCodingApprovalStore implements CodingApprovalStore {
             return false;
           const key = codingApprovalClaimKey(value);
           if (claims.has(key)) return false;
-          claims.add(key);
+          claims.set(key, value.id);
           return true;
         },
       });

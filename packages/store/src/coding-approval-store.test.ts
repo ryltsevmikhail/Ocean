@@ -56,3 +56,20 @@ it('refuses preview mutation and consumption without a claim', () => {
     'missing',
   );
 });
+
+it('requires the dispatch claim to belong to the consumed approval', () => {
+  const store = new InMemoryCodingApprovalStore();
+  store.atomic((tx) => tx.putApproval(pending));
+  const allowed = { ...pending, status: 'allowed' } as const;
+  store.atomic((tx) => tx.putApproval(allowed));
+  store.atomic((tx) => {
+    tx.claimApprovalOperation(allowed);
+    tx.putApproval({ ...allowed, status: 'consumed' });
+  });
+  const other = { ...pending, id: 'other' };
+  store.atomic((tx) => tx.putApproval(other));
+  store.atomic((tx) => tx.putApproval({ ...other, status: 'allowed' }));
+  expect(() => store.atomic((tx) => tx.putApproval({ ...other, status: 'consumed' }))).toThrow(
+    'missing',
+  );
+});
