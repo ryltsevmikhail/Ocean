@@ -22,12 +22,13 @@ export interface CodingTurnFactoryDeps {
   readonly approvals: CodingApprovalService;
   readonly journal: ToolJournalPort;
   readonly sandbox: (task: CodingTask) => Promise<SandboxOptions>;
-  readonly owner: (turn: ChatTurn) => CodingApprovalOwnerPort;
+  readonly owner: (turn: ChatTurn, signal: AbortSignal) => CodingApprovalOwnerPort;
 }
 /** Host composition only. Configuration is supplied by the owner, never model arguments. */
 export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
   return {
-    async forTurn(turn: ChatTurn): Promise<CodingTurnTools> {
+    async forTurn(turn: ChatTurn, signal: AbortSignal): Promise<CodingTurnTools> {
+      signal.throwIfAborted();
       if (!turn.codingTaskId) throw new ToolError('coding_denied', 'explicit task required');
       const access = {
         taskId: turn.codingTaskId,
@@ -67,7 +68,7 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
         definitions: TOOL_DEFINITIONS,
         presets: task.policy.testPresets,
         approvals: deps.approvals,
-        owner: deps.owner(turn),
+        owner: deps.owner(turn, signal),
         journal: deps.journal,
         taskRunId: turn.taskRunId,
         nextId: () => randomUUID(),

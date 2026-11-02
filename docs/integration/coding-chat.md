@@ -30,3 +30,12 @@ Owner sandbox/dependency configuration remains an injected host port.
 Preparation now binds the actual turn attempt ID; a native session assertion
 covers it. Factory injection into runtime/CLI and full direct/group conversation
 qualification remain pending.
+
+Durable runtime now accepts explicit owner-supplied sandbox and approval ports
+through codingTools options and composes the host factory into its common chat
+service. Restored/task authority checks remain in the factory and approval
+service. Cancellation is passed from send to the factory's owner port.
+Coding tools provide task-specific model instructions using run_test preset
+IDs, replacing legacy unrestricted-command instructions for these turns.
+A durable chat regression verifies the injected task instructions reach the
+provider. CLI configuration and full native direct/group flows remain pending.

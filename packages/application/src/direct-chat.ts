@@ -27,7 +27,9 @@ export interface RecordedRoomMessage {
 }
 export interface DirectChatDeps extends ConversationServiceDeps {
   readonly tasks: TaskRunService;
-  readonly codingTools?: { forTurn(turn: ChatTurn): Promise<NonNullable<TurnInput['tools']>> };
+  readonly codingTools?: {
+    forTurn(turn: ChatTurn, signal: AbortSignal): Promise<NonNullable<TurnInput['tools']>>;
+  };
 }
 export interface SendDirectInput extends DirectChatRequest {
   readonly provider: ProviderPort | null;
@@ -98,7 +100,9 @@ export class DirectChatService {
         return ok(next);
       }
       const tools =
-        turn.codingTaskId === undefined ? undefined : await this.#deps.codingTools!.forTurn(turn);
+        turn.codingTaskId === undefined
+          ? undefined
+          : await this.#deps.codingTools!.forTurn(turn, input.signal);
       const dispatched = { ...turn, status: 'dispatching' as const };
       updateChat(store, turn, dispatched);
       turn = dispatched;

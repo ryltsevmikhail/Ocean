@@ -1,3 +1,4 @@
+import { codingTurnFactory, type CodingTurnFactoryDeps } from './coding-turn-factory.js';
 import {
   GitCodingProject,
   SqliteProjectLeases,
@@ -53,6 +54,7 @@ export interface Runtime {
   close(): void;
 }
 export interface RuntimeOptions {
+  readonly codingTools?: Pick<CodingTurnFactoryDeps, 'sandbox' | 'owner'>;
   readonly restoredAccess?: boolean;
   readonly clock?: Clock;
   readonly dbPath?: string | undefined;
@@ -142,8 +144,6 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       clock: options.clock ?? systemClock,
       nextId: () => randomUUID().replaceAll('-', ''),
     };
-    const chat = new DirectChatService({ ...deps, tasks: service });
-    const ready = chat.recover().then(() => reconcileInterrupted(service, store.tools));
     const codingDeps = {
       store: store.coding,
       leases: new SqliteProjectLeases(),
@@ -153,15 +153,33 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       clock: deps.clock,
       restored: existsSync(join(dirname(dbPath), 'restore-guard.json')),
     };
+    const coding = new CodingTaskService(codingDeps);
+    const codingApprovals = new CodingApprovalService({
+      store: store.codingApprovals,
+      now: () => deps.clock.now().getTime(),
+      admit: (binding, tx) => codingApprovalAdmission(binding, tx, codingDeps),
+      restored: codingDeps.restored,
+    });
+    const chat = new DirectChatService({
+      ...deps,
+      tasks: service,
+      ...(options.codingTools
+        ? {
+            codingTools: codingTurnFactory({
+              ...options.codingTools,
+              store: store.coding,
+              tasks: coding,
+              approvals: codingApprovals,
+              journal: store.tools,
+            }),
+          }
+        : {}),
+    });
+    const ready = chat.recover().then(() => reconcileInterrupted(service, store.tools));
     return {
       service,
-      coding: new CodingTaskService(codingDeps),
-      codingApprovals: new CodingApprovalService({
-        store: store.codingApprovals,
-        now: () => deps.clock.now().getTime(),
-        admit: (binding, tx) => codingApprovalAdmission(binding, tx, codingDeps),
-        restored: codingDeps.restored,
-      }),
+      coding,
+      codingApprovals,
       codingChanges: new CodingChangesetService({
         ...codingDeps,
         worktrees: new GitCodingWorktrees(),

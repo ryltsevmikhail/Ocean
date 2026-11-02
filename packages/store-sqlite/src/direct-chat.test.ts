@@ -233,7 +233,11 @@ it('requires an injected task factory and binds task identity into the durable c
     codingTools: {
       forTurn: async (turn) => {
         seen.push(turn.codingTaskId!);
-        return { definitions: [], execute: async () => ({ isError: true, output: 'unused' }) };
+        return {
+          instructions: 'Task-scoped coding instructions',
+          definitions: [],
+          execute: async () => ({ isError: true, output: 'unused' }),
+        };
       },
     },
   });
@@ -242,6 +246,10 @@ it('requires an injected task factory and binds task identity into the durable c
     value: { status: 'completed', codingTaskId: 'task' },
   });
   expect(seen).toEqual(['task']);
+  expect(requests[0]?.messages[0]).toEqual({
+    role: 'system',
+    content: 'Task-scoped coding instructions',
+  });
   expect(await chat.send({ ...send, taskId: 'different' })).toMatchObject({
     ok: false,
     error: { code: 'request_conflict' },
