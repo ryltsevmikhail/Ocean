@@ -1,6 +1,7 @@
 import {
   assertCodingApprovalTransition,
   codingApprovalClaimKey,
+  type CodingTask,
   type CodingApproval,
 } from '@runnets/domain';
 import type { CodingApprovalStore, CodingApprovalTransaction } from '@runnets/application';
@@ -10,6 +11,10 @@ export class InMemoryCodingApprovalStore implements CodingApprovalStore {
   #approvals = new Map<string, CodingApproval>();
   #claims = new Map<string, string>();
   #active = false;
+  readonly #task: (id: string) => CodingTask | null;
+  constructor(task: (id: string) => CodingTask | null = () => null) {
+    this.#task = task;
+  }
   atomic<T>(work: (tx: CodingApprovalTransaction) => T): T {
     if (this.#active) throw Error('nested approval transaction');
     this.#active = true;
@@ -17,6 +22,7 @@ export class InMemoryCodingApprovalStore implements CodingApprovalStore {
       claims = new Map(this.#claims);
     try {
       const result = work({
+        task: (id) => structuredClone(this.#task(id)),
         approval: (id) => structuredClone(approvals.get(id) ?? null),
         putApproval: (value) => {
           assertCodingApprovalTransition(approvals.get(value.id) ?? null, value);

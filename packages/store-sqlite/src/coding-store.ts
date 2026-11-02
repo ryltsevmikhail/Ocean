@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { CodingStore, CodingTransaction } from '@runnets/application';
 import type { CodingTask } from '@runnets/domain';
 import { withImmediateTransaction } from './transaction.js';
-function task(row: Record<string, unknown> | undefined): CodingTask | null {
+export function task(row: Record<string, unknown> | undefined): CodingTask | null {
   if (!row) return null;
   const t = JSON.parse(String(row['payload'])) as CodingTask;
   if (

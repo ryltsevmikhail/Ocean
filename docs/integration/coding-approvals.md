@@ -59,3 +59,10 @@ writes through this public port, closes the store, reopens it and verifies the
 exact pending preview. Runtime admission wiring must avoid nesting a coding
 BEGIN IMMEDIATE inside an approval transaction on that connection; authority
 reads and consumption need a shared transaction view.
+
+Admission callbacks now receive the active approval transaction, and every
+request/decision/consumption admission check executes inside that transaction.
+SQLite exposes authoritative task reads on that view without opening a nested
+coding transaction. Memory storage accepts a synchronous task reader.
+A regression verifies all four admission checkpoints run within the transaction.
+Production authority policy and runtime wiring remain pending.

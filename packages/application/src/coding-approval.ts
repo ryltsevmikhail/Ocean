@@ -2,12 +2,14 @@ import {
   codingApprovalMatches,
   codingFailure,
   ok,
+  type CodingTask,
   type CodingApproval,
   type CodingApprovalBinding,
   type CodingResult,
 } from '@runnets/domain';
 
 export interface CodingApprovalTransaction {
+  task?(id: string): CodingTask | null;
   approval(id: string): CodingApproval | null;
   putApproval(value: CodingApproval): void;
   /** Creates the durable dispatch claim in this same transaction. */
@@ -23,7 +25,7 @@ export interface CodingApprovalDependencies {
   readonly store: CodingApprovalStore;
   readonly now: () => number;
   /** Checks current task/room/bot authority, project lease and unresolved claims. */
-  readonly admit: (binding: CodingApprovalBinding) => boolean;
+  readonly admit: (binding: CodingApprovalBinding, tx: CodingApprovalTransaction) => boolean;
   readonly restored: boolean;
 }
 /** Persists preview and owner decision. Dispatch must atomically consume before effects. */
@@ -42,8 +44,8 @@ export class CodingApprovalService {
     if (!id || !preview || preview.length > 1048576 || !Number.isSafeInteger(now))
       return codingFailure('invalid_input');
     if (this.deps.restored) return codingFailure('recovery_required');
-    if (!this.deps.admit(input)) return codingFailure('coding_denied');
     return this.deps.store.atomic((tx) => {
+      if (!this.deps.admit(input, tx)) return codingFailure('coding_denied');
       if (tx.approval(id)) return codingFailure('request_conflict');
       const approval: CodingApproval = {
         id,
@@ -64,11 +66,12 @@ export class CodingApprovalService {
   ): Promise<CodingResult<CodingApproval>> {
     const binding = structuredClone(current);
     if (this.deps.restored) return codingFailure('recovery_required');
-    const approval = this.deps.store.atomic((tx) => tx.approval(id));
+    const approval = this.deps.store.atomic((tx) =>
+      this.deps.admit(binding, tx) ? tx.approval(id) : null,
+    );
     if (
       !approval ||
       approval.status !== 'pending' ||
-      !this.deps.admit(binding) ||
       !codingApprovalMatches(
         approval.binding,
         binding,
@@ -84,7 +87,7 @@ export class CodingApprovalService {
       if (
         !pending ||
         pending.status !== 'pending' ||
-        !this.deps.admit(binding) ||
+        !this.deps.admit(binding, tx) ||
         !codingApprovalMatches(
           pending.binding,
           binding,
@@ -110,7 +113,7 @@ export class CodingApprovalService {
       if (
         !approval ||
         approval.status !== 'allowed' ||
-        !this.deps.admit(binding) ||
+        !this.deps.admit(binding, tx) ||
         !codingApprovalMatches(
           approval.binding,
           binding,

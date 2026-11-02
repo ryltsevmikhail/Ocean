@@ -1,3 +1,4 @@
+import { task as decodeTask } from './coding-store.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { CodingApprovalStore, CodingApprovalTransaction } from '@runnets/application';
 import {
@@ -23,6 +24,7 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
         return value;
       };
       return work({
+        task: (id) => decodeTask(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
         approval,
         putApproval: (value) => {
           assertCodingApprovalTransition(approval(value.id), value);
