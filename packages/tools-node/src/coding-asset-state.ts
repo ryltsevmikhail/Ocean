@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import type { CodingAssetManifest } from '@runnets/domain';
 import type { CodingAssetPolicy } from './coding-asset-policy.js';
 export interface CodingAssetLimits {
@@ -39,4 +40,24 @@ export function codingAssetMount(fd: number): string {
   const value = /^mnt_id:\s+(\d+)$/m.exec(info)?.[1];
   if (!value) throw Error('unsupported_coding_asset');
   return value;
+}
+
+/** Host-only guards issued by the scoped classifier. Never serialized to a portable manifest. */
+export interface PublicationGuard {
+  read<T>(staged: number, consume: () => T): T;
+  verify(sha256: string, bytes: number, buffer: Buffer): void;
+}
+export type PublicationGuards = ReadonlyMap<string, PublicationGuard>;
+
+/** Caller pins and checks the descriptor and charges the complete byte budget before reading. */
+export function hashAssetBytes(fd: number, bytes: number, buffer: Buffer) {
+  const digest = createHash('sha256');
+  let position = 0;
+  while (position < bytes) {
+    const count = fs.readSync(fd, buffer, 0, Math.min(buffer.length, bytes - position), position);
+    if (!count) throw Error('stale_coding_asset');
+    digest.update(buffer.subarray(0, count));
+    position += count;
+  }
+  return digest.digest('hex');
 }

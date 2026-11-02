@@ -20,11 +20,24 @@ export interface CodingRecoveryRecordEvidence {
   readonly path: string;
   readonly status: 'started' | 'completed';
   readonly nextOpaque: boolean;
+  readonly publicationLink?: 'matching' | 'conflict';
   readonly original: 'not-required' | 'absent' | 'matching' | 'conflict';
 }
 export const parseRecoveryJson = (buffer: Buffer): unknown =>
   JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer)) as unknown;
 
+export function decodeRecoveryMain(
+  bytes: Buffer,
+  id: string,
+  projects: ReadonlySet<string> | null,
+) {
+  try {
+    return decodeCodingRecoveryIntent(parseRecoveryJson(bytes), id, projects);
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof TypeError) return invalidRecovery();
+    throw error;
+  }
+}
 /** Caller provides one preflighted basename and its checked parent FD. */
 export function readRecoveryJsonBytes(
   parent: number,
@@ -73,6 +86,7 @@ export function readCodingRecoveryRecords(
   projects: ReadonlySet<string>,
   prefix: '' | 'files/',
   checkIntent?: (intent: CodingRecoveryIntent) => void,
+  publications?: ReadonlySet<string>,
 ): CodingRecoveryRecordEvidence[] {
   const states = new Map(capture.sourceEntries);
   const entries = new Map(
@@ -94,15 +108,7 @@ export function readCodingRecoveryRecords(
   for (const name of entries.keys()) {
     if (!name.endsWith('.json')) continue;
     const id = name.slice(0, -5);
-    const body = read(name);
-    let value: unknown;
-    try {
-      value = parseRecoveryJson(body);
-    } catch (error) {
-      if (error instanceof SyntaxError || error instanceof TypeError) return invalidRecovery();
-      throw error;
-    }
-    const intent = decodeCodingRecoveryIntent(value, id, projects),
+    const intent = decodeRecoveryMain(read(name), id, projects),
       before = entries.get(intent.backup);
     checkIntent?.(intent);
     if (intent.status === 'completed' && intent.before && !before) return invalidRecovery();
@@ -143,10 +149,7 @@ export function readCodingRecoveryRecords(
     if (intent.before) {
       original = 'absent';
       if (before) {
-        const matches =
-          before.kind === 'file' &&
-          before.sha256 === intent.before.sha256 &&
-          (before.mode & 0o111 ? '100755' : '100644') === intent.before.mode;
+        const matches = matchesContent(before, intent.before);
         original = matches ? 'matching' : 'conflict';
       }
     }
@@ -157,9 +160,26 @@ export function readCodingRecoveryRecords(
       status: intent.status,
       nextOpaque,
       original,
+      ...(publications?.has(prefix + intent.staged) && {
+        publicationLink: matchesContent(entries.get(intent.staged), intent.after)
+          ? ('matching' as const)
+          : ('conflict' as const),
+      }),
     });
   }
   const ids = new Set(records.map((record) => record.id));
   if ([...entries.keys()].some((name) => !ids.has(name.split('.')[0]!))) return invalidRecovery();
   return records;
+}
+
+function matchesContent(
+  entry: CodingAssetEntry | undefined,
+  expected: CodingRecoveryIntent['after'],
+) {
+  return (
+    entry?.kind === 'file' &&
+    expected &&
+    entry.sha256 === expected.sha256 &&
+    (entry.mode & 0o111 ? '100755' : '100644') === expected.mode
+  );
 }

@@ -19,7 +19,8 @@ import {
 } from './coding-recovery-evidence.js';
 import type { RecoveryBudget } from './coding-recovery-budget.js';
 import { recoveryFileKey, type RecoveryPlan } from './coding-recovery-plan.js';
-import { invalidRecovery } from './coding-recovery-record.js';
+import { classifyPublications } from './coding-publication.js';
+import { invalidRecovery, type CodingRecoveryIntent } from './coding-recovery-record.js';
 type Application = CodingBackupInventory['applications'][number];
 export type ScopedCodingApplyRecoveryObservation = {
   readonly context: CodingApplyContext;
@@ -107,6 +108,15 @@ export function observeBoundRecovery(
       if (!statuses.some((status) => status !== 'pending')) return invalidRecovery();
       let validHeader = false;
       let classifiedHeaderHash: string | undefined;
+      const classifiedIntents = new Map<string, string>();
+      const publications = new Set<string>();
+      const checkIntent = (intent: CodingRecoveryIntent) => {
+        if (graph) {
+          const file = graph.plan.files.get(intent.path);
+          if (!file || recoveryFileKey(projectRoot, file) !== recoveryFileKey(projectRoot, intent))
+            return invalidRecovery();
+        }
+      };
       const capture = captureAssetTreeAt(
         leaf.path,
         graph?.budget.limits ?? {},
@@ -161,7 +171,37 @@ export function observeBoundRecovery(
           )
             return invalidRecovery();
         },
+        undefined,
+        declared
+          ? (metadata, candidates) => {
+              if (candidates.size && (!validHeader || !classifiedHeaderHash))
+                return invalidRecovery();
+              const guards = classifyPublications(
+                {
+                  common,
+                  slot,
+                  project: projectRoot,
+                  witness,
+                  headerHash: classifiedHeaderHash ?? '',
+                },
+                source,
+                metadata,
+                candidates,
+                files,
+                checkIntent,
+                classifiedIntents,
+                graph?.witness,
+              );
+              for (const path of guards.keys()) publications.add(path);
+              return guards;
+            }
+          : undefined,
       );
+      for (const entry of capture.manifest.entries) {
+        const digest = classifiedIntents.get(entry.path);
+        if (digest && (entry.kind !== 'file' || entry.sha256 !== digest))
+          throw Error('stale_coding_asset');
+      }
       const capturedHeader = capture.manifest.entries.find((entry) => entry.path === 'scope.json');
       if (
         (capturedHeader?.kind === 'file' ? capturedHeader.sha256 : undefined) !==
@@ -174,16 +214,8 @@ export function observeBoundRecovery(
             source.files.fd,
             new Set([projectRoot]),
             'files/',
-            (intent) => {
-              if (graph) {
-                const file = graph.plan.files.get(intent.path);
-                if (
-                  !file ||
-                  recoveryFileKey(projectRoot, file) !== recoveryFileKey(projectRoot, intent)
-                )
-                  return invalidRecovery();
-              }
-            },
+            checkIntent,
+            publications,
           )
         : [];
       const seen = new Set<string>();

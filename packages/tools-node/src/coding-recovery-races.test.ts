@@ -138,3 +138,38 @@ it('retains interrupted legacy staged bytes linked to the checkout without follo
     f.close();
   }
 });
+it.each(['mapped staged body', 'missing project alias'])(
+  'refuses a changed %s after the last graph consumer',
+  async (kind) => {
+    const f = graphFixture(2);
+    try {
+      const app = f.add('publication', 0, 2, 'uncertain'),
+        files = join(f.scoped(app), 'files');
+      const main = join(
+        files,
+        fs.readdirSync(files).find((name) => name.endsWith('.json'))!,
+      );
+      fs.writeFileSync(main, fs.readFileSync(main, 'utf8').replace('"completed"', '"started"'));
+      const stage = main.replace('.json', '.after'),
+        target = join(f.tasks[0]!.projectRoot, 'file');
+      fs.linkSync(target, stage);
+      const later = f.scoped(f.add('later', 1, 2));
+      await mapped(stage, 'bad', async (mutate) => {
+        let consumed = false;
+        await expect(
+          captureCodingRecoveryAssets(f.inventory(), f.managed, async ({ capture }) => {
+            if (capture.root !== later) return;
+            consumed = true;
+            if (kind === 'mapped staged body') await mutate();
+            else fs.renameSync(target, join(f.outer, 'user-file'));
+          }),
+        ).rejects.toThrow();
+        expect(consumed).toBe(true);
+        expect(fs.readFileSync(stage, 'utf8')).toBe(kind === 'mapped staged body' ? 'bad' : 'new');
+        expect(fs.statSync(stage).nlink).toBe(2);
+      });
+    } finally {
+      f.close();
+    }
+  },
+);

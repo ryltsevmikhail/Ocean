@@ -4,6 +4,7 @@ import { planAssetSelection } from './coding-asset-selection.js';
 import type { CodingAssetPolicy } from './coding-asset-policy.js';
 import {
   CODING_ASSET_LIMITS,
+  type PublicationGuards,
   type CodingAssetLimits,
   type CodingAssetCapture,
 } from './coding-asset-state.js';
@@ -17,15 +18,18 @@ export {
 export type { CodingAssetPolicy } from './coding-asset-policy.js';
 // Only captures issued in this process can authorize another source observation.
 // Portable manifests remain independently usable by archive verification and restore.
-const issuedCaptures = new WeakMap<CodingAssetCapture, string>();
+const issuedCaptures = new WeakMap<
+  CodingAssetCapture,
+  { digest: string; guards?: PublicationGuards }
+>();
 const captureDigest = (capture: CodingAssetCapture) =>
   createHash('sha256').update(JSON.stringify(capture)).digest('hex');
-export function checkedArchiveInput(handle: CodingAssetCapture): CodingAssetCapture {
-  const digest = issuedCaptures.get(handle);
-  if (!digest) throw Error('invalid_coding_asset_capture');
+export function checkedArchiveInput(handle: CodingAssetCapture) {
+  const origin = issuedCaptures.get(handle);
+  if (!origin) throw Error('invalid_coding_asset_capture');
   const snapshot = structuredClone(handle);
-  if (captureDigest(snapshot) !== digest) throw Error('invalid_coding_asset_capture');
-  return snapshot;
+  if (captureDigest(snapshot) !== origin.digest) throw Error('invalid_coding_asset_capture');
+  return { snapshot, guards: origin.guards };
 }
 /** Captures a selected root only. Symlinks are inert text; a separate graph resolver must prove completeness. */
 export function captureCodingAssetTree(
@@ -53,6 +57,10 @@ export function captureAssetTreeAt(
   pinned?: number,
   preflight?: (metadata: CodingAssetCapture) => void,
   paths?: readonly string[],
+  publication?: (
+    metadata: CodingAssetCapture,
+    candidates: ReadonlySet<string>,
+  ) => PublicationGuards,
 ): CodingAssetCapture {
   if (
     ![
@@ -79,27 +87,57 @@ export function captureAssetTreeAt(
   )
     throw Error('unsupported_coding_asset');
   const selection = paths === undefined ? undefined : planAssetSelection(paths, limits);
+  const candidates = publication ? new Set<string>() : undefined;
   const metadata =
     policy !== 'all'
-      ? scanAssetSource(root, limits, policy, undefined, true, pinned, selection)
+      ? scanAssetSource(
+          root,
+          limits,
+          policy,
+          undefined,
+          true,
+          pinned,
+          selection,
+          candidates && { candidates },
+        )
       : undefined;
   const expected = metadata && {
     entries: new Map(metadata.sourceEntries),
     mount: metadata.sourceMount,
   };
   if (metadata) preflight?.(metadata);
-  const first = scanAssetSource(root, limits, policy, expected, false, pinned, selection),
-    second = scanAssetSource(root, limits, policy, expected, false, pinned, selection);
+  const guards = metadata && candidates && publication?.(metadata, candidates);
+  const first = scanAssetSource(
+      root,
+      limits,
+      policy,
+      expected,
+      false,
+      pinned,
+      selection,
+      guards && { guards },
+    ),
+    second = scanAssetSource(
+      root,
+      limits,
+      policy,
+      expected,
+      false,
+      pinned,
+      selection,
+      guards && { guards },
+    );
   if (
     first.manifest.hash !== second.manifest.hash ||
     first.sourceStateHash !== second.sourceStateHash
   )
     throw Error('stale_coding_asset');
-  issuedCaptures.set(first, captureDigest(first));
+  issuedCaptures.set(first, { digest: captureDigest(first), ...(guards && { guards }) });
   return first;
 }
 /** Verify captured bytes as well as source identities after consuming the evidence. */
 export function checkAssetTreeAt(capture: CodingAssetCapture, pinned: number): void {
+  const guards = issuedCaptures.get(capture)?.guards;
   const after = scanAssetSource(
     capture.root,
     capture.limits,
@@ -109,6 +147,7 @@ export function checkAssetTreeAt(capture: CodingAssetCapture, pinned: number): v
     pinned,
     capture.manifest.selectedFiles &&
       planAssetSelection(capture.manifest.selectedFiles, capture.limits),
+    guards && { guards },
   );
   if (
     after.sourceStateHash !== capture.sourceStateHash ||

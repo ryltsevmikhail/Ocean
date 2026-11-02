@@ -19,6 +19,7 @@ import {
   checkAssetPath,
   verifyAssetBlobs,
 } from './coding-asset-io.js';
+import type { PublicationGuards } from './coding-asset-state.js';
 function write(fd: number, buffer: Buffer): void {
   let offset = 0;
   while (offset < buffer.length) {
@@ -73,6 +74,7 @@ function sourceFile(
 function recapture(
   expected: CodingAssetCapture,
   manifest: CodingAssetManifest,
+  guards: PublicationGuards | undefined,
 ): CodingAssetCapture {
   return captureAssetTreeAt(
     expected.root,
@@ -83,6 +85,12 @@ function recapture(
       if (metadata.sourceStateHash !== expected.sourceStateHash) throw Error('stale_coding_asset');
     },
     manifest.selectedFiles,
+    guards &&
+      ((_metadata, candidates) => {
+        if (guards.size !== candidates.size || [...candidates].some((path) => !guards.has(path)))
+          throw Error('stale_coding_asset');
+        return guards;
+      }),
   );
 }
 /** New private output only. On failure its incomplete data is retained, never recursively cleaned. */
@@ -90,7 +98,7 @@ export function archiveCodingAssetTree(
   handle: CodingAssetCapture,
   destination: string,
 ): CodingAssetManifest {
-  const expected = checkedArchiveInput(handle);
+  const { snapshot: expected, guards } = checkedArchiveInput(handle);
   if (
     resolve(destination) !== destination ||
     destination === expected.root ||
@@ -100,7 +108,7 @@ export function archiveCodingAssetTree(
   )
     throw Error('invalid_coding_asset_destination');
   const manifest = validateCodingAssetManifest(expected.manifest),
-    fresh = recapture(expected, manifest);
+    fresh = recapture(expected, manifest, guards);
   if (fresh.manifest.hash !== manifest.hash || fresh.sourceStateHash !== expected.sourceStateHash)
     throw Error('stale_coding_asset');
   const parent = fs.openSync(dirname(destination), assetDirectoryFlags);
@@ -156,20 +164,25 @@ export function archiveCodingAssetTree(
         file = fs.openSync(join(assetFdPath(blobs), entry.sha256), 'wx', 0o600);
         const hash = createHash('sha256');
         let position = 0;
-        while (position < entry.bytes) {
-          const count = fs.readSync(
-            input,
-            buffer,
-            0,
-            Math.min(buffer.length, entry.bytes - position),
-            position,
-          );
-          if (!count) throw Error('stale_coding_asset');
-          const chunk = buffer.subarray(0, count);
-          hash.update(chunk);
-          write(file, chunk);
-          position += count;
-        }
+        const copy = () => {
+          while (position < entry.bytes) {
+            const count = fs.readSync(
+              input,
+              buffer,
+              0,
+              Math.min(buffer.length, entry.bytes - position),
+              position,
+            );
+            if (!count) throw Error('stale_coding_asset');
+            const chunk = buffer.subarray(0, count);
+            hash.update(chunk);
+            write(file!, chunk);
+            position += count;
+          }
+        };
+        const guard = guards?.get(entry.path);
+        if (guard) guard.read(input, copy);
+        else copy();
         if (
           codingAssetIdentity(fs.fstatSync(input, { bigint: true })) !== before ||
           hash.digest('hex') !== entry.sha256
@@ -185,7 +198,7 @@ export function archiveCodingAssetTree(
       checkAssetPath(output, destination);
     }
     fs.fsyncSync(blobs);
-    const after = recapture(fresh, manifest);
+    const after = recapture(fresh, manifest, guards);
     if (after.sourceStateHash !== fresh.sourceStateHash || after.manifest.hash !== manifest.hash)
       throw Error('stale_coding_asset');
     verifyAssetBlobs(blobs, manifest);

@@ -135,7 +135,9 @@ Its temporary Git fixture covers:
 - committed file started, before its external effect;
 - scope.json fsynced, before files/ creation or any project file effect;
 - original renamed into retained recovery storage, destination absent;
-- replacement published, before its file completion receipt;
+- staged replacement linked at the project destination, before its recovery name is unlinked;
+- staged name unlinked, before the completion intent is saved;
+- completion intent saved, before its file completion receipt;
 - first file completed and second changed but not recorded complete;
 - all file receipts completed, before overall operation completion.
 
@@ -187,6 +189,17 @@ can show completed native records while the overall receipt remains uncertain.
 Project bytes and dispatch counts survive both openings, the journal retains its
 hold and a duplicate claim refuses. No folder repair or settlement accompanies
 source capture. See [coding backup](coding-backup.md).
+
+At the 7.4 checkpoint both publication boundaries leave the first file uncertain
+and the shared hold in place over two reopenings. The project contains the new
+bytes and the recovery directory contains the original bytes. Immediately after
+the link, its staged name still shares the destination inode. After unlink, that
+name is absent. Read-only capture distinguishes these shapes, preserves the
+source and never retries the apply. A separate SIGKILL fixture uses a real task
+and changeset with a trusted seeded receipt to capture the publication link from
+a frozen profile under maintenance ownership. Its quarantined staged file has
+one link and its own inode. The four-file native suite passes 14 tests on Linux,
+including the two admitted direct/group workflows.
 
 ## Remaining release gates
 

@@ -368,7 +368,8 @@ and one frozen inventory application. It checks the numeric marker and
 task/application/changeset identity, derives the slot itself and opens only that
 operation below `ocean-apply-recovery-v2`. The caller binds the common directory,
 original project and owner from the frozen task/worktree and holds maintenance
-ownership. The collector never opens referenced checkout files. Its result carries
+ownership. The collector reads recovery bytes. When a staged file has two links,
+it checks metadata at the exact bound checkout path with Linux O_PATH. Its result carries
 the frozen status, context and slot alongside one of four source observations.
 
 | Presence    | Evidence                                                                                                                                    |
@@ -392,7 +393,7 @@ gone and a displaced original must be present if the intent required it.
 Before reading even the header, a metadata pass checks the entire leaf. Its
 namespace permits only private scope.json (64 KiB), the private files directory
 and flat UUID .before/.after/.json/.json.next files (2 MiB per JSON record).
-Links, special nodes, foreign owners, child mounts, unknown names and over-budget
+Symlinks, unproved hardlinks, special nodes, foreign owners, child mounts, unknown names and over-budget
 trees refuse. Selected-root limits still bound all bytes, entries and metadata.
 The manifest must match the digest of the exact header bytes used for
 classification, including an opaque partial header. After intent decoding, a
@@ -404,7 +405,7 @@ Synthetic cases cover archive verification and private quarantine materializatio
 of the entire leaf, source swaps and content mutation, and zero body reads for
 forbidden names or oversized JSON. Direct and group native workflow fixtures
 capture their admitted completed apply from an ownership-held frozen inventory.
-The seven SIGKILL boundaries also exercise source classification after reopening.
+The nine SIGKILL boundaries also exercise source classification after reopening.
 These observations describe retained evidence only. The next section extends this collector across frozen operations.
 Configuration/dependency closure, format-2 publication and full restore remain open.
 
@@ -422,7 +423,7 @@ The graph verifies the inventory hash and binds each application to its task,
 owner, changeset, ready managed worktree, derived branch and canonical Git common
 directory. It reads the managed worktree's Git pointer and the matching
 administrative HEAD, gitdir and commondir. A missing or rebound required
-worktree refuses collection. Original checkout files are outside this read.
+worktree refuses collection. Git binding uses no original checkout file bodies.
 The sequential consumer receives one source capture at a time with its kind
 and slot. The catalog binds the inventory hash, application references and
 selected legacy evidence to their portable manifest hashes.
@@ -467,9 +468,7 @@ metadata preflight. Generic selected files require all hardlink names to be
 selected. This prevents a harmless-looking name from exposing an unselected credential inode.
 Classified legacy .before/.after files can retain a link outside recovery during
 an interrupted host apply. Only the selected inode bytes and internal aliases are
-materialized. No external alias is followed or recreated. The existing v2 policy
-refuses multiply-linked recovery files, including the live staged hardlink
-interval. That v2 crash boundary remains unqualified.
+materialized. No external alias is followed or recreated.
 
 Each graph pass limits selected outputs to 2 GiB and 100,000 entries, catalog
 and reference metadata to 16 MiB and classified JSON to 256 MiB and 10,000 main
@@ -484,6 +483,34 @@ unchanged-timestamp shared-mapping writes. Direct/group native workflows also
 exercise graph collection inside the frozen callback. The API grants no sandbox
 execution authority. Public format 1 still refuses profiles with external
 coding assets.
+
+## Interrupted staged publication
+
+After the native writer links a staged replacement at its project destination,
+a process kill can leave both names on one inode. For a declared protocol-2
+receipt the collector accepts exactly two links to an owned regular UUID.after.
+The canonical header and strictly decoded started main must bind a unique started
+or uncertain receipt path. The intent must declare an after-image, have no next
+record and retain its original when required. Header, JSON and UUID.before files
+still require a single link. The graph also checks the frozen changeset modes
+and hashes before inspecting the destination.
+
+The host walks only the canonical destination components with no-follow O_PATH
+descriptors. It checks the destination inode, device, link count and mount against
+the staged descriptor. Absent, foreign, symlinked or rebound names refuse capture.
+The collector hashes the classification JSON and compares it with the actual
+captured bytes. The originating capture carries private guards for later archive
+reads. They recheck the scope, phase and project binding around the read, then
+verify the staged hash and binding after the other scope entries. The graph
+checks these witnesses again after its last consumer.
+
+The catalog reports `publicationLink` as `matching` or `conflict` based on the
+observed after bytes and executable mode. The portable manifest describes an
+ordinary file with its actual bytes and permissions. Restoring it creates an
+independent file under quarantine. Original project pointers remain inert and the
+receipt keeps its unknown effect. The native suite covers nine SIGKILL boundaries,
+one published-link frozen graph and quarantine round trip, both admitted direct
+and group workflows, and two native asset tests (14 tests total).
 
 ## Remaining format-2 work
 

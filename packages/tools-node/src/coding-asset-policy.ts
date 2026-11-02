@@ -5,6 +5,7 @@ export function checkAssetPolicy(
   policy: CodingAssetPolicy,
   relative: string,
   before: BigIntStats,
+  publicationCandidate = false,
 ): void {
   if (policy === 'coding-worktree' && relative) {
     const parts = relative.split('/');
@@ -60,7 +61,9 @@ export function checkAssetPolicy(
   if (
     !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\.(?:before|after|json(?:\.next)?)$/.test(name) ||
     !before.isFile() ||
-    (scoped && before.nlink !== 1n) ||
+    (scoped &&
+      before.nlink !== 1n &&
+      !(publicationCandidate && name.endsWith('.after') && before.nlink === 2n)) ||
     (name.includes('.json') && (before.nlink !== 1n || before.size > 2097152n))
   )
     throw Error('protected_coding_asset');

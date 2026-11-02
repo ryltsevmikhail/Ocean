@@ -54,6 +54,7 @@ function source(withFiles: boolean) {
   return {
     header: join(dirname(files), 'scope.json'),
     record: main ? join(files, main) : undefined,
+    project,
     collect: () => captureScopedCodingApplyRecovery(common, project, context, application),
     close: () => fs.rmSync(outer, { recursive: true, force: true }),
   };
@@ -68,20 +69,47 @@ with open(sys.argv[1],'r+b') as f, mmap.mmap(f.fileno(),0,access=mmap.ACCESS_WRI
     if sys.stdin.buffer.read(1) == b'!':
         page[:] = bytes.fromhex(sys.argv[2])
 `;
-it.runIf(process.platform === 'linux').each(['canonical header', 'opaque header', 'original'])(
+it
+  .runIf(process.platform === 'linux')
+  .each([
+    'canonical header',
+    'opaque header',
+    'original',
+    'publication intent',
+    'publication header',
+    'published bytes',
+  ])(
   'refuses a mapped write to the %s while inode, size, mtime and ctime stay fixed',
   async (kind) => {
     const actual = await vi.importActual<typeof fs>('node:fs');
-    const f = source(kind === 'original');
+    const publication = kind.startsWith('publication') || kind === 'published bytes';
+    const f = source(kind === 'original' || publication);
+    const after = f.record?.replace(/\.json$/, '.after');
+    if (publication) {
+      fs.writeFileSync(
+        f.record!,
+        fs.readFileSync(f.record!, 'utf8').replace('"completed"', '"started"') + ' ',
+      );
+      fs.linkSync(join(f.project, 'file'), after!);
+    }
     if (kind === 'opaque header') fs.writeFileSync(f.header, '{"partial');
-    const target = f.record?.replace(/\.json$/, '.before') ?? f.header;
+    const target =
+      kind === 'publication intent'
+        ? f.record!
+        : kind === 'publication header'
+          ? f.header
+          : kind === 'published bytes'
+            ? after!
+            : (f.record?.replace(/\.json$/, '.before') ?? f.header);
     const prior = fs.readFileSync(target, 'utf8');
     const changed =
-      kind === 'original'
-        ? 'bad'
-        : kind === 'opaque header'
-          ? '{"another'
-          : prior.replace('"owner"', '"qwner"');
+      kind === 'publication intent'
+        ? prior.trimEnd() + '\t'
+        : kind === 'original' || kind === 'published bytes'
+          ? 'bad'
+          : kind === 'opaque header'
+            ? '{"another'
+            : prior.replace('"owner"', '"qwner"');
     expect(changed.length).toBe(prior.length);
     const child = spawn(
       '/usr/bin/python3',
@@ -98,10 +126,12 @@ it.runIf(process.platform === 'linux').each(['canonical header', 'opaque header'
       };
       const initial = identity();
       let reads = 0;
-      const trigger = f.record ?? f.header,
-        boundary = f.record ? 3 : 1;
+      const trigger = kind === 'published bytes' ? target : (f.record ?? f.header),
+        boundary = f.record && !publication ? 3 : 1;
+      let stagedReads = 0;
       vi.mocked(fs.readSync).mockImplementation(((...args: Parameters<typeof fs.readSync>) => {
         const n = actual.readSync(...args);
+        if (actual.realpathSync('/proc/self/fd/' + args[0]) === after) stagedReads++;
         if (actual.realpathSync('/proc/self/fd/' + args[0]) === trigger && ++reads === boundary) {
           child.stdin.write('!');
           const deadline = Date.now() + 3000,
@@ -119,6 +149,7 @@ it.runIf(process.platform === 'linux').each(['canonical header', 'opaque header'
         error = thrown;
       }
       expect(reads).toBeGreaterThanOrEqual(boundary);
+      if (kind.startsWith('publication')) expect(stagedReads).toBe(0);
       expect(identity()).toEqual(initial);
       expect(actual.readFileSync(target, 'utf8')).toBe(changed);
       expect(error).toEqual(Error('stale_coding_asset'));

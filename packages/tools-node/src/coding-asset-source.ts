@@ -8,9 +8,11 @@ const directoryFlags = fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.con
 const fdPath = (fd: number) => '/proc/self/fd/' + String(fd);
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 import {
+  hashAssetBytes,
   codingAssetIdentity,
   codingAssetMount,
   type CodingAssetLimits,
+  type PublicationGuards,
   type CodingAssetCapture,
 } from './coding-asset-state.js';
 function same(before: fs.BigIntStats, after: fs.BigIntStats): void {
@@ -31,6 +33,7 @@ export function scanAssetSource(
   metadataOnly = false,
   pinned?: number,
   selection?: AssetSelection,
+  publications?: { candidates?: Set<string>; guards?: PublicationGuards },
 ): CodingAssetCapture {
   const uid = process.getuid?.();
   if (process.platform !== 'linux' || uid === undefined || fs.realpathSync(root) !== root)
@@ -78,7 +81,10 @@ export function scanAssetSource(
     check(before);
     if (expected && expected.entries.get(relative) !== codingAssetIdentity(before))
       throw Error('stale_coding_asset');
-    checkAssetPolicy(policy, relative, before);
+    const guard = publications?.guards?.get(relative);
+    checkAssetPolicy(policy, relative, before, !!publications?.candidates || !!guard);
+    if (publications?.candidates && before.isFile() && before.nlink === 2n)
+      publications.candidates.add(relative);
     if (selection && before.isDirectory() !== selection.children.has(relative))
       throw Error('invalid_coding_asset_selection');
     const mode = Number(before.mode & 0o777n);
@@ -179,28 +185,14 @@ export function scanAssetSource(
         append({ path: relative, kind: 'hardlink', target: previous.path }, before);
         return;
       }
-      const digest = createHash('sha256');
-      let position = metadataOnly ? Number(before.size) : 0;
-      while (position < Number(before.size)) {
-        const count = fs.readSync(
-          file,
-          buffer,
-          0,
-          Math.min(buffer.length, Number(before.size) - position),
-          position,
-        );
-        if (count === 0) throw Error('stale_coding_asset');
-        digest.update(buffer.subarray(0, count));
-        position += count;
-      }
+      const size = Number(before.size);
+      const hashBody = () => hashAssetBytes(file, metadataOnly ? 0 : size, buffer);
+      const sha256 = guard ? guard.read(file, hashBody) : hashBody();
       same(before, fs.fstatSync(file, { bigint: true }));
       same(before, fs.lstatSync(path, { bigint: true }));
       verifyPath(file, relative);
-      bytes += position;
-      append(
-        { path: relative, kind: 'file', mode, bytes: position, sha256: digest.digest('hex') },
-        before,
-      );
+      bytes += size;
+      append({ path: relative, kind: 'file', mode, bytes: size, sha256 }, before);
       inodes.set(key, { path: relative, state: codingAssetIdentity(before) });
     } finally {
       fs.closeSync(file);
@@ -211,6 +203,12 @@ export function scanAssetSource(
     if (expected && rootMount !== expected.mount) throw Error('stale_coding_asset');
     same(rootStat, fs.fstatSync(rootFd, { bigint: true }));
     visit(rootFd, '', '', 0);
+    // The project name lives outside this traversal. Verify it and its actual bytes
+    // again after visiting later scope entries, including the header.
+    if (publications?.guards?.size)
+      for (const entry of entries)
+        if (entry.kind === 'file')
+          publications.guards.get(entry.path)?.verify(entry.sha256, entry.bytes, buffer);
     same(rootStat, fs.lstatSync(root, { bigint: true }));
     verifyPath(rootFd, '');
     if ([...aliases.values()].some((alias) => BigInt(alias.count) !== alias.links))

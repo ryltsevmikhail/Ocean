@@ -1,4 +1,4 @@
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import {
   mkdtempSync,
   mkdirSync,
@@ -6,104 +6,42 @@ import {
   readFileSync,
   existsSync,
   readdirSync,
+  statSync,
   rmSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { killAt } from '../../test-fixtures/coding-apply-worker.test.js';
+import { codingWorkflowFixture, repairedMath } from './coding-workflow-fixture.js';
 import { expect, it } from 'vitest';
-import { openSqliteStore } from '@runnets/store-sqlite';
+import {
+  openSqliteStore,
+  snapshotCodingDatabase,
+  readCodingBackupInventory,
+  inspectDatabase,
+} from '@runnets/store-sqlite';
 import { createRuntime } from '../runtime.js';
-import { codingApplyRecoverySlot, captureScopedCodingApplyRecovery } from '@runnets/tools-node';
-const repository =
-  process.env['OCEAN_RC_INSTALL'] ??
-  resolve(fileURLToPath(new URL('../../../..', import.meta.url)));
-const worker = String.raw`
-import {registerHooks,syncBuiltinESMExports} from 'node:module';
-import fs from 'node:fs';
-import {join} from 'node:path';
-import {pathToFileURL,fileURLToPath} from 'node:url';
-import {createHash} from 'node:crypto';
-const [root,path,project,phase]=process.argv.slice(1);
-const halt=()=>{fs.writeSync(1,phase+'\n');Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);};
-const rename=fs.renameSync;
-fs.renameSync=(from,to)=>{rename(from,to);if(phase==='rename'&&String(to).endsWith('.before'))halt();};
-const fsync=fs.fsyncSync;
-fs.fsyncSync=fd=>{fsync(fd);if(phase==='scope_header'&&fs.readlinkSync('/proc/self/fd/'+fd).endsWith('/scope.json'))halt();};
-syncBuiltinESMExports();
-registerHooks({resolve(specifier,context,next){
- if(specifier.startsWith('@runnets/')) {
-  const name=specifier.slice(9);
-  const built=join(root,'node_modules/@runnets',name,'dist/index.js');
-  const source=join(root,'packages',name,'src/index.ts');
-  if(fs.existsSync(built)||fs.existsSync(source))return next(pathToFileURL(fs.existsSync(built)?built:source).href,context);
- }
- if(specifier.endsWith('.js')&&context.parentURL?.startsWith(pathToFileURL(root).href)) {
-  const url=new URL(specifier,context.parentURL);url.pathname=url.pathname.slice(0,-3)+'.ts';
-  if(fs.existsSync(fileURLToPath(url)))return next(url.href,context);
- }
- return next(specifier,context);
-}});
-const {openSqliteStore,ownSqliteRuntime}=await import('@runnets/store-sqlite');
-const {GitCodingApplyProject}=await import('@runnets/tools-node');
-const release=ownSqliteRuntime(path), store=openSqliteStore({path});
-const content=text=>({text,mode:'100644',sha256:createHash('sha256').update(text).digest('hex')});
-let receipt={recoveryProtocol:2,id:'apply',taskId:'task',changesetHash:'a'.repeat(64),reviewRequestId:'review',expectedBase:'base',status:'applying',files:['a','b','c'].map(path=>({path,status:'pending'}))};
-store.codingApplications.atomic(tx=>{if(!tx.claimApplication(receipt))throw Error('fixture claim refused');});
-if(phase==='intent')halt();
-const adapter=new GitCodingApplyProject();
-for(const [index,name] of ['a','b','c'].entries()) {
- receipt={...receipt,files:receipt.files.map((f,n)=>n===index?{...f,status:'started'}:f)};
- store.codingApplications.atomic(tx=>tx.putApplication(receipt));
- if(phase==='started'&&index===0)halt();
- fs.appendFileSync(path+'.effects',name+'\n');
- await adapter.applyFile(project,{path:name,before:content('old-'+name),after:content('new-'+name)},{ownerId:'fixture',taskId:'task',applicationId:receipt.id,changesetHash:receipt.changesetHash});
- if((phase==='file'&&index===0)||(phase==='partial'&&index===1))halt();
- receipt={...receipt,files:receipt.files.map((f,n)=>n===index?{...f,status:'completed'}:f)};
- store.codingApplications.atomic(tx=>tx.putApplication(receipt));
-}
-if(phase==='all_files')halt();
-store.close();release();
-`;
-async function killAt(path: string, project: string, phase: string): Promise<void> {
-  const child = spawn(
-    process.execPath,
-    ['--input-type=module', '-e', worker, repository, path, project, phase],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-  let errors = '';
-  child.stderr.on('data', (buffer: Buffer) => {
-    errors += buffer.toString();
-  });
-  const closed = new Promise<void>((resolve, reject) => {
-    child.once('close', () => resolve());
-    child.once('error', reject);
-  });
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(Error('fault boundary timeout: ' + errors)), 10000);
-      child.stdout.once('data', (buffer: Buffer) => {
-        clearTimeout(timeout);
-        if (buffer.toString().trim() === phase) resolve();
-        else reject(Error('unexpected boundary'));
-      });
-      child.once('close', () => {
-        clearTimeout(timeout);
-        reject(Error('worker exited: ' + errors));
-      });
-      child.once('error', (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      });
-    });
-  } finally {
-    child.kill('SIGKILL');
-    await closed;
-  }
-}
+import {
+  codingApplyRecoverySlot,
+  captureScopedCodingApplyRecovery,
+  captureCodingRecoveryAssets,
+  archiveCodingAssetTree,
+  restoreCodingAssetTree,
+} from '@runnets/tools-node';
+
 it
   .runIf(process.platform === 'linux')
-  .each(['intent', 'started', 'scope_header', 'rename', 'file', 'partial', 'all_files'])(
+  .each([
+    'intent',
+    'started',
+    'scope_header',
+    'rename',
+    'published',
+    'unlinked',
+    'file',
+    'partial',
+    'all_files',
+  ])(
   'holds a real apply process killed at %s without replay or inferred completion',
   async (phase) => {
     const directory = mkdtempSync(join(tmpdir(), 'ocean-coding-crash-'));
@@ -178,10 +116,25 @@ it
                 ? 'absent'
                 : phase === 'scope_header'
                   ? 'header-only'
-                  : phase === 'rename'
+                  : ['rename', 'published', 'unlinked'].includes(phase)
                     ? 'incomplete'
                     : 'scoped',
             );
+            if (phase === 'published' || phase === 'unlinked') {
+              expect(before).toEqual(['new-a', 'old-b', 'old-c']);
+              expect(effects).toBe('a\n');
+              const record = observed.records[0]!;
+              expect(record).toMatchObject({ path: 'a', status: 'started', original: 'matching' });
+              const prefix = join(scope, 'files', record.id);
+              expect(readFileSync(prefix + '.before', 'utf8')).toBe('old-a');
+              expect(existsSync(prefix + '.after')).toBe(phase === 'published');
+              if (phase === 'published') {
+                expect(record).toMatchObject({ publicationLink: 'matching' });
+                expect(readFileSync(prefix + '.after', 'utf8')).toBe('new-a');
+                expect(statSync(prefix + '.after').ino).toBe(statSync(join(project, 'a')).ino);
+                expect(statSync(prefix + '.after').nlink).toBe(2);
+              }
+            }
             expect(observed.status).toBe('uncertain');
             if (header)
               expect(observed.capture?.manifest.entries).toMatchObject([
@@ -243,4 +196,80 @@ it
     }
   },
   20000,
+);
+
+it.runIf(process.platform === 'linux')(
+  'captures a published link in the graph under frozen SQLite maintenance ownership',
+  async () => {
+    const f = await codingWorkflowFixture('direct');
+    try {
+      writeFileSync(join(f.worktree, 'math.cjs'), repairedMath);
+      const artifact = await f.capture('publication');
+      f.runtime.close();
+      const db = join(f.directory, 'runtime.sqlite');
+      const { ownerId } = readCodingBackupInventory(db).tasks[0]!;
+      await killAt(db, f.project, 'published', {
+        ownerId,
+        changesetHash: artifact.hash,
+        base: f.base,
+        changes: artifact.files,
+      });
+      const recovered = createRuntime({ dbPath: db });
+      try {
+        expect((await recovered.ready).effects).toMatchObject([
+          { id: 'apply', outcome: 'uncertain' },
+        ]);
+      } finally {
+        recovered.close();
+      }
+      const archive = join(f.directory, 'archive'),
+        quarantine = join(f.directory, 'quarantine');
+      const published = join(f.project, 'math.cjs'),
+        inode = statSync(published).ino;
+      const snapshot = await snapshotCodingDatabase(
+        db,
+        join(f.directory, 'frozen.sqlite'),
+        (inventory) => {
+          expect(inspectDatabase(db).status).toBe('owner_busy');
+          return captureCodingRecoveryAssets(
+            inventory,
+            join(f.directory, 'worktrees'),
+            async ({ capture }) => {
+              archiveCodingAssetTree(capture, archive);
+            },
+          );
+        },
+      );
+      expect(snapshot.assets.applications).toMatchObject([
+        {
+          id: 'apply',
+          declaredProtocol: 2,
+          status: 'uncertain',
+          presence: 'incomplete',
+          unknown: ['math.cjs'],
+          records: [
+            {
+              path: 'math.cjs',
+              status: 'started',
+              publicationLink: 'matching',
+              original: 'matching',
+            },
+          ],
+        },
+      ]);
+      restoreCodingAssetTree(archive, quarantine);
+      const restored = join(
+        quarantine,
+        'tree/files',
+        snapshot.assets.applications[0]!.records[0]!.id + '.after',
+      );
+      expect(readFileSync(restored, 'utf8')).toBe(repairedMath);
+      expect(statSync(restored).nlink).toBe(1);
+      expect(statSync(restored).ino).not.toBe(inode);
+      expect(statSync(published)).toMatchObject({ ino: inode, nlink: 2 });
+      expect(readFileSync(published, 'utf8')).toBe(repairedMath);
+    } finally {
+      f.close();
+    }
+  },
 );
