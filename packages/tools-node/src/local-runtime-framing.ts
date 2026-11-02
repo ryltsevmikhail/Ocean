@@ -47,7 +47,7 @@ export function writeLocalRuntimeFrame(socket: Socket, value: unknown): boolean 
   const bytes = Buffer.from(JSON.stringify(value) + '\n');
   if (
     bytes.length - 1 > LOCAL_RUNTIME_MAX_FRAME ||
-    socket.writableLength + bytes.length > LOCAL_RUNTIME_MAX_FRAME
+    socket.writableLength + bytes.length > LOCAL_RUNTIME_MAX_FRAME + 1
   ) {
     socket.destroy();
     return false;

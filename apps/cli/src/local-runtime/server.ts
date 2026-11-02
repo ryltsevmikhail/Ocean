@@ -28,12 +28,13 @@ export async function listenLocalRuntime(
       return;
     }
     clients.add(socket);
+    const detached = new AbortController();
     let authenticated = false;
     let stopping = false;
     let pending = 0;
     const handshakeTimeout = setTimeout(() => socket.destroy(), 5000);
     const frames = new LocalRuntimeFrames((value) => {
-      if (stopping) return;
+      if (stopping || socket.destroyed) return false;
       if (!isLocalRuntimeRequest(value)) {
         socket.destroy();
         return false;
@@ -100,7 +101,7 @@ export async function listenLocalRuntime(
         return false;
       }
       try {
-        const reply = operations.dispatch(method, params);
+        const reply = operations.dispatch(method, params, detached.signal);
         if (reply instanceof Promise) {
           pending++;
           void reply
@@ -130,6 +131,7 @@ export async function listenLocalRuntime(
     socket.on('error', () => {});
     socket.on('close', () => {
       clearTimeout(handshakeTimeout);
+      detached.abort();
       clients.delete(socket);
     });
   });

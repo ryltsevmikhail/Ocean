@@ -118,6 +118,13 @@ export class TaskRunService {
     return ok(receipt);
   }
 
+  /** Inspect an exact request-bound receipt without authorizing new execution. */
+  lookupCommand(command: AnyCommand): Promise<Result<CommandReceipt | null>> {
+    const commands = this.#deps.log.commands;
+    if (!commands) throw Error('atomic_commands_required');
+    return commands.lookup(snapshotCommand(command));
+  }
+
   /** Synchronous committed head for decisions sharing an adapter transaction. */
   committedVersion(id: TaskRunId): number | null {
     return this.#deps.log.headVersion?.(id) ?? null;

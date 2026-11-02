@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import type { ProviderPort, RuntimeRecovery } from '@runnets/application';
-import { LOCAL_RUNTIME_MAX_WAIT_MS } from '@runnets/contracts';
+import { LOCAL_RUNTIME_MAX_WAIT_MS, LOCAL_ROOM_METHODS } from '@runnets/contracts';
 import type {
   LocalRuntimeIdentity,
   LocalRuntimeStatus,
@@ -75,11 +75,21 @@ export async function startLocalRuntime(
       protocol: 1,
       profileId: paths.profileId,
       instanceId: randomUUID(),
-      capabilities: ['status', 'stop', 'turns.submit', 'receipts.get', 'runs.get'],
+      capabilities: [
+        'status',
+        'stop',
+        'turns.submit',
+        'receipts.get',
+        'runs.get',
+        ...LOCAL_ROOM_METHODS,
+      ],
     };
+    if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
       runtime.chat,
       options.provider === undefined ? createProviderFromEnv(process.env) : options.provider,
+      runtime.openRoomRuns(),
+      identity.instanceId,
     );
     let databaseClosed = false;
     const descriptor = {
@@ -120,6 +130,7 @@ export async function startLocalRuntime(
               throw Error('endpoint_changed');
             // Fallible endpoint cleanup must retain the database owner and listener on failure.
             if (descriptorOwned) unlinkOwnedLocalRuntimePath(paths.descriptor, descriptorOwned);
+            turns.closeObservers();
             databaseClosed = true;
             runtime.close();
             // Stop accepting now; closed resolves once existing transports have drained.
@@ -144,8 +155,10 @@ export async function startLocalRuntime(
     transport = await listenLocalRuntime({
       descriptor,
       identity,
-      dispatch: (method, params) =>
-        databaseClosed ? { error: { code: 'runtime_draining' } } : turns.dispatch(method, params),
+      dispatch: (method, params, detached) =>
+        databaseClosed
+          ? { error: { code: 'runtime_draining' } }
+          : turns.dispatch(method, params, detached),
       status: () => host.status(),
       stop: () => host.stop(),
     });

@@ -1,9 +1,10 @@
-# Local runtime lifecycle and durable turns
+# Local runtime lifecycle, durable turns and observation
 
 One foreground Linux process owns the canonical private profile, SQLite recovery
 and the provider for shared room turns. Authenticated clients can submit a turn
-and look up its receipt or current run state. The standard room TUI, desktop,
-run event observation and owner decisions are future delivery stages.
+and reconnect to its persisted room history, run events and result. Explicit
+versioned cancellation is available to authenticated clients. The standard room
+TUI, desktop and owner decisions remain future delivery stages.
 Existing CLI room commands still open the profile directly and report
 `owner_busy` while the shared runtime holds it. See the
 [shared-runtime plan](../ocean/shared-runtime.md) for the migration sequence.
@@ -85,7 +86,7 @@ JSON framing using `@runnets/contracts` without importing application internals.
 Each request is `{id,method,params}`, with a nonempty string ID up to 128
 characters. First send `hello` with `protocol:1`, `profileId`, `instanceId` and
 `capability` from the verified descriptor. Success returns identity plus
-`capabilities:["status","stop","turns.submit","receipts.get","runs.get"]`. Subsequent `status` and `stop` accept empty
+`capabilities`. Subsequent `status` and `stop` accept empty
 params. Responses are `{id,result}` or `{id,error:{code}}`. Unknown methods refuse;
 there are no placeholder handlers for future methods. Wrong authentication,
 profile and instance return `authentication_failed`; incompatible protocol returns
@@ -95,9 +96,9 @@ Each frame is at most 2MiB excluding the newline. Invalid request envelopes,
 malformed/invalid UTF-8 and oversized frames terminate that connection; later
 coalesced requests on a rejected stream cannot execute. The server bounds connections to 64,
 requires hello within five seconds and drops observers whose pending output
-exceeds 2MiB. The Node client bounds pending requests to 128 with five-second
-transport timeouts (30 seconds for stop). Contract limits of 200 items per page and 30-second waits are
-reserved for later methods; lifecycle has no lists or waits. No peer-credential
+exceeds one 2MiB frame plus its newline. The Node client bounds pending requests to 128 with five-second
+transport timeouts (30 seconds for stop and the requested wait plus five seconds
+for observation). No peer-credential
 API is claimed: filesystem privacy plus the random capability provide the local
 boundary. Same-UID processes with access to those credentials are trusted.
 
@@ -131,8 +132,67 @@ acceptance failed, with `taskStatus: "not_created"` if the aggregate is absent.
 An interrupted dispatch stays uncertain. A completed turn identifies its
 committed history message via `resultMessageId`. The existing publication path
 can finish an exactly prepared answer during recovery. None of these reads
-dispatches a provider or resumes an effect. Full history, result/event
-observation and explicit run cancellation are planned for Task 3.
+dispatches a provider or resumes an effect.
+
+## Room queries, observation and cancellation
+
+| Wire method     | Node method                 | Scope and result                                                                                                                                                                                                                                  |
+| --------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rooms.list`    | `listRooms`                 | Workspace ID. Returns direct/group summaries ordered by room ID.                                                                                                                                                                                  |
+| `rooms.members` | `listMembers`               | Workspace and room IDs. Returns room member IDs, names and handles in bot ID order.                                                                                                                                                               |
+| `history.list`  | `history`                   | Workspace and room IDs. Returns committed messages in room sequence order.                                                                                                                                                                        |
+| `runs.list`     | `listRuns`                  | Workspace and room IDs. Returns run snapshots in turn ID order.                                                                                                                                                                                   |
+| `runs.events`   | `listEvents`                | Workspace, room and run IDs. Returns the bound scope and an `events` array of sequence, type and sensitivity. The SDK returns the array. Restricted events use type `redacted`. Event payloads, actors and private tool transcripts are excluded. |
+| `runs.result`   | `getResult`                 | Workspace, room and run IDs. Returns the bound scope and `message`, containing the once-published bot reply or null. The SDK returns that message or null.                                                                                        |
+| `observe`       | `observeRoom`, `observeRun` | Workspace and room IDs. Include run ID for a run snapshot. Optional opaque `cursor` and `waitMs`.                                                                                                                                                 |
+| `runs.cancel`   | `cancelRun`                 | Workspace, room, run and request IDs and nonnegative `expectedVersion`. Returns the original bound request plus `version` and `status: "requested"`.                                                                                              |
+
+List queries accept optional `limit` (default 50, range 1–200) and exclusive
+`after`. For rooms and members, pass the last returned ID. For runs, pass the
+last turn ID. For history and events, pass the last room sequence or run event
+sequence, starting at zero. Continue until an empty page or the target
+watermark. A byte-limited page can be short even when more rows follow.
+Messages carry complete UTF-8 text in `bodyBase64` on the wire. The SDK
+returns decoded `body`. Room and run lookups check the owning scope before
+reading messages, events or results. Temporal positions beyond the head or
+gaps within a returned page produce `resync_required`.
+
+An initial observation returns `kind: "snapshot"`, workspace/room IDs,
+`instanceId`, the committed `roomSeq` and an opaque cursor. Run observation
+also includes `snapshot` with the performer, admission phase, TaskRun status
+and version, result message ID and any unexpired pending coding decision IDs
+bound to the same workspace, room, run, task and bot. These IDs are read-only
+references. Room observation works for an empty room or an unaddressed group
+post. Room changes wake observers when committed history advances.
+
+Supply the cursor again to check for changes or wait up to 30000 ms.
+`changed` and `timeout` both include the current watermarks. `resync` supplies
+a fresh snapshot when the cursor is unknown, belongs to another scope or
+instance, or trails the head by more than one maximum page. On reconnect,
+fetch committed history and events from your last consumed numeric positions.
+Drain to the observed watermarks before treating them as consumed. If local
+positions cannot be verified, rebuild the room from sequence zero. Results
+reference the same bot message as history. Merge by message ID to display
+each committed reply once. Observation never resubmits a turn.
+
+The runtime polls committed state for up to four waiting calls per client
+and 32 across the owner. Further waits return `observer_busy`. Disconnect
+releases the waits. Observers receive committed snapshots and watermarks.
+The runtime retains no token queue for them.
+
+Explicit cancel requires a live execution owned by this runtime and a created
+TaskRun. Unknown bindings return `unknown_run`. Previously unseen requests
+against a recovered or settled turn return `run_not_active`. A live turn whose
+aggregate has yet to be created returns `run_not_started`. A stale version of
+a live run returns `version_conflict`. Exact retries replay the durable
+receipt even after the run has advanced or settled. Reusing the command ID
+with a different binding returns `request_conflict`. The runtime commits the
+TaskRun cancellation command and its receipt before signalling the controller.
+Terminal provider evidence and executor settlement determine the subsequent
+run state. A lost stream can leave the run cancelling and the turn uncertain,
+with no committed cleanup. Actual usage for the same active attempt still
+settles during cancellation. An overrun commits the budget terminal event and
+retains the cancellation cause. The effect and room uncertainty remain visible.
 
 ## Safety and qualification limits
 

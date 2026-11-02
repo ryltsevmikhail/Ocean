@@ -45,7 +45,7 @@ Paths below are planned, not claims of existing modules. Split modules as needed
 
 Protocol methods: `hello`, `rooms.list`, `rooms.members`, `history.list`, `conversations.execute`, `turns.submit`, `receipts.get`, `runs.list`, `runs.get`, `runs.events`, `observe`, `runs.cancel`, `decisions.list`, `decisions.get`, `decisions.decide`, `runtime.status`, `runtime.stop`. Additional v1 methods are `coding.show`, `coding.diff`, `coding.pending`, `coding.inspectApply`, `reviews.room`, `reviews.run`, `reviews.acknowledge`. They expose existing authorized reads and exact text-only continuation with durable owner decision; never a generic function/path executor. Coding start/review/apply/reconcile-apply are explicitly offline maintenance operations in v1; they do not get mutation RPCs in this delivery.
 
-`LocalRuntimeClient` provides those typed async methods, `close():void` detaches only. Submit input is existing DirectChatRequest data; receipt includes requestId, roomId, messageId/turnId and `runId:string|null`. Run snapshot includes committed version/state/result and pending decision references. `observe({roomId?,runId?,afterVersion?,afterSeq?,waitMs})` returns bounded authoritative changes/cursors or explicit resync, never treats transient tokens as committed history. `decisions.decide({decisionId,expectedVersion,bindingHash,decision})` returns persisted winner/current conflict. Transport authenticates trusted client role; no caller owner boolean.
+`LocalRuntimeClient` provides those typed async methods, `close():void` detaches only. Submit input is existing DirectChatRequest data; receipt includes requestId, roomId, messageId/turnId and `runId:string|null`. Run snapshot includes committed version/state/result and pending decision references. `observe({workspaceId,roomId,runId?,cursor?,waitMs?})` returns the authoritative watermarks and a scoped cursor or explicit resync. Numeric history and event positions are paged separately. `decisions.decide({decisionId,expectedVersion,bindingHash,decision})` returns persisted winner/current conflict. Transport authenticates trusted client role; no caller owner boolean.
 
 ## Task 1: Profile endpoint and explicit runtime lifecycle
 
@@ -60,7 +60,7 @@ Protocol methods: `hello`, `rooms.list`, `rooms.members`, `history.list`, `conve
 
 ## Task 2: Durable submit acknowledgement and runtime-owned turns
 
-Implementation pending independent review. Application and SQLite recovery are
+Implementation and independent review completed through `a042e02`. Application and SQLite recovery are
 qualified separately from actual stale-endpoint restart, retained for Tasks 6/8.
 
 **Files:** application room-runtime modules and direct-chat.ts/admission/publication as required; host dispatch/owner; contracts receipts/runs; memory/SQLite tests.
@@ -71,17 +71,19 @@ qualified separately from actual stale-endpoint restart, retained for Tasks 6/8.
 - [x] RED tests: drop connection from onAdmitted/after commit before response; retry identical request across clients returns original runId; changed text/to/task/room refuses. Unaddressed group submit has runId null, no model dispatch.
 - [x] Separate durable acceptance from completion while preserving existing synchronous admission transaction and prepared-answer publication; do not introduce a second unbound dedup store. Register controllers/promises under runtime, not socket. Observe duplicate without dispatch.
 - [x] RED→GREEN process restart between admission and TaskRun creation and after dispatch claim: recover conservatively, never resume unknown provider action. Room contention and separate-room isolation stay intact.
-- [ ] Required gates; commit `feat: acknowledge durable room turns before runtime execution`; review.
+- [x] Required gates; commit `feat: acknowledge durable room turns before runtime execution`; review.
 
 ## Task 3: Run observation, reconnect and cancellation
+
+Implementation pending independent review. The wire method `observe` supplies room or run snapshots and an opaque, scope- and instance-bound cursor. `history.list`, `runs.events` and `runs.result` supply committed data. Task 6/8 still owns killed-listener restart and real entry-point qualification.
 
 **Files:** application room-runtime-runs; contracts snapshots/cursors; host dispatch/observation; client; process tests.
 
 **Produces:** room/history/run queries, persisted result snapshots, cursor-based bounded wait/resync and versioned explicit cancel.
 
-- [ ] RED tests: disconnect during stream, attach second process to same run, reconstruct history/result once; stale/unknown cursor causes explicit resync, bounded slow observer does not delay provider completion or retain unbounded output.
-- [ ] Implement snapshot-first reconnect over existing committed events/history. Keep transient chunks optional and private tool data excluded. Runtime restart changes instance identity while durable run cursors remain interpretable.
-- [ ] RED→GREEN cancellation request/retry/version conflict, provider failure, cleanup uncertain and client detach: only explicit cancel touches controller; never infer confirmed stop from acknowledgement.
+- [x] RED tests: disconnect during stream, attach second process to same run, reconstruct history/result once; stale/unknown cursor causes explicit resync, bounded slow observer does not delay provider completion or retain unbounded output.
+- [x] Implement snapshot-first reconnect over existing committed events/history. Keep transient chunks optional and private tool data excluded. Runtime restart changes instance identity while durable run cursors remain interpretable.
+- [x] RED→GREEN cancellation request/retry/version conflict, provider failure, cleanup uncertain and client detach: only explicit cancel touches controller; never infer confirmed stop from acknowledgement.
 - [ ] Required gates; commit `feat: observe and cancel durable runs across local clients`; review.
 
 ## Task 4: Runtime-owned durable decisions

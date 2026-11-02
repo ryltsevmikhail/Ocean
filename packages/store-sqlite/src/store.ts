@@ -28,6 +28,8 @@ import type {
 import type { TaskRunId } from '@runnets/domain';
 import type { DatabaseSync } from 'node:sqlite';
 
+import { roomRuntimeReads } from './room-runtime-reads.js';
+import type { RoomRunReadPort } from '@runnets/application';
 import { SqliteConversationStore } from './conversations.js';
 
 import { SqliteCheckpointStore, type CheckpointStore } from './checkpoints.js';
@@ -48,6 +50,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  openRoomReads(now: () => number): RoomRunReadPort;
   readonly coding: CodingStore;
   readonly codingApplications: CodingApplyStore;
   readonly codingResolutions: CodingApplyResolutionStore;
@@ -92,6 +95,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
   return {
+    openRoomReads: (now) => roomRuntimeReads(db, now),
     coding: new SqliteCodingStore(db),
     codingApplications: new SqliteCodingApplyStore(db),
     codingResolutions: new SqliteCodingApplyResolutionStore(db),

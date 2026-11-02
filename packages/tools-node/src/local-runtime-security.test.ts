@@ -1,3 +1,5 @@
+import { createServer, connect } from 'node:net';
+import { once } from 'node:events';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   mkdtempSync,
@@ -16,7 +18,7 @@ import {
   prepareLocalRuntimePaths,
   readLocalRuntimeDescriptor,
 } from './local-runtime-paths.js';
-import { LocalRuntimeFrames } from './local-runtime-framing.js';
+import { LocalRuntimeFrames, writeLocalRuntimeFrame } from './local-runtime-framing.js';
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -140,4 +142,25 @@ it('terminal consumer rejection prevents coalesced and later frame dispatch', ()
   frames.push(Buffer.from('{}\n{"method":"stop"}\n'));
   frames.push(Buffer.from('{"method":"status"}\n'));
   expect(received).toEqual([{}]);
+});
+it('writes an exact 2MiB JSON frame plus its delimiter to a draining peer', async () => {
+  const { root } = fixture();
+  let received = 0;
+  const server = createServer((socket) =>
+    socket.on('data', (b: Buffer) => {
+      received += b.length;
+    }),
+  );
+  const endpoint = join(root, 'boundary.sock');
+  await new Promise<void>((r) => server.listen(endpoint, r));
+  const socket = connect(endpoint);
+  await once(socket, 'connect');
+  try {
+    writeLocalRuntimeFrame(socket, 'x'.repeat(2 * 1024 * 1024 - 2));
+    expect(socket.destroyed).toBe(false);
+    await vi.waitFor(() => expect(received).toBe(2 * 1024 * 1024 + 1));
+  } finally {
+    socket.destroy();
+    await new Promise<void>((r) => server.close(() => r()));
+  }
 });

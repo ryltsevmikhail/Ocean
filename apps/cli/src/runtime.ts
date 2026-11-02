@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import {
   TaskRunService,
+  RoomRuntimeRuns,
   CodingTaskService,
   CodingReviewService,
   CodingApplyService,
@@ -47,6 +48,7 @@ import {
 
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
+  openRoomRuns?(): RoomRuntimeRuns;
   readonly coding: CodingTaskService;
   readonly codingReview?: CodingReviewService;
   readonly codingApply?: CodingApplyService;
@@ -200,6 +202,11 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     });
     return {
       service,
+      openRoomRuns: () =>
+        new RoomRuntimeRuns(
+          store.openRoomReads(() => deps.clock.now().getTime()),
+          service,
+        ),
       coding,
       codingApprovals,
       codingEvidence: store.codingEvidence,

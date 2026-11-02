@@ -185,6 +185,15 @@ for (const phase of [
                 : { turnStatus: 'uncertain', taskStatus: 'reconciling' },
             );
             expect(await b.getRun(query)).toEqual(snapshot);
+            expect(await b.observeRun(query)).toMatchObject({ kind: 'snapshot', snapshot });
+            await expect(
+              a.cancelRun({
+                ...query,
+                requestId: 'recovered-cancel',
+                expectedVersion: snapshot!.version,
+              }),
+            ).rejects.toThrow('run_not_active');
+            expect(await a.getRun(query)).toEqual(snapshot);
             expect(
               existsSync(path + '.effects') ? readFileSync(path + '.effects', 'utf8') : '',
             ).toBe(phase === 'after_claim' ? 'effect\n' : '');

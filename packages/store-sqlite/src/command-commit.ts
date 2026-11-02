@@ -30,14 +30,13 @@ type Append = (
 export function sqliteCommands(db: DatabaseSync, append: Append): CommandCommitPort {
   const dedup = new SqliteCommandDedup(db);
   function lookup(command: AnyCommand): Result<CommandReceipt | null> {
-    const receipt = dedup.read(command.commandId);
-    if (receipt === null) return ok(null);
     const row = db
       .prepare('SELECT request_binding FROM command_receipts WHERE command_id = ?')
       .get(command.commandId);
     // Legacy receipts lack the original request: never guess authorization or payload identity.
-    if (row?.['request_binding'] !== commandBinding(command)) return commandConflict();
-    return ok(receipt);
+    if (!row) return ok(null);
+    if (row['request_binding'] !== commandBinding(command)) return commandConflict();
+    return ok(dedup.read(command.commandId));
   }
   return {
     lookup: (command) => toPromise(() => lookup(command)),

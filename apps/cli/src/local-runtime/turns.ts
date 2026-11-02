@@ -1,27 +1,33 @@
-import type { DirectChatService, ProviderPort } from '@runnets/application';
-import {
-  isLocalReceiptQuery,
-  isLocalRunQuery,
-  isLocalTurnRequest,
-  type LocalTurnReceipt,
-  type LocalRunSnapshot,
-} from '@runnets/contracts';
+import type { DirectChatService, ProviderPort, RoomRuntimeRuns } from '@runnets/application';
+import { isLocalReceiptQuery, isLocalTurnRequest } from '@runnets/contracts';
+
+import { RuntimeQueries, type RuntimeReply } from './queries.js';
 
 type Settlement = 'settled' | 'uncertain';
-type Reply = { result: LocalTurnReceipt | LocalRunSnapshot | null } | { error: { code: string } };
 /** One owner for fresh executions. Socket lifetimes never participate in supervision. */
 export class RuntimeTurns {
-  readonly #jobs = new Map<AbortController, Promise<void>>();
+  readonly #jobs = new Map<string, { controller: AbortController; settled: Promise<void> }>();
+  readonly #queries: RuntimeQueries;
   #uncertain = false;
   #draining = false;
   readonly #chat: DirectChatService;
   readonly #provider: ProviderPort | null;
-  constructor(chat: DirectChatService, provider: ProviderPort | null) {
+  constructor(
+    chat: DirectChatService,
+    provider: ProviderPort | null,
+    runs: RoomRuntimeRuns,
+    instance: string,
+  ) {
+    this.#queries = new RuntimeQueries(runs, instance);
     this.#chat = chat;
     this.#provider = provider;
   }
 
-  dispatch(method: string, params: Record<string, unknown>): Reply | Promise<Reply> {
+  dispatch(
+    method: string,
+    params: Record<string, unknown>,
+    detached: AbortSignal,
+  ): RuntimeReply | Promise<RuntimeReply> {
     switch (method) {
       case 'turns.submit': {
         if (!isLocalTurnRequest(params)) return { error: { code: 'invalid_params' } };
@@ -51,9 +57,9 @@ export class RuntimeTurns {
               },
             )
             .finally(() => {
-              this.#jobs.delete(controller);
+              this.#jobs.delete(receipt.runId!);
             });
-          this.#jobs.set(controller, settled);
+          this.#jobs.set(receipt.runId!, { controller, settled });
         }
         return { result: receipt };
       }
@@ -61,18 +67,24 @@ export class RuntimeTurns {
         return isLocalReceiptQuery(params)
           ? { result: this.#chat.getReceipt(params) }
           : { error: { code: 'invalid_params' } };
-      case 'runs.get':
-        return isLocalRunQuery(params)
-          ? this.#chat.getRun(params).then((result) => ({ result }))
-          : { error: { code: 'invalid_params' } };
       default:
-        return { error: { code: 'method_not_found' } };
+        return this.#queries.dispatch(
+          method,
+          params,
+          detached,
+          typeof params['runId'] === 'string'
+            ? this.#jobs.get(params['runId'])?.controller
+            : undefined,
+        );
     }
+  }
+  closeObservers() {
+    this.#queries.close();
   }
   async drain(): Promise<Settlement> {
     this.#draining = true;
-    for (const controller of this.#jobs.keys()) controller.abort();
-    await Promise.all(this.#jobs.values());
+    for (const { controller } of this.#jobs.values()) controller.abort();
+    await Promise.all(Array.from(this.#jobs.values(), (job) => job.settled));
     return this.#uncertain ? 'uncertain' : 'settled';
   }
 }

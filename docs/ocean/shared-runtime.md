@@ -1,8 +1,8 @@
 # Shared local Ocean runtime
 
 Status: authenticated lifecycle, durable turn admission and scoped receipt/run
-reads are implemented. Event observation, owner decisions and client migration
-remain proposed. See [implemented commands, methods and limits](../integration/local-runtime.md).
+reads, runtime observation and versioned explicit cancellation are implemented.
+Owner decisions and client migration remain proposed. See [implemented commands, methods and limits](../integration/local-runtime.md).
 Owner request on 2026-11-02 supersedes
 continuing the remaining coding-backup work as the immediate priority. Ocean 1.1
 stages 1–6 and reviewed stage-7 work through `5d032ae` remain implemented; their

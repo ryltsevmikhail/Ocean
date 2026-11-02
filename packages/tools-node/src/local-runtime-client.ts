@@ -20,7 +20,8 @@ import {
 } from '@runnets/contracts';
 import { readLocalRuntimeDescriptor } from './local-runtime-paths.js';
 import { LocalRuntimeFrames, writeLocalRuntimeFrame } from './local-runtime-framing.js';
-export interface LocalRuntimeClient {
+import { localRoomClient, validatedParams, type LocalRoomClient } from './local-room-client.js';
+export interface LocalRuntimeClient extends LocalRoomClient {
   readonly identity: LocalRuntimeIdentity;
   submit(request: LocalTurnRequest): Promise<LocalTurnReceipt>;
   getReceipt(query: LocalReceiptQuery): Promise<LocalTurnReceipt | null>;
@@ -104,6 +105,7 @@ export async function connectLocalRuntime(options: {
       throw Error('identity_mismatch');
     return {
       identity,
+      ...localRoomClient(peer.request.bind(peer), identity),
       async submit(input) {
         const request = validatedParams(input, isLocalTurnRequest);
         const result = await peer.request('turns.submit', request);
@@ -160,13 +162,6 @@ export async function connectLocalRuntime(options: {
     peer.close();
     throw error;
   }
-}
-
-function validatedParams<T>(input: unknown, valid: (value: unknown) => value is T): T {
-  if (!localRuntimeRecord(input)) throw Error('invalid_params');
-  const snapshot = { ...input };
-  if (!valid(snapshot)) throw Error('invalid_params');
-  return snapshot;
 }
 
 function matchesReceipt(value: unknown, query: LocalReceiptQuery): value is LocalTurnReceipt {

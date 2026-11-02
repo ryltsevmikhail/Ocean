@@ -57,7 +57,8 @@ export const COMMAND_SOURCES = {
   Admit: ['created'],
   Schedule: ['queued'],
   StartAttempt: ['admitted', 'retrying'],
-  RecordUsage: ['running'],
+  // A versioned cancel can precede the active provider's final usage report.
+  RecordUsage: ['running', 'cancelling'],
   Wait: ['running'],
   Resume: ['waiting'],
   Retry: ['running'],

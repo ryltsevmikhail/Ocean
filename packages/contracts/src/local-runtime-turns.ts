@@ -51,6 +51,7 @@ const taskStates = [
 export interface LocalRunSnapshot extends LocalTurnReceipt {
   readonly turnId: string;
   readonly runId: string;
+  readonly pendingDecisionIds?: readonly string[];
   readonly performerId: string;
   readonly turnStatus: (typeof turnStates)[number];
   readonly taskStatus: (typeof taskStates)[number];
@@ -104,6 +105,10 @@ export function isLocalRunSnapshot(v: unknown): v is LocalRunSnapshot {
     isLocalTurnReceipt(v) &&
     id(v.turnId) &&
     id(v.runId) &&
+    (v['pendingDecisionIds'] === undefined ||
+      (Array.isArray(v['pendingDecisionIds']) &&
+        v['pendingDecisionIds'].length <= 200 &&
+        v['pendingDecisionIds'].every(id))) &&
     id(v['performerId']) &&
     turnStates.some((x) => x === v['turnStatus']) &&
     taskStates.some((x) => x === v['taskStatus']) &&

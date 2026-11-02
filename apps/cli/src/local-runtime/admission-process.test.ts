@@ -8,7 +8,15 @@ import { rooms } from '../../test-fixtures/local-runtime-admission.test.js';
 
 it
   .runIf(process.platform === 'linux')
-  .each(['success', 'provider_failure', 'deadline', 'draining_retry'])(
+  .each([
+    'success',
+    'provider_failure',
+    'deadline',
+    'draining_retry',
+    'observe',
+    'cancel',
+    'cancel_known',
+  ])(
   'independent clients detach and reconnect to one execution through %s',
   async (scenario) => {
     const root = mkdtempSync(join(tmpdir(), 'ocean-job-')),
@@ -70,6 +78,104 @@ it
         'client.getRun({workspaceId:request.workspaceId,roomId:request.roomId,runId:' +
         JSON.stringify(receipt.runId) +
         '})';
+      if (scenario === 'observe' || scenario.startsWith('cancel')) {
+        const scope = { workspaceId: request.workspaceId, roomId: request.roomId };
+        const run = { ...scope, runId: receipt.runId };
+        const call = (method: string, params: unknown) =>
+          client('client.' + method + '(' + JSON.stringify(params) + ')');
+        const observe = (cursor?: string, waitMs = 0) =>
+          call('observeRun', { ...run, cursor, waitMs });
+        const initial = await observe();
+        expect(initial).toMatchObject({
+          kind: 'snapshot',
+          roomSeq: 1,
+          snapshot: { ...run, taskStatus: 'running', pendingDecisionIds: [] },
+        });
+        const { cursor, snapshot } = initial;
+        expect(await observe('unrecognized')).toMatchObject({ kind: 'resync' });
+        expect(await observe(cursor, 25)).toMatchObject({ kind: 'timeout', cursor });
+        const wrong = { ...run, roomId: groupId };
+        for (const method of ['getResult', 'listEvents', 'observeRun']) {
+          expect(await call(method, wrong)).toEqual({ error: 'unknown_run' });
+          expect(await call(method, { ...run, workspaceId: 'other' })).toEqual({
+            error: 'unknown_run',
+          });
+        }
+        expect(await call('getResult', run)).toBeNull();
+        if (scenario.startsWith('cancel')) {
+          const cancel = { ...run, requestId: 'stop-one', expectedVersion: snapshot.version };
+          expect(await call('cancelRun', { ...cancel, expectedVersion: 0 })).toEqual({
+            error: 'version_conflict',
+          });
+          expect(await call('cancelRun', { ...cancel, roomId: groupId })).toEqual({
+            error: 'unknown_run',
+          });
+          expect(log).not.toContain('abort');
+          const ack = await call('cancelRun', cancel);
+          expect(ack).toEqual({ ...cancel, version: snapshot.version + 1, status: 'requested' });
+          await vi.waitFor(() => expect(log).toContain('abort'));
+          expect(await call('cancelRun', cancel)).toEqual(ack);
+          expect(await call('cancelRun', { ...cancel, expectedVersion: ack.version })).toEqual({
+            error: 'request_conflict',
+          });
+          expect(log).toContain('receipt-before-abort');
+          expect(await call('cancelRun', { ...cancel, roomId: groupId })).toEqual({
+            error: 'request_conflict',
+          });
+          const known = scenario === 'cancel_known';
+          host.send(known ? 'success' : 'release');
+          await vi.waitFor(async () =>
+            expect(await client(query)).toMatchObject({
+              turnStatus: known ? 'cancelled' : 'uncertain',
+              taskStatus: known ? 'cancelled' : 'cancelling',
+            }),
+          );
+          expect(await call('cancelRun', cancel)).toEqual(ack);
+          const events = await call('listEvents', { ...run, after: ack.version });
+          expect(events).toMatchObject(
+            known ? [{ type: 'attempt.usage_recorded' }, { type: 'task_run.cancelled' }] : [],
+          );
+          expect(await client('client.stop()')).toMatchObject({
+            outcome: known ? 'complete' : 'uncertain',
+          });
+        } else {
+          expect(
+            await call('listRooms', { workspaceId: scope.workspaceId, limit: 1 }),
+          ).toHaveLength(1);
+          expect(await call('listMembers', scope)).toMatchObject([{ handle: 'dev' }]);
+          expect(await call('listRuns', scope)).toMatchObject([
+            { runId: run.runId, performerId: snapshot.performerId },
+          ]);
+          const history = await call('history', scope);
+          expect(history).toMatchObject([{ seq: 1, body: 'hello' }]);
+          expect(await call('history', { ...scope, after: 100 })).toEqual({
+            error: 'resync_required',
+          });
+          expect(await call('listEvents', { ...run, after: 100 })).toEqual({
+            error: 'resync_required',
+          });
+          expect(await call('listEvents', { ...run, limit: 1 })).toEqual([
+            { sequence: 1, type: 'task_run.created', sensitivity: 'internal' },
+          ]);
+          const watching = observe(cursor, 5000);
+          host.send('success');
+          expect(await watching).toMatchObject({ kind: 'changed' });
+          await vi.waitFor(async () =>
+            expect(await client(query)).toMatchObject({ turnStatus: 'completed' }),
+          );
+          const answer = await call('getResult', run);
+          expect(answer).toMatchObject({
+            seq: 2,
+            body: 'native fixture answer',
+            turnId: receipt.turnId,
+          });
+          expect(await call('history', { ...scope, after: 1 })).toEqual([answer]);
+          expect(await call('history', { ...scope, after: 2 })).toEqual([]);
+          expect(await client('client.stop()')).toMatchObject({ outcome: 'complete' });
+        }
+        expect(readFileSync(join(profile, 'calls'), 'utf8')).toBe('dispatch\n');
+        return;
+      }
       if (scenario === 'draining_retry') {
         const group = { ...request, roomId: groupId, requestId: 'post' };
         const groupReceipt = await client('client.submit(' + JSON.stringify(group) + ')');
