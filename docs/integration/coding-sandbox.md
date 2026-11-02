@@ -6,6 +6,31 @@ Linux development and final qualification move to the owner's Omarchy x86_64
 notebook. BigPC remains the source of the earlier development checkpoint.
 Machine access and secrets are operational configuration, not repository assets.
 
+## Current verification record
+
+Revision d1fd454 was verified on Omarchy Linux x86_64 with Node 26.13.0,
+pnpm 12.16.1, bubblewrap 0.13.1 and systemd 262.1-1-arch.
+All 39 focused sandbox tests passed with OCEAN_SANDBOX_NATIVE=1.
+The root check, build and format checks passed. Fresh source archives of this
+revision ran each preset independently against the frozen offline dependency
+closure documented below, with private dependency and executable copies.
+
+| Preset    | Seconds | Observed memory.peak bytes | Observed pids.peak |
+| --------- | ------: | -------------------------: | -----------------: |
+| test      |    5.86 |                 1095847936 |                184 |
+| typecheck |    3.21 |                  708427776 |                 56 |
+| lint      |    6.54 |                 1145880576 |                 60 |
+| build     |    3.28 |                  684380160 |                 56 |
+
+Each returned exit 0, untruncated output and confirmed cleanup.
+Exact invocations use standalone pnpm at /toolchain/pnpm/bin/pnpm,
+with argv --config.verify-deps-before-run=false followed by the preset.
+The test preset additionally uses --configLoader native. The working
+directory is /workspace and the environment is the fixed sandbox environment.
+Limits remain 60 seconds, 2 GiB, 256 tasks and 32 KiB retained output.
+Historical measurements and superseded concerns follow below.
+Production chat admission still requires stages 4–7.
+
 ## Implemented prototype
 
 - Fixed bubblewrap namespace layout with private PID, network, proc, temporary
