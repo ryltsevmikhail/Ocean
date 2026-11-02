@@ -1,7 +1,8 @@
 # Shared local Ocean runtime
 
-Status: lifecycle subset implemented; conversation, decision and client migration
-remain proposed. See [implemented lifecycle commands and limits](../integration/local-runtime.md).
+Status: authenticated lifecycle, durable turn admission and scoped receipt/run
+reads are implemented. Event observation, owner decisions and client migration
+remain proposed. See [implemented commands, methods and limits](../integration/local-runtime.md).
 Owner request on 2026-11-02 supersedes
 continuing the remaining coding-backup work as the immediate priority. Ocean 1.1
 stages 1–6 and reviewed stage-7 work through `5d032ae` remain implemented; their
@@ -30,7 +31,8 @@ layers, conversation model and recovery semantics rather than copying Rust APIs.
   operation identity reliably.
 - `DirectChatService.send` already calls atomic `admitChat`, with a durable
   request binding and receipt before `onAdmitted`. Identical request IDs observe
-  the same turn; changed bindings fail. Send presently waits for execution.
+  the same turn; changed bindings fail. Legacy send waits for execution. The
+  shared owner uses the synchronous submit receipt and supervises fresh execution.
 - `createRuntime` owns SQLite and recovers chat publication, coding apply and the
   effect journal. Ownership must remain exclusive before exposing ready state.
 - Coding approvals persist exact bindings, expire after 300000ms and atomically

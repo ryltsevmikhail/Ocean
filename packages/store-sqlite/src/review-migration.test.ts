@@ -1,3 +1,5 @@
+import { DirectChatService, TaskRunService } from '@runnets/application';
+import { SqliteEventLog } from './event-log.js';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { afterEach, expect, it } from 'vitest';
@@ -97,4 +99,26 @@ it('rolls back new review tables and columns if the audit migration cannot finis
   expect(db.prepare('PRAGMA foreign_keys').get()?.['foreign_keys']).toBe(1);
   db.exec('DROP TABLE ocean_room_policies');
   initializeSchema(db);
+});
+
+it('reads a migrated room turn by its stored run identity even when the turn ID differs', async () => {
+  const { db, turn } = oldProfile();
+  initializeSchema(db);
+  const ids = { eventId: () => 'unused', commandId: () => 'unused' };
+  const clock = { now: () => new Date() };
+  const tasks = new TaskRunService({ log: new SqliteEventLog(db, ids), ids, clock });
+  const chat = new DirectChatService({
+    store: new SqliteConversationStore(db),
+    tasks,
+    clock,
+    nextId: () => 'unused',
+  });
+  const query = { workspaceId: 'ws_test', roomId: 'room', runId: 'tr_old' };
+  expect(await chat.getRun(query)).toMatchObject({
+    turnId: turn.id,
+    runId: 'tr_old',
+    turnStatus: 'uncertain',
+    version: 0,
+  });
+  expect(await chat.getRun({ ...query, roomId: 'other' })).toBeNull();
 });

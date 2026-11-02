@@ -1,13 +1,12 @@
-# Local runtime lifecycle
+# Local runtime lifecycle and durable turns
 
-The lifecycle subset is implemented on Linux: one foreground process owns one
-canonical private profile, its existing SQLite runtime and recovery. Only
-`hello`, `status` and `stop` are available over the socket. Conversation, run,
-approval, TUI, ACP bridging and desktop routing through this endpoint remain
-planned in [the shared-runtime design](../ocean/shared-runtime.md). Existing
-commands retain their current offline behavior and report `owner_busy` if they
-try to own an active profile. This delivery does not install a service or spawn
-one automatically.
+One foreground Linux process owns the canonical private profile, SQLite recovery
+and the provider for shared room turns. Authenticated clients can submit a turn
+and look up its receipt or current run state. The standard room TUI, desktop,
+run event observation and owner decisions are future delivery stages.
+Existing CLI room commands still open the profile directly and report
+`owner_busy` while the shared runtime holds it. See the
+[shared-runtime plan](../ocean/shared-runtime.md) for the migration sequence.
 
 After initializing an isolated profile, run:
 
@@ -17,7 +16,8 @@ pnpm ocean runtime start --profile /absolute/private/profile --json
 
 Start stays in the foreground and emits a ready status only after exclusive
 SQLite ownership and existing conversation, coding-apply and effect-journal
-recovery succeed. It never reads provider keys or dispatches a provider. A
+recovery succeed. The foreground host resolves its provider from its own environment.
+A synthetic or disabled provider can be injected by host composition. A
 restored profile, including a dangling restore-guard symlink, refuses
 `restore_restricted` before publishing an endpoint;
 existing offline restored reads and freshly confirmed text-only behavior are
@@ -35,15 +35,16 @@ returns the existing CLI envelope `{version:1,ok:true,data:...}`. Status include
 protocol, canonical profile identity, instance identity, capabilities and state.
 Stop returns `state: "stopped", outcome: "complete"` only after settlement and
 runtime close. Closing a client merely detaches it. SIGINT and SIGTERM request
-the same shutdown as explicit stop. No cancellation or work-submission method is
-implemented in this subset.
+the same shutdown as explicit stop.
 
-A host-only drain seam must settle future execution before database close. An
-uncertain/rejected drain returns `state: "stop_incomplete", outcome: "uncertain"`,
-retains the owner and listening endpoint, and never claims cancellation. The
-default drain deadline is 29 seconds; expiry also reports incomplete stop without
-closing SQLite under unsettled work. The failed stop result is retained; repeated
-stop requests do not retry effects.
+Stop refuses submissions with `runtime_draining`, signals active controllers,
+and waits for their execution promises and any additional host drain. Uncertain
+settlement from work started by this process, a rejected drain, or the default
+29-second deadline returns `state: "stop_incomplete", outcome: "uncertain"`.
+The owner and listening endpoint stay available for status and reads. Repeated
+stop requests observe the retained outcome. Uncertainty recovered from an
+earlier process remains in durable room/run state and cannot authorize replay.
+
 Clients receive exit 4 for an incomplete stop. `owner_busy`, `runtime_absent`,
 `runtime_unreachable` and `endpoint_exists` use exit 3. Other invalid input or
 security refusals use exit 2, except inherited `restore_restricted` (exit 4).
@@ -82,7 +83,7 @@ JSON framing using `@runnets/contracts` without importing application internals.
 Each request is `{id,method,params}`, with a nonempty string ID up to 128
 characters. First send `hello` with `protocol:1`, `profileId`, `instanceId` and
 `capability` from the verified descriptor. Success returns identity plus
-`capabilities:["status","stop"]`. Subsequent `status` and `stop` accept empty
+`capabilities:["status","stop","turns.submit","receipts.get","runs.get"]`. Subsequent `status` and `stop` accept empty
 params. Responses are `{id,result}` or `{id,error:{code}}`. Unknown methods refuse;
 there are no placeholder handlers for future methods. Wrong authentication,
 profile and instance return `authentication_failed`; incompatible protocol returns
@@ -97,6 +98,38 @@ transport timeouts (30 seconds for stop). Contract limits of 200 items per page 
 reserved for later methods; lifecycle has no lists or waits. No peer-credential
 API is claimed: filesystem privacy plus the random capability provide the local
 boundary. Same-UID processes with access to those credentials are trusted.
+
+## Submitting and reconnecting
+
+| Method         | Parameters                                                       | Result                                                                                       |
+| -------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `turns.submit` | `workspaceId, roomId, requestId, text` and optional `to, taskId` | Stable `{workspaceId, roomId, requestId, messageId, turnId, runId}`                          |
+| `receipts.get` | `workspaceId, roomId, requestId`                                 | Original admission identity, or `null`                                                       |
+| `runs.get`     | `workspaceId, roomId, runId`                                     | Receipt identity, `performerId, turnStatus, taskStatus, version, resultMessageId`, or `null` |
+
+Node clients call `submit`, `getReceipt` and `getRun` respectively. All three
+methods reject extra parameters. The submitting client retains the exact request
+and its ID until it can confirm the acknowledgement. After a dropped response,
+read the scoped receipt or retry the exact request. Its original message and run
+identities survive reconnect and recovery. Changing the bound workspace, room,
+text, recipient or task returns `request_conflict`. A missing or differently
+scoped lookup returns `null`. An unaddressed group post commits a message with
+both `turnId` and `runId` null.
+
+Submission commits before execution. Each fresh addressed turn gets one
+runtime-owned controller and completion promise. Duplicate submissions observe
+the existing receipt. Task-bound submissions require a coding adapter supplied
+by the trusted host. The foreground command currently refuses a fresh
+task-bound submit with `invalid_input` until the runtime decision adapter ships.
+
+Run reads expose `admitted_before_run` at version zero when a turn has been
+accepted and its TaskRun has yet to be created. Recovery marks interrupted
+acceptance failed, with `taskStatus: "not_created"` if the aggregate is absent.
+An interrupted dispatch stays uncertain. A completed turn identifies its
+committed history message via `resultMessageId`. The existing publication path
+can finish an exactly prepared answer during recovery. None of these reads
+dispatches a provider or resumes an effect. Full history, result/event
+observation and explicit run cancellation are planned for Task 3.
 
 ## Safety and qualification limits
 
@@ -118,6 +151,9 @@ The Linux process suite exercises separate owner/status/stop processes, second
 owner refusal, recovery before ready, clean restart, SIGTERM, SIGKILL stale refusal,
 uncertain drain and foreign-socket preservation. Socket tests cover two clients,
 authentication/profile/version/instance binding, modes, symlinks, short fallback,
-fragmentation, oversized frames and foreign descriptor preservation. This is
-headless lifecycle evidence only: no provider, active-turn cancellation, TUI,
-GUI shared-runtime, external-service or full Ocean 1.1 qualification is claimed.
+fragmentation, oversized frames and foreign descriptor preservation. Separate owner and client processes use a gated synthetic provider
+and a persisted dispatch counter to verify detach, retry, single publication,
+provider failure and incomplete stop. Separate SIGKILL tests reopen the
+application database twice at admission and after an effect claim. These qualify
+local persistence and headless process behavior. Standard TUI, desktop
+shared-runtime, live provider and full Ocean 1.1 acceptance gates remain open.

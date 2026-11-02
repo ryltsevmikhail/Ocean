@@ -29,6 +29,7 @@ export function admitChat(
   deps: ConversationServiceDeps,
   request: DirectChatRequest,
   provider: ProviderPort | null,
+  codingAvailable: boolean,
 ): ConversationResult<ChatAdmission> {
   if (
     ![request.workspaceId, request.requestId, request.roomId].every((id) =>
@@ -57,6 +58,8 @@ export function admitChat(
       if (turn === null) throw new Error('chat receipt has no turn');
       return ok({ turn, fresh: false, messages: [] });
     }
+    if (request.taskId !== undefined && !codingAvailable)
+      return conversationFailure('invalid_input');
     if (tx.workspace()?.id !== request.workspaceId)
       return conversationFailure('workspace_conflict');
     const room = tx.room(request.roomId);

@@ -53,21 +53,24 @@ Protocol methods: `hello`, `rooms.list`, `rooms.members`, `history.list`, `conve
 
 **Produces:** `startLocalRuntime({profile,provider?}):Promise<LocalRuntimeHost>` for composition/test injection; public client `connectLocalRuntime({profile}):Promise<LocalRuntimeClient>`; host ready/status/stop and verified instance identity.
 
-- [ ] Write failing socket/process tests for two clients/one owner, recovery before ready, wrong auth/profile/version, insecure/symlink/stale endpoint, overlong socket path, oversized/fragmented frames and foreign stale-file preservation.
-- [ ] Run focused tests and record RED. Implement handshake, bounded framing and safe publication/cleanup after existing exclusive `runtime.ready`; no automatic stealing/unlinking live endpoints.
-- [ ] Add `ocean runtime start|status|stop --profile PATH` (start foreground). Concurrent start refuses; status never opens DB. Restored profile start refuses restore_restricted before provider dispatch/usable endpoint, preserving offline restored read/text-only consent behavior. Stop tracks drain/uncertainty independently of connection close.
-- [ ] Verify GREEN, run required gates, document lifecycle commands and commit `feat: host one authenticated local runtime per profile`; review.
+- [x] Write failing socket/process tests for two clients/one owner, recovery before ready, wrong auth/profile/version, insecure/symlink/stale endpoint, overlong socket path, oversized/fragmented frames and foreign stale-file preservation.
+- [x] Run focused tests and record RED. Implement handshake, bounded framing and safe publication/cleanup after existing exclusive `runtime.ready`; no automatic stealing/unlinking live endpoints.
+- [x] Add `ocean runtime start|status|stop --profile PATH` (start foreground). Concurrent start refuses; status never opens DB. Restored profile start refuses restore_restricted before provider dispatch/usable endpoint, preserving offline restored read/text-only consent behavior. Stop tracks drain/uncertainty independently of connection close.
+- [x] Verify GREEN, run required gates, document lifecycle commands and commit `feat: host one authenticated local runtime per profile`; review.
 
 ## Task 2: Durable submit acknowledgement and runtime-owned turns
+
+Implementation pending independent review. Application and SQLite recovery are
+qualified separately from actual stale-endpoint restart, retained for Tasks 6/8.
 
 **Files:** application room-runtime modules and direct-chat.ts/admission/publication as required; host dispatch/owner; contracts receipts/runs; memory/SQLite tests.
 
 **Consumes:** Task1 transport; existing atomic admitChat receipt path, TaskRunService and recovery.
 **Produces:** application admission receipt before awaitable execution; fresh-only runtime-owned execution; read-only receipt/run access with explicit admitted-before-run state.
 
-- [ ] RED tests: drop connection from onAdmitted/after commit before response; retry identical request across clients returns original runId; changed text/to/task/room refuses. Unaddressed group submit has runId null, no model dispatch.
-- [ ] Separate durable acceptance from completion while preserving existing synchronous admission transaction and prepared-answer publication; do not introduce a second unbound dedup store. Register controllers/promises under runtime, not socket. Observe duplicate without dispatch.
-- [ ] RED→GREEN process restart between admission and TaskRun creation and after dispatch claim: recover conservatively, never resume unknown provider action. Room contention and separate-room isolation stay intact.
+- [x] RED tests: drop connection from onAdmitted/after commit before response; retry identical request across clients returns original runId; changed text/to/task/room refuses. Unaddressed group submit has runId null, no model dispatch.
+- [x] Separate durable acceptance from completion while preserving existing synchronous admission transaction and prepared-answer publication; do not introduce a second unbound dedup store. Register controllers/promises under runtime, not socket. Observe duplicate without dispatch.
+- [x] RED→GREEN process restart between admission and TaskRun creation and after dispatch claim: recover conservatively, never resume unknown provider action. Room contention and separate-room isolation stay intact.
 - [ ] Required gates; commit `feat: acknowledge durable room turns before runtime execution`; review.
 
 ## Task 3: Run observation, reconnect and cancellation

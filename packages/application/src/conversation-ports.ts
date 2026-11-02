@@ -46,6 +46,7 @@ export interface ConversationTransaction {
   roomPolicy(roomId: string): RoomExecutionPolicy | null;
   putRoomPolicy(policy: RoomExecutionPolicy): void;
   chatTurn(id: string): ChatTurn | null;
+  roomChatRun(workspaceId: string, roomId: string, runId: string): ChatTurn | null;
   chatTurns(): readonly ChatTurn[];
   activeChatTurn(roomId: string): ChatTurn | null;
   putChatTurn(turn: ChatTurn): void;

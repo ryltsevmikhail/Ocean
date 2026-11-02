@@ -4,7 +4,9 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it } from 'vitest';
-import { createRuntime } from '../runtime.js';
+import { connectLocalRuntime } from '@runnets/tools-node';
+import { startLocalRuntime } from '../local-runtime/host.js';
+import { openOceanProfile } from './profile.js';
 
 const folders: string[] = [];
 afterEach(() => {
@@ -16,7 +18,7 @@ const root =
 // This child deliberately blocks only after signalling a committed boundary. Parent kills it.
 const worker = String.raw`
 import {registerHooks} from 'node:module';
-import {existsSync,appendFileSync,writeSync} from 'node:fs';
+import {existsSync,appendFileSync,writeFileSync,writeSync} from 'node:fs';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -57,7 +59,8 @@ const provider={id:'test',models:['test'],capabilities:{streaming:true,usage:tru
   if(phase==='before_claim')halt('before_claim');
   if(phase==='after_claim'){
    const turn=db.conversations.atomic(tx=>tx.chatTurns().at(-1));
-   await db.tools.claim('rc-claim','test',{taskRunId:turn.taskRunId,attemptId:'rc-attempt'},'synthetic');
+   const claimed = await db.tools.claim('rc-claim','test',{taskRunId:turn.taskRunId,attemptId:'rc-attempt'},'synthetic');
+   if (claimed) appendFileSync(path+'.effects','effect\n',{flush:true});
    halt('after_claim');
   }
   yield {type:'text_delta',text:'Recovered answer '.repeat(300)};
@@ -65,8 +68,15 @@ const provider={id:'test',models:['test'],capabilities:{streaming:true,usage:tru
   yield {type:'completed',stopReason:'stop',rawStopReason:'stop'};
  }};
 try{
- await chat.send({workspaceId:'ws_ocean',roomId,requestId:'killed-turn',text:'Synthetic prompt',provider,
-  signal:new AbortController().signal,emit:()=>{},onAdmitted:()=>{if(phase==='accepted')halt('accepted');}});
+ const input={workspaceId:'ws_ocean',roomId,requestId:'killed-turn',text:'Synthetic prompt',provider,
+  signal:new AbortController().signal,emit:()=>{},};
+ if(phase==='accepted'||phase==='after_claim'){
+   const result=chat.submit(input);
+   if(!result.ok)throw Error('submit failed');
+   writeFileSync(path+'.receipt',JSON.stringify(result.value.receipt),{flush:true});
+   if(phase==='accepted')halt('accepted');
+   await result.value.completion;
+ }else await chat.send(input);
 }finally{db.close();release();}
 `;
 
@@ -74,7 +84,7 @@ async function killAt(path: string, roomId: string, phase: string): Promise<void
   const child = spawn(
     process.execPath,
     ['--input-type=module', '-e', worker, root, path, roomId, phase],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
+    { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env['PATH'] } },
   );
   let error = '';
   child.stderr.on('data', (b: Buffer) => {
@@ -122,7 +132,7 @@ for (const phase of [
       const dir = mkdtempSync(join(tmpdir(), 'ocean-kill-'));
       folders.push(dir);
       const path = join(dir, 'runtime.sqlite');
-      let runtime = createRuntime({ dbPath: path, mode: 'durable' });
+      let runtime = openOceanProfile(dir, true);
       let roomId = '';
       try {
         await runtime.ready;
@@ -156,7 +166,37 @@ for (const phase of [
       }
       await killAt(path, roomId, phase);
       const before = existsSync(path + '.calls') ? readFileSync(path + '.calls', 'utf8') : '';
-      runtime = createRuntime({ dbPath: path, mode: 'durable' });
+      if (phase === 'accepted' || phase === 'after_claim') {
+        const receipt = JSON.parse(readFileSync(path + '.receipt', 'utf8'));
+        for (let reopen = 0; reopen < 2; reopen++) {
+          // The killed application owner had no listener. Both subsequent socket hosts shut down cleanly.
+          const owner = await startLocalRuntime({ profile: dir, provider: null });
+          const a = await connectLocalRuntime({ profile: dir });
+          const b = await connectLocalRuntime({ profile: dir });
+          try {
+            const scope = { workspaceId: 'ws_ocean', roomId, requestId: 'killed-turn' };
+            expect(await a.getReceipt(scope)).toEqual(receipt);
+            expect(await b.submit({ ...scope, text: 'Synthetic prompt' })).toEqual(receipt);
+            const query = { workspaceId: 'ws_ocean', roomId, runId: receipt.runId };
+            const snapshot = await a.getRun(query);
+            expect(snapshot).toMatchObject(
+              phase === 'accepted'
+                ? { turnStatus: 'failed', taskStatus: 'not_created', version: 0 }
+                : { turnStatus: 'uncertain', taskStatus: 'reconciling' },
+            );
+            expect(await b.getRun(query)).toEqual(snapshot);
+            expect(
+              existsSync(path + '.effects') ? readFileSync(path + '.effects', 'utf8') : '',
+            ).toBe(phase === 'after_claim' ? 'effect\n' : '');
+          } finally {
+            a.close();
+            b.close();
+            expect((await owner.stop()).outcome).toBe('complete');
+            await owner.closed;
+          }
+        }
+      }
+      runtime = openOceanProfile(dir);
       try {
         await runtime.ready;
         const history = runtime.conversations.history('ws_ocean', roomId);
@@ -174,8 +214,8 @@ for (const phase of [
             });
           }
         }
-        expect((await runtime.toolJournal?.pending())?.length).toBe(
-          phase === 'after_claim' ? 1 : 0,
+        expect((await runtime.toolJournal!.pending()).map((effect) => effect.outcome)).toEqual(
+          phase === 'after_claim' ? ['uncertain'] : [],
         );
         expect(existsSync(path + '.calls') ? readFileSync(path + '.calls', 'utf8') : '').toBe(
           before,

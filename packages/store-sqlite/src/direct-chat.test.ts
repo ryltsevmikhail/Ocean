@@ -254,5 +254,14 @@ it('requires an injected task factory and binds task identity into the durable c
     ok: false,
     error: { code: 'request_conflict' },
   });
+  // Observation survives a host without the coding factory that admitted this task.
+  expect(await c.chat.send({ ...send, provider: null })).toMatchObject({
+    ok: true,
+    value: { status: 'completed', codingTaskId: 'task' },
+  });
+  expect(await c.chat.send({ ...send, taskId: 'different' })).toMatchObject({
+    ok: false,
+    error: { code: 'request_conflict' },
+  });
   expect(requests).toHaveLength(1);
 });

@@ -9,13 +9,15 @@ import {
   type LocalRuntimeStop,
 } from '@runnets/contracts';
 import { LocalRuntimeFrames, writeLocalRuntimeFrame } from '@runnets/tools-node';
+import type { RuntimeTurns } from './turns.js';
 export interface LifecycleOperations {
   readonly descriptor: LocalRuntimeDescriptor;
   readonly identity: LocalRuntimeIdentity;
+  readonly dispatch: RuntimeTurns['dispatch'];
   status(): LocalRuntimeStatus;
   stop(): Promise<LocalRuntimeStop>;
 }
-/** This server exposes lifecycle only. Execution and owner decisions are not RPCs yet. */
+/** Authenticate before dispatch. The connection owns only its bounded pending responses. */
 export async function listenLocalRuntime(
   operations: LifecycleOperations,
 ): Promise<{ server: Server; clients: Set<Socket> }> {
@@ -28,6 +30,7 @@ export async function listenLocalRuntime(
     clients.add(socket);
     let authenticated = false;
     let stopping = false;
+    let pending = 0;
     const handshakeTimeout = setTimeout(() => socket.destroy(), 5000);
     const frames = new LocalRuntimeFrames((value) => {
       if (stopping) return;
@@ -70,7 +73,7 @@ export async function listenLocalRuntime(
         socket.end();
         return;
       }
-      if (Object.keys(params).length !== 0) {
+      if ((method === 'status' || method === 'stop') && Object.keys(params).length !== 0) {
         reject('invalid_params');
         return;
       }
@@ -92,7 +95,29 @@ export async function listenLocalRuntime(
           });
         return;
       }
-      reject('method_not_found');
+      if (pending >= 128) {
+        socket.destroy();
+        return false;
+      }
+      try {
+        const reply = operations.dispatch(method, params);
+        if (reply instanceof Promise) {
+          pending++;
+          void reply
+            .then((value) => {
+              if (!socket.destroyed && !socket.writableEnded)
+                writeLocalRuntimeFrame(socket, { id, ...value });
+            })
+            .catch(() => {
+              if (!socket.destroyed && !socket.writableEnded) reject('runtime_failure');
+            })
+            .finally(() => {
+              pending--;
+            });
+        } else writeLocalRuntimeFrame(socket, { id, ...reply });
+      } catch {
+        reject('runtime_failure');
+      }
       return;
     });
     socket.on('data', (chunk: Buffer) => {

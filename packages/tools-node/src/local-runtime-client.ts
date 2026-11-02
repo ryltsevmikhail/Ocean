@@ -3,6 +3,13 @@ import { connect, type Socket } from 'node:net';
 import {
   LOCAL_RUNTIME_MAX_WAIT_MS,
   isLocalRuntimeIdentity,
+  isLocalTurnReceipt,
+  isLocalRunSnapshot,
+  type LocalTurnRequest,
+  type LocalTurnReceipt,
+  type LocalReceiptQuery,
+  type LocalRunQuery,
+  type LocalRunSnapshot,
   localRuntimeRecord,
   type LocalRuntimeIdentity,
   type LocalRuntimeStatus,
@@ -12,6 +19,9 @@ import { readLocalRuntimeDescriptor } from './local-runtime-paths.js';
 import { LocalRuntimeFrames, writeLocalRuntimeFrame } from './local-runtime-framing.js';
 export interface LocalRuntimeClient {
   readonly identity: LocalRuntimeIdentity;
+  submit(request: LocalTurnRequest): Promise<LocalTurnReceipt>;
+  getReceipt(query: LocalReceiptQuery): Promise<LocalTurnReceipt | null>;
+  getRun(query: LocalRunQuery): Promise<LocalRunSnapshot | null>;
   status(): Promise<LocalRuntimeStatus>;
   stop(): Promise<LocalRuntimeStop>;
   close(): void;
@@ -91,6 +101,31 @@ export async function connectLocalRuntime(options: {
       throw Error('identity_mismatch');
     return {
       identity,
+      async submit(input) {
+        const request = { ...input };
+        const result = await peer.request('turns.submit', request);
+        if (!matchesReceipt(result, request)) throw Error('invalid_frame');
+        return result;
+      },
+      async getReceipt(input) {
+        const query = { ...input };
+        const result = await peer.request('receipts.get', query);
+        if (result !== null && !matchesReceipt(result, query)) throw Error('invalid_frame');
+        return result;
+      },
+      async getRun(input) {
+        const query = { ...input };
+        const result = await peer.request('runs.get', query);
+        if (
+          result !== null &&
+          (!isLocalRunSnapshot(result) ||
+            result.workspaceId !== query.workspaceId ||
+            result.roomId !== query.roomId ||
+            result.runId !== query.runId)
+        )
+          throw Error('invalid_frame');
+        return result;
+      },
       async status() {
         const value = await peer.request('status', {});
         if (
@@ -122,4 +157,13 @@ export async function connectLocalRuntime(options: {
     peer.close();
     throw error;
   }
+}
+
+function matchesReceipt(value: unknown, query: LocalReceiptQuery): value is LocalTurnReceipt {
+  return (
+    isLocalTurnReceipt(value) &&
+    value.requestId === query.requestId &&
+    value.workspaceId === query.workspaceId &&
+    value.roomId === query.roomId
+  );
 }

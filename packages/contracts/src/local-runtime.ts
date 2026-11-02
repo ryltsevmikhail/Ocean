@@ -7,7 +7,7 @@ export interface LocalRuntimeIdentity {
   readonly protocol: 1;
   readonly profileId: string;
   readonly instanceId: string;
-  readonly capabilities: readonly ['status', 'stop'];
+  readonly capabilities: readonly string[];
 }
 export interface LocalRuntimeDescriptor {
   readonly protocol: 1;
@@ -55,7 +55,8 @@ export function isLocalRuntimeIdentity(value: unknown): value is LocalRuntimeIde
     typeof value['instanceId'] === 'string' &&
     /^[a-f0-9-]{36}$/.test(value['instanceId']) &&
     Array.isArray(value['capabilities']) &&
-    value['capabilities'].length === 2 &&
+    value['capabilities'].length <= 64 &&
+    value['capabilities'].every((c) => typeof c === 'string' && c.length > 0 && c.length <= 64) &&
     value['capabilities'][0] === 'status' &&
     value['capabilities'][1] === 'stop'
   );

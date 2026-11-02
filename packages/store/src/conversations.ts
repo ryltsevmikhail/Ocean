@@ -53,6 +53,10 @@ export class InMemoryConversationStore implements ConversationStore {
         state.policies.set(p.roomId, p);
       },
       chatTurn: (id) => state.turns.get(id) ?? null,
+      roomChatRun: (workspaceId, roomId, runId) =>
+        [...state.turns.values()].find(
+          (t) => t.workspaceId === workspaceId && t.roomId === roomId && t.taskRunId === runId,
+        ) ?? null,
       chatTurns: () => [...state.turns.values()],
       activeChatTurn: (roomId) =>
         [...state.turns.values()].find(

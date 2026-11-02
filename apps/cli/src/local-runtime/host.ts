@@ -25,6 +25,9 @@ import {
   ownsLocalRuntimePath,
   unlinkOwnedLocalRuntimePath,
 } from '@runnets/tools-node';
+import { RuntimeTurns } from './turns.js';
+import { createProviderFromEnv } from '../engine/provider.js';
+import type { RuntimeOptions } from '../runtime.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
 export interface LocalRuntimeHost {
@@ -36,9 +39,10 @@ export interface LocalRuntimeHost {
 }
 export interface LocalRuntimeHostOptions {
   readonly profile: string;
-  /** Host-only composition seam, never accepted over the wire. No provider dispatch in lifecycle v1. */
+  /** Host-only composition. Providers and coding authority never arrive over the wire. */
+  readonly codingTools?: NonNullable<RuntimeOptions['codingTools']>;
   readonly provider?: ProviderPort | null;
-  /** Future execution supervision must settle before database close; rejection is uncertainty. */
+  /** Additional host supervision joins runtime-owned execution before SQLite close. */
   readonly drain?: () => Promise<'settled' | 'uncertain'>;
   readonly drainDeadlineMs?: number;
 }
@@ -55,7 +59,11 @@ export async function startLocalRuntime(
     throw Error('invalid_input');
   const paths = localRuntimePaths(options.profile);
   assertNotRestored(paths.profile);
-  const runtime = openOceanProfile(paths.profile);
+  const runtime = openOceanProfile(
+    paths.profile,
+    false,
+    options.codingTools ? { codingTools: options.codingTools } : {},
+  );
   let transport: Awaited<ReturnType<typeof listenLocalRuntime>> | undefined;
   let socketOwned: Stats | undefined;
   let descriptorOwned: Stats | undefined;
@@ -67,8 +75,13 @@ export async function startLocalRuntime(
       protocol: 1,
       profileId: paths.profileId,
       instanceId: randomUUID(),
-      capabilities: ['status', 'stop'],
+      capabilities: ['status', 'stop', 'turns.submit', 'receipts.get', 'runs.get'],
     };
+    const turns = new RuntimeTurns(
+      runtime.chat,
+      options.provider === undefined ? createProviderFromEnv(process.env) : options.provider,
+    );
+    let databaseClosed = false;
     const descriptor = {
       protocol: 1 as const,
       profileId: identity.profileId,
@@ -93,8 +106,13 @@ export async function startLocalRuntime(
         stopping = (async (): Promise<LocalRuntimeStop> => {
           try {
             if (
-              options.drain &&
-              (await drainBeforeDeadline(options.drain, drainDeadlineMs)) !== 'settled'
+              (await drainBeforeDeadline(async () => {
+                const [jobs, extra] = await Promise.all([
+                  turns.drain(),
+                  options.drain ? options.drain() : 'settled',
+                ]);
+                return jobs === 'settled' && extra === 'settled' ? 'settled' : 'uncertain';
+              }, drainDeadlineMs)) !== 'settled'
             )
               throw Error('stop_incomplete');
             // Node closes/unlinks a listening Unix path. Refuse closing a replaced path.
@@ -102,6 +120,7 @@ export async function startLocalRuntime(
               throw Error('endpoint_changed');
             // Fallible endpoint cleanup must retain the database owner and listener on failure.
             if (descriptorOwned) unlinkOwnedLocalRuntimePath(paths.descriptor, descriptorOwned);
+            databaseClosed = true;
             runtime.close();
             // Stop accepting now; closed resolves once existing transports have drained.
             transport!.server.close(() => resolveClosed());
@@ -125,6 +144,8 @@ export async function startLocalRuntime(
     transport = await listenLocalRuntime({
       descriptor,
       identity,
+      dispatch: (method, params) =>
+        databaseClosed ? { error: { code: 'runtime_draining' } } : turns.dispatch(method, params),
       status: () => host.status(),
       stop: () => host.stop(),
     });
