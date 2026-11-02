@@ -21,3 +21,10 @@ after the owner returns. It supports allow-once, deny and cancel. Restored
 instances refuse requests and decisions. Regression tests cover expiry while
 the owner prompt is open and restored request refusal. Concrete durable storage,
 atomic consumption and host integration remain pending.
+
+Consumption is now an application transaction: recheck allowed status, exact
+binding, expiry, restored state and task admission, create the dispatch claim
+through the same transaction, then persist consumed status. The store port
+requires claim and status updates to roll back together. Regression tests
+verify one claim for allow-once, no claim for deny/cancel or a foreign room,
+and refusal of repeated consumption. Concrete adapters remain pending.

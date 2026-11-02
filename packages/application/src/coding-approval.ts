@@ -10,6 +10,8 @@ import {
 export interface CodingApprovalTransaction {
   approval(id: string): CodingApproval | null;
   putApproval(value: CodingApproval): void;
+  /** Creates the durable dispatch claim in this same transaction. */
+  claimApprovalOperation(approval: CodingApproval): boolean;
 }
 export interface CodingApprovalStore {
   atomic<T>(work: (tx: CodingApprovalTransaction) => T): T;
@@ -98,6 +100,30 @@ export class CodingApprovalService {
       };
       tx.putApproval(value);
       return ok(value);
+    });
+  }
+  consume(id: string, current: CodingApprovalBinding): CodingResult<CodingApproval> {
+    const binding = structuredClone(current);
+    if (this.deps.restored) return codingFailure('recovery_required');
+    return this.deps.store.atomic((tx) => {
+      const approval = tx.approval(id);
+      if (
+        !approval ||
+        approval.status !== 'allowed' ||
+        !this.deps.admit(binding) ||
+        !codingApprovalMatches(
+          approval.binding,
+          binding,
+          approval.createdAt,
+          approval.expiresAt,
+          this.deps.now(),
+        )
+      )
+        return codingFailure('approval_required');
+      if (!tx.claimApprovalOperation(approval)) return codingFailure('recovery_required');
+      const consumed: CodingApproval = { ...approval, status: 'consumed' };
+      tx.putApproval(consumed);
+      return ok(consumed);
     });
   }
 }
