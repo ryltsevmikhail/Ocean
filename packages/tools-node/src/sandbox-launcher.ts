@@ -1,9 +1,11 @@
+import { fingerprintTree, treeFingerprintScript } from './sandbox-tree.js';
 import { fingerprintFile } from './sandbox-mounts.js';
 import { lstat } from 'node:fs/promises';
 /** Trusted bootstrap executed inside the supervised unit before bubblewrap.
  * Mount source descriptors are inherited by bubblewrap, avoiding host proc access.
  */
 export async function sandboxLauncher(argv: readonly string[]): Promise<string> {
+  const trees: Record<string, string> = {};
   const identities: Record<string, string[]> = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] !== '--bind' && argv[i] !== '--ro-bind') continue;
@@ -14,11 +16,15 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
       String,
     );
     if (stat.isFile()) identities[source].push(await fingerprintFile(source));
+    if (stat.isDirectory() && source !== '/usr' && argv[i] === '--ro-bind')
+      trees[source] = fingerprintTree(source);
     i += 2;
   }
   return `
     const fs=require('node:fs'), cp=require('node:child_process'),crypto=require('node:crypto'),os=require('node:os'),path=require('node:path');
     const argv=${JSON.stringify(argv)}, identities=${JSON.stringify(identities)}, descriptors=[];
+    const trees=${JSON.stringify(trees)}, fingerprintTree=(${treeFingerprintScript});
+    const staged=[];
     try {
       for(let i=0;i<argv.length;i++) {
         if(argv[i]!=='--bind' && argv[i]!=='--ro-bind') continue;
@@ -60,13 +66,22 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
           argv.splice(i,1,'--perms',Number(stat.mode&0o777n).toString(8),'--ro-bind-data');
           i+=2;
         } else argv[i]=argv[i]==='--bind'?'--bind-fd':'--ro-bind-fd';
+        if(trees[argv[i+1]]) {
+          const scratch=fs.mkdtempSync(path.join(process.env.RUNTIME_DIRECTORY || os.tmpdir(),'ocean-dependencies-'));
+          staged.push(scratch);
+          const copy=path.join(scratch,'tree');
+          fs.cpSync('/proc/self/fd/'+fd+'/.',copy,{recursive:true,dereference:false,verbatimSymlinks:true});
+          if(fingerprintTree(copy)!==trees[argv[i+1]]) throw Error('dependency snapshot changed');
+          const pinned=fs.openSync(copy,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);
+          fs.closeSync(fd);fd=pinned;descriptors[descriptors.length-1]=fd;
+        }
         argv[i+1]=String(descriptors.length+2);
         i+=2;
       }
       const child=cp.spawn('/usr/bin/bwrap',argv,{
         env:process.env,stdio:['inherit','inherit','inherit',...descriptors],shell:false});
       child.on('error',()=>process.exit(127));
-      child.on('exit',(code)=>process.exit(code??128));
+      child.on('exit',(code)=>{for(const dir of staged)fs.rmSync(dir,{recursive:true,force:true});process.exit(code??128);});
     } finally {for(const fd of descriptors)fs.closeSync(fd);}
   `;
 }

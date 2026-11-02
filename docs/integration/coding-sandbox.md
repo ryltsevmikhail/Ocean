@@ -226,3 +226,12 @@ A native test verifies the unit runtime directory is absent after confirmed
 cleanup. PrivateTmp was tested but does not fit task roots hosted under /tmp;
 the runtime directory provides staging ownership without masking those roots.
 Directory dependency snapshot qualification remains open.
+
+Read-only dependency directory mounts now receive private copies in the
+unit runtime directory. A shared bounded tree attestation hashes sorted paths,
+modes, symlink text and regular file bytes without following symlinks. The host
+records the expected digest before service creation; the bootstrap verifies
+the copied tree before mounting its opened directory. The runtime directory
+is outside the sandbox and copied roots retain relative pnpm links. Focused
+native tests pass. Full Ocean dependency closure and cold preset measurements
+must be repeated with this copying launcher before qualification is complete.
