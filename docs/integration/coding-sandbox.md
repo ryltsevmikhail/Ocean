@@ -278,3 +278,10 @@ owner edit at the displacement boundary and verifies that it survives.
 A crash after displacement requires reconciliation of .ocean-recovery-* assets.
 A writer retaining an open descriptor to the displaced inode can still modify
 it after comparison; qualification and recovery must account for that case.
+
+A native SIGKILL regression now interrupts the filesystem child immediately
+after displacement. The original bytes survive in the recovery file. Admission
+refuses subsequent workers with effect_uncertain while recovery or temporary
+worker artifacts remain. Model file tools hide these artifacts and changeset
+capture refuses them, reserving reconciliation for trusted host recovery.
+All 33 focused sandbox tests and the ordinary 595-test suite pass.

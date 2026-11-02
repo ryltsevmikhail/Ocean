@@ -51,6 +51,8 @@ export async function sandboxRoot(
   async function walk(directory: string): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       if (++count > 50000) throw new ToolError('containment_unavailable', 'mount inventory limit');
+      if (/^\.ocean-(?:recovery-|.*\.tmp$)/.test(entry.name))
+        throw new ToolError('effect_uncertain', 'unreconciled filesystem worker artifacts');
       if (entry.name === '.git' && directory === root) {
         if (!(await lstat(join(directory, entry.name))).isFile())
           throw new ToolError('containment_unavailable', 'linked worktree required');

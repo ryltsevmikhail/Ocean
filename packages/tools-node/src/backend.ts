@@ -52,6 +52,7 @@ export function blockedName(name: string): boolean {
     ['.git', 'node_modules', '.ssh', '.aws', '.config', '.npmrc', '.netrc', '.DS_Store'].includes(
       name,
     ) ||
+    /^\.ocean-(?:recovery-|.*\.tmp$)/.test(name) ||
     /^\.env(?:\.|$)/i.test(name) ||
     /\.(?:pem|key|p12|pfx)$/i.test(name) ||
     /^id_(?:rsa|ed25519)/.test(name)
