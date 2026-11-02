@@ -137,7 +137,8 @@ it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race', 'refactor
             putApplication: (value) => {
               receipts.set(value.id, structuredClone(value));
             },
-            claimApplication: () => {
+            claimApplication: (receipt) => {
+              expect(receipt.recoveryProtocol).toBe(2);
               claims++;
               return true;
             },
@@ -151,6 +152,7 @@ it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race', 'refactor
         sourceTree: async () =>
           mode === 'race' && claims > 0 ? 'changed-after-claim' : artifact.afterTreeHash,
         applyFile: async (_root, file, context) => {
+          expect(receipts.get('apply')?.recoveryProtocol).toBe(2);
           expect(context).toEqual({
             ownerId: task.lease.ownerId,
             taskId: task.id,

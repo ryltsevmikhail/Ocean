@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { CodingAssetEntry, CodingAssetManifest } from '@runnets/domain';
+import { checkAssetPolicy, type CodingAssetPolicy } from './coding-asset-policy.js';
 const directoryFlags = fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW;
 const fdPath = (fd: number) => '/proc/self/fd/' + String(fd);
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -15,7 +16,7 @@ export const CODING_ASSET_LIMITS: CodingAssetLimits = {
   entries: 100000,
   depth: 128,
 };
-export type CodingAssetPolicy = 'all' | 'coding-worktree' | 'coding-recovery';
+export type { CodingAssetPolicy } from './coding-asset-policy.js';
 export interface CodingAssetCapture {
   readonly policy: CodingAssetPolicy;
   readonly limits: CodingAssetLimits;
@@ -59,12 +60,13 @@ function scan(
   policy: CodingAssetPolicy,
   expected?: ReadonlyMap<string, string>,
   metadataOnly = false,
+  pinned?: number,
 ): CodingAssetCapture {
   const uid = process.getuid?.();
   if (process.platform !== 'linux' || uid === undefined || fs.realpathSync(root) !== root)
     throw Error('unsupported_coding_asset');
   const rootStat = fs.lstatSync(root, { bigint: true });
-  const rootFd = fs.openSync(root, directoryFlags);
+  const rootFd = pinned ?? fs.openSync(root, directoryFlags);
   let rootMount = '';
   const entries: CodingAssetEntry[] = [],
     states: [string, string][] = [];
@@ -105,40 +107,7 @@ function scan(
     check(before);
     if (expected && expected.get(relative) !== codingAssetIdentity(before))
       throw Error('stale_coding_asset');
-    if (policy === 'coding-worktree' && relative) {
-      const parts = relative.split('/');
-      if (
-        parts.some(
-          (part) =>
-            [
-              '.ssh',
-              '.aws',
-              '.config',
-              '.npmrc',
-              '.netrc',
-              '.gitconfig',
-              '.git-credentials',
-              '.gnupg',
-              '.kube',
-            ].includes(part) ||
-            /^\.env(?:\.|$)/i.test(part) ||
-            /\.(?:pem|key|p12|pfx)$/i.test(part) ||
-            /^id_(?:rsa|ed25519|ecdsa|dsa)/.test(part),
-        ) ||
-        (parts.includes('.git') && (relative !== '.git' || !before.isFile()))
-      )
-        throw Error('protected_coding_asset');
-    }
-    if (
-      policy === 'coding-recovery' &&
-      relative &&
-      (!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\.(?:before|after|json(?:\.next)?)$/.test(
-        relative,
-      ) ||
-        !before.isFile() ||
-        (relative.includes('.json') && (before.nlink !== 1n || before.size > 2097152n)))
-    )
-      throw Error('protected_coding_asset');
+    checkAssetPolicy(policy, relative, before);
     const mode = Number(before.mode & 0o777n);
     if (before.isSymbolicLink()) {
       const target = text(fs.readlinkSync(path, { encoding: 'buffer' }));
@@ -257,7 +226,7 @@ function scan(
       sourceEntries: states,
     };
   } finally {
-    fs.closeSync(rootFd);
+    if (pinned === undefined) fs.closeSync(rootFd);
   }
 }
 /** Captures a selected root only. Symlinks are inert text; a separate graph resolver must prove completeness. */
@@ -266,7 +235,17 @@ export function captureCodingAssetTree(
   options: Partial<CodingAssetLimits> = {},
   policy: CodingAssetPolicy = 'all',
 ): CodingAssetCapture {
-  if (!['all', 'coding-worktree', 'coding-recovery'].includes(policy))
+  return captureAssetTreeAt(root, options, policy);
+}
+/** Internal entry point for a source already pinned by a trusted collector. */
+export function captureAssetTreeAt(
+  root: string,
+  options: Partial<CodingAssetLimits>,
+  policy: CodingAssetPolicy,
+  pinned?: number,
+  preflight?: (metadata: CodingAssetCapture) => void,
+): CodingAssetCapture {
+  if (!['all', 'coding-worktree', 'coding-recovery', 'coding-recovery-v2'].includes(policy))
     throw Error('unsupported_coding_asset');
   const limits = { ...CODING_ASSET_LIMITS, ...options };
   for (const key of ['bytes', 'entries', 'depth'] as const)
@@ -276,16 +255,28 @@ export function captureCodingAssetTree(
       limits[key] > CODING_ASSET_LIMITS[key]
     )
       throw Error('coding_asset_limit');
-  const expected =
-    policy !== 'all'
-      ? new Map(scan(root, limits, policy, undefined, true).sourceEntries)
-      : undefined;
-  const first = scan(root, limits, policy, expected),
-    second = scan(root, limits, policy, expected);
+  const metadata =
+    policy !== 'all' ? scan(root, limits, policy, undefined, true, pinned) : undefined;
+  if (metadata) preflight?.(metadata);
+  const expected = metadata && new Map(metadata.sourceEntries);
+  const first = scan(root, limits, policy, expected, false, pinned),
+    second = scan(root, limits, policy, expected, false, pinned);
   if (
     first.manifest.hash !== second.manifest.hash ||
     first.sourceStateHash !== second.sourceStateHash
   )
     throw Error('stale_coding_asset');
   return first;
+}
+/** Recheck every namespace entry and physical identity after consuming capture evidence. */
+export function checkAssetTreeAt(capture: CodingAssetCapture, pinned: number): void {
+  const after = scan(
+    capture.root,
+    capture.limits,
+    capture.policy,
+    new Map(capture.sourceEntries),
+    true,
+    pinned,
+  );
+  if (after.sourceStateHash !== capture.sourceStateHash) throw Error('stale_coding_asset');
 }

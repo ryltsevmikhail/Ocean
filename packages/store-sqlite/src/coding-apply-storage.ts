@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { CodingApplyStore, CodingApplyTransaction } from '@runnets/application';
 import {
   assertCodingApplyTransition,
+  validCodingRecoveryProtocol,
   type CodingApplyReceipt,
   type CodingApplyResolution,
 } from '@runnets/domain';
@@ -56,6 +57,7 @@ export class SqliteCodingApplyStore implements CodingApplyStore {
             .map((row) => JSON.parse(String(row['payload'])) as CodingApplyReceipt),
         claimApplication: (receipt) => {
           if (
+            !validCodingRecoveryProtocol(receipt) ||
             application(receipt.id) ||
             receipt.status !== 'applying' ||
             receipt.files.some((f) => f.status !== 'pending') ||

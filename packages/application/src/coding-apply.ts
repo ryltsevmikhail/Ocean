@@ -114,6 +114,7 @@ export class CodingApplyService {
     const claimed = this.#store.atomic((tx) => {
       if (tx.application(i.id) || !resolve(tx)) return null;
       const receipt: CodingApplyReceipt = {
+        recoveryProtocol: 2,
         id: i.id,
         taskId: i.taskId,
         changesetHash: i.changesetHash,

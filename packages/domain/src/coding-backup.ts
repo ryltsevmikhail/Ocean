@@ -1,3 +1,4 @@
+import type { CodingApplyReceipt } from './coding-apply.js';
 import type { CodingWorktree } from './changeset.js';
 /** External-asset references bound to an immutable database snapshot, not execution authority. */
 export interface CodingBackupInventory {
@@ -24,6 +25,24 @@ export interface CodingBackupInventory {
     readonly id: string;
     readonly taskId: string;
     readonly changesetHash: string;
-    readonly status: 'applying' | 'completed' | 'uncertain' | 'not_started';
+    readonly status: CodingApplyReceipt['status'];
+    readonly recoveryProtocol: 2 | null;
+    readonly files: CodingApplyReceipt['files'];
   }[];
+}
+
+/** Bounded path/status evidence shared by inventory readers and external asset collectors. */
+export function validCodingBackupFiles(files: CodingApplyReceipt['files']): boolean {
+  return (
+    Array.isArray(files) &&
+    files.length <= 1000 &&
+    files.every(
+      (file: CodingApplyReceipt['files'][number]) =>
+        typeof file?.path === 'string' &&
+        file.path.length > 0 &&
+        file.path.length <= 4096 &&
+        !file.path.includes('\0') &&
+        ['pending', 'started', 'completed', 'uncertain'].includes(file.status),
+    )
+  );
 }

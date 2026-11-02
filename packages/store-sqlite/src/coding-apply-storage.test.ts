@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -169,7 +170,9 @@ it.each(['started', 'uncertain', 'completed'] as const)(
           'applying',
         );
       } else {
-        expect(service.recover()[0]?.status).toBe('uncertain');
+        const [recovered] = service.recover();
+        expect(recovered?.status).toBe('uncertain');
+        expect(recovered).not.toHaveProperty('recoveryProtocol');
         expect((await store.tools.pending())[0]?.outcome).toBe('uncertain');
         expect(service.recover()).toEqual([]);
         expect(
@@ -186,3 +189,35 @@ it.each(['started', 'uncertain', 'completed'] as const)(
     }
   },
 );
+
+it('admits only an absent or numeric v2 protocol and freezes it in either direction', async () => {
+  for (const marker of [undefined, 1, null, '2', [2], 2, 'absent']) {
+    const store = openSqliteStore({ path: ':memory:' });
+    const receipt = (
+      marker === 'absent' ? intent : { ...intent, recoveryProtocol: marker }
+    ) as CodingApplyReceipt;
+    try {
+      const admitted = marker === 2 || marker === 'absent';
+      expect(store.codingApplications.atomic((tx) => tx.claimApplication(receipt))).toBe(admitted);
+      if (admitted) {
+        expect((await store.tools.pending())[0]).toMatchObject({
+          fingerprint: createHash('sha256').update(JSON.stringify(receipt)).digest('hex'),
+        });
+
+        const changed = marker === 2 ? intent : { ...intent, recoveryProtocol: 2 as const };
+        expect(() => store.codingApplications.atomic((tx) => tx.putApplication(changed))).toThrow();
+        expect(() =>
+          store.codingApplications.atomic((tx) =>
+            tx.putApplication({
+              ...receipt,
+              recoveryProtocol: undefined,
+            } as unknown as CodingApplyReceipt),
+          ),
+        ).toThrow();
+        expect(store.codingApplications.atomic((tx) => tx.application(intent.id))).toEqual(receipt);
+      }
+    } finally {
+      store.close();
+    }
+  }
+});

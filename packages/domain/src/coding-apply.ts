@@ -42,6 +42,7 @@ export function codingApplicationVerified(
 }
 
 export interface CodingApplyReceipt {
+  readonly recoveryProtocol?: 2;
   readonly id: string;
   readonly taskId: string;
   readonly changesetHash: string;
@@ -52,6 +53,10 @@ export interface CodingApplyReceipt {
     readonly path: string;
     readonly status: 'pending' | 'started' | 'completed' | 'uncertain';
   }[];
+}
+
+export function validCodingRecoveryProtocol(receipt: CodingApplyReceipt): boolean {
+  return !('recoveryProtocol' in receipt) || receipt.recoveryProtocol === 2;
 }
 
 /** Identity metadata for already-claimed host application effects; not execution authority. */

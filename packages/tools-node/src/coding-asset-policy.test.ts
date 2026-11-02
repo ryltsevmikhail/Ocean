@@ -115,3 +115,62 @@ it.runIf(process.platform === 'linux')(
     }
   },
 );
+
+it.each([
+  'leaf-name',
+  'credential',
+  'link',
+  'hardlink',
+  'large-header',
+  'large-json',
+  'large-next',
+  'nested',
+])('refuses %s in metadata preflight before body reads', (kind) => {
+  const leaf = fs.mkdtempSync(join(tmpdir(), 'ocean-scoped-policy-')),
+    files = join(leaf, 'files');
+  fs.mkdirSync(files, { mode: 0o700 });
+  const main = '11111111-1111-1111-1111-111111111111.json',
+    record = join(files, main);
+  fs.writeFileSync(join(leaf, 'scope.json'), '{}', { mode: 0o600 });
+  fs.writeFileSync(record, '{}', { mode: 0o600 });
+  fs.writeFileSync(record.replace('.json', '.before'), 'synthetic');
+  try {
+    switch (kind) {
+      case 'leaf-name':
+        fs.writeFileSync(join(leaf, 'unknown'), 'synthetic');
+        break;
+      case 'credential':
+        fs.writeFileSync(join(files, 'z.key'), 'synthetic');
+        break;
+      case 'link':
+        fs.symlinkSync(record, join(files, main + '.next'));
+        break;
+      case 'hardlink':
+        fs.linkSync(
+          record.replace('.json', '.before'),
+          join(files, main.replace('.json', '.after')),
+        );
+        break;
+      case 'large-header':
+        fs.truncateSync(join(leaf, 'scope.json'), 65537);
+        break;
+      case 'large-json':
+        fs.truncateSync(record, 2097153);
+        break;
+      case 'large-next':
+        fs.writeFileSync(record + '.next', 'x', { mode: 0o600 });
+        fs.truncateSync(record + '.next', 2097153);
+        break;
+      case 'nested':
+        fs.mkdirSync(join(files, 'nested'));
+        break;
+    }
+    vi.mocked(fs.readSync).mockClear();
+    expect(() => captureCodingAssetTree(leaf, {}, 'coding-recovery-v2')).toThrow(
+      'protected_coding_asset',
+    );
+    expect(fs.readSync).not.toHaveBeenCalled();
+  } finally {
+    fs.rmSync(leaf, { recursive: true, force: true });
+  }
+});

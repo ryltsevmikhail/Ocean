@@ -1,6 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
-import type { CodingBackupInventory, CodingApplyReceipt } from '@runnets/domain';
+import {
+  validCodingRecoveryProtocol,
+  validCodingBackupFiles,
+  type CodingBackupInventory,
+  type CodingApplyReceipt,
+} from '@runnets/domain';
 import { task as decodeTask } from './coding-store.js';
 import { changesetStorage } from './changeset-storage.js';
 import { SCHEMA_VERSION } from './schema.js';
@@ -143,6 +148,7 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
         const value = JSON.parse(String(row['payload'])) as CodingApplyReceipt;
         const artifact = byChangeset.get(value.changesetHash);
         if (
+          !validCodingRecoveryProtocol(value) ||
           value.id !== id ||
           !text(id) ||
           !artifact ||
@@ -151,12 +157,7 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
           !['applying', 'completed', 'uncertain', 'not_started'].includes(value.status)
         )
           throw Error('invalid_coding_inventory');
-        if (
-          value.files.some(
-            (file) => !['pending', 'started', 'completed', 'uncertain'].includes(file.status),
-          )
-        )
-          throw Error('invalid_coding_inventory');
+        if (!validCodingBackupFiles(value.files)) throw Error('invalid_coding_inventory');
         if (
           JSON.stringify(value.files.map((file) => file.path)) !==
           JSON.stringify(artifactPaths.get(value.changesetHash))
@@ -167,6 +168,8 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
             id,
             taskId: value.taskId,
             changesetHash: value.changesetHash,
+            recoveryProtocol: value.recoveryProtocol ?? null,
+            files: value.files.map(({ path, status }) => ({ path, status })),
             status: value.status,
           }),
         );

@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import { createRuntime } from '../runtime.js';
-import { codingApplyRecoverySlot } from '@runnets/tools-node';
+import { codingApplyRecoverySlot, captureScopedCodingApplyRecovery } from '@runnets/tools-node';
 const repository =
   process.env['OCEAN_RC_INSTALL'] ??
   resolve(fileURLToPath(new URL('../../../..', import.meta.url)));
@@ -48,7 +48,7 @@ const {openSqliteStore,ownSqliteRuntime}=await import('@runnets/store-sqlite');
 const {GitCodingApplyProject}=await import('@runnets/tools-node');
 const release=ownSqliteRuntime(path), store=openSqliteStore({path});
 const content=text=>({text,mode:'100644',sha256:createHash('sha256').update(text).digest('hex')});
-let receipt={id:'apply',taskId:'task',changesetHash:'a'.repeat(64),reviewRequestId:'review',expectedBase:'base',status:'applying',files:['a','b','c'].map(path=>({path,status:'pending'}))};
+let receipt={recoveryProtocol:2,id:'apply',taskId:'task',changesetHash:'a'.repeat(64),reviewRequestId:'review',expectedBase:'base',status:'applying',files:['a','b','c'].map(path=>({path,status:'pending'}))};
 store.codingApplications.atomic(tx=>{if(!tx.claimApplication(receipt))throw Error('fixture claim refused');});
 if(phase==='intent')halt();
 const adapter=new GitCodingApplyProject();
@@ -131,15 +131,17 @@ it
         existsSync(join(project, name)) ? readFileSync(join(project, name), 'utf8') : null,
       );
       const effects = existsSync(path + '.effects') ? readFileSync(path + '.effects', 'utf8') : '';
+      const context = {
+        ownerId: 'fixture',
+        taskId: 'task',
+        applicationId: 'apply',
+        changesetHash: 'a'.repeat(64),
+      };
+      const common = join(project, '.git');
       const scope = join(
-        project,
-        '.git/ocean-apply-recovery-v2',
-        codingApplyRecoverySlot(project, {
-          ownerId: 'fixture',
-          taskId: 'task',
-          applicationId: 'apply',
-          changesetHash: 'a'.repeat(64),
-        }),
+        common,
+        'ocean-apply-recovery-v2',
+        codingApplyRecoverySlot(project, context),
       );
       const header = phase === 'scope_header' ? readFileSync(join(scope, 'scope.json')) : null;
       if (header) {
@@ -166,6 +168,26 @@ it
           const store = openSqliteStore({ path });
           try {
             const receipt = store.codingApplications.atomic((tx) => tx.application('apply'))!;
+            expect(receipt.recoveryProtocol).toBe(2);
+            const observed = captureScopedCodingApplyRecovery(common, project, context, {
+              ...receipt,
+              recoveryProtocol: receipt.recoveryProtocol ?? null,
+            });
+            expect(observed.presence).toBe(
+              phase === 'intent' || phase === 'started'
+                ? 'absent'
+                : phase === 'scope_header'
+                  ? 'header-only'
+                  : phase === 'rename'
+                    ? 'incomplete'
+                    : 'scoped',
+            );
+            expect(observed.status).toBe('uncertain');
+            if (header)
+              expect(observed.capture?.manifest.entries).toMatchObject([
+                { path: '', kind: 'directory' },
+                { path: 'scope.json', kind: 'file', bytes: header.byteLength },
+              ]);
             expect(receipt.status).toBe('uncertain');
             expect(receipt.files.map((file) => file.status)).toEqual(
               phase === 'intent'

@@ -170,6 +170,24 @@ The initial 7.1 review found a scope/effect pathname substitution gap. Its fix
 adds deterministic scope/files/header swaps before effects and scope replacement
 after displacement, preserving both directories and refusing false completion.
 
+## Frozen recovery protocol and source evidence
+
+New claims persist recoveryProtocol 2 in the receipt and shared journal
+fingerprint before file effects. Startup retains the marker when it changes
+interrupted status to uncertain. Historical unmarked receipts retain their
+original protocol ambiguity, including receipts created by the initial scoped
+writer. The read-only evidence collector requires a frozen numeric marker and the
+exact original operation context.
+
+The SIGKILL fixture now explicitly seeds a marked receipt and inspects the scoped
+source after each of two reopenings. Claim and pre-dispatch interruptions show
+an absent source. A crash after scope.json fsync shows a header-only leaf. The
+rename gap shows an incomplete record with the displaced original. Later crashes
+can show completed native records while the overall receipt remains uncertain.
+Project bytes and dispatch counts survive both openings, the journal retains its
+hold and a duplicate claim refuses. No folder repair or settlement accompanies
+source capture. See [coding backup](coding-backup.md).
+
 ## Remaining release gates
 
 Extend reconciliation to other coding effects without redispatching unknown

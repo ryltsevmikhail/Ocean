@@ -1,9 +1,10 @@
-import type { CodingApplyReceipt } from './coding-apply.js';
+import { validCodingRecoveryProtocol, type CodingApplyReceipt } from './coding-apply.js';
 export function assertCodingApplyTransition(
   previous: CodingApplyReceipt,
   next: CodingApplyReceipt,
 ): void {
   if (
+    !validCodingRecoveryProtocol(next) ||
     JSON.stringify({ ...previous, status: next.status, files: next.files }) !==
       JSON.stringify(next) ||
     previous.status !== 'applying' ||

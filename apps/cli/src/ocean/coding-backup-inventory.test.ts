@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { expect, it } from 'vitest';
@@ -72,6 +72,50 @@ it('bounds record enumeration before loading or validating unbounded payload his
       db.close();
     }
     expect(() => readCodingBackupInventory(path)).toThrow('coding_inventory_limit');
+  } finally {
+    f.close();
+  }
+});
+
+it('freezes ordered receipt paths, states and exact v2 or unmarked protocol from SQLite alone', async () => {
+  const f = await codingWorkflowFixture('direct');
+  try {
+    writeFileSync(join(f.worktree, 'a'), 'a');
+    writeFileSync(join(f.worktree, 'b'), 'b');
+    const artifact = await f.capture('capture');
+    const path = join(f.directory, 'runtime.sqlite');
+    f.runtime.close();
+    rmSync(f.project, { recursive: true });
+    const db = new DatabaseSync(path);
+    const files = [
+      { path: 'a', status: 'completed' },
+      { path: 'b', status: 'started' },
+    ];
+    const receipt = {
+      id: 'apply',
+      taskId: 'task',
+      changesetHash: artifact.hash,
+      expectedBase: f.base,
+      status: 'applying',
+      files,
+    };
+    try {
+      const write = db.prepare('INSERT OR REPLACE INTO ocean_coding_applications VALUES(?,?)');
+      write.run('apply', JSON.stringify(receipt));
+      const old = readCodingBackupInventory(path);
+      expect(old.applications[0]).toMatchObject({ recoveryProtocol: null, files });
+      write.run('apply', JSON.stringify({ ...receipt, recoveryProtocol: 2 }));
+      const marked = readCodingBackupInventory(path);
+      expect(marked.applications[0]).toMatchObject({ recoveryProtocol: 2, files });
+      expect(marked.hash).not.toBe(old.hash);
+      expect(readCodingBackupInventory(path)).toEqual(marked);
+      for (const recoveryProtocol of ['2', null, [2], 1]) {
+        write.run('apply', JSON.stringify({ ...receipt, recoveryProtocol }));
+        expect(() => readCodingBackupInventory(path)).toThrow('invalid_coding_inventory');
+      }
+    } finally {
+      db.close();
+    }
   } finally {
     f.close();
   }

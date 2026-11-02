@@ -13,16 +13,13 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
     mkdirSync(join(dependencies, 'project/node_modules'), { recursive: true });
     writeFileSync(join(root, '.git'), 'gitdir: /host/not-visible');
     writeFileSync(join(dependencies, 'project/node_modules/dependency.js'), 'synthetic dependency');
-    const source = readFileSync(
-      process.env['OCEAN_RC_INSTALL']
-        ? join(
-            process.env['OCEAN_RC_INSTALL'],
-            'node_modules/@runnets/tools-node/dist/coding-asset-scan.js',
-          )
-        : new URL('../dist/coding-asset-scan.js', import.meta.url),
-      'utf8',
-    );
     try {
+      for (const module of ['coding-asset-scan.js', 'coding-asset-policy.js']) {
+        const built = process.env['OCEAN_RC_INSTALL']
+          ? join(process.env['OCEAN_RC_INSTALL'], 'node_modules/@runnets/tools-node/dist', module)
+          : new URL('../dist/' + module, import.meta.url);
+        writeFileSync(join(root, module), readFileSync(built));
+      }
       const evidence = await runSandbox({
         root,
         dependencyProjectRoot: dependencies,
@@ -36,8 +33,9 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         args: [
           '--input-type=module',
           '-e',
-          source +
-            String.raw`
+          String.raw`
+import * as fs from 'node:fs';
+import {captureCodingAssetTree} from '/workspace/coding-asset-scan.js';
 const testRoot=fs.openSync('/workspace/project',fs.constants.O_RDONLY|fs.constants.O_DIRECTORY);
 const testChild=fs.openSync('/workspace/project/node_modules',fs.constants.O_RDONLY|fs.constants.O_DIRECTORY);
 const testMountOf=fd=>/^mnt_id:\s+(\d+)$/m.exec(fs.readFileSync('/proc/self/fdinfo/'+fd,'utf8'))?.[1];

@@ -18,6 +18,9 @@ invalid base/tree hashes and mismatched application file ordering/statuses.
 
 The deterministic content-addressed inventory includes minimal task references,
 worktree bindings, changeset tree/hash references and application identities.
+Each frozen application includes its ordered file paths and statuses and a
+recoveryProtocol of 2 or null. An absent historical marker becomes null only in
+the inventory projection. The stored receipt keeps its original fields.
 Authoritative approvals, messages, evidence, review/resolution records and exact
 changed-file contents remain in the complete SQLite snapshot; they are not
 replaced with this reduced reference list. Inventory format 1 describes this
@@ -351,6 +354,57 @@ passes 9 tests on the target Linux laptop. Installed 1.0 artifacts are unchanged
 Full scoped-asset graph capture and legacy attribution, configuration/dependency
 closure, format-2 publication/restore and installed/interactive/RC qualification
 remain open. User-facing backup retains its external-assets refusal.
+
+## Source capture for a frozen protocol-2 application
+
+New application claims persist numeric recoveryProtocol 2 before the first
+file starts. The marker is immutable and part of the shared journal claim
+fingerprint. Earlier receipts, including receipts from the initial scoped writer,
+can lack a marker. Their layout and exact operation attribution remain unknown.
+
+The tools-node adapter `captureScopedCodingApplyRecovery` accepts the trusted
+canonical Git common directory, original project-root identity, operation context
+and one frozen inventory application. It checks the numeric marker and
+task/application/changeset identity, derives the slot itself and opens only that
+operation below `ocean-apply-recovery-v2`. The caller binds the common directory,
+original project and owner from the frozen task/worktree and holds maintenance
+ownership. The collector never opens referenced checkout files. Its result carries
+the frozen status, context and slot alongside one of four source observations.
+
+| Presence    | Evidence                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| absent      | No scope exists and no file has a completed receipt. Includes an empty completed changeset.                                                 |
+| header-only | Exact canonical header without a files directory after a file started.                                                                      |
+| incomplete  | Empty leaf, bounded partial header before files creation, missing started/uncertain file intent or a still-started native intent.           |
+| scoped      | Valid header and files directory, with a completed native record for each non-pending receipt path. The application can still be uncertain. |
+
+Every present leaf yields the portable manifest and physical source identities
+for its actual contents, including empty directories, header bytes and ordinary
+modes. A conflicting decoded header, missing completed-file record or required
+original, orphan UUID, malformed main intent, duplicate or foreign path, and
+an intent for a pending file each refuse capture. Each record distinguishes a
+matching original, conflicting actual bytes or executable mode, absent original
+and an addition that required no original. A bounded opaque partial next record
+is retained only beside a valid main record. The collector never substitutes the
+expected preimage for conflicting retained data.
+
+Before reading even the header, a metadata pass checks the entire leaf. Its
+namespace permits only private scope.json (64 KiB), the private files directory
+and flat UUID .before/.after/.json/.json.next files (2 MiB per JSON record).
+Links, special nodes, foreign owners, child mounts, unknown names and over-budget
+trees refuse. Selected-root limits still bound all bytes, entries and metadata.
+Checked directory FDs remain open through header validation, hashing, intent
+decoding and the final namespace/identity check. The retained policy also runs
+during archive recapture.
+
+Synthetic cases cover archive verification and private quarantine materialization
+of the entire leaf, source swaps and content mutation, and zero body reads for
+forbidden names or oversized JSON. Direct and group native workflow fixtures
+capture their admitted completed apply from an ownership-held frozen inventory.
+The seven SIGKILL boundaries also exercise source classification after reopening.
+These observations describe retained evidence only. The complete cross-operation
+graph, unmarked legacy attribution, configuration/dependency closure, format-2
+publication and full restore still require their own gates.
 
 ## Remaining format-2 work
 
