@@ -321,20 +321,31 @@ metadata confers that identity or grants execution authority.
 
 The Linux adapter creates private owned directories through pinned directory FDs
 with O_NOFOLLOW, verifies canonical paths and exact existing headers, and syncs
-the header and directories before any project file effect. Existing missing or
-corrupt headers/files directories refuse without repair or deletion. Unknown
+the header and directories before any project file effect. A synchronous callback
+keeps the validated common/scope/files descriptors open throughout that effect;
+recovery writes use the borrowed files FD rather than reopening its pathname.
+Canonical directory bindings, private ownership and the exact header are checked
+before project mutation and after displacement/publication. An observed binding
+change throws and retains application uncertainty; no cleanup removes evidence.
+Existing missing or corrupt headers/files directories refuse without repair or
+deletion. Unknown
 contents and retained originals remain evidence. Scope identifies an operation;
 it never authorizes replay, resolves uncertainty or proves historical completion.
 
 Focused tests cover identity separation, exact header reuse, legacy preservation,
-corrupt/missing header and missing-files refusal. A real SIGKILL immediately after
+corrupt/missing header and missing-files refusal. Review found and reproduced a
+pathname handoff substitution in the initial implementation. Deterministic
+regressions now replace the scope/files directory or header at effect-root open
+and require refusal before source mutation; a swap after displacement must leave
+the original and started intent under the pinned directory and throw. Both old
+and replacement directories are preserved. A real SIGKILL immediately after
 scope.json fsync leaves only the header: two runtime openings retain its exact
 bytes, preserve unchanged project files and the unresolved hold, refuse replay,
 and do not recreate files/. These are synthetic trusted seeded-receipt crash
 fixtures, not admission or power-loss qualification. Separate direct/group native
 workflows qualify actual admitted application. See [coding recovery](coding-recovery.md).
 
-At the 7.1 checkpoint, root check passes 909 tests (41 opt-in skipped), build and
+At the corrected 7.1 checkpoint, root check passes 913 tests (41 opt-in skipped), build and
 format pass; the separate seven-boundary SIGKILL plus direct/group native suite
 passes 9 tests on the target Linux laptop. Installed 1.0 artifacts are unchanged.
 Full scoped-asset graph capture and legacy attribution, configuration/dependency

@@ -12,6 +12,12 @@ started receipt. Private canonical FD-pinned directories and the exact scope
 header must be synced before project effects. Existing missing/corrupt scope
 state refuses without repair; legacy recovery data remains untouched. This
 identity evidence grants no approval, replay permission or completion inference.
+The adapter keeps the checked directory FDs open across the full synchronous
+effect and writes recovery evidence relative to the validated files FD. It
+rechecks canonical scope bindings/private ownership/exact header before project
+mutation and after displacement/publication. Observed replacement throws, leaving
+the durable application uncertain and retaining evidence even if displacement
+already occurred; it never accepts a substituted private directory by pathname.
 
 ## Interrupted application receipts
 
@@ -152,7 +158,7 @@ pnpm 12.16.1: `pnpm check` passed 807 tests (39 opt-in skipped); `pnpm build` an
 covers process SIGKILL, not power loss. No external provider or real profile is
 used. Independent review found no blocking issue in this recovery increment.
 
-At the separate 7.1 scope checkpoint, root check passes 909 tests (41 opt-in
+At the corrected 7.1 scope checkpoint, root check passes 913 tests (41 opt-in
 skipped), build and format pass. The opt-in Linux command
 `OCEAN_SANDBOX_NATIVE=1 pnpm test apps/cli/src/ocean/coding-process-recovery.test.ts apps/cli/src/ocean/coding-workflow-native.test.ts`
 passes 9 tests: seven process boundaries plus two direct/group workflows with
@@ -160,6 +166,9 @@ actual admitted application. Crash fixtures remain trusted seeded receipts;
 they do not replace admission qualification. No provider/key or installed 1.0
 artifact was used or changed. Fresh independent packaged review remains with
 the controller; this checkpoint does not complete Task 7.
+The initial 7.1 review found a scope/effect pathname substitution gap. Its fix
+adds deterministic scope/files/header swaps before effects and scope replacement
+after displacement, preserving both directories and refusing false completion.
 
 ## Remaining release gates
 

@@ -13,7 +13,7 @@ import { codingGit, codingText } from './coding-git.js';
 import { captureCodingProjectTree } from './coding-project-tree.js';
 import { observeCodingFiles } from './coding-apply-observation.js';
 import { applyCodingFile } from './coding-apply-file.js';
-import { prepareCodingApplyRecovery } from './coding-apply-scope.js';
+import { withCodingApplyRecovery } from './coding-apply-scope.js';
 /** Trusted owner-application adapter; never stages, commits, cleans or invokes project code. */
 export class GitCodingApplyProject
   implements CodingApplyProjectPort, CodingApplyObservationPort, CodingApplyTreePort
@@ -55,7 +55,8 @@ export class GitCodingApplyProject
     const common = await realpath(
       resolve(root, codingText(await codingGit(root, ['rev-parse', '--git-common-dir'])).trim()),
     );
-    const recovery = prepareCodingApplyRecovery(common, root, operation);
-    applyCodingFile(root, recovery, file);
+    withCodingApplyRecovery(common, root, operation, (recovery) => {
+      applyCodingFile(root, recovery, file);
+    });
   }
 }

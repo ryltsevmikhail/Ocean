@@ -4,6 +4,7 @@ import { dirname, basename, join } from 'node:path';
 import type { CodingFileChange, CodingFileContent } from '@runnets/domain';
 import { codingPath } from './coding-git.js';
 import { blockedName } from './backend.js';
+import type { CodingApplyRecovery } from './coding-apply-scope.js';
 const directoryFlags = fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW;
 const fdPath = (fd: number) => '/proc/self/fd/' + String(fd);
 const hash = (body: Buffer | string) => createHash('sha256').update(body).digest('hex');
@@ -140,7 +141,7 @@ function removeEmptyTree(parent: number, name: string, budget = { remaining: 100
 /** Called only after a durable per-file started receipt. Never removes recovery assets. */
 export function applyCodingFile(
   root: string,
-  recoveryDirectory: string,
+  recoveryDirectory: string | CodingApplyRecovery,
   change: CodingFileChange,
 ): void {
   codingPath(change.path);
@@ -150,8 +151,15 @@ export function applyCodingFile(
   valid(change.after);
   const project = rootDirectory(root);
   let recovery: number | undefined, parent: number | undefined;
+  const checkRecovery = () => {
+    if (typeof recoveryDirectory !== 'string') recoveryDirectory.check();
+  };
   try {
-    recovery = rootDirectory(recoveryDirectory, true);
+    checkRecovery();
+    recovery =
+      typeof recoveryDirectory === 'string'
+        ? rootDirectory(recoveryDirectory, true)
+        : recoveryDirectory.fd;
     if (fs.fstatSync(project).dev !== fs.fstatSync(recovery).dev)
       throw Error('cross-device recovery unsupported');
     const id = randomUUID(),
@@ -169,6 +177,7 @@ export function applyCodingFile(
       staged: id + '.after',
     };
     const save = (status: string, exclusive: boolean) => {
+      checkRecovery();
       const target = exclusive ? record : record + '.next';
       const file = fs.openSync(target, 'wx', 0o600);
       try {
@@ -191,6 +200,7 @@ export function applyCodingFile(
       }
       fs.fsyncSync(recovery);
     }
+    checkRecovery();
     const relative = dirname(change.path);
     parent = parentDirectory(project, relative, change.before === null);
     const destination = join(fdPath(parent), basename(change.path));
@@ -217,18 +227,22 @@ export function applyCodingFile(
       }
     }
     sameDirectory(project, relative, parent);
+    checkRecovery();
     if (change.before) {
       fs.renameSync(destination, backup);
       fs.fsyncSync(parent);
       fs.fsyncSync(recovery);
+      checkRecovery();
       matches(backup, change.before, true);
       sameDirectory(project, relative, parent);
     }
     if (change.after) {
+      checkRecovery();
       fs.linkSync(staged, destination);
       fs.fsyncSync(parent);
       fs.unlinkSync(staged);
       fs.fsyncSync(recovery);
+      checkRecovery();
     }
     sameDirectory(project, relative, parent);
     if (fs.realpathSync(root) !== root) throw Error('apply root changed');
@@ -239,7 +253,7 @@ export function applyCodingFile(
     save('completed', false);
   } finally {
     if (parent !== undefined) fs.closeSync(parent);
-    if (recovery !== undefined) fs.closeSync(recovery);
+    if (recovery !== undefined && typeof recoveryDirectory === 'string') fs.closeSync(recovery);
     fs.closeSync(project);
   }
 }

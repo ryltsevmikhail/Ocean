@@ -2,7 +2,15 @@ import * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { expect, it } from 'vitest';
-import { prepareCodingApplyRecovery } from './coding-apply-scope.js';
+import type { CodingApplyContext } from '@runnets/domain';
+import { withCodingApplyRecovery } from './coding-apply-scope.js';
+function prepareCodingApplyRecovery(common: string, root: string, context: CodingApplyContext) {
+  let path = '';
+  withCodingApplyRecovery(common, root, context, (recovery) => {
+    path = recovery.path;
+  });
+  return path;
+}
 const context = {
   ownerId: 'owner',
   taskId: 'task',

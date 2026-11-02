@@ -61,12 +61,18 @@ function child(
     throw error;
   }
 }
-/** Caller has durably recorded the exact file as started. Existing incomplete scope is never repaired. */
-export function prepareCodingApplyRecovery(
+export interface CodingApplyRecovery {
+  readonly fd: number;
+  readonly path: string;
+  check(): void;
+}
+/** Run a synchronous effect with its validated scope pinned. Incomplete scope is never repaired. */
+export function withCodingApplyRecovery(
   common: string,
   root: string,
   context: CodingApplyContext,
-): string {
+  effect: (recovery: CodingApplyRecovery) => void,
+): void {
   const scope = codingApplyRecoveryScope(root, context),
     slot = codingApplyRecoverySlot(root, context);
   if (
@@ -105,9 +111,33 @@ export function prepareCodingApplyRecovery(
     files = child(leaf, 'files', path, opened.created).fd;
     fs.fsyncSync(files);
     fs.fsyncSync(leaf);
-    checkAssetPath(leaf, leafPath);
-    checkAssetPath(commonFd, common);
-    return path;
+    const recovery: CodingApplyRecovery = {
+      fd: files,
+      path,
+      check: () => {
+        checkAssetPath(commonFd, common);
+        if (fs.fstatSync(commonFd).uid !== process.getuid?.())
+          throw Error('invalid_coding_apply_scope');
+        for (const [fd, canonical] of [
+          [parent!, parentPath],
+          [leaf!, leafPath],
+          [files!, path],
+        ] as const) {
+          const stat = fs.fstatSync(fd);
+          if (stat.uid !== process.getuid?.() || stat.mode & 0o7077)
+            throw Error('invalid_coding_apply_scope');
+          checkAssetPath(fd, canonical);
+        }
+        if (
+          readAssetBlob(leaf!, 'scope.json', body.length) !==
+          createHash('sha256').update(body).digest('hex')
+        )
+          throw Error('invalid_coding_apply_scope');
+      },
+    };
+    recovery.check();
+    effect(recovery);
+    recovery.check();
   } finally {
     if (files !== undefined) fs.closeSync(files);
     if (leaf !== undefined) fs.closeSync(leaf);
