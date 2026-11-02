@@ -226,3 +226,75 @@ it.each([
     f.close();
   }
 });
+
+it.each([1, 8])(
+  'bounds publication verification with %i linked replacements among eight receipt paths',
+  async (linked) => {
+    const f = fixture(),
+      actual = await vi.importActual<typeof fs>('node:fs');
+    const files: { path: string; status: 'completed' | 'uncertain' }[] = [...app.files];
+    try {
+      for (let i = 1; i < 8; i++) {
+        const otherId = '22222222-2222-2222-2222-' + String(i).padStart(12, '0'),
+          path = 'dir/file-' + i;
+        const published = i < linked;
+        const main = {
+          ...f.intent,
+          path,
+          backup: otherId + '.before',
+          staged: otherId + '.after',
+          before: null,
+          status: published ? 'started' : 'completed',
+        };
+        actual.writeFileSync(join(f.files, otherId + '.json'), JSON.stringify(main), {
+          mode: 0o600,
+        });
+        const destination = join(f.project, path);
+        actual.writeFileSync(destination, 'new', { mode: 0o600 });
+        if (published) actual.linkSync(destination, join(f.files, main.staged));
+        files.push({ path, status: published ? 'uncertain' : 'completed' });
+      }
+      let mainReads = 0,
+        stagedReads = 0;
+      vi.mocked(fs.readSync).mockImplementation(((...args: Parameters<typeof fs.readSync>) => {
+        const path = actual.realpathSync('/proc/self/fd/' + args[0]);
+        if (path.startsWith(f.files + '/')) {
+          if (path.endsWith('.json')) mainReads++;
+          if (path.endsWith('.after')) stagedReads++;
+        }
+        return actual.readSync(...args);
+      }) as typeof fs.readSync);
+      const collect = () =>
+        captureScopedCodingApplyRecovery(join(f.outer, 'common'), f.project, context, {
+          ...app,
+          files,
+        });
+      if (linked === 1) {
+        const result = collect();
+        expect(result.records).toHaveLength(8);
+        expect(result.records.filter((record) => record.publicationLink)).toMatchObject([
+          { path: 'dir/file', publicationLink: 'matching' },
+        ]);
+      } else {
+        let error: unknown;
+        try {
+          collect();
+        } catch (thrown) {
+          error = thrown;
+        }
+        expect({ error, mainReads, stagedReads }).toEqual({
+          error: Error('invalid_coding_apply_recovery'),
+          mainReads: 0,
+          stagedReads: 0,
+        });
+      }
+      for (const { path } of files.slice(0, linked)) {
+        expect(actual.statSync(join(f.project, path)).nlink).toBe(2);
+        expect(actual.readFileSync(join(f.project, path), 'utf8')).toBe('new');
+      }
+    } finally {
+      vi.mocked(fs.readSync).mockImplementation(actual.readSync);
+      f.close();
+    }
+  },
+);

@@ -489,6 +489,9 @@ coding assets.
 After the native writer links a staged replacement at its project destination,
 a process kill can leave both names on one inode. For a declared protocol-2
 receipt the collector accepts exactly two links to an owned regular UUID.after.
+The native writer finishes each file before starting the next. A scope with
+multiple linked staged names therefore refuses during metadata preflight,
+before any main record or staged body is read.
 The canonical header and strictly decoded started main must bind a unique started
 or uncertain receipt path. The intent must declare an after-image, have no next
 record and retain its original when required. Header, JSON and UUID.before files
