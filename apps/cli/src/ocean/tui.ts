@@ -1,3 +1,4 @@
+import { isRestored } from './restored.js';
 import type { ProviderPort } from '@runnets/application';
 import type { Readable, Writable } from 'node:stream';
 import { TuiApp } from '../tui/app.js';
@@ -14,6 +15,7 @@ export interface DirectTuiOptions {
 }
 /** Keep the profile owned until any streamed model request has settled and raw mode is restored. */
 export async function runDirectTui(options: DirectTuiOptions): Promise<number> {
+  if (isRestored(options.profile)) throw new Error('restore_restricted');
   const runtime = openOceanProfile(options.profile);
   let app: TuiApp | undefined;
   const shutdown = () => app?.stop();

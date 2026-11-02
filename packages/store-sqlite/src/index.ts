@@ -12,3 +12,6 @@ export type { OpenSqliteStoreOptions, SqliteStore } from './store.js';
 export type { Checkpoint, CheckpointStore } from './checkpoints.js';
 export type { RecoveryResult } from './recovery.js';
 export { ownSqliteRuntime } from './ownership.js';
+
+export { inspectDatabase, snapshotDatabase } from './maintenance.js';
+export type { DatabaseSummary, DatabaseInspection } from './maintenance.js';

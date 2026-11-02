@@ -1,3 +1,5 @@
+import { checkRestoredAccess } from './restored.js';
+import { runOperations } from './operations.js';
 import { runReviewCommand, terminalReviewApproval } from './review.js';
 import { randomUUID } from 'node:crypto';
 import type { Readable, Writable } from 'node:stream';
@@ -9,6 +11,7 @@ import { oceanArguments, required } from './arguments.js';
 import type { Runtime } from '../runtime.js';
 
 export interface OceanCommandOptions {
+  readonly restoredApproval?: () => Promise<boolean>;
   readonly input?: Readable;
   readonly reviewApproval?: ReviewApprovalPort;
   readonly provider?: ProviderPort | null;
@@ -29,6 +32,17 @@ export async function runOceanCommand(
     const { command, positional, flags } = args;
     if (args.bots.length > 1 && !(command === 'room' && positional[0] === 'group'))
       throw new Error('Repeated --bot is only valid for group creation');
+    if (['doctor', 'backup', 'restore'].includes(command)) {
+      const result = await runOperations(args);
+      output.write(JSON.stringify({ version: 1, ok: true, data: result.data }) + '\n');
+      return result.code;
+    }
+    await checkRestoredAccess(
+      args,
+      options.input ?? process.stdin,
+      error,
+      options.restoredApproval,
+    );
     if (command === 'tui') {
       const { runDirectTui } = await import('./tui.js');
       return await runDirectTui({
@@ -183,6 +197,7 @@ export async function runOceanCommand(
             'review_conflict',
             'review_unavailable',
             'approval_required',
+            'restore_restricted',
           ].includes(safe)
         ? 4
         : 2;

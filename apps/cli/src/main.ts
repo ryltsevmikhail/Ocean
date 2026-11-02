@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * RunneTS CLI entry point.
+ * Ocean CLI entry point.
  *
  * Commands are intentionally small: the CLI is a host that composes domain,
  * application, and store adapters. It owns no domain logic of its own.
@@ -10,9 +10,13 @@ import { runDemo } from './lifecycle.js';
 import { renderEvents, renderJson, renderState } from './render.js';
 import { CLI_VERSION, isVersionRequest } from './version.js';
 
-const HELP = `runne ${CLI_VERSION} — RunneTS command line
+const HELP = `ocean ${CLI_VERSION} — Ocean command line
 
 Usage:
+  ocean install --archive /archive --sha256 HASH --prefix /user/prefix
+  ocean doctor [--profile /path] [--json]
+  ocean backup --to /new/snapshot --profile /path
+  ocean restore --from /snapshot --profile /new/profile
   ocean init --workspace dir [--profile /path]
   ocean bot add --handle dev --name Developer --role "Your role"
   ocean bot list | ocean room direct --bot dev
@@ -39,7 +43,7 @@ Exit codes: 0 success, 1 runtime failure, 2 usage error.
 
 export async function main(argv: readonly string[]): Promise<number> {
   if (isVersionRequest(argv)) {
-    process.stdout.write(`runne ${CLI_VERSION}\n`);
+    process.stdout.write(`ocean ${CLI_VERSION}\n`);
     return 0;
   }
 
@@ -47,7 +51,9 @@ export async function main(argv: readonly string[]): Promise<number> {
   if (
     command === '--profile' ||
     command === '--json' ||
-    ['init', 'bot', 'room', 'send', 'history', 'run'].includes(command ?? '') ||
+    ['init', 'bot', 'room', 'send', 'history', 'run', 'doctor', 'backup', 'restore'].includes(
+      command ?? '',
+    ) ||
     (command === 'tui' && rest.includes('--room'))
   ) {
     const { runOceanCommand } = await import('./ocean/command.js');
@@ -57,6 +63,11 @@ export async function main(argv: readonly string[]): Promise<number> {
   if (command === 'help' || command === '--help' || command === '-h') {
     process.stdout.write(HELP);
     return 0;
+  }
+
+  if (command === 'install') {
+    const { installCommand } = await import('./release/installer.js');
+    return installCommand(rest);
   }
 
   if (command === 'status') {

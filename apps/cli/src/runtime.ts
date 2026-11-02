@@ -1,4 +1,6 @@
 /** Host composition: ephemeral state or a single-owner durable runtime with reconciliation. */
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   TaskRunService,
@@ -35,6 +37,7 @@ export interface Runtime {
   close(): void;
 }
 export interface RuntimeOptions {
+  readonly restoredAccess?: boolean;
   readonly clock?: Clock;
   readonly dbPath?: string | undefined;
   readonly mode?: 'ephemeral' | 'durable' | undefined;
@@ -91,6 +94,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       close: () => {},
     };
   }
+  if (existsSync(join(dirname(dbPath), 'restore-guard.json')) && !options.restoredAccess)
+    throw new Error('restore_restricted');
   const release = ownSqliteRuntime(dbPath);
   try {
     const store = openSqliteStore({ path: dbPath });

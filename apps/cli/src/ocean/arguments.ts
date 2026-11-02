@@ -21,6 +21,7 @@ const valueFlags = new Set([
   'limit',
   'room',
   'to',
+  'from',
   'reason',
   'review-version',
 ]);

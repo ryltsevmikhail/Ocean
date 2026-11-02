@@ -20,7 +20,8 @@
     "format:check": "prettier --check .",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "runne": "node apps/cli/dist/main.js",
-    "ocean": "node apps/cli/dist/main.js"
+    "ocean": "node apps/cli/dist/main.js",
+    "package:release": "pnpm build && node apps/cli/dist/release/package.js"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
