@@ -207,6 +207,7 @@ it.each([
         app = interrupted;
         fs.writeFileSync(record + '.next', JSON.stringify(body), { mode: 0o600 });
         fs.writeFileSync(record, JSON.stringify({ ...body, status: 'started' }));
+        expect(f.collect(app).presence).toBe('incomplete');
         fs.unlinkSync(record.replace('.json', '.before'));
         break;
       case 'missing-before':

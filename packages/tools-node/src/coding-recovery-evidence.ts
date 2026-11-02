@@ -113,7 +113,13 @@ export function readCodingRecoveryRecords(
       }
       if (!nextOpaque) {
         const decoded = decodeCodingRecoveryIntent(next, id, projects);
-        if (prefix && decoded.status === 'completed' && decoded.before && !before)
+        if (
+          prefix === 'files/' &&
+          (intent.status !== 'started' ||
+            decoded.status !== 'completed' ||
+            entries.has(intent.staged) ||
+            (intent.before && !before))
+        )
           return invalidRecovery();
         if (
           JSON.stringify({ ...decoded, status: 'started' }) !==

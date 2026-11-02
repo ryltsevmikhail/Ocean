@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   validCodingBackupFiles,
   type CodingApplyContext,
@@ -83,6 +84,7 @@ export function captureScopedCodingApplyRecovery(
     }
     if (!statuses.some((status) => status !== 'pending')) return invalidRecovery();
     let validHeader = false;
+    let classifiedHeaderHash: string | undefined;
     const capture = captureAssetTreeAt(leaf.path, {}, 'coding-recovery-v2', leaf.fd, (metadata) => {
       const states = new Map(metadata.sourceEntries);
       if (states.get('') !== leaf.state || states.get('files') !== source.files?.state)
@@ -98,6 +100,7 @@ export function captureScopedCodingApplyRecovery(
           65536,
           false,
         );
+        classifiedHeaderHash = createHash('sha256').update(bytes).digest('hex');
         const expected = Buffer.from(JSON.stringify(scope) + '\n');
         validHeader = bytes.equals(expected);
         if (!validHeader) {
@@ -115,6 +118,11 @@ export function captureScopedCodingApplyRecovery(
       }
       if ((source.files && !validHeader) || (required && !source.files)) return invalidRecovery();
     });
+    const capturedHeader = capture.manifest.entries.find((entry) => entry.path === 'scope.json');
+    if (
+      (capturedHeader?.kind === 'file' ? capturedHeader.sha256 : undefined) !== classifiedHeaderHash
+    )
+      throw Error('stale_coding_asset');
     const records = source.files
       ? readCodingRecoveryRecords(capture, source.files.fd, new Set([projectRoot]), 'files/')
       : [];

@@ -268,15 +268,19 @@ export function captureAssetTreeAt(
     throw Error('stale_coding_asset');
   return first;
 }
-/** Recheck every namespace entry and physical identity after consuming capture evidence. */
+/** Verify captured bytes as well as source identities after consuming the evidence. */
 export function checkAssetTreeAt(capture: CodingAssetCapture, pinned: number): void {
   const after = scan(
     capture.root,
     capture.limits,
     capture.policy,
     new Map(capture.sourceEntries),
-    true,
+    false,
     pinned,
   );
-  if (after.sourceStateHash !== capture.sourceStateHash) throw Error('stale_coding_asset');
+  if (
+    after.sourceStateHash !== capture.sourceStateHash ||
+    after.manifest.hash !== capture.manifest.hash
+  )
+    throw Error('stale_coding_asset');
 }

@@ -385,17 +385,20 @@ original, orphan UUID, malformed main intent, duplicate or foreign path, and
 an intent for a pending file each refuse capture. Each record distinguishes a
 matching original, conflicting actual bytes or executable mode, absent original
 and an addition that required no original. A bounded opaque partial next record
-is retained only beside a valid main record. The collector never substitutes the
-expected preimage for conflicting retained data.
+is retained only beside a valid main record. A decoded v2 next record must
+complete the same started intent. At that boundary the staged after-image is
+gone and a displaced original must be present if the intent required it.
 
 Before reading even the header, a metadata pass checks the entire leaf. Its
 namespace permits only private scope.json (64 KiB), the private files directory
 and flat UUID .before/.after/.json/.json.next files (2 MiB per JSON record).
 Links, special nodes, foreign owners, child mounts, unknown names and over-budget
 trees refuse. Selected-root limits still bound all bytes, entries and metadata.
-Checked directory FDs remain open through header validation, hashing, intent
-decoding and the final namespace/identity check. The retained policy also runs
-during archive recapture.
+The manifest must match the digest of the exact header bytes used for
+classification, including an opaque partial header. After intent decoding, a
+final traversal through the pinned leaf rechecks every content hash and source
+identity. This catches writes through shared mappings even when inode, size,
+mtime and ctime stay fixed. Archive recapture uses the same namespace policy.
 
 Synthetic cases cover archive verification and private quarantine materialization
 of the entire leaf, source swaps and content mutation, and zero body reads for

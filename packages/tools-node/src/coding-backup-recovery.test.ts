@@ -158,3 +158,26 @@ it.runIf(process.platform === 'linux')(
     });
   },
 );
+
+it.runIf(process.platform === 'linux')(
+  'preserves legacy decoded next evidence without assigning v2 phase semantics',
+  () => {
+    fixture((root, recovery) => {
+      fs.writeFileSync(join(root, 'file'), 'before');
+      applyCodingFile(root, recovery, { path: 'file', before: content('before'), after: null });
+      const json = join(
+        recovery,
+        fs.readdirSync(recovery).find((name) => name.endsWith('.json'))!,
+      );
+      const next = JSON.stringify({
+        ...JSON.parse(fs.readFileSync(json, 'utf8')),
+        status: 'started',
+      });
+      fs.writeFileSync(json + '.next', next, { mode: 0o600 });
+      expect(captureCodingApplyRecovery(recovery, [root]).records).toMatchObject([
+        { status: 'completed', nextOpaque: false },
+      ]);
+      expect(fs.readFileSync(json + '.next', 'utf8')).toBe(next);
+    });
+  },
+);
