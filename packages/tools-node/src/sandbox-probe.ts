@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { ToolError } from '@runnets/application';
 import type { CodingTestPreset } from '@runnets/domain';
 import { blockedName, checkedPath, type WorkspaceBackend, type FileEntry } from './backend.js';
-import { validateMounts } from './sandbox-mounts.js';
+import { realpath } from 'node:fs/promises';
+import { fingerprintFile, validateMounts } from './sandbox-mounts.js';
 import { sandboxFile } from './sandbox-files.js';
 import {
   runSandbox,
@@ -103,8 +104,20 @@ export async function createSandboxBackend(
   const frozen = structuredClone({ options, presets });
   options = frozen.options;
   presets = frozen.presets;
+  const identity = async () =>
+    JSON.stringify([
+      await fingerprintFile(await realpath(process.execPath)),
+      await validateMounts(options.mounts ?? [], options.dependencyProjectRoot),
+    ]);
+  const qualifiedIdentity = await identity();
   if (!(await probeSandbox(options)).qualified)
     throw new ToolError('containment_unavailable', 'sandbox qualification failed');
+  if ((await identity()) !== qualifiedIdentity)
+    throw new ToolError('containment_unavailable', 'sandbox inputs changed during qualification');
+  const verify = async () => {
+    if ((await identity()) !== qualifiedIdentity)
+      throw new ToolError('containment_unavailable', 'sandbox qualification is stale');
+  };
   return {
     capabilities: {
       filesystemContainment: true,
@@ -112,20 +125,24 @@ export async function createSandboxBackend(
       confirmedTreeStop: true,
     },
     async read(path) {
+      await verify();
       return (await sandboxFile(options, { op: 'read', path })) as string | null;
     },
     async list(path) {
+      await verify();
       const entries = (await sandboxFile(options, { op: 'list', path })) as FileEntry[];
       return entries
         .filter((e) => !blockedName(e.name))
         .sort((a, b) => a.name.localeCompare(b.name));
     },
     async write(path, content, expected, signal) {
+      await verify();
       if (Buffer.byteLength(content) > 131072 || content.includes('\0'))
         throw new ToolError('unsupported_file', 'write exceeds text limits');
       await sandboxFile(options, { op: 'write', path, content, expected }, signal);
     },
     async command(program, args, cwd, signal) {
+      await verify();
       const preset = presets.find(
         (p) =>
           p.program === program && p.cwd === cwd && JSON.stringify(p.args) === JSON.stringify(args),

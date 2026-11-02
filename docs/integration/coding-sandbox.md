@@ -152,3 +152,11 @@ digest in its invocation hash and verifies it again after execution. Changed
 dependencies make the command result an error. A regression replaces package
 contents at the same path and verifies a different digest. Binding the running
 Node binary and the qualification lifetime still remains open.
+
+Backend qualification now records the content identity of the current Node
+executable and declared dependency/toolchain mounts before the probe, verifies
+it after the probe, and checks it before every read/list/write/command. Changed
+inputs require a new backend qualification. A native regression replaces a
+dependency after qualification and verifies refusal before the write marker
+is created. This still requires closing the interval between verification and
+mount creation before declaring the complete qualification gate passed.

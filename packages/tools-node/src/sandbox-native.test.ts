@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { createSandboxBackend } from './sandbox-probe.js';
 import { runSandbox, sandboxLimits } from './sandbox-supervision.js';
 
 describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')(
@@ -83,6 +84,18 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         expect(result.cleanupConfirmed).toBe(true);
         expect(await readFile(join(root, 'scratch'), 'utf8')).toBe('private');
         expect(await readFile(join(source, 'fixture'), 'utf8')).toBe('dependency');
+        const backend = await createSandboxBackend(
+          {
+            root,
+            dependencyProjectRoot: fixture,
+            mounts: [{ source, target: '/workspace/node_modules' }],
+          },
+          [],
+          async () => 'fixture',
+        );
+        await writeFile(join(source, 'fixture'), 'replacement');
+        await expect(backend.write('marker', 'unexpected', null)).rejects.toThrow('stale');
+        await expect(readFile(join(root, 'marker'))).rejects.toMatchObject({ code: 'ENOENT' });
       } finally {
         await rm(fixture, { recursive: true, force: true });
       }
