@@ -35,13 +35,17 @@ not completion of stage 3.
 ## Notebook transfer verification
 
 The notebook uses Node 26.13.0 and pnpm 12.16.1. The frozen lockfile
-installation, ordinary 585-test suite, typecheck, lint, build and formatting
+installation, ordinary 586-test suite, typecheck, lint, build and formatting
 passed. All seven focused native tests passed after replacing the assumed
 /usr/bin/node with a read-only mount of the actual runtime executable at
 /toolchain/node. No complete home directory is mounted.
 
 The source checkout is now on the notebook; stages 3–7 continue there. These
 checks do not yet qualify the dependency closure or complete stage 3.
+
+A repeat run exposed registry initialization under an exclusive SQLite lock.
+The busy timeout now takes effect before synchronous-mode initialization; a
+real child-process lock regression failed before the fix and passed afterward.
 
 ## Open qualification work
 

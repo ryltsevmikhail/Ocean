@@ -45,7 +45,7 @@ export class SqliteProjectLeases implements ProjectLeasePort {
     privateFile(path, false);
     const db = new DatabaseSync(path);
     try {
-      db.exec(`PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
+      db.exec(`PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL;
     CREATE TABLE IF NOT EXISTS project_leases_v1(token TEXT PRIMARY KEY,root TEXT NOT NULL,payload TEXT NOT NULL) STRICT;`);
       return db;
     } catch (error) {
