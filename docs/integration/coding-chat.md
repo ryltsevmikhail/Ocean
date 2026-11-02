@@ -55,3 +55,11 @@ flag exists and redirected input refuses ownership confirmation.
 Presets currently remain empty for this direct-project start path; persistent
 project registration, owner-managed dependency configuration and full command
 acceptance remain pending.
+
+Owner-managed project configuration can now be validated and saved privately
+as coding-projects.json in the profile. Registration checks canonical root,
+exact preset schemas/unique IDs, explicit mount closure and duplicate project
+IDs/roots before confirmation, then atomically writes mode 0600 metadata.
+Tests verify denial leaves no file, exact confirmed persistence, private mode,
+duplicate refusal and malformed configuration refusal. CLI project routing
+and use of the registry during start/send remain pending.
