@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import type { CodingAssetManifest } from '@runnets/domain';
 import {
   captureAssetTreeAt,
+  checkedArchiveInput,
   codingAssetIdentity,
   codingAssetMount,
   type CodingAssetCapture,
@@ -86,9 +87,10 @@ function recapture(
 }
 /** New private output only. On failure its incomplete data is retained, never recursively cleaned. */
 export function archiveCodingAssetTree(
-  expected: CodingAssetCapture,
+  handle: CodingAssetCapture,
   destination: string,
 ): CodingAssetManifest {
+  const expected = checkedArchiveInput(handle);
   if (
     resolve(destination) !== destination ||
     destination === expected.root ||

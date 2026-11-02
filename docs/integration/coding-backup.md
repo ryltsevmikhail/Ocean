@@ -444,8 +444,9 @@ contributes its available files and the IDs of all candidate applications.
 Unmatched valid records contribute only to the private stability check.
 Their original and staged bytes are never read.
 
-Repeated identical files can leave several possible owners. For each exact
-descriptor group, each completed receipt file without exact v2 completion
+A record is marked ambiguous if several applications match its exact descriptor
+or several candidate UUIDs match that descriptor for one application. Within
+each descriptor group, a completed receipt file without exact v2 completion
 requires a distinct finalized legacy main record. The graph counts these UUIDs
 without assigning them. Decoded completion-next evidence still needs its retained
 original and does not cover a completed receipt file. Opaque partial next bytes
@@ -457,8 +458,13 @@ eligible evidence both captures are retained. No observation settles a receipt.
 `captureCodingAssetFiles` takes explicit normalized relative endpoints, emits
 them as a sorted `selectedFiles` list in the manifest and includes the real
 ancestor directories. Rechecks retain this selection, the path policy and lowered
-limits. Generic selected files require all hardlink names to be selected. This
-prevents a harmless-looking name from exposing an unselected credential inode.
+limits. Archive accepts an originating in-process capture handle and checks a
+private digest of its original fields before accessing any source. It uses a
+verified copy for the entire archive operation. A rehashed DTO or a clone cannot
+authorize source reads. Existing portable archives can be verified and restored
+in a separate process. Both content passes require the root mount observed in
+metadata preflight. Generic selected files require all hardlink names to be
+selected. This prevents a harmless-looking name from exposing an unselected credential inode.
 Classified legacy .before/.after files can retain a link outside recovery during
 an interrupted host apply. Only the selected inode bytes and internal aliases are
 materialized. No external alias is followed or recreated. The existing v2 policy
@@ -468,8 +474,9 @@ interval. That v2 crash boundary remains unqualified.
 Each graph pass limits selected outputs to 2 GiB and 100,000 entries, catalog
 and reference metadata to 16 MiB and classified JSON to 256 MiB and 10,000 main
 records. Repeated references are charged conservatively. After the final
-consumer a fresh pass verifies every binding, scope, observed absence, selected
-manifest, physical identity and classification digest, including the JSON of
+consumer a fresh pass verifies every binding, including the managed checkout
+mount. It also verifies every scope, observed absence, selected manifest,
+physical identity and classification digest, including the JSON of
 unmatched UUIDs. A changed source refuses the graph. No source is repaired.
 
 These fixtures qualify read-only host I/O on synthetic repositories, including

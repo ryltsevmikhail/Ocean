@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { scanAssetSource } from './coding-asset-source.js';
 import { planAssetSelection } from './coding-asset-selection.js';
 import type { CodingAssetPolicy } from './coding-asset-policy.js';
@@ -14,6 +15,18 @@ export {
   type CodingAssetCapture,
 } from './coding-asset-state.js';
 export type { CodingAssetPolicy } from './coding-asset-policy.js';
+// Only captures issued in this process can authorize another source observation.
+// Portable manifests remain independently usable by archive verification and restore.
+const issuedCaptures = new WeakMap<CodingAssetCapture, string>();
+const captureDigest = (capture: CodingAssetCapture) =>
+  createHash('sha256').update(JSON.stringify(capture)).digest('hex');
+export function checkedArchiveInput(handle: CodingAssetCapture): CodingAssetCapture {
+  const digest = issuedCaptures.get(handle);
+  if (!digest) throw Error('invalid_coding_asset_capture');
+  const snapshot = structuredClone(handle);
+  if (captureDigest(snapshot) !== digest) throw Error('invalid_coding_asset_capture');
+  return snapshot;
+}
 /** Captures a selected root only. Symlinks are inert text; a separate graph resolver must prove completeness. */
 export function captureCodingAssetTree(
   root: string,
@@ -70,8 +83,11 @@ export function captureAssetTreeAt(
     policy !== 'all'
       ? scanAssetSource(root, limits, policy, undefined, true, pinned, selection)
       : undefined;
+  const expected = metadata && {
+    entries: new Map(metadata.sourceEntries),
+    mount: metadata.sourceMount,
+  };
   if (metadata) preflight?.(metadata);
-  const expected = metadata && new Map(metadata.sourceEntries);
   const first = scanAssetSource(root, limits, policy, expected, false, pinned, selection),
     second = scanAssetSource(root, limits, policy, expected, false, pinned, selection);
   if (
@@ -79,6 +95,7 @@ export function captureAssetTreeAt(
     first.sourceStateHash !== second.sourceStateHash
   )
     throw Error('stale_coding_asset');
+  issuedCaptures.set(first, captureDigest(first));
   return first;
 }
 /** Verify captured bytes as well as source identities after consuming the evidence. */
@@ -87,7 +104,7 @@ export function checkAssetTreeAt(capture: CodingAssetCapture, pinned: number): v
     capture.root,
     capture.limits,
     capture.policy,
-    new Map(capture.sourceEntries),
+    { entries: new Map(capture.sourceEntries), mount: capture.sourceMount },
     false,
     pinned,
     capture.manifest.selectedFiles &&

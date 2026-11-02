@@ -109,3 +109,36 @@ it('retains the lowered selected byte limit during archive preflight before read
     );
     expect(fs.readSync).not.toHaveBeenCalled();
   }));
+
+it.each(['modified', 'fabricated'] as const)(
+  'rejects a %s capture before a downgraded archive can open any source',
+  (kind) =>
+    fixture((root, outer) => {
+      fs.writeFileSync(join(root, 'x'), 'x');
+      fs.writeFileSync(join(root, 'private.key'), 'synthetic');
+      const issued = assets.captureCodingAssetFiles(root, ['x'], { bytes: 1 });
+      const capture = kind === 'modified' ? issued : structuredClone(issued);
+      if (kind === 'modified') {
+        const { hash: _hash, selectedFiles: _selection, ...body } = capture.manifest;
+        Object.assign(capture, {
+          policy: 'all',
+          limits: { ...capture.limits, bytes: 100 },
+          manifest: {
+            ...body,
+            hash: createHash('sha256').update(JSON.stringify(body)).digest('hex'),
+          },
+        });
+      }
+      vi.mocked(fs.openSync).mockClear();
+      let error: unknown;
+      try {
+        assets.archiveCodingAssetTree(capture, join(outer, 'archive'));
+      } catch (thrown) {
+        error = thrown;
+      }
+      const opens = vi.mocked(fs.openSync).mock.calls.map(([path]) => String(path));
+      expect(opens.filter((name) => name.endsWith('/private.key'))).toEqual([]);
+      expect(opens).toEqual([]);
+      expect(error).toEqual(Error('invalid_coding_asset_capture'));
+    }),
+);

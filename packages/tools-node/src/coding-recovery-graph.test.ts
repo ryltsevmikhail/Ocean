@@ -261,3 +261,17 @@ it('rechecks legacy directory privacy before the archive opens selected body byt
     }),
   ).rejects.toThrow('invalid_coding_apply_recovery');
 });
+
+it('retains both matching UUIDs and flags ambiguous attribution to a single receipt file', async () => {
+  f = graphFixture();
+  f.add('one');
+  const ids = [f.legacy(), f.legacy()].map((main) => basename(main, '.json')).sort();
+  const records = (await collect()).legacy[0]!.records;
+  expect(records.map((r) => r.id)).toEqual(ids);
+  expect(
+    records.map((r) => ({ candidates: r.candidateApplicationIds, ambiguous: r.ambiguous })),
+  ).toEqual([
+    { candidates: ['one'], ambiguous: true },
+    { candidates: ['one'], ambiguous: true },
+  ]);
+});

@@ -27,7 +27,7 @@ export function scanAssetSource(
   root: string,
   limits: CodingAssetLimits,
   policy: CodingAssetPolicy,
-  expected?: ReadonlyMap<string, string>,
+  expected?: { entries: ReadonlyMap<string, string>; mount: string },
   metadataOnly = false,
   pinned?: number,
   selection?: AssetSelection,
@@ -76,7 +76,7 @@ export function scanAssetSource(
       ? fs.lstatSync(path, { bigint: true })
       : fs.fstatSync(parent, { bigint: true });
     check(before);
-    if (expected && expected.get(relative) !== codingAssetIdentity(before))
+    if (expected && expected.entries.get(relative) !== codingAssetIdentity(before))
       throw Error('stale_coding_asset');
     checkAssetPolicy(policy, relative, before);
     if (selection && before.isDirectory() !== selection.children.has(relative))
@@ -208,6 +208,7 @@ export function scanAssetSource(
   };
   try {
     rootMount = codingAssetMount(rootFd);
+    if (expected && rootMount !== expected.mount) throw Error('stale_coding_asset');
     same(rootStat, fs.fstatSync(rootFd, { bigint: true }));
     visit(rootFd, '', '', 0);
     same(rootStat, fs.lstatSync(root, { bigint: true }));

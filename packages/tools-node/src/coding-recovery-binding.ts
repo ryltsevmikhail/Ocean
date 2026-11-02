@@ -23,14 +23,15 @@ export function verifyRecoveryBinding(tree: Worktree) {
   };
   const evidence: unknown[] = [];
   const state = (fd: number) => codingAssetIdentity(fs.fstatSync(fd, { bigint: true }));
-  const pointer = (parent: number, name: string, canonical: string) => {
+  const pointer = (parent: number, name: string, canonical: string, mount: string) => {
     const file = fs.openSync(
       join(assetFdPath(parent), name),
       fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
     );
     try {
       const before = state(file);
-      if (codingAssetMount(file) !== codingAssetMount(parent)) return invalidInventory();
+      if (codingAssetMount(parent) !== mount || codingAssetMount(file) !== mount)
+        return invalidInventory();
       checkAssetPath(file, join(canonical, name));
       const value = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
         readGitDescriptor(file, 4096),
@@ -41,7 +42,7 @@ export function verifyRecoveryBinding(tree: Worktree) {
           before
       )
         return invalidInventory();
-      evidence.push([name, before, value]);
+      evidence.push([name, before, mount, value]);
       return value;
     } finally {
       fs.closeSync(file);
@@ -50,8 +51,9 @@ export function verifyRecoveryBinding(tree: Worktree) {
   try {
     const managed = keep(privateAssetDirectory(dirname(root))),
       checkout = keep(privateAssetChild(managed, basename(root), root));
-    if (codingAssetMount(checkout) !== codingAssetMount(managed)) return invalidInventory();
-    const gitdir = pointer(checkout, '.git', root);
+    const managedMount = codingAssetMount(managed);
+    if (codingAssetMount(checkout) !== managedMount) return invalidInventory();
+    const gitdir = pointer(checkout, '.git', root, managedMount);
     if (!gitdir.startsWith('gitdir: ') || !gitdir.endsWith('\n')) return invalidInventory();
     const adminPath = resolve(root, gitdir.slice(8, -1));
     if (
@@ -77,16 +79,16 @@ export function verifyRecoveryBinding(tree: Worktree) {
       evidence.push([path, state(fd), mount]);
     }
     if (
-      pointer(admin, 'HEAD', adminPath) !== 'ref: refs/heads/' + tree.branch + '\n' ||
-      !namesPath(pointer(admin, 'gitdir', adminPath), adminPath, join(root, '.git')) ||
-      !namesPath(pointer(admin, 'commondir', adminPath), adminPath, common)
+      pointer(admin, 'HEAD', adminPath, mount) !== 'ref: refs/heads/' + tree.branch + '\n' ||
+      !namesPath(pointer(admin, 'gitdir', adminPath, mount), adminPath, join(root, '.git')) ||
+      !namesPath(pointer(admin, 'commondir', adminPath, mount), adminPath, common)
     )
       return invalidInventory();
     checkAssetPath(checkout, root);
     checkAssetPath(commonFd, common);
     checkAssetPath(admin, adminPath);
     return {
-      hash: graphHash([state(managed), state(checkout), evidence]),
+      hash: graphHash([managedMount, state(managed), state(checkout), evidence]),
       commonState: state(commonFd),
       mount,
     };

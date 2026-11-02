@@ -75,11 +75,14 @@ export function collectLegacyRecovery(
     common,
     ['ocean-apply-recovery'],
     (dirs, namespaceWitness) => {
-      const root = dirs[1],
-        records: LegacyEvidence[] = [];
+      const root = dirs[1];
       if (!root) {
         if ([...demands.values()].some((d) => d.required)) return invalidRecovery();
-        return { capture: null, witness: graphHash(namespaceWitness), records };
+        return {
+          capture: null,
+          witness: graphHash(namespaceWitness),
+          records: [] as LegacyEvidence[],
+        };
       }
       const files = namespace(root.fd, root.path, budget);
       const observed = createHash('sha256').update(namespaceWitness);
@@ -93,9 +96,15 @@ export function collectLegacyRecovery(
         classifiedHashes.set(name, hash);
         return body;
       };
-      const originals = new Map<string, BackupFile['before']>(),
-        selected: string[] = [];
-      const coverage = new Map<string, number>();
+      const selected: string[] = [];
+      type Coverage = { matches: number; finalized: number };
+      const coverage = new Map<string, Coverage>();
+      const matches: {
+        evidence: Omit<LegacyEvidence, 'ambiguous'>;
+        before: BackupFile['before'];
+        group: Coverage;
+      }[] = [];
+
       for (const name of files.keys()) {
         if (!name.endsWith('.json')) continue;
         const id = name.slice(0, -5);
@@ -148,18 +157,23 @@ export function collectLegacyRecovery(
           nextOpaque,
           original: main.before ? ('absent' as const) : ('not-required' as const),
           candidateApplicationIds: candidates.ids,
-          ambiguous: candidates.ids.length > 1,
         };
         // Charge the longest final original classification before retaining a candidate list.
-        budget.reference({ ...record, original: 'not-required' });
-        records.push(record);
-        originals.set(id, main.before && { mode: main.before.mode, sha256: main.before.sha256 });
+        budget.reference({ ...record, original: 'not-required', ambiguous: false });
+        const group = coverage.get(key) ?? { matches: 0, finalized: 0 };
+        group.matches++;
+        if (main.status === 'completed') group.finalized++;
+        coverage.set(key, group);
+        matches.push({
+          evidence: record,
+          before: main.before && { mode: main.before.mode, sha256: main.before.sha256 },
+          group,
+        });
         for (const path of [name, name + '.next', main.backup, main.staged])
           if (files.has(path)) selected.push(path);
-        if (main.status === 'completed') coverage.set(key, (coverage.get(key) ?? 0) + 1);
       }
       for (const [key, demand] of demands)
-        if ((coverage.get(key) ?? 0) < demand.required) return invalidRecovery();
+        if ((coverage.get(key)?.finalized ?? 0) < demand.required) return invalidRecovery();
       const capture = selected.length
         ? captureAssetTreeAt(
             root.path,
@@ -182,9 +196,12 @@ export function collectLegacyRecovery(
         if (hash !== undefined && (entry?.kind !== 'file' || entry.sha256 !== hash))
           throw Error('stale_coding_asset');
       }
-      const qualified = records.map((record) => {
-        const expected = originals.get(record.id),
-          entry = entries.get(record.id + '.before');
+      const qualified = matches.map(({ evidence, before: expected, group }) => {
+        const record = {
+          ...evidence,
+          ambiguous: group.matches > 1 || evidence.candidateApplicationIds.length > 1,
+        };
+        const entry = entries.get(record.id + '.before');
         if (!expected || !entry) return record;
         const file = entry.kind === 'hardlink' ? entries.get(entry.target) : entry;
         const matching =
