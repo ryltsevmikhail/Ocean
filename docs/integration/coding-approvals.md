@@ -128,3 +128,10 @@ invalid operation kinds and nonpositive/nonintegral policy versions. Matching
 two malformed copies does not authorize an operation. Request timestamps must
 also allow a safe-integer expiry. Domain regressions cover malformed equal
 bindings.
+
+Independent review identified source snapshot ordering during final binding
+recomputation. Source is now captured after all asynchronous toolchain hashing.
+The prepared executable also compares the source against its approved snapshot
+before backend execution. A native regression changes source during executable
+hashing: the pre-fix binding retained the old hash, while the corrected binding
+sees the change and cannot match the approval. Native dispatch tests still pass.

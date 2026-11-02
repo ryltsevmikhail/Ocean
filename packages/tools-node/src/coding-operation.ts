@@ -86,19 +86,29 @@ async function prepareOperation(
     worktreeRoot: task.worktreeRoot!,
     operation,
     operationHash: hash({ call, preview }),
-    sourceTreeHash: await snapshot(),
     policyVersion: task.policyVersion,
     limitsHash: hash(sandboxLimits),
     toolchainHash: hash([
       await fingerprintFile(await realpath(process.execPath)),
       await validateMounts(sandbox.mounts ?? [], sandbox.dependencyProjectRoot),
     ]),
+    sourceTreeHash: await snapshot(),
   });
+  const binding = await currentBinding();
   return {
     approvalId,
-    binding: await currentBinding(),
+    binding,
     currentBinding,
-    tool: { ...tool, preview },
+    tool: {
+      ...tool,
+      preview,
+      execute: async (signal) => {
+        signal.throwIfAborted();
+        if ((await snapshot()) !== binding.sourceTreeHash)
+          throw new ToolError('stale_read', 'approved source tree changed before execution');
+        return tool.execute(signal);
+      },
+    },
   };
 }
 

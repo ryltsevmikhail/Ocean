@@ -1,9 +1,26 @@
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import type * as Mounts from './sandbox-mounts.js';
 import type { CodingApprovalBinding, CodingTask } from '@runnets/domain';
 import { createCodingOperationSession, prepareCodingOperation } from './coding-operation.js';
+const mutation = vi.hoisted(() => ({ path: '' }));
+vi.mock('./sandbox-mounts.js', async (original) => {
+  const mounts = await original<typeof Mounts>();
+  return {
+    ...mounts,
+    async fingerprintFile(path: string) {
+      const result = await mounts.fingerprintFile(path);
+      if (mutation.path) {
+        const target = mutation.path;
+        mutation.path = '';
+        await writeFile(target, 'changed during hashing');
+      }
+      return result;
+    },
+  };
+});
 const binding: CodingApprovalBinding = {
   workspaceId: 'w',
   taskId: 't',
@@ -117,6 +134,35 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       await expect(prepared.tool.execute(new AbortController().signal)).rejects.toThrow();
       expect(await readFile(join(root, 'source'), 'utf8')).toBe('owner change');
     } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
+
+it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')(
+  'takes the final source snapshot after asynchronous toolchain hashing',
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ocean-binding-source-'));
+    try {
+      await writeFile(join(root, '.git'), 'synthetic');
+      await writeFile(join(root, 'source'), 'before');
+      const prepared = await prepareCodingOperation({
+        task: { ...task, worktreeRoot: root },
+        scope: binding,
+        approvalId: 'approval',
+        sandbox: { root },
+        snapshot: () => readFile(join(root, 'source'), 'utf8'),
+        call: {
+          id: binding.invocationId,
+          name: 'write_file',
+          arguments: JSON.stringify({ path: 'new', content: 'after' }),
+        },
+      });
+      mutation.path = join(root, 'source');
+      expect((await prepared.currentBinding()).sourceTreeHash).toBe('changed during hashing');
+      expect(prepared.binding.sourceTreeHash).toBe('before');
+    } finally {
+      mutation.path = '';
       await rm(root, { recursive: true, force: true });
     }
   },
