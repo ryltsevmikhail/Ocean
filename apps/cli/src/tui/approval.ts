@@ -1,4 +1,8 @@
-import type { ReviewSnapshot, ToolPermissionPort } from '@runnets/application';
+import type {
+  CodingApprovalOwnerPort,
+  ReviewSnapshot,
+  ToolPermissionPort,
+} from '@runnets/application';
 import type { Key } from './keys.js';
 import type { Size } from './types.js';
 
@@ -7,7 +11,7 @@ export { terminalText } from './text.js';
 
 type ApprovalPreview =
   | Parameters<ToolPermissionPort['review']>[0]
-  | { readonly title: string; readonly kind: 'review'; readonly preview: string };
+  | { readonly title: string; readonly kind: 'review' | 'coding'; readonly preview: string };
 
 type Decision = 'allow_once' | 'allow_session' | 'reject';
 
@@ -25,6 +29,25 @@ export class TuiApproval implements ToolPermissionPort {
     signal: AbortSignal,
   ): Promise<Decision> {
     return this.#ask(tool, signal);
+  }
+  codingOwner(
+    signal: AbortSignal,
+    interactive = process.stdin.isTTY === true && process.stdout.isTTY === true,
+  ): CodingApprovalOwnerPort {
+    return {
+      decide: async (approval) => {
+        if (!interactive) return 'cancel';
+        const decision = await this.#ask(
+          {
+            kind: 'coding',
+            title: 'Approve exact ' + approval.binding.operation,
+            preview: JSON.stringify(approval.binding, null, 2) + '\n' + approval.preview,
+          },
+          signal,
+        );
+        return decision === 'allow_once' ? 'allow-once' : signal.aborted ? 'cancel' : 'deny';
+      },
+    };
   }
   /** One owner confirmation cannot become an approval for later operations. */
   async reviewOwner(snapshot: ReviewSnapshot, signal: AbortSignal): Promise<boolean> {
@@ -65,7 +88,12 @@ export class TuiApproval implements ToolPermissionPort {
       return false;
     }
     if (key.type === 'char' && key.value === 'y') this.#pending.decide('allow_once');
-    else if (key.type === 'char' && key.value === 'a' && this.#pending.tool.kind !== 'review')
+    else if (
+      key.type === 'char' &&
+      key.value === 'a' &&
+      this.#pending.tool.kind !== 'review' &&
+      this.#pending.tool.kind !== 'coding'
+    )
       this.#pending.decide('allow_session');
     else if (key.type === 'char' && key.value === 'n') this.#pending.decide('reject');
     else if (key.type === 'up') this.#offset = Math.max(0, this.#offset - 1);
@@ -89,14 +117,18 @@ export class TuiApproval implements ToolPermissionPort {
       `Permission: ${terminalText(tool.title)}`.slice(0, width),
       (tool.kind === 'review'
         ? 'Review the unknown outcome before continuing text-only.'
-        : tool.kind === 'execute'
-          ? 'Command has your user permissions; cwd is not an OS sandbox.'
-          : 'Review file changes before allowing.'
+        : tool.kind === 'coding'
+          ? 'Review this exact task operation and its limits.'
+          : tool.kind === 'execute'
+            ? 'Command has your user permissions; cwd is not an OS sandbox.'
+            : 'Review file changes before allowing.'
       ).slice(0, width),
       ...lines.slice(this.#offset, this.#offset + height - 3),
       (tool.kind === 'review'
         ? 'y confirm text-only | n deny | arrows scroll'
-        : 'y allow once | a allow same operation | n deny | arrows scroll'
+        : tool.kind === 'coding'
+          ? 'y allow once | n deny | arrows scroll'
+          : 'y allow once | a allow same operation | n deny | arrows scroll'
       ).slice(0, width),
     ].join('\n');
   }

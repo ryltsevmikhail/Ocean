@@ -82,3 +82,11 @@ offers synchronous claim admission for this transaction while preserving the
 existing asynchronous API. A regression verifies rollback leaves no pending
 effect, successful consumption appears in global inspectPending, and a legacy
 claim is blocked while that coding effect remains unresolved.
+
+CLI and TUI owner adapters now display the exact binding and preview with
+terminal controls escaped. Both refuse noninteractive approval. TUI coding
+screens ignore the legacy allow-session key; only allow-once or denial is
+available, and abort cancels the pending screen. CLI requires a live TTY and
+an exact y response, with cancellation handled through AbortSignal.
+Tests cover exact escaped preview, ignored session key, abort and no-TTY refusal.
+Adapters still require connection to the task operation preparation flow.
