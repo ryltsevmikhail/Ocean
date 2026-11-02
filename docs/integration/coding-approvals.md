@@ -106,3 +106,11 @@ preparation creates no target file. The factory is public for host integration.
 Session-scoped read history for existing-file edits and conversation wiring
 remain pending; existing-file edits still fail the inherited read-before-write
 guard when prepared without that history.
+
+Task operation sessions retain qualified backend and WorkspaceTools read history
+for subsequent existing-file edits in the same task scope. Reads require the
+explicit project_read capability. Native regressions verify refusal before
+reading and preservation of a file changed after preparation. Current root
+pnpm check is blocked by unrelated untracked design-assets/ocean-motion.js
+outside the TypeScript lint project. Typecheck, lint with that directory
+excluded, the ordinary suite, native session tests, build and formatting pass.

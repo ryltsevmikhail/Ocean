@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import type { CodingApprovalBinding, CodingTask } from '@runnets/domain';
-import { prepareCodingOperation } from './coding-operation.js';
+import { createCodingOperationSession, prepareCodingOperation } from './coding-operation.js';
 const binding: CodingApprovalBinding = {
   workspaceId: 'w',
   taskId: 't',
@@ -78,6 +78,44 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       expect(prepared.tool.preview).toContain('after');
       await expect(readFile(join(root, 'new'))).rejects.toMatchObject({ code: 'ENOENT' });
       expect(prepared.binding.operationHash).toMatch(/^[a-f0-9]{64}$/);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
+
+it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')(
+  'retains read history for edits and refuses source changed after the read',
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ocean-operation-session-'));
+    try {
+      await writeFile(join(root, '.git'), 'synthetic');
+      await writeFile(join(root, 'source'), 'before');
+      const session = await createCodingOperationSession({
+        task: {
+          ...task,
+          worktreeRoot: root,
+          policy: { ...task.policy, devCapabilities: ['project_read', 'propose_write'] },
+        },
+        scope: binding,
+        sandbox: { root },
+        snapshot: () => readFile(join(root, 'source'), 'utf8'),
+      });
+      const edit = {
+        id: 'edit',
+        name: 'write_file',
+        arguments: JSON.stringify({ path: 'source', content: 'after' }),
+      };
+      await expect(session.prepare('approval', edit)).rejects.toMatchObject({ code: 'stale_read' });
+      await session.read(
+        { id: 'read', name: 'read_file', arguments: JSON.stringify({ path: 'source' }) },
+        new AbortController().signal,
+      );
+      const prepared = await session.prepare('approval', edit);
+      expect(prepared.tool.preview).toContain('before');
+      await writeFile(join(root, 'source'), 'owner change');
+      await expect(prepared.tool.execute(new AbortController().signal)).rejects.toThrow();
+      expect(await readFile(join(root, 'source'), 'utf8')).toBe('owner change');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

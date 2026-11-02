@@ -13,15 +13,22 @@ export type CodingOperationScope = Pick<
 >;
 
 /** Trusted host factory. Caller supplies the authoritative task and complete source snapshot port. */
+export interface CodingOperationInput {
+  readonly task: CodingTask;
+  readonly scope: CodingOperationScope;
+  readonly approvalId: string;
+  readonly call: ToolInvocation;
+  readonly sandbox: SandboxOptions;
+  readonly snapshot: () => Promise<string>;
+}
 export async function prepareCodingOperation(
-  input: Readonly<{
-    task: CodingTask;
-    scope: CodingOperationScope;
-    approvalId: string;
-    call: ToolInvocation;
-    sandbox: SandboxOptions;
-    snapshot: () => Promise<string>;
-  }>,
+  input: CodingOperationInput,
+): Promise<PreparedCodingOperation> {
+  return prepareOperation(input);
+}
+async function prepareOperation(
+  input: CodingOperationInput,
+  sessionTools?: WorkspaceTools,
 ): Promise<PreparedCodingOperation> {
   const { task, scope, call, sandbox, approvalId } = structuredClone({
     task: input.task,
@@ -39,8 +46,11 @@ export async function prepareCodingOperation(
   )
     throw new ToolError('coding_denied', 'task operation scope mismatch');
   const snapshot = input.snapshot;
-  const backend = await createSandboxBackend(sandbox, task.policy.testPresets, snapshot);
-  const tools = new WorkspaceTools(backend, { requireContainment: true });
+  const tools =
+    sessionTools ??
+    new WorkspaceTools(await createSandboxBackend(sandbox, task.policy.testPresets, snapshot), {
+      requireContainment: true,
+    });
   const tool = await tools.prepare(call);
   if (tool.kind !== 'edit' && tool.kind !== 'execute')
     throw new ToolError('coding_denied', 'approval factory accepts mutations and tests');
@@ -89,5 +99,42 @@ export async function prepareCodingOperation(
     binding: await currentBinding(),
     currentBinding,
     tool: { ...tool, preview },
+  };
+}
+
+export async function createCodingOperationSession(
+  input: Omit<CodingOperationInput, 'approvalId' | 'call'>,
+) {
+  const fixed = {
+    ...structuredClone({ task: input.task, scope: input.scope, sandbox: input.sandbox }),
+    snapshot: input.snapshot,
+  };
+  if (
+    fixed.task.status !== 'reserved' ||
+    fixed.task.worktreeRoot !== fixed.sandbox.root ||
+    fixed.scope.roomId !== fixed.task.ownerRoomId ||
+    fixed.scope.botId !== fixed.task.devBotId
+  )
+    throw new ToolError('coding_denied', 'task session scope mismatch');
+  const tools = new WorkspaceTools(
+    await createSandboxBackend(fixed.sandbox, fixed.task.policy.testPresets, fixed.snapshot),
+    { requireContainment: true },
+  );
+  return {
+    async read(call: ToolInvocation, signal: AbortSignal) {
+      if (
+        !fixed.task.policy.devCapabilities.includes('project_read') ||
+        (call.name !== 'read_file' && call.name !== 'list_files')
+      )
+        throw new ToolError('coding_denied', 'task read capability required');
+      const prepared = await tools.prepare(call);
+      return prepared.execute(signal);
+    },
+    prepare(approvalId: string, call: ToolInvocation) {
+      return prepareOperation(
+        { ...fixed, approvalId, call, scope: { ...fixed.scope, invocationId: call.id } },
+        tools,
+      );
+    },
   };
 }
