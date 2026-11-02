@@ -103,7 +103,7 @@ it('packaged install command upgrades and rolls back from an independent install
     );
   writeFileSync(
     join(repo, 'apps/cli/dist/main.js'),
-    "import {installCommand} from './release/installer.js';process.exitCode=installCommand(process.argv.slice(3));",
+    "import {installCommand} from './release/installer.js';process.exitCode=installCommand(process.argv.slice(3));\n//# sourceMappingURL=absent.js.map",
   );
   // Fixture still uses the real compiled standalone installer source.
   const source = readFileSync(new URL('./installer.ts', import.meta.url), 'utf8');
@@ -120,6 +120,9 @@ it('packaged install command upgrades and rolls back from an independent install
   );
   const a = packageRelease(repo, '0.1.0', join(root, 'a')),
     b = packageRelease(repo, '0.2.0', join(root, 'b'));
+  expect(
+    archiveFiles(readFileSync(a.archive)).get('apps/cli/dist/main.js')?.body.toString(),
+  ).not.toContain('sourceMappingURL');
   const prefix = join(root, 'local');
   installArchive(a.archive, a.sha256, prefix);
   // Source is removed: CLI update must use the installed installer.

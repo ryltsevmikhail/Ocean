@@ -22,8 +22,9 @@ export function acquireOwnership(
     if (previous !== undefined) {
       const pid = previous['pid'];
       if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0 || isAlive(pid))
-        throw new Error(
-          'Durable runtime is owned by a live or unverified process; refusing recovery',
+        throw Object.assign(
+          new Error('Durable runtime is owned by a live or unverified process; refusing recovery'),
+          { code: 'owner_busy' },
         );
     }
     db.prepare(

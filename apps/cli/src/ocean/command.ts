@@ -180,7 +180,12 @@ export async function runOceanCommand(
     output.write(JSON.stringify({ version: 1, ok: true, data }) + '\n');
     return 0;
   } catch (caught) {
-    const message = caught instanceof Error ? caught.message : 'Ocean operation failed';
+    const message =
+      caught instanceof Error && 'code' in caught && caught.code === 'owner_busy'
+        ? 'owner_busy'
+        : caught instanceof Error
+          ? caught.message
+          : 'Ocean operation failed';
     // Public errors contain stable classifications, never arbitrary storage paths or payloads.
     const safe = /^[a-z_]+$/.test(message) ? message : 'invalid_input';
     if (json)

@@ -18,7 +18,7 @@ export function privatePath(path: string, directory: boolean): boolean {
     const s = lstatSync(path);
     return (
       !s.isSymbolicLink() &&
-      (directory ? s.isDirectory() : s.isFile()) &&
+      (directory ? s.isDirectory() : s.isFile() && s.nlink === 1) &&
       s.uid === process.getuid?.() &&
       (s.mode & 0o077) === 0 &&
       realpathSync(path) === resolve(path)

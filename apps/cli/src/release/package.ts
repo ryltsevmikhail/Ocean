@@ -31,6 +31,8 @@ export function packageRelease(
   const add = (name: string, body: Buffer | string, mode = 0o644) =>
     files.set(name, { body: Buffer.isBuffer(body) ? body : Buffer.from(body), mode });
   const json = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  const compiled = (path: string) =>
+    readFileSync(path, 'utf8').replace(/^\/\/# sourceMappingURL=.*$/gm, '');
   const modules = readdirSync(join(root, 'packages'));
   for (const name of [...modules, 'cli']) {
     const from = name === 'cli' ? join(root, 'apps', 'cli') : join(root, 'packages', name);
@@ -56,7 +58,7 @@ export function packageRelease(
         } else if (entry.isFile() && entry.name.endsWith('.js'))
           add(
             destination + '/dist/' + relative + entry.name,
-            readFileSync(join(directory, entry.name)),
+            compiled(join(directory, entry.name)),
           );
       }
     };
@@ -64,7 +66,7 @@ export function packageRelease(
     if (name === 'cli')
       add(
         destination + '/dist/release/installer.js',
-        readFileSync(join(from, 'dist/release/installer.js')),
+        compiled(join(from, 'dist/release/installer.js')),
       );
   }
   for (const name of ['LICENSE', 'NOTICE', 'README.md']) add(name, readFileSync(join(root, name)));
@@ -126,7 +128,7 @@ await import('./apps/cli/dist/main.js');
   });
   writeFileSync(
     join(to, 'ocean-install.mjs'),
-    readFileSync(join(root, 'apps/cli/dist/release/installer.js')),
+    compiled(join(root, 'apps/cli/dist/release/installer.js')),
     { flag: 'wx', mode: 0o700 },
   );
   return { archive, sha256: checksum };

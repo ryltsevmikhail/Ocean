@@ -10,7 +10,9 @@ const folders: string[] = [];
 afterEach(() => {
   for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
 });
-const root = resolve(fileURLToPath(new URL('../../../..', import.meta.url)));
+const root =
+  process.env['OCEAN_RC_INSTALL'] ??
+  resolve(fileURLToPath(new URL('../../../..', import.meta.url)));
 // This child deliberately blocks only after signalling a committed boundary. Parent kills it.
 const worker = String.raw`
 import {registerHooks} from 'node:module';
@@ -23,7 +25,10 @@ const aliases={application:'application',domain:'domain',store:'store','store-sq
 registerHooks({resolve(specifier,context,next){
  if(specifier.startsWith('@runnets/')){
   const name=aliases[specifier.slice(9)];
-  if(name)return next(pathToFileURL(join(root,'packages',name,'src/index.ts')).href,context);
+  if(name) {
+   const built=join(root,'node_modules/@runnets',name,'dist/index.js');
+   return next(pathToFileURL(existsSync(built)?built:join(root,'packages',name,'src/index.ts')).href,context);
+  }
  }
  if(specifier.endsWith('.js')&&context.parentURL?.startsWith(pathToFileURL(root).href)){
   const url=new URL(specifier,context.parentURL);url.pathname=url.pathname.slice(0,-3)+'.ts';
@@ -49,6 +54,12 @@ const provider={id:'test',models:['test'],capabilities:{streaming:true,usage:tru
  async *stream(){
   appendFileSync(path+'.calls','dispatch\n');
   if(phase==='dispatch')halt('dispatch');
+  if(phase==='before_claim')halt('before_claim');
+  if(phase==='after_claim'){
+   const turn=db.conversations.atomic(tx=>tx.chatTurns().at(-1));
+   await db.tools.claim('rc-claim','test',{taskRunId:turn.taskRunId,attemptId:'rc-attempt'},'synthetic');
+   halt('after_claim');
+  }
   yield {type:'text_delta',text:'Recovered answer '.repeat(300)};
   yield {type:'usage',usage:{inputTokens:2,outputTokens:1,totalTokens:3}};
   yield {type:'completed',stopReason:'stop',rawStopReason:'stop'};
@@ -97,7 +108,14 @@ async function killAt(path: string, roomId: string, phase: string): Promise<void
     await stopped;
   }
 }
-for (const phase of ['accepted', 'dispatch', 'prepared', 'publication']) {
+for (const phase of [
+  'accepted',
+  'dispatch',
+  'before_claim',
+  'after_claim',
+  'prepared',
+  'publication',
+]) {
   it(
     'recovers a real process killed at ' + phase + ' without another external dispatch',
     async () => {
@@ -148,7 +166,7 @@ for (const phase of ['accepted', 'dispatch', 'prepared', 'publication']) {
           expect(history.value[1]?.body).toBe('Recovered answer '.repeat(300));
         } else {
           expect(history.value.map((m) => m.author)).toEqual(['user']);
-          if (phase === 'dispatch') {
+          if (['dispatch', 'before_claim', 'after_claim'].includes(phase)) {
             const reviewed = await runtime.reviews.reviewRoom('ws_ocean', roomId);
             expect(reviewed).toMatchObject({
               ok: true,
@@ -156,6 +174,9 @@ for (const phase of ['accepted', 'dispatch', 'prepared', 'publication']) {
             });
           }
         }
+        expect((await runtime.toolJournal?.pending())?.length).toBe(
+          phase === 'after_claim' ? 1 : 0,
+        );
         expect(existsSync(path + '.calls') ? readFileSync(path + '.calls', 'utf8') : '').toBe(
           before,
         );
