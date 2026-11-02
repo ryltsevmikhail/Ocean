@@ -40,3 +40,16 @@ export function codingApplicationVerified(
     );
   });
 }
+
+export interface CodingApplyReceipt {
+  readonly id: string;
+  readonly taskId: string;
+  readonly changesetHash: string;
+  readonly reviewRequestId: string;
+  readonly expectedBase: string;
+  readonly status: 'applying' | 'completed' | 'uncertain';
+  readonly files: readonly {
+    readonly path: string;
+    readonly status: 'pending' | 'started' | 'completed' | 'uncertain';
+  }[];
+}

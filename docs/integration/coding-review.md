@@ -96,3 +96,12 @@ New runtime evidence includes the exact registered preset ID; older records
 without it cannot establish verification. Domain regressions cover these cases.
 Scoped checks/build and global formatting pass; root lint remains blocked by
 parallel asset imports. Owner-confirmed filesystem application is still pending.
+
+The application apply service now validates exact approved artifact/evidence,
+clean base and unchanged task source before/after owner confirmation, then
+claims an application intent before any filesystem effect. Each file is
+persisted pending→started→completed; interruptions retain completed files and
+mark the active file uncertain. Existing receipts refuse replay. Regression
+tests cover denied/dirty refusal without claims, successful two-file execution,
+partial failure and no replay. Concrete storage/project adapters remain pending.
+Root check, build and format gates pass again in the current workspace.

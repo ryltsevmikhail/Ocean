@@ -34,3 +34,4 @@ export * from './coding-turn-tools.js';
 export * from './coding-review.js';
 export * from './coding-test-evidence.js';
 export * from './coding-model-review.js';
+export * from './coding-apply.js';
