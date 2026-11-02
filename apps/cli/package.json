@@ -1,0 +1,21 @@
+{
+  "name": "@runnets/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "runne": "./dist/main.js"
+  },
+  "main": "./dist/main.js",
+  "dependencies": {
+    "@runnets/application": "workspace:*",
+    "@runnets/contracts": "workspace:*",
+    "@runnets/domain": "workspace:*",
+    "@runnets/provider-core": "workspace:*",
+    "@runnets/provider-deepseek": "workspace:*",
+    "@runnets/store": "workspace:*",
+    "@runnets/store-sqlite": "workspace:*",
+    "@runnets/tools-node": "workspace:*"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,73 @@
+Ocean
+Licensed under the Apache License, Version 2.0.
+
+Inherited RunneTS material retains its original MIT copyright and permission notice in LICENSES/RunneTS-MIT.txt. The following inherited notices apply to that material.
+
+RunneTS
+TypeScript implementation of the Runne agent runtime
+
+Copyright (c) 2026 RUNNE Runtime contributors
+Licensed under the MIT License. The full text is in LICENSE.
+
+
+ARCHIVE MATERIAL
+================
+
+The architecture documentation under docs/ is condensed and adapted from the
+documentation of the archived Runne runtime:
+
+  Runne archive (SourceCraft)
+  https://sourcecraft.dev/ryltsevmg/runne
+  License: MIT
+  Copyright (c) 2026 RUNNE Runtime contributors
+
+The archived documentation described an earlier design: a Rust runtime and
+clients with a Tauri desktop host. RunneTS is its own runtime, not a port of
+that implementation: the archive informs intended behavior and provenance only.
+The archived documents were translated into English, condensed and mapped onto
+this repository; the adaptation is not a verbatim copy. No Rust source code from
+the archive is included in RunneTS, and this repository contains no Rust code.
+The desktop application is a separate project and is not built or shipped here.
+
+The archive is reference material only. Where its documents disagree with this
+repository's code, the code is authoritative.
+
+
+OPENCODE REFERENCE BASELINE
+===========================
+
+The Runne archive documented behavioural compatibility against the OpenCode
+project. Its NOTICE recorded that interface material is derived from OpenCode
+and pinned the baseline used for reverse-specification:
+
+  Project:  OpenCode
+  Commit:   66495a2a22cd0a57efcc4f721e65532f0987b4e8
+  Date:     2026-07-24
+  License:  MIT
+  Copyright (c) the OpenCode contributors
+
+OpenCode is used under the terms of the MIT License. This attribution is
+carried forward for any material inherited through the Runne archive. No
+OpenCode source code is vendored in this repository.
+
+RunneTS is a separate project. It is not a fork of OpenCode and is not
+endorsed by or affiliated with the OpenCode project.
+
+
+DEVELOPMENT TOOLCHAIN
+=====================
+
+Direct development dependencies (see package.json and pnpm-lock.yaml; transitive
+dependency licenses are recorded in the lockfile):
+
+  typescript        5.9.3    Apache-2.0 (license text ships with the package)
+  eslint            9.39.5   MIT
+  @eslint/js        9.39.5   MIT
+  typescript-eslint 8.72.1   MIT
+  vitest            4.1.12   MIT
+  prettier          3.9.10   MIT
+  @types/node       24.13.3  MIT
+
+No third-party source code is copied into this repository. Dependencies whose
+licenses are incompatible with MIT must not be added without an explicit
+decision recorded in an ADR under docs/adr/.

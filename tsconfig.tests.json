@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@runnets/domain": ["packages/domain/src/index.ts"],
+      "@runnets/application": ["packages/application/src/index.ts"],
+      "@runnets/store": ["packages/store/src/index.ts"],
+      "@runnets/store-sqlite": ["packages/store-sqlite/src/index.ts"],
+      "@runnets/contracts": ["packages/contracts/src/index.ts"],
+      "@runnets/provider-core": ["packages/provider-core/src/index.ts"],
+      "@runnets/provider-deepseek": ["packages/provider-deepseek/src/index.ts"],
+      "@runnets/tools-node": ["packages/tools-node/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*.ts", "apps/*/src/**/*.ts", "vitest.config.ts"]
+}

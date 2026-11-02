@@ -1,0 +1,32 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/domain"
+    },
+    {
+      "path": "packages/application"
+    },
+    {
+      "path": "packages/contracts"
+    },
+    {
+      "path": "packages/store"
+    },
+    {
+      "path": "packages/store-sqlite"
+    },
+    {
+      "path": "packages/provider-core"
+    },
+    {
+      "path": "packages/provider-deepseek"
+    },
+    {
+      "path": "packages/tools-node"
+    },
+    {
+      "path": "apps/cli"
+    }
+  ]
+}
