@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { truncate, mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -20,3 +20,15 @@ it('attests dependency bytes and symlink text without following links', async ()
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('refuses an oversized sparse dependency before reading its contents', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ocean-tree-limit-'));
+  try {
+    const file = join(root, 'oversized');
+    await writeFile(file, '');
+    await truncate(file, 1073741825);
+    expect(() => fingerprintTree(root)).toThrow('dependency byte limit');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 1000);

@@ -285,3 +285,9 @@ refuses subsequent workers with effect_uncertain while recovery or temporary
 worker artifacts remain. Model file tools hide these artifacts and changeset
 capture refuses them, reserving reconciliation for trusted host recovery.
 All 33 focused sandbox tests and the ordinary 595-test suite pass.
+
+Tree attestation now includes explicit regular-file byte lengths and encoded
+symlink strings in the hash stream. Files exceeding the remaining 1 GiB
+inventory budget are rejected from descriptor metadata before reading them.
+A sparse-file regression exceeds that budget without allocating or reading
+a gigabyte of content.

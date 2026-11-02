@@ -11,7 +11,7 @@ export const treeFingerprintScript = String.raw`
     if(++count>100000) throw Error('dependency inventory limit');
     const stat=fs.lstatSync(path);
     hash.update(JSON.stringify([relative,stat.mode]));
-    if(stat.isSymbolicLink()) hash.update(fs.readlinkSync(path));
+    if(stat.isSymbolicLink()) hash.update(JSON.stringify(fs.readlinkSync(path)));
     else if(stat.isDirectory()) {
       for(const name of fs.readdirSync(path).sort()) walk(path+'/'+name,relative+'/'+name);
     } else if(stat.isFile() && stat.nlink===1) {
@@ -19,6 +19,8 @@ export const treeFingerprintScript = String.raw`
       try {
         const before=fs.fstatSync(fd,{bigint:true});
         if(!before.isFile()) throw Error('dependency file changed');
+        if(before.size>BigInt(1073741824-bytes)) throw Error('dependency byte limit');
+        hash.update(JSON.stringify(String(before.size)));
         const buffer=Buffer.alloc(65536);
         let length;
         while((length=fs.readSync(fd,buffer,0,buffer.length,null))>0) {
