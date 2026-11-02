@@ -87,3 +87,12 @@ Native direct/group fixtures now exercise CLI diff against real changed/new
 artifact capture, checking exact before/after source. No live provider is used.
 Typecheck, scoped lint, tests, build and global formatting pass in the current
 workspace; root check still fails on unrelated design-assets import restrictions.
+
+Application eligibility now requires an approve verdict bound to the exact
+artifact/evidence list plus a current passed result for every registered preset.
+Evidence must match the task/workspace/room/bot/worktree/policy and reviewed
+tree. Missing, truncated, failed, unclean or stale evidence blocks eligibility.
+New runtime evidence includes the exact registered preset ID; older records
+without it cannot establish verification. Domain regressions cover these cases.
+Scoped checks/build and global formatting pass; root lint remains blocked by
+parallel asset imports. Owner-confirmed filesystem application is still pending.

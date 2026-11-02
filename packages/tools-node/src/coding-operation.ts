@@ -121,7 +121,21 @@ async function prepareOperation(
               (evidence.exitCode !== null && !Number.isSafeInteger(evidence.exitCode))
             )
               throw new ToolError('effect_uncertain', 'test evidence unavailable');
+            const invocation = JSON.parse(call.arguments) as {
+              program: string;
+              args: string[];
+              cwd: string;
+            };
+            const preset = task.policy.testPresets.find(
+              (p) =>
+                p.program === invocation.program &&
+                p.cwd === invocation.cwd &&
+                JSON.stringify(p.args) === JSON.stringify(invocation.args),
+            );
+            if (!preset)
+              throw new ToolError('preset_denied', 'test evidence has no registered preset');
             const body = {
+              presetId: preset.id,
               id: approvalId,
               binding,
               invocationHash: evidence.invocationHash,

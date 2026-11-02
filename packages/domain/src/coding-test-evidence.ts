@@ -1,5 +1,6 @@
 import type { CodingApprovalBinding } from './coding-approval.js';
 export interface CodingTestEvidence {
+  readonly presetId?: string;
   readonly id: string;
   readonly hash: string;
   readonly binding: CodingApprovalBinding;
