@@ -185,17 +185,21 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
           }
         : {}),
     });
-    const ready = chat.recover().then(() => reconcileInterrupted(service, store.tools));
+    const codingApply = new CodingApplyService(
+      store.codingApplications,
+      new GitCodingApplyProject(),
+      (task, tx) => codingApplyAdmission(task, tx, codingDeps),
+    );
+    const ready = chat.recover().then(() => {
+      codingApply.recover();
+      return reconcileInterrupted(service, store.tools);
+    });
     return {
       service,
       coding,
       codingApprovals,
       codingEvidence: store.codingEvidence,
-      codingApply: new CodingApplyService(
-        store.codingApplications,
-        new GitCodingApplyProject(),
-        (task, tx) => codingApplyAdmission(task, tx, codingDeps),
-      ),
+      codingApply,
       codingReview: new CodingReviewService(
         store.codingReviews,
         (task) =>

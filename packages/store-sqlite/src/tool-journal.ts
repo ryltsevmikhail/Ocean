@@ -83,6 +83,16 @@ export class SqliteToolJournal implements ToolJournalPort {
       .run(outcome, id, context.taskRunId, context.attemptId);
     if (result.changes !== 1) throw new Error('tool claim is missing or already settled');
   }
+  /** Transaction-local recovery can retain an existing hold, never upgrade its outcome. */
+  holdNow(id: string, context: ToolEffectContext): void {
+    const row = this.#db
+      .prepare(
+        'SELECT outcome FROM tool_invocations_v2 WHERE id=? AND task_run_id=? AND attempt_id=?',
+      )
+      .get(id, context.taskRunId, context.attemptId);
+    if (row?.['outcome'] === 'uncertain') return;
+    this.settleNow(id, 'uncertain', context);
+  }
   /** Includes legacy unresolved claims globally so upgrades cannot hide uncertainty. */
   async pending(taskRunId?: string): Promise<readonly ToolEffectRecord[]> {
     await Promise.resolve();

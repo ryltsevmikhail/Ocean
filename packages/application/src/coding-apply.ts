@@ -19,6 +19,7 @@ export interface CodingApplyTransaction {
   verdict(requestId: string): CodingReviewVerdict | null;
   evidence(taskId: string): readonly CodingTestEvidence[];
   application(id: string): CodingApplyReceipt | null;
+  pendingApplications(): readonly CodingApplyReceipt[];
   putApplication(receipt: CodingApplyReceipt): void;
   claimApplication(receipt: CodingApplyReceipt): boolean;
 }
@@ -48,6 +49,22 @@ export class CodingApplyService {
     this.#store = store;
     this.#project = project;
     this.#admit = admit;
+  }
+  /** Exclusive runtime startup: preserve uncertainty without observing or replaying effects. */
+  recover(): readonly CodingApplyReceipt[] {
+    return this.#store.atomic((tx) =>
+      tx.pendingApplications().map((previous) => {
+        const receipt: CodingApplyReceipt = {
+          ...previous,
+          status: 'uncertain',
+          files: previous.files.map((file) =>
+            file.status === 'started' ? { ...file, status: 'uncertain' } : file,
+          ),
+        };
+        tx.putApplication(receipt);
+        return receipt;
+      }),
+    );
   }
   async apply(
     input: Readonly<{

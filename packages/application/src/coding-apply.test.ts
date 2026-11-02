@@ -133,6 +133,7 @@ it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race', 'refactor
             verdict: () => review,
             evidence: () => [evidence],
             application: (id) => receipts.get(id) ?? null,
+            pendingApplications: () => [],
             putApplication: (value) => {
               receipts.set(value.id, structuredClone(value));
             },
@@ -231,6 +232,7 @@ it('refuses a concurrent second apply whose clean checkout observation preceded 
           verdict: () => review,
           evidence: () => [evidence],
           application: (id) => receipts.get(id) ?? null,
+          pendingApplications: () => [],
           claimApplication: (receipt) => {
             if (active) return false;
             active = true;

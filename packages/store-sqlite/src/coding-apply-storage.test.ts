@@ -143,3 +143,46 @@ it('settles an observation refusal without effects and never reopens that receip
     store.close();
   }
 });
+
+it.each(['started', 'uncertain', 'completed'] as const)(
+  'reconciles receipt and existing %s journal atomically without upgrading certainty',
+  async (outcome) => {
+    const { CodingApplyService } = await import('@runnets/application');
+    const store = openSqliteStore({ path: ':memory:' });
+    try {
+      store.codingApplications.atomic((tx) => expect(tx.claimApplication(intent)).toBe(true));
+      const context = { taskRunId: 'apply-' + intent.id, attemptId: 'apply' };
+      if (outcome === 'uncertain') await store.tools.recover(intent.id, context);
+      if (outcome === 'completed') await store.tools.settle(intent.id, 'completed', context);
+      const service = new CodingApplyService(
+        store.codingApplications,
+        {
+          inspect: () => Promise.reject(Error('must not inspect')),
+          sourceTree: () => Promise.reject(Error('must not inspect')),
+          applyFile: () => Promise.reject(Error('must not execute')),
+        },
+        () => false,
+      );
+      if (outcome === 'completed') {
+        expect(() => service.recover()).toThrow();
+        expect(store.codingApplications.atomic((tx) => tx.application(intent.id))?.status).toBe(
+          'applying',
+        );
+      } else {
+        expect(service.recover()[0]?.status).toBe('uncertain');
+        expect((await store.tools.pending())[0]?.outcome).toBe('uncertain');
+        expect(service.recover()).toEqual([]);
+        expect(
+          await store.tools.claim(
+            'other',
+            'write',
+            { taskRunId: 'other', attemptId: 'other' },
+            'other',
+          ),
+        ).toBe(false);
+      }
+    } finally {
+      store.close();
+    }
+  },
+);

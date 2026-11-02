@@ -35,6 +35,13 @@ export class SqliteCodingApplyStore implements CodingApplyStore {
         },
         evidence: (id) => new SqliteCodingTestEvidenceStore(db).list(id),
         application,
+        pendingApplications: () =>
+          db
+            .prepare(
+              "SELECT payload FROM ocean_coding_applications WHERE json_extract(payload,'$.status')='applying'",
+            )
+            .all()
+            .map((row) => JSON.parse(String(row['payload'])) as CodingApplyReceipt),
         claimApplication: (receipt) => {
           if (
             application(receipt.id) ||
@@ -66,14 +73,12 @@ export class SqliteCodingApplyStore implements CodingApplyStore {
             JSON.stringify(receipt),
             receipt.id,
           );
-          if (receipt.status !== 'applying')
+          if (receipt.status === 'uncertain')
+            journal.holdNow(receipt.id, { taskRunId: 'apply-' + receipt.id, attemptId: 'apply' });
+          else if (receipt.status !== 'applying')
             journal.settleNow(
               receipt.id,
-              receipt.status === 'completed'
-                ? 'completed'
-                : receipt.status === 'not_started'
-                  ? 'not_started'
-                  : 'uncertain',
+              receipt.status === 'completed' ? 'completed' : 'not_started',
               { taskRunId: 'apply-' + receipt.id, attemptId: 'apply' },
             );
         },
