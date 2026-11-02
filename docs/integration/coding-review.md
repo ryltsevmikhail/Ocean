@@ -121,3 +121,23 @@ the shared claim. The service now repeats both checks under that claim before
 marking any file started. A mismatch commits a terminal not_started receipt and
 settles the journal without effects. Concurrent deferred-observation regression
 proves a second apply cannot reuse a clean observation from before the first.
+
+The Linux GitCodingApplyProject adapter now captures the verified task worktree
+for source hashes and applies individual artifact files through pinned directory
+FDs. It rejects links, special/oversized files and changed before bytes/modes;
+new destinations use link-without-overwrite. Existing access bits remain private
+and executable mode follows readable classes; newly added files start at 0600
+(or 0700 for executable files). Parent/root replacements fail conservatively.
+No Git checkout/filter, staging, commit or cleanup operation is invoked.
+
+Per-file recovery intents, staged bytes and retained displaced originals live
+in the repository common directory's private ocean-apply-recovery directory.
+The recovery directory must be on the project filesystem; cross-device use is
+refused. Intent/data/directory fsync precede publication; completion updates the
+intent by atomic rename. Backups are retained even after success, including
+writes through an old open descriptor. There is no automatic backup deletion
+or replay. Full recovery/backup accounting for these assets remains stage 7.
+Tests use real temporary Git projects/files and deterministic syscall-boundary
+fault injection for destination/parent replacement; they do not qualify power
+loss durability on the target filesystem. Runtime/CLI apply composition and
+complete multi-file refactor ordering remain pending stage-6 work.

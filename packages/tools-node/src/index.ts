@@ -12,3 +12,4 @@ export * from './coding-operation.js';
 export { probeSandbox, createSandboxBackend } from './sandbox-probe.js';
 export type { SandboxOptions, SandboxQualification } from './sandbox-probe.js';
 export { validateMounts } from './sandbox-mounts.js';
+export { GitCodingApplyProject } from './coding-apply-project.js';
