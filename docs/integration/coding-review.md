@@ -58,3 +58,13 @@ room and artifact binding. Completion requires a stored verdict. Disk-backed
 tests verify rollback of verdict plus completion, duplicate/mutation refusal
 and exact data after reopen. Root check is still blocked by parallel asset lint
 errors; scoped lint, full tests, build and changed-source formatting pass.
+
+Reviewer dispatch now persists requested→dispatching before invoking its
+host-owned read-only reviewer port. The port receives the immutable changeset,
+bound evidence and explicit context grant, with no tools/history dependency.
+Success stores an exact verdict; provider/record failure retains uncertainty.
+Dispatching, completed and uncertain requests cannot be automatically replayed.
+Tests verify intent precedes the external call and both success/failure refuse
+second dispatch. SQLite enforces the new irreversible state transitions.
+Scoped validation passes; parallel asset/config formatting still blocks the
+whole-workspace formatting gate.

@@ -62,5 +62,5 @@ export interface CodingReviewRequest {
   readonly reviewerBotId: string;
   readonly binding: CodingReviewBinding;
   readonly contextGrant: readonly string[];
-  readonly status: 'requested' | 'completed';
+  readonly status: 'requested' | 'dispatching' | 'uncertain' | 'completed';
 }

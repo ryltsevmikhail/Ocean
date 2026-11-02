@@ -1,3 +1,4 @@
+import { SqliteCodingTestEvidenceStore } from './coding-test-evidence.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { CodingReviewStore, CodingReviewTransaction } from '@runnets/application';
 import type { CodingReviewRequest, CodingReviewVerdict } from '@runnets/domain';
@@ -30,6 +31,7 @@ export class SqliteCodingReviewStore implements CodingReviewStore {
         changeset: (hash) => changesetStorage(db).changeset(hash),
         reviewRequest: request,
         reviewVerdict: verdict,
+        evidence: (id) => new SqliteCodingTestEvidenceStore(db).list(id),
         evidenceHashes: (id) =>
           db
             .prepare('SELECT hash FROM ocean_coding_test_evidence WHERE task_id=? ORDER BY rowid')
@@ -39,10 +41,14 @@ export class SqliteCodingReviewStore implements CodingReviewStore {
           const previous = request(value.id);
           if (previous) {
             if (
-              previous.status !== 'requested' ||
-              value.status !== 'completed' ||
+              !(
+                (previous.status === 'requested' &&
+                  ['dispatching', 'completed'].includes(value.status)) ||
+                (previous.status === 'dispatching' &&
+                  ['uncertain', 'completed'].includes(value.status))
+              ) ||
               JSON.stringify({ ...previous, status: value.status }) !== JSON.stringify(value) ||
-              !verdict(value.id)
+              (value.status === 'completed' && !verdict(value.id))
             )
               throw Error('immutable review request');
           } else if (value.status !== 'requested')
@@ -55,7 +61,7 @@ export class SqliteCodingReviewStore implements CodingReviewStore {
           const original = request(id);
           if (
             !original ||
-            original.status !== 'requested' ||
+            !['requested', 'dispatching'].includes(original.status) ||
             original.reviewerBotId !== value.reviewerBotId ||
             original.reviewRoomId !== value.reviewRoomId ||
             JSON.stringify(original.binding) !== JSON.stringify(value.binding)

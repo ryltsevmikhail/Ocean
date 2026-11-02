@@ -3,6 +3,7 @@ import {
   ok,
   codingReviewCurrent,
   codingReviewFindingValid,
+  type CodingTestEvidence,
   type CodingTask,
   type Changeset,
   type CodingReviewRequest,
@@ -17,6 +18,7 @@ export interface CodingReviewTransaction {
   putReviewVerdict(requestId: string, verdict: CodingReviewVerdict): void;
   reviewVerdict(requestId: string): CodingReviewVerdict | null;
   evidenceHashes(taskId: string): readonly string[];
+  evidence(taskId: string): readonly CodingTestEvidence[];
 }
 export interface CodingReviewStore {
   atomic<T>(work: (tx: CodingReviewTransaction) => T): T;
@@ -25,6 +27,15 @@ export interface CodingReviewOwnerPort {
   confirm(
     preview: Readonly<{ request: CodingReviewRequest; changeset: Changeset }>,
   ): Promise<boolean>;
+}
+export interface CodingReviewerPort {
+  review(
+    input: Readonly<{
+      request: CodingReviewRequest;
+      changeset: Changeset;
+      evidence: readonly CodingTestEvidence[];
+    }>,
+  ): Promise<Pick<CodingReviewVerdict, 'verdict' | 'findings' | 'summary'>>;
 }
 /** Immutable artifact handoff. No conversation history or executable tools enter this port. */
 export class CodingReviewService {
@@ -99,6 +110,48 @@ export class CodingReviewService {
       return ok(prepared.request);
     });
   }
+  async dispatch(
+    requestId: string,
+    reviewer: CodingReviewerPort,
+  ): Promise<CodingResult<CodingReviewVerdict>> {
+    const input = this.#store.atomic((tx) => {
+      const request = tx.reviewRequest(requestId);
+      const task = request ? tx.task(request.binding.taskId) : null;
+      const changeset = request ? tx.changeset(request.binding.changesetHash) : null;
+      if (
+        !request ||
+        request.status !== 'requested' ||
+        !task ||
+        !this.#admit(task) ||
+        !changeset ||
+        !codingReviewCurrent(request.binding, changeset, tx.evidenceHashes(task.id))
+      )
+        return null;
+      const dispatching = { ...request, status: 'dispatching' as const };
+      tx.putReviewRequest(dispatching);
+      return { request: dispatching, changeset, evidence: tx.evidence(task.id) };
+    });
+    if (!input) return codingFailure('coding_denied');
+    try {
+      const response = await reviewer.review(structuredClone(input));
+      const result = this.record(requestId, {
+        ...response,
+        id: requestId + '-verdict',
+        binding: input.request.binding,
+        reviewerBotId: input.request.reviewerBotId,
+        reviewRoomId: input.request.reviewRoomId,
+      });
+      if (result.ok) return result;
+    } catch {
+      /* Preserve the dispatched request for reconciliation. */
+    }
+    this.#store.atomic((tx) => {
+      const request = tx.reviewRequest(requestId);
+      if (request?.status === 'dispatching')
+        tx.putReviewRequest({ ...request, status: 'uncertain' });
+    });
+    return codingFailure('recovery_required');
+  }
   record(requestId: string, verdict: CodingReviewVerdict): CodingResult<CodingReviewVerdict> {
     const value = structuredClone(verdict);
     return this.#store.atomic((tx) => {
@@ -107,7 +160,7 @@ export class CodingReviewService {
       const task = request ? tx.task(request.binding.taskId) : null;
       if (
         !request ||
-        request.status !== 'requested' ||
+        !['requested', 'dispatching'].includes(request.status) ||
         !task ||
         !this.#admit(task) ||
         !changeset ||
