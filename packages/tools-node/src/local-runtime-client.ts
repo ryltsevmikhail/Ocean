@@ -3,6 +3,9 @@ import { connect, type Socket } from 'node:net';
 import {
   LOCAL_RUNTIME_MAX_WAIT_MS,
   isLocalRuntimeIdentity,
+  isLocalReceiptQuery,
+  isLocalRunQuery,
+  isLocalTurnRequest,
   isLocalTurnReceipt,
   isLocalRunSnapshot,
   type LocalTurnRequest,
@@ -102,19 +105,19 @@ export async function connectLocalRuntime(options: {
     return {
       identity,
       async submit(input) {
-        const request = { ...input };
+        const request = validatedParams(input, isLocalTurnRequest);
         const result = await peer.request('turns.submit', request);
         if (!matchesReceipt(result, request)) throw Error('invalid_frame');
         return result;
       },
       async getReceipt(input) {
-        const query = { ...input };
+        const query = validatedParams(input, isLocalReceiptQuery);
         const result = await peer.request('receipts.get', query);
         if (result !== null && !matchesReceipt(result, query)) throw Error('invalid_frame');
         return result;
       },
       async getRun(input) {
-        const query = { ...input };
+        const query = validatedParams(input, isLocalRunQuery);
         const result = await peer.request('runs.get', query);
         if (
           result !== null &&
@@ -157,6 +160,13 @@ export async function connectLocalRuntime(options: {
     peer.close();
     throw error;
   }
+}
+
+function validatedParams<T>(input: unknown, valid: (value: unknown) => value is T): T {
+  if (!localRuntimeRecord(input)) throw Error('invalid_params');
+  const snapshot = { ...input };
+  if (!valid(snapshot)) throw Error('invalid_params');
+  return snapshot;
 }
 
 function matchesReceipt(value: unknown, query: LocalReceiptQuery): value is LocalTurnReceipt {

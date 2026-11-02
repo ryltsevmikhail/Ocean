@@ -37,8 +37,10 @@ Stop returns `state: "stopped", outcome: "complete"` only after settlement and
 runtime close. Closing a client merely detaches it. SIGINT and SIGTERM request
 the same shutdown as explicit stop.
 
-Stop refuses submissions with `runtime_draining`, signals active controllers,
-and waits for their execution promises and any additional host drain. Uncertain
+Stop signals active controllers and waits for their execution promises and any
+additional host drain. During draining or an incomplete stop, exact retries
+return the original receipt and changed bindings return `request_conflict`.
+Fresh submissions return `runtime_draining` before any admission write. Uncertain
 settlement from work started by this process, a rejected drain, or the default
 29-second deadline returns `state: "stop_incomplete", outcome: "uncertain"`.
 The owner and listening endpoint stay available for status and reads. Repeated
@@ -108,7 +110,8 @@ boundary. Same-UID processes with access to those credentials are trusted.
 | `runs.get`     | `workspaceId, roomId, runId`                                     | Receipt identity, `performerId, turnStatus, taskStatus, version, resultMessageId`, or `null` |
 
 Node clients call `submit`, `getReceipt` and `getRun` respectively. All three
-methods reject extra parameters. The submitting client retains the exact request
+methods reject extra parameters on both the client and the server. The Node SDK
+validates its parameter snapshot before writing a frame. The submitting client retains the exact request
 and its ID until it can confirm the acknowledgement. After a dropped response,
 read the scoped receipt or retry the exact request. Its original message and run
 identities survive reconnect and recovery. Changing the bound workspace, room,

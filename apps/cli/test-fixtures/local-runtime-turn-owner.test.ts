@@ -20,6 +20,10 @@ const provider: ProviderPort = {
     })();
   },
 };
-const host = await startLocalRuntime({ profile, provider, drainDeadlineMs: 300 });
+const host = await startLocalRuntime({
+  profile,
+  provider,
+  drainDeadlineMs: process.argv[3] === 'draining_retry' ? 25_000 : 300,
+});
 writeSync(1, 'ready\n');
 await host.closed;

@@ -216,3 +216,29 @@ it('refuses a missing capability without exposing status', async () => {
     ]),
   ).toMatchObject([{ error: { code: 'authentication_failed' } }]);
 });
+
+it('validates turn parameters at the authenticated host even for a client bypassing the SDK', async () => {
+  const { profile } = await fixture();
+  await host(profile);
+  const params = {
+    workspaceId: 'ws_ocean',
+    roomId: 'room',
+    requestId: 'op',
+    text: 'hello',
+    provider: 'forbidden',
+  };
+  const result = await raw(profile, [
+    { id: 'auth', method: 'hello', params: readLocalRuntimeDescriptor(profile) },
+    { id: 'submit', method: 'turns.submit', params },
+    { id: 'receipt', method: 'receipts.get', params },
+    {
+      id: 'run',
+      method: 'runs.get',
+      params: { workspaceId: 'ws_ocean', roomId: 'room', runId: 'tr_op', owner: true },
+    },
+  ]);
+  expect(result).toMatchObject([
+    { result: { protocol: 1 } },
+    ...['submit', 'receipt', 'run'].map((id) => ({ id, error: { code: 'invalid_params' } })),
+  ]);
+});

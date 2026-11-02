@@ -20,6 +20,7 @@ export interface DirectChatRequest {
   readonly text: string;
   readonly to?: string | undefined;
 }
+export type ChatAdmissionMode = 'admit' | 'existing_only';
 export type ChatAdmission =
   | { readonly turn: ChatTurn; readonly fresh: boolean; readonly messages: readonly ChatMessage[] }
   | { readonly record: ConversationMessage };
@@ -29,7 +30,7 @@ export function admitChat(
   deps: ConversationServiceDeps,
   request: DirectChatRequest,
   provider: ProviderPort | null,
-  codingAvailable: boolean,
+  policy: { readonly mode: ChatAdmissionMode; readonly codingAvailable: boolean },
 ): ConversationResult<ChatAdmission> {
   if (
     ![request.workspaceId, request.requestId, request.roomId].every((id) =>
@@ -58,7 +59,8 @@ export function admitChat(
       if (turn === null) throw new Error('chat receipt has no turn');
       return ok({ turn, fresh: false, messages: [] });
     }
-    if (request.taskId !== undefined && !codingAvailable)
+    if (policy.mode === 'existing_only') return conversationFailure('admission_closed');
+    if (request.taskId !== undefined && !policy.codingAvailable)
       return conversationFailure('invalid_input');
     if (tx.workspace()?.id !== request.workspaceId)
       return conversationFailure('workspace_conflict');

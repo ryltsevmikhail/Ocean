@@ -213,3 +213,83 @@ it('admits a selected group recipient while another room runs and hides receipts
   f.finish();
   await vi.waitFor(() => expect(f.signals).toHaveLength(2));
 });
+
+it('rejects extra fields and payload substitution locally without writing any of the three RPC frames', async () => {
+  const f = await fixture(),
+    client = await f.client();
+  const { workspaceId, roomId, requestId } = f.request;
+  const scope = { workspaceId, roomId, requestId };
+  const run = { workspaceId, roomId, runId: 'tr_fixture' };
+  const writes = vi.spyOn(Socket.prototype, 'write');
+  const original = { ...f.request, provider: { apiKey: 'synthetic-credential' } };
+  const modified = { ...f.request, toJSON: () => ({ ...f.request, text: 'substituted' }) };
+  const extraReceipt = { ...scope, capability: 'synthetic' };
+  const modifiedReceipt = { ...scope, toJSON: () => scope };
+  const extraRun = { ...run, provider: 'caller-selected' };
+  const modifiedRun = { ...run, toJSON: () => run };
+  const outcomes = await Promise.allSettled([
+    client.submit(original),
+    client.submit(modified),
+    client.getReceipt(extraReceipt),
+    client.getReceipt(modifiedReceipt),
+    client.getRun(extraRun),
+    client.getRun(modifiedRun),
+    client.submit(Object.assign([], f.request)),
+    client.getReceipt(Object.assign([], scope)),
+    client.getRun(Object.assign([], run)),
+  ]);
+  const requests = writes.mock.calls.filter(
+    ([bytes]) => Buffer.isBuffer(bytes) && bytes.includes(Buffer.from('"method":')),
+  );
+  writes.mockRestore();
+  expect(requests).toHaveLength(0);
+  expect(outcomes).toEqual(
+    Array.from({ length: 9 }, () => ({ status: 'rejected', reason: Error('invalid_params') })),
+  );
+  expect(await client.getReceipt(scope)).toBeNull();
+  expect(f.signals).toHaveLength(0);
+});
+
+it('owns fresh public submissions even if a structurally wider input carries a throwing legacy observer', async () => {
+  const runtime = createRuntime({ mode: 'ephemeral' });
+  const { groupId: _, ...request } = rooms(runtime.conversations);
+  let calls = 0;
+  const input = {
+    ...request,
+    signal: new AbortController().signal,
+    emit: () => {},
+    provider: gatedProvider(
+      async () => {},
+      () => {
+        calls++;
+      },
+    ),
+    onAdmitted() {
+      throw Error('legacy observer');
+    },
+  };
+  const first = runtime.chat.submit(input);
+  if (!first.ok) throw Error('admission failed');
+  const retry = runtime.chat.submit(input);
+  expect(retry).toMatchObject({
+    ok: true,
+    value: { receipt: first.value.receipt, completion: null },
+  });
+  expect(await first.value.completion).toMatchObject({ status: 'completed' });
+  expect(calls).toBe(1);
+  let observed: string | undefined;
+  const next = await runtime.chat.send({
+    ...input,
+    requestId: 'next',
+    onAdmitted(turn) {
+      expect(calls).toBe(1);
+      expect(runtime.chat.getReceipt({ ...request, requestId: 'next' })).toMatchObject({
+        turnId: turn.id,
+      });
+      observed = turn.id;
+    },
+  });
+  expect(observed).toEqual(expect.any(String));
+  expect(next).toMatchObject({ ok: true, value: { status: 'completed', id: observed } });
+  expect(calls).toBe(2);
+});

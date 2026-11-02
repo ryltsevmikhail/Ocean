@@ -6,7 +6,9 @@ import { expect, it, vi } from 'vitest';
 import { openOceanProfile } from '../ocean/profile.js';
 import { rooms } from '../../test-fixtures/local-runtime-admission.test.js';
 
-it.runIf(process.platform === 'linux').each(['success', 'provider_failure', 'deadline'])(
+it
+  .runIf(process.platform === 'linux')
+  .each(['success', 'provider_failure', 'deadline', 'draining_retry'])(
   'independent clients detach and reconnect to one execution through %s',
   async (scenario) => {
     const root = mkdtempSync(join(tmpdir(), 'ocean-job-')),
@@ -16,11 +18,11 @@ it.runIf(process.platform === 'linux').each(['success', 'provider_failure', 'dea
     const env = { PATH: process.env['PATH'], XDG_RUNTIME_DIR: runDir };
     const runtime = openOceanProfile(profile, true);
     await runtime.ready;
-    const { groupId: _, ...request } = rooms(runtime.conversations);
+    const { groupId, ...request } = rooms(runtime.conversations);
     runtime.close();
     const host = spawn(
       process.execPath,
-      [resolve('apps/cli/test-fixtures/local-runtime-turn-owner.test.ts'), profile],
+      [resolve('apps/cli/test-fixtures/local-runtime-turn-owner.test.ts'), profile, scenario],
       { env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] },
     );
     const exited = new Promise((resolve) => host.once('exit', resolve));
@@ -68,6 +70,50 @@ it.runIf(process.platform === 'linux').each(['success', 'provider_failure', 'dea
         'client.getRun({workspaceId:request.workspaceId,roomId:request.roomId,runId:' +
         JSON.stringify(receipt.runId) +
         '})';
+      if (scenario === 'draining_retry') {
+        const group = { ...request, roomId: groupId, requestId: 'post' };
+        const groupReceipt = await client('client.submit(' + JSON.stringify(group) + ')');
+        expect(groupReceipt.runId).toBeNull();
+        const stop = client('client.stop()');
+        try {
+          await vi.waitFor(() => expect(log).toContain('abort'));
+          for (const phase of ['draining', 'stop_incomplete']) {
+            if (phase === 'stop_incomplete') {
+              host.send('release');
+              expect(await stop).toMatchObject({ state: phase });
+            }
+            expect((await client('client.status()')).state).toBe(phase);
+            expect(await client('client.submit(request)')).toEqual(receipt);
+            expect(await client('client.submit({...request,text:"changed"})')).toEqual({
+              error: 'request_conflict',
+            });
+            expect(await client('client.submit(' + JSON.stringify(group) + ')')).toEqual(
+              groupReceipt,
+            );
+            const fresh = { ...group, requestId: 'new' };
+            expect(await client('client.submit(' + JSON.stringify(fresh) + ')')).toEqual({
+              error: 'runtime_draining',
+            });
+            expect(
+              await client(
+                'client.getReceipt(' +
+                  JSON.stringify({
+                    workspaceId: request.workspaceId,
+                    roomId: groupId,
+                    requestId: 'new',
+                  }) +
+                  ')',
+              ),
+            ).toBeNull();
+          }
+          expect(readFileSync(join(profile, 'calls'), 'utf8')).toBe('dispatch\n');
+        } finally {
+          // Release even when an assertion fails while the stop caller waits on this gate.
+          if (host.connected) host.send('release');
+          await stop;
+        }
+        return;
+      }
       if (scenario !== 'deadline') {
         host.send(scenario);
         const expected =

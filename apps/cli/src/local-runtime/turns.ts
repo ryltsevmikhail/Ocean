@@ -25,15 +25,20 @@ export class RuntimeTurns {
     switch (method) {
       case 'turns.submit': {
         if (!isLocalTurnRequest(params)) return { error: { code: 'invalid_params' } };
-        if (this.#draining) return { error: { code: 'runtime_draining' } };
         const controller = new AbortController();
-        const admitted = this.#chat.submit({
-          ...params,
-          provider: this.#provider,
-          signal: controller.signal,
-          emit: () => {},
-        });
-        if (!admitted.ok) return { error: { code: admitted.error.code } };
+        const admitted = this.#chat.submit(
+          {
+            ...params,
+            provider: this.#provider,
+            signal: controller.signal,
+            emit: () => {},
+          },
+          this.#draining ? 'existing_only' : 'admit',
+        );
+        if (!admitted.ok) {
+          const code = admitted.error.code;
+          return { error: { code: code === 'admission_closed' ? 'runtime_draining' : code } };
+        }
         const { receipt, completion } = admitted.value;
         if (completion) {
           const settled = completion

@@ -8,7 +8,12 @@ import {
   type ChatTurn,
   type ConversationResult,
 } from '@runnets/domain';
-import { admitChat, updateChat, type DirectChatRequest } from './direct-chat-admission.js';
+import {
+  admitChat,
+  updateChat,
+  type DirectChatRequest,
+  type ChatAdmissionMode,
+} from './direct-chat-admission.js';
 import { publishChat, recoverChats } from './direct-chat-publication.js';
 import type { ConversationServiceDeps } from './conversations.js';
 import type { TaskRunService } from './service.js';
@@ -21,7 +26,7 @@ import {
   type RunQuery,
 } from './chat-receipts.js';
 export type { ChatAdmissionReceipt, ReceiptQuery, RunQuery } from './chat-receipts.js';
-export type { DirectChatRequest } from './direct-chat-admission.js';
+export type { ChatAdmissionMode, DirectChatRequest } from './direct-chat-admission.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
 import type { TurnUpdate } from './turn-update.js';
 import { executeStep } from './commands.js';
@@ -40,10 +45,12 @@ export interface DirectChatDeps extends ConversationServiceDeps {
     forTurn(turn: ChatTurn, signal: AbortSignal): Promise<NonNullable<TurnInput['tools']>>;
   };
 }
-export interface SendDirectInput extends DirectChatRequest {
+export interface SubmitDirectInput extends DirectChatRequest {
   readonly provider: ProviderPort | null;
   readonly signal: AbortSignal;
   readonly emit: (update: TurnUpdate) => void;
+}
+export interface SendDirectInput extends SubmitDirectInput {
   readonly onAdmitted?: (turn: ChatTurn) => void;
 }
 /** One host-neutral direct dialogue path for CLI and TUI, reconstructed from committed history. */
@@ -54,16 +61,17 @@ export class DirectChatService {
   }
   /** Commit admission synchronously. Only this fresh invocation starts private execution. */
   submit(
-    input: SendDirectInput,
+    input: SubmitDirectInput,
+    mode: ChatAdmissionMode = 'admit',
   ): ConversationResult<{ receipt: ChatAdmissionReceipt; completion: Promise<ChatTurn> | null }> {
-    const begun = this.#begin(input);
+    const begun = this.#begin(input, mode);
     if (!begun.ok) return begun;
     const { receipt, completion } = begun.value;
     return ok({ receipt, completion });
   }
   /** Legacy callers await the fresh turn, or observe the current state on an exact retry. */
   async send(input: SendDirectInput): Promise<ConversationResult<ChatTurn | RecordedRoomMessage>> {
-    const begun = this.#begin(input);
+    const begun = this.#begin(input, 'admit', input.onAdmitted);
     if (!begun.ok) return begun;
     return ok(begun.value.completion ? await begun.value.completion : begun.value.observed);
   }
@@ -73,18 +81,20 @@ export class DirectChatService {
   getRun(query: RunQuery) {
     return readChatRun(this.#deps.store, this.#deps.tasks, query);
   }
-  #begin(submitted: SendDirectInput): ConversationResult<{
+  #begin(
+    submitted: SubmitDirectInput,
+    mode: ChatAdmissionMode,
+    onAdmitted?: SendDirectInput['onAdmitted'],
+  ): ConversationResult<{
     receipt: ChatAdmissionReceipt;
     completion: Promise<ChatTurn> | null;
     observed: ChatTurn | RecordedRoomMessage;
   }> {
     const input = { ...submitted };
-    const admitted = admitChat(
-      this.#deps,
-      input,
-      input.provider,
-      this.#deps.codingTools !== undefined,
-    );
+    const admitted = admitChat(this.#deps, input, input.provider, {
+      mode,
+      codingAvailable: this.#deps.codingTools !== undefined,
+    });
     if (!admitted.ok) return admitted;
     if ('record' in admitted.value) {
       const { record } = admitted.value;
@@ -100,7 +110,7 @@ export class DirectChatService {
       });
     }
     const { turn, fresh, messages } = admitted.value;
-    input.onAdmitted?.(structuredClone(turn));
+    onAdmitted?.(structuredClone(turn));
     return ok({
       receipt: chatReceipt(input.requestId, turn),
       observed: turn,
@@ -108,7 +118,7 @@ export class DirectChatService {
     });
   }
   async #execute(
-    input: SendDirectInput,
+    input: SubmitDirectInput,
     turn: ChatTurn,
     messages: readonly ChatMessage[],
   ): Promise<ChatTurn> {

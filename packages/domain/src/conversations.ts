@@ -42,6 +42,7 @@ export interface ConversationMessage {
 }
 export type ConversationErrorCode =
   | 'invalid_input'
+  | 'admission_closed'
   | 'request_conflict'
   | 'workspace_conflict'
   | 'handle_taken'
