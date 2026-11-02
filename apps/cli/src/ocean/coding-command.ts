@@ -1,3 +1,4 @@
+import { readCodingProjects } from './coding-projects.js';
 import { createInterface } from 'node:readline/promises';
 import { randomUUID } from 'node:crypto';
 import type { Runtime } from '../runtime.js';
@@ -36,6 +37,11 @@ export async function runCodingCommand(
     if (!selected) throw Error('unknown_bot');
     return selected.id;
   };
+  const projectName = required(args.flags, 'project');
+  const registered = (await readCodingProjects(args.flags.get('profile'))).find(
+    (project) => project.id === projectName,
+  );
+  if (!registered && !projectName.startsWith('/')) throw Error('unknown project');
   const taskId = args.flags.get('task-id') ?? randomUUID();
   const roomId = required(args.flags, 'room'),
     devBotId = resolve(required(args.flags, 'dev'));
@@ -44,13 +50,13 @@ export async function runCodingCommand(
       taskId,
       requestId,
       workspaceId,
-      projectRoot: required(args.flags, 'project'),
+      projectRoot: registered?.root ?? projectName,
       ownerRoomId: roomId,
       reviewRoomId: required(args.flags, 'review-room'),
       devBotId,
       reviewBotId: resolve(required(args.flags, 'review')),
       devCapabilities: ['project_read', 'propose_write', 'run_test_preset'],
-      testPresets: [],
+      testPresets: registered?.testPresets ?? [],
     },
     { confirm: terminalCodingConfirm },
   );

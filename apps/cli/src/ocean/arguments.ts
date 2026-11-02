@@ -8,6 +8,7 @@ export interface OceanArguments {
 }
 const valueFlags = new Set([
   'profile',
+  'config',
   'project',
   'dev',
   'review',

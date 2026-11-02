@@ -6,14 +6,14 @@ import { terminalText } from '../tui/text.js';
 export function codingApprovalOwner(signal: AbortSignal): CodingApprovalOwnerPort {
   return {
     decide: async (approval) => {
-      if (signal.aborted || process.stdin.isTTY !== true || process.stdout.isTTY !== true)
+      if (signal.aborted || process.stdin.isTTY !== true || process.stderr.isTTY !== true)
         return 'cancel';
-      process.stdout.write(
+      process.stderr.write(
         terminalText(JSON.stringify(approval.binding, null, 2) + '\n' + approval.preview) + '\n',
       );
       const reader = createInterface({
         input: process.stdin,
-        output: process.stdout,
+        output: process.stderr,
         terminal: true,
       });
       try {

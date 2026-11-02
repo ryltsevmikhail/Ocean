@@ -63,3 +63,12 @@ IDs/roots before confirmation, then atomically writes mode 0600 metadata.
 Tests verify denial leaves no file, exact confirmed persistence, private mode,
 duplicate refusal and malformed configuration refusal. CLI project routing
 and use of the registry during start/send remain pending.
+
+CLI project add --config FILE validates and owner-confirms a bounded JSON
+registration. coding start --project ID copies its exact presets into task
+policy. send --task automatically resolves the registered root/mounts and uses
+the interactive owner adapter. Changed registered presets are refused for an
+existing task. Dependency mountpoint directories are created only beneath
+canonical existing worktree parents. A host regression verifies registration
+resolution, destination preparation and policy mismatch refusal. Approval
+previews use stderr so the send JSON response stream stays parseable.

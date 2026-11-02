@@ -1,3 +1,7 @@
+import { readFileSync, statSync } from 'node:fs';
+import { registeredCodingTools } from './coding-project-host.js';
+import { registerCodingProject } from './coding-projects.js';
+import { terminalCodingConfirm } from './coding-command.js';
 import { runCodingCommand } from './coding-command.js';
 import { checkRestoredAccess } from './restored.js';
 import { runOperations } from './operations.js';
@@ -56,7 +60,11 @@ export async function runOceanCommand(
     runtime = openOceanProfile(
       flags.get('profile'),
       command === 'init',
-      options.codingTools ? { codingTools: options.codingTools } : {},
+      options.codingTools
+        ? { codingTools: options.codingTools }
+        : command === 'send' && flags.has('task')
+          ? { codingTools: registeredCodingTools(flags.get('profile')) }
+          : {},
     );
     await runtime.ready;
     const requestId = flags.get('request-id') ?? randomUUID();
@@ -70,7 +78,15 @@ export async function runOceanCommand(
       return result.value;
     };
     let data: unknown;
-    if (command === 'coding') {
+    if (command === 'project' && positional[0] === 'add') {
+      const config = required(flags, 'config');
+      if (statSync(config).size > 1048576) throw Error('project configuration too large');
+      data = await registerCodingProject(
+        flags.get('profile'),
+        JSON.parse(readFileSync(config, 'utf8')) as unknown,
+        terminalCodingConfirm,
+      );
+    } else if (command === 'coding') {
       data = await runCodingCommand(runtime, args, requestId);
     } else if (command === 'init') {
       data = execute({
