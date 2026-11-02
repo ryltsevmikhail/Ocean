@@ -1,21 +1,41 @@
-# Desktop client integration
+# Desktop clients and runtime integration
 
-How an out-of-repository desktop application attaches to this runtime, and what
-exactly it is expected to call. The client behavior below was inspected in
-the shipped Linux driver; an end-to-end desktop handshake has not been
-qualified. No client source is vendored into this repository.
+## In-repository Ocean Desktop
 
-## What the client is
+`apps/desktop` imports the complete committed desktop tree from source revision
+`1c8d8c3` (2026-11-02). See [its README](../../apps/desktop/README.md) for launch
+and attachment behavior. It is an Electron/Vue Linux client with room/bot
+management, direct/group history, named recipients, appearance controls and
+persistent scoped attachments (four files, 10 MiB each).
 
-- The desktop application is **RunneBot** (`runnebot` 0.1.111, Electron, Linux
-  x86_64), distributed as `runnebot-0.1.111-linux-x64.tar.gz`.
-- RunneBot is a rebranded fork of **OpenMausBot** (Electron + React, MIT). Its
-  `package.json` declares `RunneBot: a local-first chat app for running a team of
-AI agents (fork of OpenMausBot)`, with `repository → milind-soni/OpenMausBot`
-  and `homepage → Ryltsevmg/runne-os`.
-- The desktop side is owned by other projects (`Ryltsevmg/runne-os` for the
-  fork lineage and the OS distribution). Ocean does **not** contain UI,
-  windowing, packaging or OS integration, and must not grow them.
+The implemented host is `apps/desktop/src/host/main.ts`. Each operation starts
+an external Node 26 worker, which invokes this checkout's built CLI through
+`src/host/worker.ts`; it does not attach through ACP or a shared-runtime socket.
+Its private Electron userData `conversation` directory contains the CLI profile,
+workspace and attachment store. Window close sends SIGINT to the active worker;
+an interrupted send can remain `uncertain`, and does not prove cancellation.
+
+Attachment bytes and request receipts are stored before CLI submission. Images
+can be previewed/zoomed, text can be previewed, and original files exported.
+Clipboard/drop imports and restarted history use the same room/message-scoped
+store. The current provider path is text-only: it includes bounded text excerpts
+and descriptions, with no image/PDF/archive understanding. CLI profile backup
+does not include attachment bytes; preserve the full `conversation` directory.
+
+[Shared local runtime](../ocean/shared-runtime.md) is a future migration of this
+in-repository host. The current worker-per-request implementation has no shared
+endpoint seam and is not evidence of detach/reconnect or two-client runtime
+acceptance. Deterministic GUI smoke/transfer QA uses a temporary Electron profile
+and mocked HTTP provider; live-provider, installed-app and packaging qualification
+are separate gates. This import does not modify the installed application.
+
+## External RunneBot / ACP client
+
+The following contract describes the separately inspected **RunneBot**
+(`runnebot` 0.1.111, Electron/React, Linux x86_64), an MIT OpenMausBot fork from
+`Ryltsevmg/runne-os`. That client's source is not vendored here and its ACP
+handshake has not been qualified end-to-end. Its external-engine contract is
+separate from the imported Ocean Desktop host above.
 
 ## How a desktop client attaches an external engine
 

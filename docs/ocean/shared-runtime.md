@@ -160,19 +160,26 @@ not a claim of confirmed cancellation. SIGKILL recovery remains conservative.
 
 ## Desktop boundary
 
-A read-only inspection found a separate checkout at
-`/home/ryltsevmg/Projects/ocean-handoff.AWRBYtwS/Ocean-desktop`.
-Its `apps/desktop/src/host/main.ts` is Electron, starts worker.js per request and
-aborts its active worker on window close. `apps/desktop/package.json` provides
-`pnpm --filter @ocean/desktop start`. This is an available client candidate,
-not a proven shared-runtime client. Do not edit/reset/switch its checkout.
+Ocean Desktop is now imported in this repository at `apps/desktop` from source
+revision `1c8d8c3`. Its actual entry point is
+`pnpm --filter @ocean/desktop start`; `src/host/main.ts` starts `worker.js` per
+request and sends SIGINT to the active worker on window close. The worker invokes
+this checkout's CLI. This imported behavior is implemented; the shared-runtime
+migration remains proposed. Preserve the separate source checkout and installed
+application.
 
-Qualify its actual entry point against the delivered endpoint/profile configuration
-if its owner-provided integration supports it. If it has no external-runtime seam,
-record that exact incompatibility and provide a concrete adapter contract/example
-for its parallel session; do not claim GUI acceptance from a headless process.
-Always deliver an independent client-process example and E2E driver. GUI acceptance
-and protocol acceptance have distinct evidence and pass/fail status.
+Task 7 must qualify this in-repository entry point against the delivered endpoint
+using an isolated profile and a deterministic provider. Currently no external
+endpoint/profile configuration seam exists: replace worker-per-request ownership
+with the authenticated client port before claiming GUI shared-runtime acceptance.
+The attachment store is Desktop-local, room/message scoped; preserve its existing
+import/preview/export/receipt semantics during migration. Providers currently
+receive only bounded text excerpts and attachment descriptions. Asset-complete
+backup is still an open gate: CLI profile backup excludes attachment bytes.
+
+Always deliver an independent client-process example and E2E driver. GUI smoke of
+the imported client and shared-runtime GUI acceptance have distinct evidence and
+pass/fail status; a headless protocol test cannot prove GUI acceptance.
 
 ## Acceptance
 

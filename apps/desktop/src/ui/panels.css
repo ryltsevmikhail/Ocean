@@ -1,0 +1,131 @@
+.details {
+  padding: 18px 16px;
+  min-height: 0;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+}
+.identity {
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  margin: 26px 0;
+}
+.identity strong {
+  overflow-wrap: anywhere;
+}
+.identity .avatar {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 10px;
+}
+.details h3 {
+  margin: 22px 0 8px;
+}
+.details p,
+.info-card {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.info-card,
+.settings-rows {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+.person {
+  gap: 10px;
+  padding: 5px 0;
+}
+dialog {
+  background: var(--bg);
+  color: var(--text);
+  width: min(440px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+}
+dialog::backdrop {
+  background: #0009;
+}
+dialog label,
+fieldset {
+  display: block;
+  margin: 12px 0;
+}
+#fields label input:not([type='checkbox'], [type='radio']),
+#fields textarea,
+#fields select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+#fields button {
+  margin-right: 7px;
+}
+#fields [role='alert'] {
+  color: var(--muted);
+  margin: 8px 0;
+}
+.settings header,
+.setting,
+.settings-rows label,
+.swatches {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.settings h3 {
+  margin: 24px 0 8px;
+}
+.settings-rows {
+  padding: 3px 12px;
+}
+.settings-rows label,
+.setting {
+  min-height: 44px;
+  margin: 0;
+  font-size: 13px;
+}
+.settings input {
+  accent-color: var(--accent);
+}
+.swatches button {
+  height: 21px;
+  width: 21px;
+  border-radius: 50%;
+  padding: 0;
+}
+.swatches [data-swatch='blue'] {
+  background: #146bc5;
+}
+.swatches [data-swatch='teal'] {
+  background: #087667;
+}
+.swatches [data-swatch='purple'] {
+  background: #7440ba;
+}
+.swatches [aria-pressed='true'] {
+  outline: 1px solid var(--text);
+  outline-offset: 2px;
+}
+button.person {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+}
+button.person:hover {
+  background: var(--panel);
+}
+.person span {
+  min-width: 0;
+}

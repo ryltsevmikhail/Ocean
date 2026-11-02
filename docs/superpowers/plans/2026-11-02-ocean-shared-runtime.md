@@ -6,7 +6,7 @@
 
 **Architecture:** Preserve Ocean domain/application services, atomic admission/receipts, effect journal and startup recovery. A Linux Unix-socket host exclusively owns the profile and execution. TUI and desktop observe and decide through one authenticated versioned contract; disconnection does not own execution lifetime.
 
-**Tech Stack:** TypeScript strict, Node26 on Omarchy Linux x86_64, pinned pnpm12.16.1, existing SQLite, Node net and existing PTY/test infrastructure. No schedules or desktop UI dependencies added here.
+**Tech Stack:** TypeScript strict, Node26 on Omarchy Linux x86_64, pinned pnpm12.16.1, existing SQLite, Node net and existing PTY/test infrastructure. Desktop UI is already imported in `apps/desktop`; this plan adds no schedules.
 
 **Spec:** [Shared runtime design and acceptance](../../ocean/shared-runtime.md), derived from the owner's 2026-11-02 request. Reference Runne checkout `b0e23ae6`, ExternalLocal/CLI exec, not a new engine implementation.
 
@@ -114,11 +114,11 @@ Protocol methods: `hello`, `rooms.list`, `rooms.members`, `history.list`, `conve
 
 ## Task 7: Desktop contract and real entry-point qualification
 
-**Files:** examples/local-runtime-client.mjs; docs/integration/local-runtime.md and desktop-client.md; independent-client process tests. No edits to external desktop checkout.
+**Files:** apps/desktop/src/host/main.ts and worker/client boundary; examples/local-runtime-client.mjs; docs/integration/local-runtime.md and desktop-client.md; independent-client process tests. Preserve imported attachment behavior. No edits to external desktop checkout or installed application.
 
 - [ ] RED→GREEN independent client process uses only versioned public contract to authenticate, list rooms/history, submit/resume/get result, observe and decide; no Runtime/SQLite/application internals imported. Document a raw-wire hello/submit/read/observe/decision transcript.
-- [ ] Reinspect available desktop checkout read-only and its supported endpoint/profile configuration. Attempt штатный `pnpm --filter @ocean/desktop start` only against isolated test profile if configuration supports delivered endpoint. Preserve source/branch/installed app; never use real credentials or user's live profile.
-- [ ] If worker-per-request host lacks an external endpoint seam, record exact file/API incompatibility and deliver adapter instructions to its owning session via documentation. Do not fabricate GUI success; report GUI NOT VERIFIED with reason while independent protocol client is verified.
+- [ ] Migrate the imported `apps/desktop` worker-per-request host (`1c8d8c3`) to the delivered authenticated client port. Qualify штатный `pnpm --filter @ocean/desktop start` against an isolated test profile and deterministic provider. Preserve source checkout/branch/installed app; never use real credentials or user's live profile. Keep scoped attachment import/receipts/history/preview/export; current providers remain text-only, and CLI backup still excludes attachment bytes.
+- [ ] Add explicit endpoint/profile configuration to the in-repository host; its current `main.ts`/`worker.ts` has no such seam. Verify window close detaches rather than killing execution. If GUI qualification cannot run, record exact incompatibility and GUI NOT VERIFIED with reason while independent protocol client is verified.
 - [ ] Required gates; commit `docs: qualify desktop shared-runtime client contract`; review. GUI status is an explicit acceptance result, not silently omitted.
 
 ## Task 8: Four process acceptance cases and candidate evidence
@@ -134,7 +134,9 @@ Protocol methods: `hello`, `rooms.list`, `rooms.members`, `history.list`, `conve
 
 ## Execution state
 
-Planning only. No shared-runtime product code or GUI launch is claimed here.
+Shared-runtime planning only. The existing Desktop UI is imported from `1c8d8c3`;
+its worker-per-request GUI qualification is separate from this future contract.
+No shared-runtime product code or shared-runtime GUI acceptance is claimed here.
 Ocean1.1 previous checkpoint: `5d032ae`, 1032 passed/41 skipped, build/format and
 14 native tests recorded; these are previous coding recovery evidence, not proof
 of shared-runtime acceptance. Workpackage7.5 was stopped before implementation:
