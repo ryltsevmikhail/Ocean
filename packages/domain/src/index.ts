@@ -31,3 +31,4 @@ export * from './changeset.js';
 
 export * from './coding-approval.js';
 export * from './coding-approval-state.js';
+export * from './coding-review.js';
