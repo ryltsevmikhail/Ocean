@@ -13,6 +13,7 @@ export const sandboxLimits = Object.freeze({
 });
 export interface SandboxRequest {
   readonly root: string;
+  readonly expectedInputs?: Readonly<Record<string, string>>;
   readonly mounts?: readonly SandboxMount[];
   readonly dependencyProjectRoot?: string;
   readonly program: string;

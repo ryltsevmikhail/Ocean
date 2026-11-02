@@ -1,3 +1,4 @@
+import { fingerprintTree } from './sandbox-tree.js';
 import { createHash } from 'node:crypto';
 import { ToolError } from '@runnets/application';
 import type { CodingTestPreset } from '@runnets/domain';
@@ -17,7 +18,10 @@ export interface SandboxQualification {
   readonly limits: typeof sandboxLimits;
   readonly platform: string;
 }
-export type SandboxOptions = Pick<SandboxRequest, 'root' | 'mounts' | 'dependencyProjectRoot'>;
+export type SandboxOptions = Pick<
+  SandboxRequest,
+  'root' | 'mounts' | 'dependencyProjectRoot' | 'expectedInputs'
+>;
 const canary = `
 const fs=require('node:fs'),assert=require('node:assert/strict');
 assert.equal(process.env.DEEPSEEK_API_KEY,undefined);
@@ -109,6 +113,15 @@ export async function createSandboxBackend(
       await fingerprintFile(await realpath(process.execPath)),
       await validateMounts(options.mounts ?? [], options.dependencyProjectRoot),
     ]);
+  const expectedInputs: Record<string, string> = {};
+  const nodePath = await realpath(process.execPath);
+  expectedInputs[nodePath] = await fingerprintFile(nodePath);
+  for (const mount of options.mounts ?? [])
+    expectedInputs[mount.source] =
+      mount.target === '/toolchain/pnpm/bin/pnpm'
+        ? await fingerprintFile(mount.source)
+        : fingerprintTree(mount.source);
+  options = { ...options, expectedInputs };
   const qualifiedIdentity = await identity();
   if (!(await probeSandbox(options)).qualified)
     throw new ToolError('containment_unavailable', 'sandbox qualification failed');

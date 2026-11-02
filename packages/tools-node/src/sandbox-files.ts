@@ -82,7 +82,7 @@ try {
 } catch(e) {process.stdout.write(JSON.stringify({ok:false,code:installed?'effect_uncertain':e.message}));}
 `;
 export async function sandboxFile(
-  options: Pick<SandboxRequest, 'root' | 'mounts' | 'dependencyProjectRoot'>,
+  options: Pick<SandboxRequest, 'root' | 'mounts' | 'dependencyProjectRoot' | 'expectedInputs'>,
   input: {
     op: 'read' | 'list' | 'write';
     path: string;

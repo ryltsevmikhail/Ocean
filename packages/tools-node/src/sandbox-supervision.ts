@@ -74,6 +74,7 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   const nodeBinary = await realpath(process.execPath);
   const launcher = await sandboxLauncher(
     sandboxArgv(request.root, script, request.mounts, nodeBinary),
+    request.expectedInputs,
   );
   request.signal?.throwIfAborted();
   const child = spawn(

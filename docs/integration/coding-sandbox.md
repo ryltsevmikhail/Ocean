@@ -255,3 +255,15 @@ before bubblewrap starts. Two regressions exchange or rewrite the executable
 after preparation, direct TMPDIR to the fixture, and verify that refusal
 leaves no executable staging directory. SIGKILL cleanup remains owned by
 the systemd runtime directory.
+
+Independent review reproduced a qualification-to-launch identity gap by changing
+the pnpm file in the first source snapshot callback, after backend verification.
+Backend qualification now passes its immutable expected file/tree digests
+through every request to launcher preparation. The launcher refuses changed
+inputs instead of adopting fresh content as its baseline. A native regression
+covers this exact callback scenario.
+
+The reviewer also reproduced an unresolved concurrent-writer interval between
+the final content comparison and rename. A noncooperating host writer can lose
+an edit in that interval. Task leases serialize Ocean operations but do not
+serialize arbitrary host editors; the filesystem admission gate remains open.

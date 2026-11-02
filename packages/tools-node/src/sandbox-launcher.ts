@@ -4,7 +4,10 @@ import { lstat } from 'node:fs/promises';
 /** Trusted bootstrap executed inside the supervised unit before bubblewrap.
  * Mount source descriptors are inherited by bubblewrap, avoiding host proc access.
  */
-export async function sandboxLauncher(argv: readonly string[]): Promise<string> {
+export async function sandboxLauncher(
+  argv: readonly string[],
+  expectedInputs: Readonly<Record<string, string>> = {},
+): Promise<string> {
   const trees: Record<string, string> = {};
   const identities: Record<string, string[]> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -18,6 +21,9 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
     if (stat.isFile()) identities[source].push(await fingerprintFile(source));
     if (stat.isDirectory() && source !== '/usr' && argv[i] === '--ro-bind')
       trees[source] = fingerprintTree(source);
+    const digest = stat.isFile() ? identities[source].at(-1) : trees[source];
+    if (expectedInputs[source] !== undefined && digest !== expectedInputs[source])
+      throw new Error('qualified sandbox input changed');
     i += 2;
   }
   return `
