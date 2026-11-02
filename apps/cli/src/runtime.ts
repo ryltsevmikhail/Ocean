@@ -1,4 +1,9 @@
-import { GitCodingProject, SqliteProjectLeases } from '@runnets/tools-node';
+import {
+  GitCodingProject,
+  SqliteProjectLeases,
+  GitCodingWorktrees,
+  GitCodingSnapshots,
+} from '@runnets/tools-node';
 /** Host composition: ephemeral state or a single-owner durable runtime with reconciliation. */
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -6,6 +11,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import {
   TaskRunService,
   CodingTaskService,
+  CodingChangesetService,
   ConversationService,
   DirectChatService,
   ChatReviewService,
@@ -31,6 +37,7 @@ import {
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
   readonly coding: CodingTaskService;
+  readonly codingChanges: CodingChangesetService;
   readonly service: TaskRunService;
   readonly conversations: ConversationService;
   readonly chat: DirectChatService;
@@ -88,16 +95,22 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       clock: options.clock ?? systemClock,
       nextId: () => randomUUID().replaceAll('-', ''),
     };
+    const codingDeps = {
+      store: new InMemoryCodingStore(deps.store),
+      leases: new InMemoryProjectLeases(),
+      projects: new GitCodingProject(),
+      journal,
+      ownerId: 'ephemeral-' + randomUUID(),
+      enabled: false,
+      clock: deps.clock,
+    };
     return {
       service,
-      coding: new CodingTaskService({
-        store: new InMemoryCodingStore(deps.store),
-        leases: new InMemoryProjectLeases(),
-        projects: new GitCodingProject(),
-        journal,
-        ownerId: 'ephemeral-' + randomUUID(),
-        enabled: false,
-        clock: deps.clock,
+      coding: new CodingTaskService(codingDeps),
+      codingChanges: new CodingChangesetService({
+        ...codingDeps,
+        worktrees: new GitCodingWorktrees(),
+        snapshots: new GitCodingSnapshots(),
       }),
       conversations: new ConversationService(deps),
       chat: new DirectChatService({ ...deps, tasks: service }),
@@ -121,16 +134,22 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     };
     const chat = new DirectChatService({ ...deps, tasks: service });
     const ready = chat.recover().then(() => reconcileInterrupted(service, store.tools));
+    const codingDeps = {
+      store: store.coding,
+      leases: new SqliteProjectLeases(),
+      projects: new GitCodingProject(),
+      journal: store.tools,
+      ownerId: createHash('sha256').update(realpathSync(dbPath)).digest('hex'),
+      clock: deps.clock,
+      restored: existsSync(join(dirname(dbPath), 'restore-guard.json')),
+    };
     return {
       service,
-      coding: new CodingTaskService({
-        store: store.coding,
-        leases: new SqliteProjectLeases(),
-        projects: new GitCodingProject(),
-        journal: store.tools,
-        ownerId: createHash('sha256').update(realpathSync(dbPath)).digest('hex'),
-        clock: deps.clock,
-        restored: existsSync(join(dirname(dbPath), 'restore-guard.json')),
+      coding: new CodingTaskService(codingDeps),
+      codingChanges: new CodingChangesetService({
+        ...codingDeps,
+        worktrees: new GitCodingWorktrees(),
+        snapshots: new GitCodingSnapshots(),
       }),
       conversations: new ConversationService(deps),
       chat,

@@ -1,6 +1,6 @@
 # Coding task authority — Ocean 1.1 stage 1
 
-Implemented in the development source; not part of the published Ocean 1.0 archive. This stage reserves a project and stores task-scoped policy. It does not enable chat file edits, test execution, worktrees or diff review.
+Implemented in the development source; not part of the published Ocean 1.0 archive. Stage 1 reserves a project and stores task-scoped policy. Stage 2 now adds [worktrees and frozen diff artifacts](coding-worktrees.md); model-driven writes, tests and review remain planned.
 
 ## Application API
 
@@ -16,11 +16,11 @@ Durable host composition exposes `runtime.coding: CodingTaskService`. The applic
 
 The trusted host supplies an in-process `CodingOwnerPort.confirm(preview)`. The preview contains operation, task ID, canonical root, base commit, workspace, both room/bot assignments and complete policy. A model response or boolean from a wire request cannot supply this port. Denial creates no task or project hold. Requests/previews are detached so an approval callback cannot change the stored binding.
 
-The result is a reserved task with policyVersion 1 and worktreeRoot null. Review receives only changeset_read; it can never inherit dev's write/test capabilities. Separate private dev/review rooms and a shared group are both supported. The first stage has no per-operation approval UI; that is stage 4.
+A new reservation has policyVersion 1 and worktreeRoot null. Stage-2 preparation can bind the root once through a persisted creation intent. Review receives only changeset_read; it can never inherit dev's write/test capabilities. Separate private dev/review rooms and a shared group are both supported. The first stage has no per-operation approval UI; that is stage 4.
 
 `authorize(access: CodingAccess)` checks task/workspace/room/bot/policy version, current membership, local unresolved claims and retained coordination ownership. Success always includes **executionEnabled: false**: it describes a valid reservation, not an executable tool token.
 
-`cancel(workspaceId, taskId, owner)` explicitly cancels a reserved stage-1 task after owner confirmation and releases only its exact lease token. It does not certify process cleanup and cannot bypass unresolved tool claims. Duplicate cancellation cannot release a newer task's reservation.
+`cancel(workspaceId, taskId, owner)` explicitly cancels a reserved stage-1 task after owner confirmation and releases only its exact lease token. It does not certify process cleanup and cannot bypass unresolved tool claims. A bound worktree requires later reconciliation; cancellation rechecks this after owner consent. Duplicate cancellation cannot release a newer task's reservation.
 
 Expected classifications: invalid_input, coding_denied, coding_unavailable, approval_required, project_busy, project_changed, request_conflict and recovery_required. The same start request returns its saved task without repeated consent; a changed binding conflicts. An already-used task ID cannot be silently recycled through a new request ID.
 
@@ -54,11 +54,11 @@ InMemoryProjectLeases/InMemoryCodingStore are isolated test adapters. Production
 
 ## SQLite and snapshots
 
-Schema 6 adds ocean_coding_tasks and ocean_coding_receipts. Task policy, base, role assignments, lease binding, status and start receipt are persisted. Only reserved→cancelled is currently supported; other binding fields are immutable through adapters. SQL foreign keys check participants, and a unique active-project index complements cross-profile coordination.
+Schema 6 adds ocean_coding_tasks and ocean_coding_receipts. Task policy, base, role assignments, lease binding, status and start receipt are persisted. Task lifecycle remains reserved→cancelled. Stage 2 additionally permits one null→root binding backed by a persisted worktree intent; role/policy fields remain immutable. SQL foreign keys check participants, and a unique active-project index complements cross-profile coordination.
 
 Migration from frozen released schema 5 is transactional and leaves original bots, rooms, history, events and unresolved claims unchanged. Existing bots receive no task grants. Tests also retain older schema fixtures and future-schema refusal.
 
-Snapshot format 1 continues to back up and restore schemas 5 and 6. The new snapshot contains all task/policy metadata; worktreeRoot is null, so no external coding assets exist yet. The global coordinator is not copied or used to reactivate reservations. Restored runtime coding start/authorize/cancel return recovery_required regardless of saved policy. Opening a schema-5 restored profile through a current host applies the normal migration, with its restore guard preserved.
+Snapshot format 1 can back up and restore schemas 5, 6 and 7 when there are no external coding assets. A stage-1-only reservation has worktreeRoot null; after stage-2 preparation, backup refuses rather than omitting external worktree content. The global coordinator is not copied or used to reactivate reservations. Restored runtime coding start/authorize/cancel return recovery_required regardless of saved policy. Opening a schema-5 restored profile through a current host applies the normal migration, with its restore guard preserved.
 
 Never test the development schema by opening the only operational profile with source CLI. The installed 1.0 binary cannot read schema 6; use a separate development profile and retain a verified schema-5 snapshot for its original binary.
 
@@ -67,3 +67,5 @@ Never test the development schema by opening the only operational profile with s
 Tests cover memory/SQLite policy equivalence, explicit role/room assignments, default-deny behavior, duplicate/conflicting requests, changed owner previews, transactional rollback, orphan-free known rejection, two real simultaneous lease processes, retained holds after exit, canonical aliases, legacy mutation refusal, uncertain-command retention, malicious Git worktree filters, frozen 5→6 migration and schema-5/schema-6 backup/restore.
 
 Run pnpm check, pnpm build and pnpm format:check. Native lease tests use temporary registries and synthetic subprocesses; no provider key or paid model request is required. These checks qualify stage-1 coordination, not the planned sandbox.
+
+The current development schema is 7. Its artifact tables and backup restrictions are described in the stage-2 documentation. The schema-6 details above describe the stage-1 baseline; published Ocean 1.0 still uses schema 5.

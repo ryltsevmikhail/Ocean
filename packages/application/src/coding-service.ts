@@ -180,6 +180,7 @@ export class CodingTaskService {
     const task = this.#deps.store.atomic((tx) => tx.task(taskId));
     if (!task || task.workspaceId !== workspaceId || task.lease.ownerId !== this.#deps.ownerId)
       return codingFailure('coding_denied');
+    if (task.worktreeRoot !== null) return codingFailure('recovery_required');
     if (
       task.status === 'reserved' &&
       !(await owner.confirm(
@@ -200,7 +201,8 @@ export class CodingTaskService {
       return codingFailure('approval_required');
     const result = this.#deps.store.atomic((tx) => {
       const current = tx.task(taskId);
-      if (!current || this.#pending()) return codingFailure('recovery_required');
+      if (!current || current.worktreeRoot !== null || this.#pending())
+        return codingFailure('recovery_required');
       const cancelled = { ...current, status: 'cancelled' as const };
       tx.putTask(cancelled);
       return ok(cancelled);

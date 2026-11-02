@@ -91,7 +91,7 @@ export function restoreProfile(from: string, to: string): Snapshot {
       !/^[a-f0-9]{64}$/.test(manifest.sha256) ||
       !Number.isSafeInteger(manifest.bytes) ||
       manifest.bytes <= 0 ||
-      ![5, 6].includes(manifest.summary.schema) ||
+      ![5, 6, 7].includes(manifest.summary.schema) ||
       !Number.isFinite(Date.parse(manifest.createdAt))
     )
       throw new Error();
@@ -109,6 +109,7 @@ export function restoreProfile(from: string, to: string): Snapshot {
     const inspection = inspectDatabase(path);
     if (
       inspection.status !== 'ok' ||
+      inspection.summary.externalCodingAssets ||
       JSON.stringify(inspection.summary) !== JSON.stringify(manifest.summary)
     )
       throw new Error('invalid_backup');

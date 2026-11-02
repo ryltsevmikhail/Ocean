@@ -1,0 +1,209 @@
+import {
+  validConversationText,
+  codingCapabilities,
+  codingFailure,
+  CodingArtifactError,
+  ok,
+  type CodingAccess,
+  type CodingTask,
+  type CodingResult,
+  type CodingWorktree,
+  type Changeset,
+} from '@runnets/domain';
+import type { CodingServiceDeps } from './coding-service.js';
+import type { CodingTransaction } from './coding-ports.js';
+import type { WorktreePort, ChangesetPort, CodingWorktreeOwnerPort } from './changeset-ports.js';
+export interface ChangesetServiceDeps extends CodingServiceDeps {
+  readonly worktrees: WorktreePort;
+  readonly snapshots: ChangesetPort;
+}
+/** Only host-authorized task preparation and immutable artifact I/O; still no executable chat tools. */
+export class CodingChangesetService {
+  readonly #deps: ChangesetServiceDeps;
+  constructor(deps: ChangesetServiceDeps) {
+    this.#deps = deps;
+  }
+  #task(tx: CodingTransaction, access: CodingAccess, frozen = false): CodingTask | null {
+    const task = tx.task(access.taskId);
+    if (
+      this.#deps.enabled === false ||
+      this.#deps.restored ||
+      !task ||
+      task.lease.ownerId !== this.#deps.ownerId ||
+      !codingCapabilities(task, access).includes(access.capability) ||
+      !tx.participates(access.workspaceId, access.roomId, access.botId)
+    )
+      return null;
+    if (frozen)
+      return access.capability === 'changeset_read' ||
+        (task.devBotId === access.botId && access.capability === 'project_read')
+        ? task
+        : null;
+    if (
+      access.capability !== 'project_read' ||
+      access.botId !== task.devBotId ||
+      !this.#deps.leases.owns(task.lease) ||
+      this.#deps.journal.inspectPending === undefined ||
+      this.#deps.journal.inspectPending().length
+    )
+      return null;
+    return task;
+  }
+  async prepare(
+    input: CodingAccess,
+    owner: CodingWorktreeOwnerPort,
+  ): Promise<CodingResult<CodingWorktree>> {
+    const access = structuredClone(input),
+      task = this.#deps.store.atomic((tx) => this.#task(tx, access));
+    if (!task) return codingFailure('coding_denied');
+    const existing = this.#deps.store.atomic((tx) => tx.worktree(task.id));
+    if (existing) {
+      if (existing.state !== 'ready' || !this.#deps.leases.owns(existing.lease))
+        return codingFailure('recovery_required');
+      try {
+        await this.#deps.worktrees.verify(task, existing);
+        return ok(existing);
+      } catch {
+        return codingFailure('recovery_required');
+      }
+    }
+    let plan: Awaited<ReturnType<WorktreePort['plan']>>;
+    try {
+      plan = await this.#deps.worktrees.plan(task);
+      await this.#deps.worktrees.preflight(task);
+    } catch (error) {
+      return codingFailure(
+        error instanceof CodingArtifactError ? error.code : 'worktree_unavailable',
+      );
+    }
+    if (!(await owner.confirm(structuredClone({ task, plan }))))
+      return codingFailure('approval_required');
+    let project: Awaited<ReturnType<ChangesetServiceDeps['projects']['inspect']>>;
+    try {
+      project = await this.#deps.projects.inspect(task.projectRoot);
+    } catch {
+      return codingFailure('project_changed');
+    }
+    if (
+      !project.clean ||
+      project.root !== task.projectRoot ||
+      project.baseCommit !== task.baseCommit
+    )
+      return codingFailure('project_changed');
+    const prepared = this.#deps.store.atomic((tx) => {
+      const current = this.#task(tx, access);
+      if (!current || current.worktreeRoot !== null || tx.worktree(task.id))
+        return codingFailure('recovery_required');
+      const lease = this.#deps.leases.acquire(plan.root, {
+        ownerId: this.#deps.ownerId,
+        taskId: task.id,
+        requestId: 'worktree-' + task.id,
+        binding: JSON.stringify([task.id, task.baseCommit, plan]),
+        kind: 'coding',
+      });
+      if (!lease.ok) return lease;
+      const record: CodingWorktree = {
+        ...plan,
+        taskId: task.id,
+        projectRoot: task.projectRoot,
+        baseCommit: task.baseCommit,
+        workspaceId: task.workspaceId,
+        state: 'preparing',
+        lease: lease.value,
+      };
+      tx.putWorktree(record);
+      tx.putTask({ ...current, worktreeRoot: plan.root });
+      return ok(record);
+    });
+    if (!prepared.ok) return prepared;
+    const record = prepared.value;
+    try {
+      await this.#deps.worktrees.create(task, plan);
+      await this.#deps.worktrees.verify(task, record);
+      return this.#deps.store.atomic((tx) => {
+        const current = this.#task(tx, access),
+          intent = tx.worktree(task.id);
+        if (!current || intent?.state !== 'preparing' || !this.#deps.leases.owns(record.lease))
+          return codingFailure('recovery_required');
+        const ready = { ...record, state: 'ready' as const };
+        tx.putWorktree(ready);
+        return ok(ready);
+      });
+    } catch (error) {
+      this.#deps.store.atomic((tx) => {
+        const current = tx.worktree(task.id);
+        if (current?.state === 'preparing') tx.putWorktree({ ...current, state: 'uncertain' });
+      });
+      return codingFailure(error instanceof CodingArtifactError ? error.code : 'recovery_required');
+    }
+  }
+  async capture(input: CodingAccess, requestId: string): Promise<CodingResult<Changeset>> {
+    const access = structuredClone(input);
+    if (!validConversationText(requestId, 128)) return codingFailure('invalid_input');
+    const binding = JSON.stringify([
+      access.taskId,
+      access.workspaceId,
+      access.roomId,
+      access.botId,
+      access.policyVersion,
+      access.capability,
+    ]);
+    const receipt = this.#deps.store.atomic((tx) => {
+      const task = this.#task(tx, access, true);
+      return task && access.botId === task.devBotId && access.capability === 'project_read'
+        ? tx.captureReceipt(requestId)
+        : null;
+    });
+    if (receipt)
+      return receipt.binding === binding
+        ? this.read(access, receipt.hash)
+        : codingFailure('request_conflict');
+    const selected = this.#deps.store.atomic((tx) => {
+      const task = this.#task(tx, access);
+      if (!task) return null;
+      const worktree = tx.worktree(task.id);
+      return worktree?.state === 'ready' && this.#deps.leases.owns(worktree.lease)
+        ? { task, worktree, receipt: tx.captureReceipt(requestId) }
+        : null;
+    });
+    if (!selected) return codingFailure('coding_denied');
+    if (selected.receipt)
+      return selected.receipt.binding === binding
+        ? this.read(access, selected.receipt.hash)
+        : codingFailure('request_conflict');
+    let snapshot: Changeset;
+    try {
+      snapshot = await this.#deps.snapshots.capture(selected.task, selected.worktree);
+    } catch (error) {
+      return codingFailure(error instanceof CodingArtifactError ? error.code : 'recovery_required');
+    }
+    if (
+      snapshot.taskId !== selected.task.id ||
+      snapshot.baseCommit !== selected.task.baseCommit ||
+      snapshot.id !== snapshot.hash ||
+      !/^[a-f0-9]{64}$/.test(snapshot.hash)
+    )
+      return codingFailure('recovery_required');
+    return this.#deps.store.atomic((tx) => {
+      const task = this.#task(tx, access),
+        worktree = tx.worktree(access.taskId);
+      if (!task || worktree?.state !== 'ready' || !this.#deps.leases.owns(worktree.lease))
+        return codingFailure('recovery_required');
+      const old = tx.captureReceipt(requestId);
+      if (old)
+        return old.binding === binding && tx.changeset(old.hash)
+          ? ok(tx.changeset(old.hash)!)
+          : codingFailure('request_conflict');
+      tx.putChangeset(snapshot);
+      tx.putCaptureReceipt(requestId, { binding, hash: snapshot.hash });
+      return ok(snapshot);
+    });
+  }
+  read(access: CodingAccess, hash: string): CodingResult<Changeset> {
+    return this.#deps.store.atomic((tx) => {
+      const task = this.#task(tx, access, true),
+        snapshot = tx.changeset(hash);
+      return task && snapshot?.taskId === task.id ? ok(snapshot) : codingFailure('coding_denied');
+    });
+  }
+}

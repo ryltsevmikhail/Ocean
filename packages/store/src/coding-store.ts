@@ -1,3 +1,4 @@
+import { newCodingArtifacts, memoryCodingArtifacts } from './changeset-state.js';
 import type {
   CodingStore,
   CodingTransaction,
@@ -10,6 +11,7 @@ export class InMemoryCodingStore implements CodingStore {
   #tasks = new Map<string, CodingTask>();
   #receipts = new Map<string, CodingReceipt>();
   #active = false;
+  #artifacts = newCodingArtifacts();
   readonly #conversations: ConversationStore;
   constructor(conversations: ConversationStore) {
     this.#conversations = conversations;
@@ -19,17 +21,30 @@ export class InMemoryCodingStore implements CodingStore {
     this.#active = true;
     const tasks = structuredClone(this.#tasks),
       receipts = structuredClone(this.#receipts);
+    const artifacts = structuredClone(this.#artifacts);
     try {
       const value = work({
+        ...memoryCodingArtifacts(artifacts),
         task: (id) => tasks.get(id) ?? null,
         putTask: (t) => {
           const old = tasks.get(t.id);
           if (
             old &&
-            (JSON.stringify({ ...old, status: t.status }) !== JSON.stringify(t) ||
-              (old.status === 'cancelled' && t.status !== 'cancelled'))
+            (JSON.stringify({ ...old, status: t.status, worktreeRoot: t.worktreeRoot }) !==
+              JSON.stringify(t) ||
+              (old.status === 'cancelled' && t.status !== 'cancelled') ||
+              (old.worktreeRoot !== null && old.worktreeRoot !== t.worktreeRoot))
           )
             throw Error('Immutable coding binding');
+          if (old && old.worktreeRoot === null && t.worktreeRoot !== null) {
+            const bound = artifacts.worktrees.get(t.id);
+            if (
+              old.status !== 'reserved' ||
+              bound?.state !== 'preparing' ||
+              bound.root !== t.worktreeRoot
+            )
+              throw Error('Missing worktree intent');
+          }
           tasks.set(t.id, structuredClone(t));
         },
         receipt: (id) => receipts.get(id) ?? null,
@@ -53,6 +68,7 @@ export class InMemoryCodingStore implements CodingStore {
             );
           }),
       });
+      this.#artifacts = structuredClone(artifacts);
       this.#tasks = structuredClone(tasks);
       this.#receipts = structuredClone(receipts);
       return structuredClone(value);

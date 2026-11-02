@@ -1,3 +1,4 @@
+import type { CodingArtifactTransaction } from './changeset-ports.js';
 import type {
   CodingTask,
   CodingPolicy,
@@ -9,7 +10,7 @@ export interface CodingReceipt {
   readonly binding: string;
   readonly taskId: string;
 }
-export interface CodingTransaction {
+export interface CodingTransaction extends CodingArtifactTransaction {
   task(id: string): CodingTask | null;
   putTask(task: CodingTask): void;
   receipt(id: string): CodingReceipt | null;

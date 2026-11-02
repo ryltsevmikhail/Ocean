@@ -21,7 +21,7 @@ function temporary() {
   closeSync(openSync(path, 'wx', 0o600));
   return { root, profile, path };
 }
-it('backup keeps schema6 task/rights; restored runtime refuses all coding authority', async () => {
+it('backup keeps schema7 task/rights; restored runtime refuses all coding authority', async () => {
   const { root, profile, path } = temporary(),
     store = openSqliteStore({ path });
   let id = 0;
@@ -86,7 +86,7 @@ it('backup keeps schema6 task/rights; restored runtime refuses all coding author
   store.close();
   const snapshot = join(root, 'backup'),
     restored = join(root, 'restored');
-  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(6);
+  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(7);
   restoreProfile(snapshot, restored);
   const copy = openSqliteStore({ path: join(restored, 'runtime.sqlite') });
   expect(copy.coding.atomic((tx) => tx.task('task'))).toEqual(created.ok ? created.value : null);

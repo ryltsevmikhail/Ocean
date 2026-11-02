@@ -7,6 +7,7 @@ import { SCHEMA_VERSION } from './schema.js';
 
 export interface DatabaseSummary {
   readonly schema: number;
+  readonly externalCodingAssets?: number;
   readonly rooms: number;
   readonly messages: number;
   readonly positions: readonly { roomId: string; sequence: number }[];
@@ -50,6 +51,9 @@ function summary(db: DatabaseSync): DatabaseSummary {
   verify(db);
   return {
     schema: schema(db),
+    ...(schema(db) >= 7
+      ? { externalCodingAssets: count(db, 'SELECT count(*) AS n FROM ocean_worktrees') }
+      : {}),
     rooms: count(db, 'SELECT count(*) AS n FROM ocean_rooms'),
     messages: count(db, 'SELECT count(*) AS n FROM ocean_messages'),
     positions: db
@@ -83,7 +87,7 @@ export function inspectDatabase(path: string): DatabaseInspection {
   let db: DatabaseSync | undefined;
   try {
     db = new DatabaseSync(path, { readOnly: true });
-    if (![5, SCHEMA_VERSION].includes(schema(db))) return { status: 'unsupported_schema' };
+    if (![5, 6, SCHEMA_VERSION].includes(schema(db))) return { status: 'unsupported_schema' };
     if (ownerBusy(db)) return { status: 'owner_busy' };
     db.exec('BEGIN');
     const result = summary(db);
@@ -106,7 +110,7 @@ export async function snapshotDatabase(
   const db = new DatabaseSync(path);
   let release: (() => void) | undefined;
   try {
-    if (![5, SCHEMA_VERSION].includes(schema(db))) throw new Error('unsupported_schema');
+    if (![5, 6, SCHEMA_VERSION].includes(schema(db))) throw new Error('unsupported_schema');
     if (ownerBusy(db)) throw new Error('owner_busy');
     try {
       release = acquireOwnership(db, { id: randomUUID(), pid: process.pid }, alive);
@@ -114,6 +118,7 @@ export async function snapshotDatabase(
       throw new Error('owner_busy');
     }
     const original = summary(db);
+    if (original.externalCodingAssets) throw new Error('coding_assets_unavailable');
     await backup(db, destination);
     chmodSync(destination, 0o600);
     const snapshot = new DatabaseSync(destination);

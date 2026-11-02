@@ -1,6 +1,10 @@
 import { err, type Result } from './errors.js';
 import type { CodingCapability, CodingPolicy } from './coding-policy.js';
 export type CodingErrorCode =
+  | 'unsupported_file'
+  | 'changeset_limit'
+  | 'stale_capture'
+  | 'worktree_unavailable'
   | 'coding_unavailable'
   | 'invalid_input'
   | 'coding_denied'
@@ -27,7 +31,7 @@ export interface CodingTask {
   readonly workspaceId: string;
   readonly projectRoot: string;
   readonly baseCommit: string;
-  readonly worktreeRoot: null;
+  readonly worktreeRoot: string | null;
   readonly ownerRoomId: string;
   readonly devBotId: string;
   readonly reviewBotId: string;

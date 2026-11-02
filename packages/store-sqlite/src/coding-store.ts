@@ -1,3 +1,4 @@
+import { changesetStorage } from './changeset-storage.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { CodingStore, CodingTransaction } from '@runnets/application';
 import type { CodingTask } from '@runnets/domain';
@@ -28,15 +29,29 @@ export class SqliteCodingStore implements CodingStore {
     const db = this.#db;
     return withImmediateTransaction(db, () =>
       work({
+        ...changesetStorage(db),
         task: (id) => task(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
         putTask: (t) => {
           const old = task(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(t.id));
           if (
             old &&
-            (JSON.stringify({ ...old, status: t.status }) !== JSON.stringify(t) ||
-              (old.status === 'cancelled' && t.status !== 'cancelled'))
+            (JSON.stringify({ ...old, status: t.status, worktreeRoot: t.worktreeRoot }) !==
+              JSON.stringify(t) ||
+              (old.status === 'cancelled' && t.status !== 'cancelled') ||
+              (old.worktreeRoot !== null && old.worktreeRoot !== t.worktreeRoot))
           )
             throw Error('Immutable coding binding');
+          if (old && old.worktreeRoot === null && t.worktreeRoot !== null) {
+            const bound = db
+              .prepare('SELECT root,state FROM ocean_worktrees WHERE task_id=?')
+              .get(t.id);
+            if (
+              old.status !== 'reserved' ||
+              bound?.state !== 'preparing' ||
+              bound.root !== t.worktreeRoot
+            )
+              throw Error('Missing worktree intent');
+          }
           db.prepare(
             `INSERT INTO ocean_coding_tasks VALUES(?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(id) DO UPDATE SET status=excluded.status,payload=excluded.payload`,

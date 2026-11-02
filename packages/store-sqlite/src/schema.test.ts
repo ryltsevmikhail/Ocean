@@ -63,6 +63,8 @@ describe('schema initialization', () => {
       'events',
       'meta',
       'ocean_bots',
+      'ocean_capture_receipts',
+      'ocean_changesets',
       'ocean_chat_turns',
       'ocean_coding_receipts',
       'ocean_coding_tasks',
@@ -73,6 +75,7 @@ describe('schema initialization', () => {
       'ocean_room_policies',
       'ocean_rooms',
       'ocean_workspace',
+      'ocean_worktrees',
     ]);
     expect(db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()?.['value']).toBe(
       String(SCHEMA_VERSION),
