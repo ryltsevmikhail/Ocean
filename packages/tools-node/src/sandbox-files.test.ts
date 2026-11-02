@@ -1,4 +1,4 @@
-import { mkdtemp, rm, readFile, writeFile, symlink, link } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, readFile, writeFile, symlink, link } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -10,10 +10,18 @@ describe('sandbox mount refusal', () => {
     const root = await mkdtemp(join(tmpdir(), 'ocean-mount-'));
     try {
       await expect(validateMounts([{ source: root, target: '/home' }])).rejects.toThrow();
-      await symlink('/etc/passwd', join(root, 'escape'));
-      await expect(
-        validateMounts([{ source: root, target: '/workspace/node_modules' }]),
-      ).rejects.toThrow();
+      const target = '/workspace/node_modules';
+      const source = join(root, 'node_modules');
+      await mkdir(source);
+      await expect(validateMounts([{ source: root, target }], root)).rejects.toThrow();
+      await expect(validateMounts([{ source: root, target: '/toolchain/pnpm' }])).rejects.toThrow();
+      await expect(validateMounts([{ source, target }], root)).resolves.toBeUndefined();
+      await symlink('/etc/passwd', join(source, 'escape'));
+      await expect(validateMounts([{ source, target }], root)).rejects.toThrow();
+      await rm(join(source, 'escape'));
+      await writeFile(join(root, 'outside'), 'synthetic-canary');
+      await link(join(root, 'outside'), join(source, 'alias'));
+      await expect(validateMounts([{ source, target }], root)).rejects.toThrow();
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -89,3 +89,26 @@ is read-only. The exact invocation
 completed with exit 0, untruncated output and confirmed cleanup in the same
 network-isolated worker. These exploratory runs do not establish peak usage,
 source stability, or production-safe mount admission.
+
+## Cold preset measurements on Omarchy
+
+A new source archive of 51c6d9c was used for each preset, without dist or
+incremental compiler state. All four used the same frozen offline dependency
+copy. Dependency mounts now require the matching node_modules path in the
+declared dependency project and reject multiply linked files. Only the
+standalone executable is bound to /toolchain/pnpm/bin/pnpm. The OS /usr and
+current Node executable remain read-only. Commands used
+`pnpm --config.verify-deps-before-run=false <preset>`, adding
+`--configLoader native` for test.
+
+| Preset    | Elapsed (s) | Observed memory.peak (bytes) | Observed pids.peak |
+| --------- | ----------: | ---------------------------: | -----------------: |
+| test      |        6.69 |                    768421888 |                169 |
+| typecheck |        2.80 |                    353157120 |                 49 |
+| lint      |        5.77 |                    814325760 |                 53 |
+| build     |        2.41 |                    360546304 |                 49 |
+
+Elapsed time includes inventory and supervision. The host sampled kernel peak
+counters at 5 ms intervals and matched each unit to the returned cgroup. Each
+exited 0 with untruncated output and confirmed cleanup. These observations
+support retaining the prototype limits for subsequent qualification.
