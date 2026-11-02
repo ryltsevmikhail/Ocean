@@ -1,3 +1,4 @@
+import { codingTestPassed } from '@runnets/domain';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -204,6 +205,9 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       });
       expect(result).toMatchObject({ ok: true, value: { status: 'completed' } });
       expect(previews).toEqual(['write', 'test']);
+      const evidence = runtime.codingEvidence?.list('task') ?? [];
+      expect(evidence).toHaveLength(decision === 'allow-once' ? 1 : 0);
+      if (evidence[0]) expect(codingTestPassed(evidence[0])).toBe(true);
       expect(await readFile(join(prepared.value.root, 'source.txt'), 'utf8')).toBe(
         decision === 'allow-once' ? 'after' : 'before',
       );

@@ -41,3 +41,12 @@ restore compatibility now includes schema 9. Root check/build pass; formatting
 remains blocked by parallel design-assets/vitest configuration changes outside
 this task. Changed store files pass formatting. Runtime evidence capture and
 review table adapters remain pending.
+
+Prepared tests now attach a host-owned evidence recorder. Dispatch persists the
+validated sandbox result and its content hash before settling the shared effect
+claim; recorder failure leaves uncertainty. Durable runtime supplies the SQLite
+port and exposes evidence for later review. Native direct/group acceptance
+asserts one passed persisted record for allow-once and no record for denial.
+Typecheck, ordinary tests, native flows, build and changed-source formatting
+pass. Full root check is blocked by parallel design-assets import-rule errors;
+lint with that unrelated directory excluded passes.

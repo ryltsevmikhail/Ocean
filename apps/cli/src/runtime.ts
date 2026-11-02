@@ -20,6 +20,7 @@ import {
   ChatReviewService,
   reconcileInterrupted,
   type Clock,
+  type CodingTestEvidenceStore,
   type CommandDedupPort,
   type EventLogPort,
   type RuntimeRecovery,
@@ -41,6 +42,7 @@ import {
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
   readonly coding: CodingTaskService;
+  readonly codingEvidence?: CodingTestEvidenceStore;
   readonly codingApprovals: CodingApprovalService;
   readonly codingChanges: CodingChangesetService;
   readonly service: TaskRunService;
@@ -172,6 +174,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
               tasks: coding,
               approvals: codingApprovals,
               journal: store.tools,
+              evidence: store.codingEvidence,
             }),
           }
         : {}),
@@ -181,6 +184,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       service,
       coding,
       codingApprovals,
+      codingEvidence: store.codingEvidence,
       codingChanges: new CodingChangesetService({
         ...codingDeps,
         worktrees: new GitCodingWorktrees(options.codingWorktreeDirectory),

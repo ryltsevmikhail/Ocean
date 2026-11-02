@@ -4,6 +4,7 @@ import {
   CodingTurnTools,
   ToolError,
   type CodingTaskService,
+  type CodingTestEvidenceStore,
   type CodingStore,
   type CodingApprovalService,
   type CodingApprovalOwnerPort,
@@ -18,6 +19,7 @@ import {
 
 export interface CodingTurnFactoryDeps {
   readonly store: CodingStore;
+  readonly evidence: CodingTestEvidenceStore;
   readonly tasks: CodingTaskService;
   readonly approvals: CodingApprovalService;
   readonly journal: ToolJournalPort;
@@ -54,6 +56,7 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
         task,
         sandbox: await deps.sandbox(task),
         snapshot,
+        recordEvidence: (value) => deps.evidence.put(value),
         scope: {
           roomId: turn.roomId,
           botId: turn.bot.id,

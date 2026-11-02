@@ -8,6 +8,7 @@ export interface PreparedCodingOperation {
   readonly binding: CodingApprovalBinding;
   readonly tool: PreparedTool;
   currentBinding(): Promise<CodingApprovalBinding>;
+  recordResult?(result: ToolResult): void | Promise<void>;
 }
 export async function dispatchCodingOperation(
   operation: PreparedCodingOperation,
@@ -22,6 +23,7 @@ export async function dispatchCodingOperation(
   const preview = operation.tool.preview;
   const execute = operation.tool.execute.bind(operation.tool);
   const currentBinding = operation.currentBinding.bind(operation);
+  const recordResult = operation.recordResult?.bind(operation);
   const requested = approvals.request(approvalId, binding, preview);
   if (!requested.ok) return { isError: true, output: requested.error.code };
   const decision = await approvals.decide(approvalId, binding, owner);
@@ -35,6 +37,7 @@ export async function dispatchCodingOperation(
   const context = { taskRunId: binding.runId, attemptId: binding.attemptId };
   try {
     const result = await execute(signal);
+    await recordResult?.(result);
     await journal.settle(
       binding.invocationId,
       result.uncertain ? 'uncertain' : result.isError ? 'failed' : 'completed',

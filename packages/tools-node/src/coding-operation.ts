@@ -1,9 +1,13 @@
 import { createHash } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
-import type { CodingApprovalBinding, CodingTask } from '@runnets/domain';
+import type { CodingApprovalBinding, CodingTask, CodingTestEvidence } from '@runnets/domain';
 import { ToolError, type PreparedCodingOperation, type ToolInvocation } from '@runnets/application';
 import { WorkspaceTools } from './executor.js';
-import { createSandboxBackend, type SandboxOptions } from './sandbox-probe.js';
+import {
+  type SandboxCommandEvidence,
+  createSandboxBackend,
+  type SandboxOptions,
+} from './sandbox-probe.js';
 import { fingerprintFile, validateMounts } from './sandbox-mounts.js';
 import { sandboxLimits } from './sandbox-layout.js';
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -20,6 +24,7 @@ export interface CodingOperationInput {
   readonly call: ToolInvocation;
   readonly sandbox: SandboxOptions;
   readonly snapshot: () => Promise<string>;
+  readonly recordEvidence?: (evidence: CodingTestEvidence) => void;
 }
 export async function prepareCodingOperation(
   input: CodingOperationInput,
@@ -99,6 +104,41 @@ async function prepareOperation(
     approvalId,
     binding,
     currentBinding,
+    ...(operation === 'test' && input.recordEvidence
+      ? {
+          recordResult: (result) => {
+            const evidence = JSON.parse(result.output) as SandboxCommandEvidence;
+            if (
+              typeof evidence.invocationHash !== 'string' ||
+              typeof evidence.beforeTreeHash !== 'string' ||
+              typeof evidence.afterTreeHash !== 'string' ||
+              typeof evidence.dependencyHash !== 'string' ||
+              typeof evidence.output !== 'string' ||
+              typeof evidence.cleanupConfirmed !== 'boolean' ||
+              typeof evidence.truncated !== 'boolean' ||
+              typeof evidence.dependenciesUnchanged !== 'boolean' ||
+              !['exit', 'timeout', 'cancelled', 'unavailable'].includes(evidence.reason) ||
+              (evidence.exitCode !== null && !Number.isSafeInteger(evidence.exitCode))
+            )
+              throw new ToolError('effect_uncertain', 'test evidence unavailable');
+            const body = {
+              id: approvalId,
+              binding,
+              invocationHash: evidence.invocationHash,
+              beforeTreeHash: evidence.beforeTreeHash,
+              afterTreeHash: evidence.afterTreeHash,
+              dependencyHash: evidence.dependencyHash,
+              dependenciesUnchanged: evidence.dependenciesUnchanged,
+              exitCode: evidence.exitCode,
+              reason: evidence.reason,
+              cleanupConfirmed: evidence.cleanupConfirmed,
+              truncated: evidence.truncated,
+              output: evidence.output,
+            };
+            input.recordEvidence!({ ...body, hash: hash(body) });
+          },
+        }
+      : {}),
     tool: {
       ...tool,
       preview,
@@ -118,6 +158,7 @@ export async function createCodingOperationSession(
   const fixed = {
     ...structuredClone({ task: input.task, scope: input.scope, sandbox: input.sandbox }),
     snapshot: input.snapshot,
+    ...(input.recordEvidence ? { recordEvidence: input.recordEvidence } : {}),
   };
   if (
     fixed.task.status !== 'reserved' ||
