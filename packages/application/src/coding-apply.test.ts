@@ -103,7 +103,7 @@ const review: CodingReviewVerdict = {
   },
 };
 
-it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race'])(
+it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race', 'refactor'])(
   'records per-file application %s and refuses replay',
   async (mode) => {
     const receipts = new Map<string, CodingApplyReceipt>(),
@@ -116,8 +116,10 @@ it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race'])(
     const changeset = {
       ...artifact,
       files: [
-        { ...change, path: 'one' },
-        { ...change, path: 'two' },
+        { ...change, path: mode === 'refactor' ? 'a' : 'one' },
+        mode === 'refactor'
+          ? { path: 'a/b', before: change.after, after: null }
+          : { ...change, path: 'two' },
       ],
     };
     const service = new CodingApplyService(
@@ -125,6 +127,8 @@ it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race'])(
         atomic: (work) =>
           work({
             task: () => configured,
+            worktree: () => null,
+            participates: () => false,
             changeset: () => changeset,
             verdict: () => review,
             evidence: () => [evidence],
@@ -164,7 +168,7 @@ it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race'])(
       expectedBase: artifact.baseCommit,
     };
     const result = await service.apply(input, { confirm: async () => mode !== 'denied' });
-    if (mode === 'success') {
+    if (mode === 'success' || mode === 'refactor') {
       expect(result.ok).toBe(true);
       expect(receipts.get('apply')?.status).toBe('completed');
     } else if (mode === 'failure') {
@@ -186,10 +190,10 @@ it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race'])(
       expect(claims).toBe(0);
       expect(effects).toEqual([]);
     }
-    if (mode === 'success' || mode === 'failure') {
+    if (mode === 'success' || mode === 'failure' || mode === 'refactor') {
       expect(claims).toBe(1);
       expect((await service.apply(input, { confirm: async () => true })).ok).toBe(false);
-      expect(effects).toEqual(['one', 'two']);
+      expect(effects).toEqual(mode === 'refactor' ? ['a/b', 'a'] : ['one', 'two']);
     }
   },
 );
@@ -212,6 +216,8 @@ it('refuses a concurrent second apply whose clean checkout observation preceded 
       atomic: (work) =>
         work({
           task: () => configured,
+          worktree: () => null,
+          participates: () => false,
           changeset: () => ({
             ...artifact,
             files: [

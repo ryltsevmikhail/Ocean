@@ -1,143 +1,100 @@
 # Coding changeset review development
 
-Status: stage 6 in progress.
+Status: stage 6 in progress. Immutable review, durable apply orchestration and
+Linux file application are implemented in development source. TUI presentation,
+complete dev/review/apply acceptance and stage-7 recovery/release gates remain
+open. Ocean 1.0 is the separate released baseline.
 
-Domain review bindings identify exact task, changeset hash, base commit,
-after-tree hash and ordered test evidence hashes. Findings anchor to a path,
-before/after side and line in the immutable complete changeset. Missing paths,
-absent file sides and invalid lines are refused. A changed artifact, base,
-tree or evidence list makes a review stale.
+## Owner commands
 
-Domain regression tests pass with root check and build. Root formatting is
-currently blocked by an unrelated untracked design-assets/character-atlas
-file; formatting of the changed domain files passes. Durable handoff/verdict
-storage, isolated reviewer input and exact owner-approved application remain
-pending.
+- `ocean coding diff TASK` captures the complete stable changeset.
+- `ocean coding review TASK --to REVIEWER` captures and owner-confirms the exact
+  handoff, then runs the assigned reviewer separately through the metered model
+  path. It requires an explicitly configured provider.
+- `ocean coding apply TASK --changeset HASH --review-request ID` uses the saved
+  exact artifact and verdict; it never recaptures a different artifact or calls
+  the provider. A second interactive owner confirmation displays the exact
+  task, changeset and verdict. Redirected stdin/non-interactive terminals cannot
+  approve. No model toolset exposes application.
 
-The application service now creates an owner-confirmed immutable review request
-with artifact/test binding and explicit context grants, then validates reviewer
-identity, finding anchors and evidence freshness before persisting a verdict.
-No conversation-history or tool executor port enters reviewer handoff.
-Regression tests verify default empty context, exact seeded-defect artifact,
-stale-evidence refusal and one verdict per request. Concrete durable storage,
-provider review dispatch and exact application remain pending.
-Root check/build pass; global formatting is still blocked by parallel untracked
-character-atlas files, while the changed source formatting passes.
+The runtime shares these services with conversation tools. Apply exists only
+in durable runtime. Restored profiles cannot exercise coding authority, including
+when explicitly opened for restricted read access.
 
-Test evidence now has a domain representation binding exact approval identity,
-invocation/source/dependency hashes, exit/termination status, cleanup and retained
-output. codingTestPassed requires exit 0, confirmed cleanup, untruncated output,
-unchanged dependencies and the exact approved source before/after hashes.
-Regression cases reject zero-exit results with stale source or incomplete
-cleanup/logs. Durable evidence recording and review consumption remain pending.
-Root check and build pass; global format check remains blocked by parallel
-design-assets files, while changed source formatting passes.
+## Immutable review and test evidence
 
-Schema 9 adds immutable test evidence plus review request/verdict tables through
-the existing migration transaction. Public SQLite storage can append/list
-task-scoped evidence and refuses ID/hash replacement. A disk-backed regression
-verifies exact evidence after reopen and task filtering. Existing migration and
-restore compatibility now includes schema 9. Root check/build pass; formatting
-remains blocked by parallel design-assets/vitest configuration changes outside
-this task. Changed store files pass formatting. Runtime evidence capture and
-review table adapters remain pending.
+Review binding identifies task, changeset hash, base commit, after-tree hash and
+ordered test-evidence hashes. Findings anchor to an existing path, before/after
+side and line in that complete immutable artifact. Changed artifact/base/tree
+or evidence makes the verdict stale. One request stores at most one verdict.
 
-Prepared tests now attach a host-owned evidence recorder. Dispatch persists the
-validated sandbox result and its content hash before settling the shared effect
-claim; recorder failure leaves uncertainty. Durable runtime supplies the SQLite
-port and exposes evidence for later review. Native direct/group acceptance
-asserts one passed persisted record for allow-once and no record for denial.
-Typecheck, ordinary tests, native flows, build and changed-source formatting
-pass. Full root check is blocked by parallel design-assets import-rule errors;
-lint with that unrelated directory excluded passes.
+Owner-confirmed handoff defaults to no private conversation history; explicit
+context grants are immutable. The reviewer receives the artifact, bound evidence
+and grant only, with no write/read/command tools or dev history. ModelCodingReviewer
+uses a separate TaskRun and one metered request, bounded strict JSON parsing,
+and host-side exact finding validation. Dispatching intent precedes the model
+call; interrupted/failed observation stays uncertain rather than redispatching.
 
-Public SQLite storage now exposes codingReviews with transaction-local
-task/artifact/evidence reads and immutable handoff transitions. Verdicts bind
-an explicit request ID and can be inserted only once for its exact reviewer,
-room and artifact binding. Completion requires a stored verdict. Disk-backed
-tests verify rollback of verdict plus completion, duplicate/mutation refusal
-and exact data after reopen. Root check is still blocked by parallel asset lint
-errors; scoped lint, full tests, build and changed-source formatting pass.
+Test evidence binds the approval, registered preset ID, invocation, source and
+dependency hashes, exit reason/code, cleanup and retained output. Dispatch records
+it before effect settlement. Passed evidence requires exit 0, confirmed cleanup,
+untruncated output, unchanged dependencies and exactly the approved source before
+and after. Older records without a preset ID cannot establish verification.
+Application requires a current approve verdict and passed current evidence for
+every registered preset, matching workspace/task/room/bot/worktree/policy.
 
-Reviewer dispatch now persists requested→dispatching before invoking its
-host-owned read-only reviewer port. The port receives the immutable changeset,
-bound evidence and explicit context grant, with no tools/history dependency.
-Success stores an exact verdict; provider/record failure retains uncertainty.
-Dispatching, completed and uncertain requests cannot be automatically replayed.
-Tests verify intent precedes the external call and both success/failure refuse
-second dispatch. SQLite enforces the new irreversible state transitions.
-Scoped validation passes; parallel asset/config formatting still blocks the
-whole-workspace formatting gate.
+## Application authority and effects
 
-ModelCodingReviewer now runs the read-only review through a separate TaskRun
-using the normal metered runTurn path with no tool executor/definitions and
-one model request. Input contains only the immutable handoff/evidence. Its
-bounded JSON parser refuses unknown fields and malformed findings; exact
-artifact anchors remain validated before verdict storage.
-A deterministic-provider integration test checks a seeded defect, no tools,
-isolated input and terminal succeeded TaskRun. No external provider is called.
-Typecheck, scoped lint, tests and build pass; whole-workspace lint/format gates
-remain blocked by parallel design-assets/config changes.
+Admission checks original profile owner, reserved task, ready worktree binding,
+current dev/review memberships, both live project/worktree leases and no global
+unresolved effect. The service checks clean original base and current task tree
+before and after confirmation, obtains the shared effect claim, then repeats
+both observations under that claim before any file is marked started. This
+closes the concurrent check/claim race found during independent review. Changed
+state at that point records not_started with confirmed no file effects.
 
-Durable runtime now composes CodingReviewService over SQLite. CLI coding diff
-TASK captures the complete current artifact; coding review TASK --to REVIEWER
-checks the exact assigned reviewer/provider, owner-confirms the frozen handoff
-and dispatches a separate metered reviewer run with cancellation.
-Native direct/group fixtures now exercise CLI diff against real changed/new
-artifact capture, checking exact before/after source. No live provider is used.
-Typecheck, scoped lint, tests, build and global formatting pass in the current
-workspace; root check still fails on unrelated design-assets import restrictions.
+Schema 9 stores immutable evidence and review requests/verdicts. Schema 10 adds
+application receipts. Migration is additive and transactional. SQLite commits
+initial receipt plus shared claim atomically; terminal receipt plus journal
+settlement are atomic too. Per-file transitions are pending→started→completed,
+or started→uncertain. Terminal receipts cannot reopen or replay. Deletions run
+deepest first before additions/replacements while retaining original artifact
+indexes in the receipt. Multi-file application is not atomic; a partial failure
+preserves completed files and a globally blocking uncertain effect.
 
-Application eligibility now requires an approve verdict bound to the exact
-artifact/evidence list plus a current passed result for every registered preset.
-Evidence must match the task/workspace/room/bot/worktree/policy and reviewed
-tree. Missing, truncated, failed, unclean or stale evidence blocks eligibility.
-New runtime evidence includes the exact registered preset ID; older records
-without it cannot establish verification. Domain regressions cover these cases.
-Scoped checks/build and global formatting pass; root lint remains blocked by
-parallel asset imports. Owner-confirmed filesystem application is still pending.
+Linux GitCodingApplyProject observes the verified task tree and applies files
+through pinned directory FDs. It rejects links, special/oversized files and
+changed preimage bytes/modes. New destinations use link-without-overwrite.
+Existing read/write access bits stay private; executable bits follow readable
+classes. Added files start at 0600 or 0700. File↔directory refactors remove only
+bounded empty directory trees; nonempty/protected directories and links refuse.
+Parent/root replacement fails conservatively. No checkout/filter, staging,
+commit, push, deploy, stash, reset or clean is invoked.
 
-The application apply service now validates exact approved artifact/evidence,
-clean base and unchanged task source before/after owner confirmation, then
-claims an application intent before any filesystem effect. Each file is
-persisted pending→started→completed; interruptions retain completed files and
-mark the active file uncertain. Existing receipts refuse replay. Regression
-tests cover denied/dirty refusal without claims, successful two-file execution,
-partial failure and no replay. Concrete storage/project adapters remain pending.
-Root check, build and format gates pass again in the current workspace.
+Recovery intents, staged bytes and retained displaced originals live in the Git
+common directory's private ocean-apply-recovery directory on the same filesystem.
+Cross-device recovery is refused. Intent/data/directory fsync precede publication;
+completion updates the intent by atomic rename. Original inodes are retained
+even after success, preserving later writes through an old descriptor. No backup
+is deleted or replayed automatically. Stage 7 must include these assets in full
+backup/recovery and reconcile unfinished per-file effects.
 
-Schema 10 adds durable application receipts. SQLite commits the initial receipt
-and shared effect claim in one transaction, and commits the terminal receipt
-with journal settlement in one transaction. File transitions cannot skip
-started, rewrite the immutable binding or reopen a terminal receipt. A crash
-with a started file preserves the last committed receipt and global unresolved
-effect hold; neither the same application nor another write can replay it.
-Disk-reopen and rollback regressions exercise these boundaries. The concrete
-filesystem application adapter, runtime composition and CLI apply remain pending.
+## Verification and remaining gates
 
-Independent review identified a check/claim race: a concurrent writer or apply
-could finish after the clean/source snapshot but before this operation acquired
-the shared claim. The service now repeats both checks under that claim before
-marking any file started. A mismatch commits a terminal not_started receipt and
-settles the journal without effects. Concurrent deferred-observation regression
-proves a second apply cannot reuse a clean observation from before the first.
+Domain/application regressions cover exact/stale evidence, owner refusal,
+per-file state, and concurrent application with deferred source observation.
+SQLite disk-reopen tests cover atomic rollback, partial receipts, immutable
+transitions, global holds and schema migration failures. Deterministic reviewer
+fixtures contain a seeded defect and verify isolation, anchors and metering.
 
-The Linux GitCodingApplyProject adapter now captures the verified task worktree
-for source hashes and applies individual artifact files through pinned directory
-FDs. It rejects links, special/oversized files and changed before bytes/modes;
-new destinations use link-without-overwrite. Existing access bits remain private
-and executable mode follows readable classes; newly added files start at 0600
-(or 0700 for executable files). Parent/root replacements fail conservatively.
-No Git checkout/filter, staging, commit or cleanup operation is invoked.
+Real temporary Git runtime tests cover application, dirty original, denial,
+restored authority, stale worktree, lost lease and both deep file/directory
+refactors. They verify original HEAD/index are unchanged and no unresolved claim
+is lost. Syscall-boundary fault injection covers concurrent destination/parent
+replacement and backup fsync; an open-writer test proves displaced bytes survive.
+These do not qualify power loss durability on the target filesystem.
 
-Per-file recovery intents, staged bytes and retained displaced originals live
-in the repository common directory's private ocean-apply-recovery directory.
-The recovery directory must be on the project filesystem; cross-device use is
-refused. Intent/data/directory fsync precede publication; completion updates the
-intent by atomic rename. Backups are retained even after success, including
-writes through an old open descriptor. There is no automatic backup deletion
-or replay. Full recovery/backup accounting for these assets remains stage 7.
-Tests use real temporary Git projects/files and deterministic syscall-boundary
-fault injection for destination/parent replacement; they do not qualify power
-loss durability on the target filesystem. Runtime/CLI apply composition and
-complete multi-file refactor ordering remain pending stage-6 work.
+Full stage-6 acceptance still needs real task-bound dev tests followed by seeded
+review finding, repair, fresh review and owner apply, plus TUI changeset display.
+Native interactive terminal acceptance, crash/backup qualification, installed
+Linux candidate and explicitly budgeted live-provider acceptance remain open.

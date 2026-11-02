@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { CodingApplyStore, CodingApplyTransaction } from '@runnets/application';
 import { assertCodingApplyTransition, type CodingApplyReceipt } from '@runnets/domain';
-import { task as decodeTask } from './coding-store.js';
+import { task as decodeTask, participates } from './coding-store.js';
 import { changesetStorage } from './changeset-storage.js';
 import { SqliteCodingTestEvidenceStore } from './coding-test-evidence.js';
 import { SqliteToolJournal } from './tool-journal.js';
@@ -23,6 +23,8 @@ export class SqliteCodingApplyStore implements CodingApplyStore {
         return row ? (JSON.parse(String(row['payload'])) as CodingApplyReceipt) : null;
       };
       return work({
+        worktree: (id) => changesetStorage(db).worktree(id),
+        participates: (ws, room, bot) => participates(db, ws, room, bot),
         task: (id) => decodeTask(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
         changeset: (hash) => changesetStorage(db).changeset(hash),
         verdict: (id) => {

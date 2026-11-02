@@ -3,6 +3,7 @@ import {
   codingFailure,
   ok,
   type CodingTask,
+  type CodingWorktree,
   type Changeset,
   type CodingFileChange,
   type CodingReviewVerdict,
@@ -11,6 +12,8 @@ import {
   type CodingResult,
 } from '@runnets/domain';
 export interface CodingApplyTransaction {
+  worktree(taskId: string): CodingWorktree | null;
+  participates(workspaceId: string, roomId: string, botId: string): boolean;
   task(id: string): CodingTask | null;
   changeset(hash: string): Changeset | null;
   verdict(requestId: string): CodingReviewVerdict | null;
@@ -36,11 +39,11 @@ export interface CodingApplyOwnerPort {
 export class CodingApplyService {
   readonly #store: CodingApplyStore;
   readonly #project: CodingApplyProjectPort;
-  readonly #admit: (task: CodingTask) => boolean;
+  readonly #admit: (task: CodingTask, tx: CodingApplyTransaction) => boolean;
   constructor(
     store: CodingApplyStore,
     project: CodingApplyProjectPort,
-    admit: (task: CodingTask) => boolean,
+    admit: (task: CodingTask, tx: CodingApplyTransaction) => boolean,
   ) {
     this.#store = store;
     this.#project = project;
@@ -65,7 +68,7 @@ export class CodingApplyService {
       if (
         !task ||
         task.workspaceId !== i.workspaceId ||
-        !this.#admit(task) ||
+        !this.#admit(task, tx) ||
         !changeset ||
         !verdict ||
         i.expectedBase !== changeset.baseCommit ||
@@ -112,7 +115,16 @@ export class CodingApplyService {
         this.#store.atomic((tx) => tx.putApplication(receipt));
         return codingFailure('project_changed');
       }
-      for (const [index, file] of prepared.changeset.files.entries()) {
+      // Delete obsolete descendants before adding a file at their former parent.
+      const ordered = [...prepared.changeset.files.entries()].sort(
+        ([, a], [, b]) =>
+          Number(a.after !== null) - Number(b.after !== null) ||
+          (a.after === null
+            ? b.path.split('/').length - a.path.split('/').length
+            : a.path.split('/').length - b.path.split('/').length) ||
+          (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+      );
+      for (const [index, file] of ordered) {
         receipt = {
           ...receipt,
           files: receipt.files.map((entry, n) =>

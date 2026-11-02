@@ -1,3 +1,4 @@
+import { runCodingApplyCommand } from './coding-apply-command.js';
 import { runCodingReviewCommand } from './coding-review-command.js';
 import type { ProviderPort } from '@runnets/application';
 import { readCodingProjects } from './coding-projects.js';
@@ -24,6 +25,7 @@ export async function runCodingCommand(
   requestId: string,
   provider: ProviderPort | null = null,
 ): Promise<unknown> {
+  if (args.positional[0] === 'apply') return runCodingApplyCommand(runtime, args, requestId);
   if (['diff', 'review'].includes(args.positional[0] ?? ''))
     return runCodingReviewCommand(runtime, args, requestId, provider);
   const workspaceId = 'ws_ocean';

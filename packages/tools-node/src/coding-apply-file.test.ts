@@ -127,3 +127,34 @@ it('preserves private access bits when adding executable mode', () =>
     applyCodingFile(root, recovery, { path: 'added', before: null, after: content('new') });
     expect(lstatSync(join(root, 'added')).mode & 0o777).toBe(0o600);
   }));
+
+it('replaces a tree of empty directories left by approved descendant deletions', () =>
+  fixture((root, recovery) => {
+    mkdirSync(join(root, 'a/b/c'), { recursive: true });
+    applyCodingFile(root, recovery, { path: 'a', before: null, after: content('file') });
+    expect(readFileSync(join(root, 'a'), 'utf8')).toBe('file');
+  }));
+it('refuses directory replacement containing user data or symlinks', () =>
+  fixture((root, recovery, outer) => {
+    mkdirSync(join(root, 'a'));
+    writeFileSync(join(root, 'a/user'), 'keep');
+    expect(() =>
+      applyCodingFile(root, recovery, { path: 'a', before: null, after: content('new') }),
+    ).toThrow();
+    expect(readFileSync(join(root, 'a/user'), 'utf8')).toBe('keep');
+    mkdirSync(join(root, 'b'));
+    symlinkSync(outer, join(root, 'b/link'));
+    expect(() =>
+      applyCodingFile(root, recovery, { path: 'b', before: null, after: content('new') }),
+    ).toThrow();
+    expect(lstatSync(join(root, 'b/link')).isSymbolicLink()).toBe(true);
+  }));
+
+it('refuses protected directories even when they contain no files', () =>
+  fixture((root, recovery) => {
+    mkdirSync(join(root, 'a/.git'), { recursive: true });
+    expect(() =>
+      applyCodingFile(root, recovery, { path: 'a', before: null, after: content('new') }),
+    ).toThrow();
+    expect(lstatSync(join(root, 'a/.git')).isDirectory()).toBe(true);
+  }));

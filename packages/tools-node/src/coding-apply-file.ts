@@ -115,6 +115,28 @@ function matches(path: string, expected: CodingFileContent | null, synchronize =
   )
     throw Error('apply preimage changed');
 }
+function removeEmptyTree(parent: number, name: string, budget = { remaining: 1000 }): void {
+  if (--budget.remaining < 0) throw Error('apply directory limit');
+  const path = join(fdPath(parent), name);
+  const directory = fs.openSync(path, directoryFlags);
+  try {
+    const pinned = fs.fstatSync(directory);
+    const entries = fs.readdirSync(fdPath(directory), { withFileTypes: true });
+    if (
+      entries.length > budget.remaining ||
+      entries.some((entry) => !entry.isDirectory() || blockedName(entry.name))
+    )
+      throw Error('apply directory not empty');
+    for (const entry of entries) removeEmptyTree(directory, entry.name, budget);
+    const current = fs.lstatSync(path);
+    if (current.dev !== pinned.dev || current.ino !== pinned.ino)
+      throw Error('apply directory changed');
+    fs.rmdirSync(path);
+    fs.fsyncSync(parent);
+  } finally {
+    fs.closeSync(directory);
+  }
+}
 /** Called only after a durable per-file started receipt. Never removes recovery assets. */
 export function applyCodingFile(
   root: string,
@@ -176,8 +198,7 @@ export function applyCodingFile(
       // Empty directories can remain after an approved file→directory refactor.
       try {
         if (fs.lstatSync(destination).isDirectory()) {
-          fs.rmdirSync(destination);
-          fs.fsyncSync(parent);
+          removeEmptyTree(parent, basename(change.path));
         }
       } catch (error) {
         if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;

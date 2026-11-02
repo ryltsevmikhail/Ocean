@@ -83,15 +83,20 @@ export class SqliteCodingStore implements CodingStore {
           const row = db.prepare('SELECT root FROM ocean_workspace WHERE id=?').get(id);
           return row ? String(row['root']) : null;
         },
-        participates: (ws, room, bot) =>
-          db
-            .prepare(
-              `SELECT 1 FROM ocean_members m
-    JOIN ocean_rooms r ON r.id=m.room_id JOIN ocean_bots b ON b.id=m.bot_id
-    WHERE m.workspace_id=? AND m.room_id=? AND m.bot_id=? AND r.workspace_id=? AND b.workspace_id=?`,
-            )
-            .get(ws, room, bot, ws, ws) !== undefined,
+        participates: (ws, room, bot) => participates(db, ws, room, bot),
       }),
     );
   }
+}
+
+export function participates(db: DatabaseSync, ws: string, room: string, bot: string): boolean {
+  return (
+    db
+      .prepare(
+        `SELECT 1 FROM ocean_members m
+    JOIN ocean_rooms r ON r.id=m.room_id JOIN ocean_bots b ON b.id=m.bot_id
+    WHERE m.workspace_id=? AND m.room_id=? AND m.bot_id=? AND r.workspace_id=? AND b.workspace_id=?`,
+      )
+      .get(ws, room, bot, ws, ws) !== undefined
+  );
 }

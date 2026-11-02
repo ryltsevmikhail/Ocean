@@ -1,6 +1,7 @@
 import { codingTurnFactory, type CodingTurnFactoryDeps } from './coding-turn-factory.js';
 import {
   GitCodingProject,
+  GitCodingApplyProject,
   SqliteProjectLeases,
   GitCodingWorktrees,
   GitCodingSnapshots,
@@ -13,6 +14,8 @@ import {
   TaskRunService,
   CodingTaskService,
   CodingReviewService,
+  CodingApplyService,
+  codingApplyAdmission,
   CodingApprovalService,
   codingApprovalAdmission,
   CodingChangesetService,
@@ -44,6 +47,7 @@ export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
   readonly coding: CodingTaskService;
   readonly codingReview?: CodingReviewService;
+  readonly codingApply?: CodingApplyService;
   readonly codingEvidence?: CodingTestEvidenceStore;
   readonly codingApprovals: CodingApprovalService;
   readonly codingChanges: CodingChangesetService;
@@ -187,6 +191,11 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       coding,
       codingApprovals,
       codingEvidence: store.codingEvidence,
+      codingApply: new CodingApplyService(
+        store.codingApplications,
+        new GitCodingApplyProject(),
+        (task, tx) => codingApplyAdmission(task, tx, codingDeps),
+      ),
       codingReview: new CodingReviewService(
         store.codingReviews,
         (task) =>
