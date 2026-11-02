@@ -19,6 +19,8 @@ export interface SandboxRequest {
   readonly args: readonly string[];
   readonly cwd?: string;
   readonly signal?: AbortSignal;
+  /** Private input for the fixed filesystem worker. */
+  readonly stdin?: string;
   readonly timeoutMs?: number;
   /** Fixed file protocol only; command callers retain the default 32 KiB. */
   readonly outputBytes?: number;
@@ -40,6 +42,10 @@ export async function sandboxRoot(
   if ((await realpath(root)) !== root || !(await lstat(root)).isDirectory())
     throw new ToolError('containment_unavailable', 'canonical task root required');
   await validateMounts(mounts, projectRoot);
+  const pending = new Set(
+    mounts.map((m) => m.target).filter((target) => target.startsWith('/workspace/')),
+  );
+  pending.add('/workspace/.git');
   let count = 0;
   async function walk(directory: string): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -47,13 +53,12 @@ export async function sandboxRoot(
       if (entry.name === '.git' && directory === root) {
         if (!(await lstat(join(directory, entry.name))).isFile())
           throw new ToolError('containment_unavailable', 'linked worktree required');
+        pending.delete('/workspace/.git');
         continue;
       }
       if (
         entry.name === 'node_modules' &&
-        mounts.some(
-          (m) => m.target === '/workspace/' + pathRelative(root, join(directory, entry.name)),
-        )
+        pending.delete('/workspace/' + pathRelative(root, join(directory, entry.name)))
       ) {
         if (!entry.isDirectory())
           throw new ToolError(
@@ -72,6 +77,7 @@ export async function sandboxRoot(
     }
   }
   await walk(root);
+  if (pending.size) throw new ToolError('containment_unavailable', 'missing worker mountpoint');
 }
 export function sandboxArgv(
   root: string,

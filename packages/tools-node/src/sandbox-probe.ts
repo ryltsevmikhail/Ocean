@@ -127,7 +127,11 @@ export async function createSandboxBackend(
       const result = await sandboxCommand(options, preset, signal, snapshot);
       return {
         output: JSON.stringify(result),
-        isError: result.exitCode !== 0 || result.reason !== 'exit' || !result.sourceUnchanged,
+        isError:
+          !result.cleanupConfirmed ||
+          result.exitCode !== 0 ||
+          result.reason !== 'exit' ||
+          !result.sourceUnchanged,
         ...(!result.cleanupConfirmed ? { uncertain: true } : {}),
       };
     },

@@ -112,3 +112,22 @@ Elapsed time includes inventory and supervision. The host sampled kernel peak
 counters at 5 ms intervals and matched each unit to the returned cgroup. Each
 exited 0 with untruncated output and confirmed cleanup. These observations
 support retaining the prototype limits for subsequent qualification.
+
+## Observation and file worker review
+
+The supervisor now requires a populated cgroup for the exact generated unit
+before transferring the request over stdin. Missing, contradictory or
+unreadable final observations leave cleanup uncertain. Removal of an observed
+cgroup is checked against its readable parent. Native fault-injection tests
+cover both sides of dispatch. Another test kills the worker while a detached
+descendant is writing and verifies that writes cease after confirmed cleanup.
+
+The fixed file worker receives approved contents through private stdin. An
+exact 128 KiB replacement with a 128 KiB preimage previously exceeded Linux's
+single-argument limit. The regression also verifies preservation of mode 0777
+across replacement. Missing task mountpoints are refused before bubblewrap
+can create them during a read. Failures after installation are uncertain.
+
+Independent review still requires end-to-end file cancellation, parent
+directory race protection, content-bound toolchain/dependency identity and
+stronger native canaries before the qualification gate closes.

@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -41,9 +41,75 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         await rm(secret);
       }
     }, 20000);
+    it('isolates writable scratch from read-only dependencies and toolchain', async () => {
+      const fixture = await mkdtemp(join(tmpdir(), 'ocean-mount-native-'));
+      const root = join(fixture, 'task');
+      const source = join(fixture, 'node_modules');
+      try {
+        await mkdir(join(root, 'node_modules'), { recursive: true });
+        await writeFile(join(root, '.git'), 'synthetic-git-pointer');
+        await mkdir(source);
+        await writeFile(join(source, 'fixture'), 'dependency');
+        const result = await runSandbox({
+          root,
+          dependencyProjectRoot: fixture,
+          mounts: [{ source, target: '/workspace/node_modules' }],
+          program: '/toolchain/node',
+          args: [
+            '-e',
+            `
+            const fs=require('node:fs'), assert=require('node:assert/strict');
+            assert.equal(fs.readFileSync('node_modules/fixture','utf8'),'dependency');
+            assert.throws(()=>fs.writeFileSync('node_modules/fixture','overwrite'));
+            assert.throws(()=>fs.openSync('/toolchain/node','r+'));
+            for(const dir of [process.env.HOME,'/tmp','/workspace'])
+              fs.writeFileSync(dir+'/scratch','private');
+          `,
+          ],
+        });
+        expect(result.exitCode, result.output).toBe(0);
+        expect(result.cleanupConfirmed).toBe(true);
+        expect(await readFile(join(root, 'scratch'), 'utf8')).toBe('private');
+        expect(await readFile(join(source, 'fixture'), 'utf8')).toBe('dependency');
+      } finally {
+        await rm(fixture, { recursive: true, force: true });
+      }
+    });
+    it('contains descendants when project code kills the worker', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'ocean-interrupt-'));
+      try {
+        await writeFile(join(root, '.git'), 'synthetic-git-pointer');
+        const result = await runSandbox({
+          root,
+          program: '/toolchain/node',
+          args: [
+            '-e',
+            `
+            const child=require('node:child_process').spawn('/toolchain/node',
+              ['-e',"setInterval(()=>require('node:fs').appendFileSync('/workspace/ticks','x'),10)"],
+              {detached:true,stdio:'ignore'});
+            child.unref();
+            const timer=setInterval(()=>{
+              if(require('node:fs').existsSync('/workspace/ticks')){
+                clearInterval(timer);process.kill(process.ppid,'SIGKILL');
+              }
+            },5);
+          `,
+          ],
+        });
+        expect(result.exitCode).not.toBe(0);
+        expect(result.cleanupConfirmed).toBe(true);
+        const ticks = await readFile(join(root, 'ticks'), 'utf8');
+        await new Promise((r) => setTimeout(r, 80));
+        expect(await readFile(join(root, 'ticks'), 'utf8')).toBe(ticks);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
     it('refuses dispatch when cancelled during filesystem inventory', async () => {
       const root = await mkdtemp(join(tmpdir(), 'ocean-sandbox-'));
       try {
+        await writeFile(join(root, '.git'), 'synthetic-git-pointer');
         const controller = new AbortController();
         const pending = runSandbox({
           root,
@@ -61,6 +127,7 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
     it('kills detached descendants and proves cgroup emptiness after leader exit', async () => {
       const root = await mkdtemp(join(tmpdir(), 'ocean-sandbox-'));
       try {
+        await writeFile(join(root, '.git'), 'synthetic-git-pointer');
         const result = await runSandbox({
           root,
           program: '/toolchain/node',
@@ -85,6 +152,7 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
     it('bounds output, timeout and cancellation and confirms cleanup', async () => {
       const root = await mkdtemp(join(tmpdir(), 'ocean-sandbox-'));
       try {
+        await writeFile(join(root, '.git'), 'synthetic-git-pointer');
         const loud = await runSandbox({
           root,
           program: '/toolchain/node',

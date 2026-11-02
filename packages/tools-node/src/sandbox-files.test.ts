@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, rm, readFile, writeFile, symlink, link } from 'node:fs/promises';
+import {
+  chmod,
+  stat,
+  mkdir,
+  mkdtemp,
+  rm,
+  readFile,
+  writeFile,
+  symlink,
+  link,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -22,6 +32,15 @@ describe('sandbox mount refusal', () => {
       await writeFile(join(root, 'outside'), 'synthetic-canary');
       await link(join(root, 'outside'), join(source, 'alias'));
       await expect(validateMounts([{ source, target }], root)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+  it('refuses absent worktree mountpoints without creating host files', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ocean-missing-'));
+    try {
+      await expect(sandboxFile({ root }, { op: 'list', path: '.' })).rejects.toThrow('mountpoint');
+      await expect(stat(join(root, '.git'))).rejects.toMatchObject({ code: 'ENOENT' });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -66,6 +85,21 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         await rm(root, { recursive: true, force: true });
       }
     }, 20000);
+    it('transfers maximum-size write previews through private IPC', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'ocean-files-'));
+      try {
+        await writeFile(join(root, '.git'), 'synthetic-git-pointer');
+        const expected = 'a'.repeat(131072);
+        const content = 'b'.repeat(131072);
+        await writeFile(join(root, 'large'), expected);
+        await chmod(join(root, 'large'), 0o777);
+        await sandboxFile({ root }, { op: 'write', path: 'large', expected, content });
+        expect(await readFile(join(root, 'large'), 'utf8')).toBe(content);
+        expect((await stat(join(root, 'large'))).mode & 0o777).toBe(0o777);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
     it('refuses symlink, hardlink and credential-bearing task trees', async () => {
       const root = await mkdtemp(join(tmpdir(), 'ocean-refusal-'));
       try {

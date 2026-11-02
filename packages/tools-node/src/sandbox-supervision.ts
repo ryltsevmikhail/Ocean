@@ -1,6 +1,7 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, realpath } from 'node:fs/promises';
+import { readdir, readFile, realpath } from 'node:fs/promises';
+import { dirname, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   sandboxArgv,
@@ -22,6 +23,10 @@ async function control(args: string[]): Promise<string> {
     })
   ).stdout;
 }
+function populated(events: string, expected: 0 | 1): boolean {
+  const fields = events.split('\n').filter((line) => /^populated\b/.test(line));
+  return fields.length === 1 && fields[0] === 'populated ' + expected;
+}
 /** No project code executes until the host has observed the service cgroup. */
 export async function runSandbox(request: SandboxRequest): Promise<SandboxEvidence> {
   request.signal?.throwIfAborted();
@@ -33,16 +38,27 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   const ready = 'OCEAN_READY_' + randomUUID();
   const script = `
     process.stdout.write(${JSON.stringify(ready)} + '\\n');
-    process.stdin.once('data', () => {
-      process.stdin.pause();
-      const child = require('node:child_process').spawn(
-        ${JSON.stringify(request.program)}, ${JSON.stringify(request.args)},
-        {cwd:${JSON.stringify('/workspace' + (request.cwd ? '/' + request.cwd : ''))},
-         env:process.env,stdio:['ignore','inherit','inherit'],shell:false});
+    const chunks = [];
+    process.stdin.on('data', chunk => chunks.push(chunk));
+    process.stdin.once('end', () => {
+      const {program,args,cwd,stdin} = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      const child = require('node:child_process').spawn(program,args,{
+        cwd,env:process.env,stdio:[stdin === undefined ? 'ignore' : 'pipe','inherit','inherit'],shell:false});
+      if (child.stdin) {
+        child.stdin.on('error',()=>process.exit(127));
+        child.stdin.end(stdin);
+      }
       child.on('error',()=>process.exit(127));
       child.on('exit',(code)=>process.exit(code ?? 128));
     });
   `;
+  const payload = JSON.stringify({
+    program: request.program,
+    args: request.args,
+    cwd: '/workspace' + (request.cwd ? '/' + request.cwd : ''),
+    stdin: request.stdin,
+  });
+  if (Buffer.byteLength(payload) > 4 * 1024 * 1024) throw new Error('sandbox request too large');
   const observed: { cgroup: string | null } = { cgroup: null };
   let reason: SandboxEvidence['reason'] = 'exit';
   let output = Buffer.alloc(0);
@@ -93,6 +109,10 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
     if (output.length + chunk.length > outputBytes) truncated = true;
     output = Buffer.concat([output, chunk.subarray(0, outputBytes - output.length)]);
   };
+  child.stdin.on('error', () => {
+    reason = 'unavailable';
+    void stop();
+  });
   child.stderr.on('data', retain);
   child.stdout.on('data', (chunk: Buffer) => {
     if (admitted) {
@@ -113,11 +133,19 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
       void (async () => {
         try {
           const path = (await control(['show', unit, '--property=ControlGroup', '--value'])).trim();
-          if (!/^\/user.slice\/[A-Za-z0-9_.@/-]+\/ocean-worker-[a-f0-9-]+\.service$/.test(path))
+          if (
+            !path.startsWith('/user.slice/') ||
+            basename(path) !== unit ||
+            !path
+              .slice(1)
+              .split('/')
+              .every((part) => /^[A-Za-z0-9_@-][A-Za-z0-9_.@-]*$/.test(part))
+          )
             throw new Error('invalid cgroup');
-          await readFile('/sys/fs/cgroup' + path + '/cgroup.events', 'utf8');
+          const events = await readFile('/sys/fs/cgroup' + path + '/cgroup.events', 'utf8');
+          if (!populated(events, 1)) throw new Error('cgroup not populated');
           observed.cgroup = path;
-          if (reason === 'exit' && !closed) child.stdin.end('go\n');
+          if (reason === 'exit' && !closed) child.stdin.end(payload);
           else await stop();
         } catch {
           reason = 'unavailable';
@@ -143,9 +171,14 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   if (observed.cgroup !== null) {
     try {
       const events = await readFile('/sys/fs/cgroup' + observed.cgroup + '/cgroup.events', 'utf8');
-      cleanupConfirmed = /^populated 0$/m.test(events);
+      cleanupConfirmed = populated(events, 0);
     } catch (error) {
-      cleanupConfirmed = error instanceof Error && 'code' in error && error.code === 'ENOENT';
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        const siblings = await readdir('/sys/fs/cgroup' + dirname(observed.cgroup)).catch(
+          () => null,
+        );
+        cleanupConfirmed = siblings !== null && !siblings.includes(unit);
+      }
     }
   }
   await control(['reset-failed', unit]).catch(() => {});

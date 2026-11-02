@@ -7,7 +7,7 @@ const worker = String.raw`
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const input = JSON.parse(process.argv[1]);
+const input = JSON.parse(fs.readFileSync(0,'utf8'));
 function target(relative, missing=false) {
   let current='/workspace';
   const parts=relative==='.'?[]:relative.split('/');
@@ -36,6 +36,7 @@ function read(relative) {
     return text;
   } finally {fs.closeSync(file);}
 }
+let installed=false;
 try {
   let result;
   if(input.op==='read') result=read(input.path);
@@ -48,16 +49,18 @@ try {
     const mode=input.expected===null?0o600:fs.lstatSync(dest).mode&0o777;
     let fd;
     try {
-      fd=fs.openSync(temp,'wx',mode);
-      fs.writeFileSync(fd,input.content);fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;
+      fd=fs.openSync(temp,'wx',0o600);
+      fs.writeFileSync(fd,input.content);fs.fchmodSync(fd,mode);fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;
       if(read(input.path)!==input.expected) throw Error('stale_read');
       if(input.expected===null) fs.linkSync(temp,dest);else fs.renameSync(temp,dest);
+      installed=true;
+      if(input.expected===null) fs.unlinkSync(temp);
       const directory=fs.openSync(path.dirname(dest),'r');try{fs.fsyncSync(directory);}finally{fs.closeSync(directory);}
       result=true;
     } finally {if(fd!==undefined)fs.closeSync(fd);try{fs.unlinkSync(temp);}catch{}}
   }
   process.stdout.write(JSON.stringify({ok:true,result}));
-} catch(e) {process.stdout.write(JSON.stringify({ok:false,code:e.message}));}
+} catch(e) {process.stdout.write(JSON.stringify({ok:false,code:installed?'effect_uncertain':e.message}));}
 `;
 export async function sandboxFile(
   options: Pick<SandboxRequest, 'root' | 'mounts' | 'dependencyProjectRoot'>,
@@ -72,7 +75,8 @@ export async function sandboxFile(
   const evidence = await runSandbox({
     ...options,
     program: '/toolchain/node',
-    args: ['-e', worker, JSON.stringify({ ...input, path })],
+    args: ['-e', worker],
+    stdin: JSON.stringify({ ...input, path }),
     outputBytes: 1048576,
   });
   if (!evidence.cleanupConfirmed || evidence.reason !== 'exit')
