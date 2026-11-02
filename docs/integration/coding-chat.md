@@ -88,3 +88,9 @@ coding approvals are routed to the TUI's exclusive approval screen with the
 turn cancellation signal. Without a ready screen they cancel. The run_test
 progress update is typed as execute. CLI parsing regression covers the TUI
 task flag. Native interactive screen acceptance remains part of final RC.
+
+The native direct/group fixture additionally verifies that ordinary sends have
+no provider tool definitions, review bots are refused task tools before model
+dispatch, and shared history contains only the owner message and final bot
+reply. Exact tool evidence remains private to the turn rather than being
+automatically published to the room.

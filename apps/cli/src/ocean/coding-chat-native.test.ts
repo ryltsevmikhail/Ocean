@@ -165,6 +165,54 @@ it
       expect(await readFile(join(prepared.value.root, 'source.txt'), 'utf8')).toBe('after');
       expect(await readFile(join(project, 'source.txt'), 'utf8')).toBe('before');
       expect(runtime.toolJournal?.inspectPending?.()).toEqual([]);
+      const history = runtime.conversations.history('ws_fixture', room);
+      expect(history.ok).toBe(true);
+      if (history.ok) {
+        expect(history.value.map((message) => message.body)).toEqual([
+          'Edit and test',
+          'Completed fixture',
+        ]);
+        expect(JSON.stringify(history.value)).not.toContain('sourceUnchanged');
+      }
+      let plainCalls = 0;
+      const plain: ProviderPort = {
+        ...provider,
+        async *stream(request) {
+          plainCalls++;
+          expect(request.tools).toBeUndefined();
+          yield { type: 'text_delta', text: 'Text only' };
+          yield { type: 'usage', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
+          yield { type: 'completed', stopReason: 'stop', rawStopReason: 'stop' };
+        },
+      };
+      expect(
+        await runtime.chat.send({
+          workspaceId: 'ws_fixture',
+          roomId: room,
+          requestId: 'plain',
+          to: 'dev',
+          text: 'Plain chat',
+          provider: plain,
+          signal: new AbortController().signal,
+          emit: () => {},
+        }),
+      ).toMatchObject({ ok: true, value: { status: 'completed' } });
+      expect(plainCalls).toBe(1);
+      await expect(
+        runtime.chat.send({
+          workspaceId: 'ws_fixture',
+          roomId: reviewRoom,
+          requestId: 'review-tool-refusal',
+          taskId: 'task',
+          to: 'review',
+          text: 'Try tools',
+          provider: plain,
+          signal: new AbortController().signal,
+          emit: () => {},
+        }),
+      ).rejects.toMatchObject({ code: 'coding_denied' });
+      expect(plainCalls).toBe(1);
+      expect(previews).toEqual(['write', 'test']);
     } finally {
       runtime.close();
       await rm(root, { recursive: true, force: true });
