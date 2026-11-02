@@ -79,3 +79,13 @@ the top-level node_modules, apps/cli/node_modules and node_modules under
 packages/{application,provider-core,provider-deepseek,store,store-sqlite,tools-node}.
 The installed pnpm is a standalone executable. This inventory still requires
 read-only worker verification with all four real presets.
+
+With those eight dependency roots and a separate directory containing only
+bin/pnpm mounted read-only, the supervised worker executed typecheck, lint and
+build with exit 0 and confirmed cgroup cleanup. Build reused typecheck output.
+Plain pnpm test failed during Vite configuration loading because node_modules
+is read-only. The exact invocation
+`pnpm --config.verify-deps-before-run=false test --configLoader native`
+completed with exit 0, untruncated output and confirmed cleanup in the same
+network-isolated worker. These exploratory runs do not establish peak usage,
+source stability, or production-safe mount admission.
