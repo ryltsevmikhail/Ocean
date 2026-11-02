@@ -1,3 +1,4 @@
+import { refreshChangeset, messageOf } from './changeset.js';
 /** Terminal input and rendering; RunBook composes the runtime and turn engine. */
 
 import type { Readable, Writable } from 'node:stream';
@@ -21,12 +22,6 @@ import {
   type FrameInput,
   type RunViewData,
 } from './view.js';
-
-function messageOf(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'unexpected error';
-}
 
 export class TuiApp {
   readonly #input: Readable;
@@ -150,6 +145,10 @@ export class TuiApp {
       ...navigationContext(this.#frameInput()),
     });
     this.#ui = transition.state;
+    if (key.type === 'panel' && key.panel === 'changeset')
+      this.#track(
+        refreshChangeset(this.#book, this.#book.runs[this.#ui.selectedIndex], () => this.#redraw()),
+      );
     switch (transition.action.type) {
       case 'quit':
         this.#quit();

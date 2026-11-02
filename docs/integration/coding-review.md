@@ -1,9 +1,9 @@
 # Coding changeset review development
 
-Status: stage 6 in progress. Immutable review, durable apply orchestration and
-Linux file application are implemented in development source. TUI presentation,
-complete dev/review/apply acceptance and stage-7 recovery/release gates remain
-open. Ocean 1.0 is the separate released baseline.
+Status: stage 6 implemented in development source and deterministically qualified
+on Linux x86_64 Omarchy. Recovery, asset-complete backup, installed/live-provider
+acceptance and release remain stage-7 gates. Ocean 1.0 is the separate released
+baseline.
 
 ## Owner commands
 
@@ -94,7 +94,26 @@ is lost. Syscall-boundary fault injection covers concurrent destination/parent
 replacement and backup fsync; an open-writer test proves displaced bytes survive.
 These do not qualify power loss durability on the target filesystem.
 
-Full stage-6 acceptance still needs real task-bound dev tests followed by seeded
-review finding, repair, fresh review and owner apply, plus TUI changeset display.
-Native interactive terminal acceptance, crash/backup qualification, installed
-Linux candidate and explicitly budgeted live-provider acceptance remain open.
+The full deterministic native workflow now passes in both direct and group
+rooms: denied edit, real failed test, exact seeded finding through the metered
+reviewer, repair, fresh passed evidence/review, denied owner apply, exact applied
+bytes and duplicate refusal. The same fixture loads ChatRunBook's actual F6
+panel and checks the captured hash/test evidence without private dev history.
+The panel displays complete diff, file modes and exact recorded exit/cleanup/
+truncation status; frozen/stale labels prevent treating old test results as a
+current verification. Refresh and navigation preserve drafts and do not send a
+turn. All rows are reachable and terminal control characters are stripped.
+
+Qualification on 2026-11-02: Linux x86_64, Node 26.13.0, pnpm 12.16.1.
+`pnpm check` passes 797 tests (39 opt-in skipped); `pnpm build` and
+`pnpm format:check` pass. Separately,
+`OCEAN_SANDBOX_NATIVE=1 pnpm test apps/cli/src/ocean/coding-workflow-native.test.ts`
+passes both actual sandbox scenarios (about 22–25 seconds combined). Providers
+are deterministic in-process fixtures; no external API requests or credentials
+are used. Independent code review found no remaining blocking issue in the
+stage-6 authority/application/panel delta.
+
+Full native interactive terminal acceptance, process-crash reconciliation,
+asset-complete backup/restore, installed Linux candidate and explicitly budgeted
+live-provider acceptance remain open stage-7 gates. These tests do not qualify
+external provider behavior or power-loss durability on the target filesystem.

@@ -12,6 +12,7 @@ export interface RunViewData {
   readonly events: readonly EventEnvelope[];
   readonly stream: readonly StreamLine[];
   readonly liveMode: string | null;
+  readonly codingLines?: readonly string[];
 }
 export interface FrameInput {
   readonly workspace?: string | undefined;
@@ -61,6 +62,15 @@ function content(
         .flatMap((line) => wrap(line, width))
         .slice(input.ui.eventScroll, input.ui.eventScroll + height),
     };
+  if (focus === 'changeset')
+    return {
+      title: 'Changeset · F6 refresh · PgUp/PgDn scroll · Esc close',
+      lines: (
+        selected?.codingLines ?? ['No coding changeset. Open a task-bound room to inspect changes.']
+      )
+        .flatMap((line) => wrap(line, width))
+        .slice(input.ui.eventScroll, input.ui.eventScroll + height),
+    };
   if (focus === 'help')
     return {
       title: 'Help · Esc close',
@@ -95,11 +105,14 @@ export function navigationContext(input: FrameInput): {
   const { columns, rows } = dimensions(input.size);
   const selected = input.runs[input.ui.selectedIndex];
   const eventCount =
-    input.ui.focus === 'details'
-      ? details(selected, input.workspace).flatMap((line) => wrap(line, columns)).length
-      : input.ui.focus === 'help'
-        ? HELP.flatMap((line) => wrap(line, columns)).length
-        : eventLines(selected, columns).length;
+    input.ui.focus === 'changeset'
+      ? (selected?.codingLines ?? ['No coding changeset.']).flatMap((line) => wrap(line, columns))
+          .length
+      : input.ui.focus === 'details'
+        ? details(selected, input.workspace).flatMap((line) => wrap(line, columns)).length
+        : input.ui.focus === 'help'
+          ? HELP.flatMap((line) => wrap(line, columns)).length
+          : eventLines(selected, columns).length;
   return {
     dialogCount:
       selected === undefined
@@ -154,7 +167,7 @@ export function renderFrame(input: FrameInput): string {
   const body = [...pane.lines];
   while (body.length < height) body.push('');
   const footer =
-    'Enter send · PgUp/PgDn scroll · F2 tasks · F3 events · F4 details · F5 reasoning · Esc cancel';
+    'Enter send · PgUp/PgDn scroll · F2 tasks · F3 events · F4 details · F5 reasoning · F6 changeset · Esc cancel';
   return [
     header,
     status(input),

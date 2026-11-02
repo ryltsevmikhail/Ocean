@@ -29,6 +29,7 @@ export interface RunEntry {
   events: readonly EventEnvelope[];
   stream: readonly StreamLine[];
   liveMode: string | null;
+  codingLines?: readonly string[];
 }
 
 export interface RunBookOptions {
@@ -60,6 +61,7 @@ export function runView(entry: RunEntry): RunViewData {
     events: entry.events,
     stream: entry.stream,
     liveMode: entry.liveMode,
+    ...(entry.codingLines === undefined ? {} : { codingLines: entry.codingLines }),
   };
 }
 
@@ -257,4 +259,7 @@ export type RunBookPort = Pick<
   | 'openForTurn'
   | 'turn'
   | 'cancel'
-> & { setReviewApproval?: (approval: ReviewApprovalPort) => void };
+> & {
+  loadChangeset?: (entry: RunEntry) => Promise<void>;
+  setReviewApproval?: (approval: ReviewApprovalPort) => void;
+};

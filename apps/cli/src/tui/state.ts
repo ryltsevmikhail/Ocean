@@ -93,7 +93,8 @@ export function reduceKey(state: UiState, key: Key, context: UiContext): UiTrans
   if (key.type === 'panel')
     return transition({
       ...cleared,
-      focus: state.focus === key.panel ? 'prompt' : key.panel,
+      focus:
+        key.panel === 'changeset' ? 'changeset' : state.focus === key.panel ? 'prompt' : key.panel,
       eventScroll: 0,
     });
   if (key.type === 'toggle-thoughts')
@@ -132,25 +133,32 @@ export function reduceKey(state: UiState, key: Key, context: UiContext): UiTrans
   ) {
     let delta =
       key.type === 'page-up' ? page : key.type === 'page-down' ? -page : key.type === 'up' ? 1 : -1;
-    if (state.focus === 'details' || state.focus === 'help') delta = -delta;
+    if (state.focus === 'details' || state.focus === 'help' || state.focus === 'changeset')
+      delta = -delta;
     return transition(scroll(cleared, delta, context));
   }
   if (state.focus !== 'prompt') {
     if (key.type === 'enter') return transition({ ...cleared, focus: 'prompt' });
     if (key.type === 'home')
       return transition(
-        state.focus === 'details' || state.focus === 'help'
+        state.focus === 'details' || state.focus === 'help' || state.focus === 'changeset'
           ? { ...cleared, eventScroll: 0 }
           : scroll(cleared, Number.MAX_SAFE_INTEGER, context),
       );
     if (key.type === 'end')
       return transition(
-        state.focus === 'details' || state.focus === 'help'
+        state.focus === 'details' || state.focus === 'help' || state.focus === 'changeset'
           ? scroll(cleared, Number.MAX_SAFE_INTEGER, context)
           : { ...cleared, dialogScroll: 0, eventScroll: 0 },
       );
     if (key.type === 'char' && (key.value === 'j' || key.value === 'k'))
-      return transition(scroll(cleared, key.value === 'k' ? 1 : -1, context));
+      return transition(
+        scroll(
+          cleared,
+          state.focus === 'changeset' ? (key.value === 'k' ? -1 : 1) : key.value === 'k' ? 1 : -1,
+          context,
+        ),
+      );
     return transition(cleared);
   }
   if (key.type === 'enter') {

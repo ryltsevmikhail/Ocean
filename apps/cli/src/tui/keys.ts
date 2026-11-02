@@ -1,5 +1,5 @@
 /** Raw keys and bracketed paste: pasted newlines are text, never submit actions. */
-export type Panel = 'runs' | 'events' | 'details' | 'help';
+export type Panel = 'runs' | 'events' | 'details' | 'help' | 'changeset';
 export type Key =
   | { readonly type: 'char'; readonly value: string }
   | { readonly type: 'paste'; readonly text: string }
@@ -51,6 +51,7 @@ const SEQUENCES: Readonly<Record<string, Key>> = {
   '[12~': { type: 'panel', panel: 'runs' },
   '[13~': { type: 'panel', panel: 'events' },
   '[14~': { type: 'panel', panel: 'details' },
+  '[17~': { type: 'panel', panel: 'changeset' },
   '[15~': { type: 'toggle-thoughts' },
   '[13;2u': { type: 'newline' },
 };

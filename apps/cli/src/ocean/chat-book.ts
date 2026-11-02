@@ -1,3 +1,4 @@
+import { codingPanelLines } from './coding-panel.js';
 import { RoomReviewController } from './room-review.js';
 import { randomUUID } from 'node:crypto';
 import { taskRunId, type TaskRunId } from '@runnets/domain';
@@ -28,6 +29,9 @@ export class ChatRunBook implements RunBookPort {
     this.#reviews = new RoomReviewController(runtime, roomId);
     this.#roomId = roomId;
     this.#provider = provider;
+  }
+  async loadChangeset(entry: RunEntry): Promise<void> {
+    entry.codingLines = await codingPanelLines(this.#runtime, this.#roomId, this.#taskId);
   }
   setReviewApproval(approval: ReviewApprovalPort): void {
     this.#reviews.setApproval(approval);

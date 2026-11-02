@@ -8,6 +8,7 @@ export const HELP = [
   'Tab: focus dialogue / input. Home / End: edit, or jump in focused dialogue.',
   'F2 Tasks: select with arrows or j/k; Enter returns to the dialogue; n creates a task.',
   'F3 Events: committed events and full tool output. F4 Details: status and budgets.',
+  'F6 Changeset: capture the task diff and test evidence. Press F6 again to refresh.',
   'F5: show or hide reasoning. F1: this help. Esc: close a panel or cancel a turn.',
   'Ctrl+J or Alt+Enter: new input line. Pasting text never sends it automatically.',
   '/new: independent task. /quit or Ctrl+C twice while idle: exit.',
