@@ -90,3 +90,10 @@ available, and abort cancels the pending screen. CLI requires a live TTY and
 an exact y response, with cancellation handled through AbortSignal.
 Tests cover exact escaped preview, ignored session key, abort and no-TTY refusal.
 Adapters still require connection to the task operation preparation flow.
+
+Application dispatch now snapshots the trusted prepared operation, requests and
+decides its exact preview, recomputes the current binding, consumes approval,
+then executes and settles the shared journal claim. It does not claim twice.
+Regression tests verify owner→claim→execute→settle ordering, no claim/effect for
+deny/cancel/stale source, and uncertainty on execution failure after claim.
+Host task operation preparation and chat invocation wiring remain pending.
