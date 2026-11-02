@@ -186,6 +186,7 @@ it('accepts unchanged private modes from earlier installers, but refuses broader
   chmodSync(license, 0o600);
   chmodSync(join(prefix, 'lib/ocean/current/bin/ocean'), 0o700);
   installArchive(a.path, a.hash, prefix);
+  expect(statSync(license).mode & 0o777).toBe(0o644);
   chmodSync(license, 0o666);
   expect(() => installArchive(a.path, a.hash, prefix)).toThrow('version_conflict');
 });

@@ -207,6 +207,12 @@ export function installArchive(archive: string, checksum: string, prefix: string
       if (!readFileSync(path).equals(e.body) || ![e.mode, e.mode & 0o700].includes(mode))
         throw new Error('version_conflict');
     }
+    // Only normalize fully verified public program files, before switching current.
+    for (const [name, entry] of files) {
+      const path = join(destination, name);
+      chmodSync(path, entry.mode);
+      durable(path);
+    }
   } else {
     const stage = join(releases, '.install-' + randomUUID());
     mkdirSync(stage, { mode: 0o700 });
