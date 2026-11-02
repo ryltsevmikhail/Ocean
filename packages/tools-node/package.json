@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@runnets/application": "workspace:*",
-    "@runnets/domain": "workspace:*"
+    "@runnets/domain": "workspace:*",
+    "@runnets/contracts": "workspace:*"
   },
   "license": "Apache-2.0"
 }

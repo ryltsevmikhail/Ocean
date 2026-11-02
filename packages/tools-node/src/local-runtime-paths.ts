@@ -1,0 +1,151 @@
+import { createHash } from 'node:crypto';
+import {
+  constants,
+  closeSync,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  unlinkSync,
+  type Stats,
+} from 'node:fs';
+import { isAbsolute, join, resolve } from 'node:path';
+import { localRuntimeRecord, type LocalRuntimeDescriptor } from '@runnets/contracts';
+export interface LocalRuntimePaths {
+  readonly profile: string;
+  readonly profileId: string;
+  readonly root: string;
+  readonly directory: string;
+  readonly descriptor: string;
+  readonly endpoint: string;
+}
+function fail(code: string): never {
+  throw Error(code);
+}
+export function assertLocalPrivate(path: string, kind: 'directory' | 'file' | 'socket'): Stats {
+  const s = lstatSync(path);
+  if (
+    s.isSymbolicLink() ||
+    realpathSync(path) !== resolve(path) ||
+    s.uid !== process.getuid?.() ||
+    (s.mode & 0o777) !== (kind === 'directory' ? 0o700 : 0o600) ||
+    !(kind === 'directory'
+      ? s.isDirectory()
+      : kind === 'file'
+        ? s.isFile() && s.nlink === 1
+        : s.isSocket())
+  )
+    fail('insecure_permissions');
+  return s;
+}
+export function localRuntimePaths(profile: string): LocalRuntimePaths {
+  if (!isAbsolute(profile) || profile !== resolve(profile)) fail('insecure_permissions');
+  assertLocalPrivate(profile, 'directory');
+  const profileId = createHash('sha256').update(profile).digest('hex');
+  const fallback = '/tmp/ocean-' + process.getuid?.();
+  let root = process.env['XDG_RUNTIME_DIR'] ?? fallback;
+  if (!isAbsolute(root) || resolve(root) !== root) fail('insecure_permissions');
+  if (existsSync(root)) assertLocalPrivate(root, 'directory');
+  // Linux sockaddr_un reserves one byte for NUL. Use a short private fallback.
+  if (Buffer.byteLength(join(root, 'ocean-' + profileId.slice(0, 24), 'runtime.sock')) > 103) {
+    root = fallback;
+    if (existsSync(root)) assertLocalPrivate(root, 'directory');
+  }
+  const directory = join(root, 'ocean-' + profileId.slice(0, 24));
+  const endpoint = join(directory, 'runtime.sock');
+  if (Buffer.byteLength(endpoint) > 103) fail('endpoint_path_too_long');
+  return {
+    profile,
+    profileId,
+    root,
+    directory,
+    endpoint,
+    descriptor: join(directory, 'connection.json'),
+  };
+}
+export function prepareLocalRuntimePaths(paths: LocalRuntimePaths): void {
+  for (const path of [paths.root, paths.directory]) {
+    try {
+      mkdirSync(path, { mode: 0o700 });
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
+    }
+    assertLocalPrivate(path, 'directory');
+  }
+  for (const path of [paths.descriptor, paths.endpoint]) {
+    try {
+      lstatSync(path);
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue;
+      throw error;
+    }
+    fail('endpoint_exists');
+  }
+}
+function entryExists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+export function readLocalRuntimeDescriptor(profile: string): LocalRuntimeDescriptor {
+  const p = localRuntimePaths(profile);
+  for (const path of [p.root, p.directory]) {
+    if (!entryExists(path)) fail('runtime_absent');
+    assertLocalPrivate(path, 'directory');
+  }
+  if (!entryExists(p.descriptor))
+    fail(entryExists(p.endpoint) ? 'endpoint_exists' : 'runtime_absent');
+  const before = assertLocalPrivate(p.descriptor, 'file');
+  const fd = openSync(p.descriptor, constants.O_RDONLY | constants.O_NOFOLLOW);
+  let value: unknown;
+  try {
+    const pinned = fstatSync(fd);
+    if (pinned.ino !== before.ino || pinned.dev !== before.dev || pinned.size > 4096)
+      fail('insecure_permissions');
+    try {
+      value = JSON.parse(readFileSync(fd, 'utf8')) as unknown;
+    } catch {
+      fail('invalid_descriptor');
+    }
+  } finally {
+    closeSync(fd);
+  }
+  if (
+    !localRuntimeRecord(value) ||
+    value['protocol'] !== 1 ||
+    value['profileId'] !== p.profileId ||
+    typeof value['instanceId'] !== 'string' ||
+    !/^[a-f0-9-]{36}$/.test(value['instanceId']) ||
+    value['endpoint'] !== p.endpoint ||
+    typeof value['capability'] !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(value['capability'])
+  )
+    fail('invalid_descriptor');
+  if (!entryExists(p.endpoint)) fail('runtime_unreachable');
+  assertLocalPrivate(p.endpoint, 'socket');
+  return value as unknown as LocalRuntimeDescriptor;
+}
+export function ownsLocalRuntimePath(path: string, owned: Stats): boolean {
+  try {
+    const current = lstatSync(path);
+    return (
+      !current.isSymbolicLink() &&
+      current.ino === owned.ino &&
+      current.dev === owned.dev &&
+      current.uid === owned.uid &&
+      current.mode === owned.mode
+    );
+  } catch {
+    return false;
+  }
+}
+export function unlinkOwnedLocalRuntimePath(path: string, owned: Stats): void {
+  if (ownsLocalRuntimePath(path, owned)) unlinkSync(path);
+}

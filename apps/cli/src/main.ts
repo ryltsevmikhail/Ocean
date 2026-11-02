@@ -14,6 +14,7 @@ const HELP = `ocean ${CLI_VERSION} — Ocean command line
 
 Usage:
   ocean install --archive /archive --sha256 HASH --prefix /user/prefix
+  ocean runtime start|status|stop --profile /path [--json]
   ocean doctor [--profile /path] [--json]
   ocean backup --to /new/snapshot --profile /path
   ocean restore --from /snapshot --profile /new/profile
@@ -51,9 +52,18 @@ export async function main(argv: readonly string[]): Promise<number> {
   if (
     command === '--profile' ||
     command === '--json' ||
-    ['init', 'bot', 'room', 'send', 'history', 'run', 'doctor', 'backup', 'restore'].includes(
-      command ?? '',
-    ) ||
+    [
+      'runtime',
+      'init',
+      'bot',
+      'room',
+      'send',
+      'history',
+      'run',
+      'doctor',
+      'backup',
+      'restore',
+    ].includes(command ?? '') ||
     (command === 'tui' && rest.includes('--room'))
   ) {
     const { runOceanCommand } = await import('./ocean/command.js');

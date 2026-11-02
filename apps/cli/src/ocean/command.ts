@@ -37,6 +37,10 @@ export async function runOceanCommand(
   try {
     const args = oceanArguments(argv);
     const { command, positional, flags } = args;
+    if (command === 'runtime') {
+      const { runRuntimeCommand } = await import('./runtime-command.js');
+      return await runRuntimeCommand(args, output);
+    }
     if (args.bots.length > 1 && !(command === 'room' && positional[0] === 'group'))
       throw new Error('Repeated --bot is only valid for group creation');
     if (['doctor', 'backup', 'restore'].includes(command)) {
@@ -230,7 +234,13 @@ export async function runOceanCommand(
         JSON.stringify({ version: 1, ok: false, error: { code: safe, message: safe } }) + '\n',
       );
     else error.write(terminalText(message) + '\n');
-    return ['owner_busy', 'room_busy'].includes(safe)
+    return [
+      'owner_busy',
+      'room_busy',
+      'runtime_absent',
+      'runtime_unreachable',
+      'endpoint_exists',
+    ].includes(safe)
       ? 3
       : [
             'provider_unavailable',

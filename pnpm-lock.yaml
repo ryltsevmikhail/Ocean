@@ -291,6 +291,9 @@ importers:
       '@runnets/application':
         specifier: workspace:*
         version: link:../application
+      '@runnets/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@runnets/domain':
         specifier: workspace:*
         version: link:../domain

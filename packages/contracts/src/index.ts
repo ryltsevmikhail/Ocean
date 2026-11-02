@@ -7,3 +7,4 @@
 
 export * from './jsonrpc.js';
 export * from './acp.js';
+export * from './local-runtime.js';

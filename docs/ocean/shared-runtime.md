@@ -1,6 +1,8 @@
 # Shared local Ocean runtime
 
-Status: proposed delivery, not implemented. Owner request on 2026-11-02 supersedes
+Status: lifecycle subset implemented; conversation, decision and client migration
+remain proposed. See [implemented lifecycle commands and limits](../integration/local-runtime.md).
+Owner request on 2026-11-02 supersedes
 continuing the remaining coding-backup work as the immediate priority. Ocean 1.1
 stages 1–6 and reviewed stage-7 work through `5d032ae` remain implemented; their
 remaining acceptance gates are not waived. Schedules and ScheduleOccurrence are
