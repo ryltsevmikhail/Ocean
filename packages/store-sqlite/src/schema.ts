@@ -17,9 +17,11 @@ import {
 
 import { CHAT_TABLES, migrateChats } from './chat-schema.js';
 
+import { migrateGroups } from './group-schema.js';
+
 import { readText } from './rows.js';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -123,6 +125,17 @@ export function applyDurabilityProfile(db: DatabaseSync, busyTimeoutMs: number):
  * anything else is refused rather than silently overwritten.
  */
 export function initializeSchema(db: DatabaseSync): void {
+  if (db.isTransaction) throw new Error('Schema initialization requires its own transaction');
+  const foreignKeys = db.prepare('PRAGMA foreign_keys').get()?.['foreign_keys'] === 1;
+  // Parent-table replacement is isolated in one transaction and checked before commit.
+  if (foreignKeys) db.exec('PRAGMA foreign_keys=OFF');
+  try {
+    initializeSchemaTransaction(db);
+  } finally {
+    if (foreignKeys) db.exec('PRAGMA foreign_keys=ON');
+  }
+}
+function initializeSchemaTransaction(db: DatabaseSync): void {
   db.exec('BEGIN IMMEDIATE');
   try {
     const existing = userTables(db);
@@ -165,6 +178,7 @@ export function initializeSchema(db: DatabaseSync): void {
       for (const table of CHAT_TABLES) {
         if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
       }
+    if (previousVersion < 4) migrateGroups(db);
     if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
       throw new Error('Schema foreign key check failed');
     db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(SCHEMA_VERSION));

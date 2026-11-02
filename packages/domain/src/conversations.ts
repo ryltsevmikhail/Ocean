@@ -20,6 +20,14 @@ export interface DirectRoom {
   readonly kind: 'direct';
   readonly botId: string;
 }
+export interface GroupRoom {
+  readonly id: string;
+  readonly workspaceId: string;
+  readonly kind: 'group';
+  readonly title: string;
+  readonly botIds: readonly string[];
+}
+export type Room = DirectRoom | GroupRoom;
 export interface ConversationMessage {
   readonly id: string;
   readonly workspaceId: string;
@@ -28,7 +36,7 @@ export interface ConversationMessage {
   readonly author: 'user' | 'bot';
   readonly authorBotId?: string;
   readonly turnId?: string;
-  readonly targetBotId: string;
+  readonly targetBotId: string | null;
   readonly body: string;
   readonly createdAt: string;
 }
@@ -38,6 +46,7 @@ export type ConversationErrorCode =
   | 'workspace_conflict'
   | 'handle_taken'
   | 'unknown_bot'
+  | 'not_member'
   | 'unknown_room'
   | 'room_busy'
   | 'recovery_required'

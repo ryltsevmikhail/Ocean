@@ -1,4 +1,4 @@
-import type { Bot, ConversationMessage, DirectRoom, Workspace } from '@runnets/domain';
+import type { Bot, ConversationMessage, Room, Workspace } from '@runnets/domain';
 import { readText } from './rows.js';
 
 type Row = Record<string, unknown>;
@@ -26,7 +26,15 @@ export function botRow(row: Row): Bot {
   };
 }
 /** Only M1 direct rooms are accepted by this adapter version. */
-export function roomRow(row: Row): DirectRoom {
+export function roomRow(row: Row, botIds: readonly string[] = []): Room {
+  if (row['kind'] === 'group')
+    return {
+      id: readText(row, 'id'),
+      workspaceId: readText(row, 'workspace_id'),
+      kind: 'group',
+      title: readText(row, 'title'),
+      botIds,
+    };
   if (row['kind'] !== 'direct') throw new Error('Unsupported room kind');
   return {
     id: readText(row, 'id'),
@@ -48,7 +56,7 @@ export function messageRow(row: Row): ConversationMessage {
     ...(row['author'] === 'bot'
       ? { authorBotId: readText(row, 'author_bot_id'), turnId: readText(row, 'turn_id') }
       : {}),
-    targetBotId: readText(row, 'target_bot_id'),
+    targetBotId: row['target_bot_id'] === null ? null : readText(row, 'target_bot_id'),
     body: readText(row, 'body'),
     createdAt: readText(row, 'created_at'),
   };

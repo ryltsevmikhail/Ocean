@@ -39,7 +39,7 @@ CLI commands for that profile. The default profile is under
 
 ## Persistence and retry behavior
 
-Schema 3 migrates schema 1 or 2 transactionally. Existing profiles, rooms,
+M2 introduced schema 3. Current schema 4 preserves that data and adds [group rooms](group-chat.md), migrating schemas 1–3 transactionally. Existing profiles, rooms,
 user records and receipts survive. Bot messages have their author and chat turn
 identity. A unique room hold excludes overlapping execution; a unique publication
 per turn prevents duplicate answers.

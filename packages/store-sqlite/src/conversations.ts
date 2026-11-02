@@ -20,6 +20,15 @@ export class SqliteConversationStore implements ConversationStore {
   /** Roll back profile, room, history and sequence allocation if any receipt write fails. */
   atomic<T>(work: (transaction: ConversationTransaction) => T): T {
     const db = this.#db;
+    const decodeRoom = (row: Record<string, unknown>) =>
+      roomRow(
+        row,
+        db
+          .prepare('SELECT bot_id FROM ocean_members WHERE room_id=? ORDER BY bot_id')
+          .all(readText(row, 'id'))
+          .map((m) => readText(m, 'bot_id')),
+      );
+
     return withImmediateTransaction(db, () =>
       work({
         ...chatStorage(db),
@@ -53,20 +62,26 @@ export class SqliteConversationStore implements ConversationStore {
         },
         room(id) {
           const row = db.prepare('SELECT * FROM ocean_rooms WHERE id=?').get(id);
-          return row === undefined ? null : roomRow(row);
+          return row === undefined ? null : decodeRoom(row);
         },
+        rooms: () => db.prepare('SELECT * FROM ocean_rooms ORDER BY id').all().map(decodeRoom),
         directRoom(botId) {
           const row = db.prepare('SELECT * FROM ocean_rooms WHERE bot_id=?').get(botId);
-          return row === undefined ? null : roomRow(row);
+          if (row === undefined) return null;
+          const room = decodeRoom(row);
+          if (room.kind !== 'direct') throw new Error('Expected direct room');
+          return room;
         },
         putRoom(r) {
-          db.prepare('INSERT INTO ocean_rooms VALUES(?,?,?,?)').run(
+          db.prepare('INSERT INTO ocean_rooms VALUES(?,?,?,?,?)').run(
             r.id,
             r.workspaceId,
             r.kind,
-            r.botId,
+            r.kind === 'direct' ? r.botId : null,
+            r.kind === 'group' ? r.title : null,
           );
-          db.prepare('INSERT INTO ocean_members VALUES(?,?,?)').run(r.workspaceId, r.id, r.botId);
+          for (const id of r.kind === 'direct' ? [r.botId] : r.botIds)
+            db.prepare('INSERT INTO ocean_members VALUES(?,?,?)').run(r.workspaceId, r.id, id);
         },
         history: (roomId, after, limit) =>
           db

@@ -16,7 +16,9 @@ Usage:
   ocean init --workspace dir [--profile /path]
   ocean bot add --handle dev --name Developer --role "Your role"
   ocean bot list | ocean room direct --bot dev
-  ocean send roomId --text "message" [--request-id id] [--json]
+  ocean room group --name Team --bot dev --bot review
+  ocean room list | ocean room members roomId
+  ocean send roomId --text "message" [--to dev] [--request-id id] [--json]
   ocean history roomId | ocean tui --room roomId
   runne                 open TUI in the current directory
   runne demo [--json]   run a scripted TaskRun lifecycle and print the result

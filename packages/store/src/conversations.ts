@@ -3,13 +3,13 @@ import type {
   ConversationStore,
   ConversationTransaction,
 } from '@runnets/application';
-import type { ChatTurn, Bot, ConversationMessage, DirectRoom, Workspace } from '@runnets/domain';
+import type { ChatTurn, Bot, ConversationMessage, Room, Workspace } from '@runnets/domain';
 
 interface State {
   turns: Map<string, ChatTurn>;
   workspace: Workspace | null;
   bots: Map<string, Bot>;
-  rooms: Map<string, DirectRoom>;
+  rooms: Map<string, Room>;
   messages: Map<string, ConversationMessage>;
   receipts: Map<string, ConversationReceipt>;
 }
@@ -56,8 +56,12 @@ export class InMemoryConversationStore implements ConversationStore {
         if (state.bots.has(value.id)) throw new Error('duplicate bot identity');
         state.bots.set(value.id, value);
       },
+      rooms: () => [...state.rooms.values()],
       room: (id) => state.rooms.get(id) ?? null,
-      directRoom: (botId) => [...state.rooms.values()].find((r) => r.botId === botId) ?? null,
+      directRoom: (botId) =>
+        [...state.rooms.values()].find(
+          (r): r is Extract<Room, { kind: 'direct' }> => r.kind === 'direct' && r.botId === botId,
+        ) ?? null,
       putRoom: (value) => {
         if (state.rooms.has(value.id)) throw new Error('duplicate room identity');
         state.rooms.set(value.id, value);

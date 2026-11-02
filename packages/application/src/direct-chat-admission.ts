@@ -1,26 +1,29 @@
 import {
   conversationFailure,
   ok,
+  roomAddress,
   validConversationText,
   type ChatTurn,
+  type ConversationMessage,
   type ConversationResult,
 } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
 import type { ConversationServiceDeps } from './conversations.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
+import { roomContext } from './room-context.js';
 
 export interface DirectChatRequest {
   readonly workspaceId: string;
   readonly requestId: string;
   readonly roomId: string;
   readonly text: string;
+  readonly to?: string | undefined;
 }
-export interface ChatAdmission {
-  readonly turn: ChatTurn;
-  readonly fresh: boolean;
-  readonly messages: readonly ChatMessage[];
-}
-/** Admit under the same lock as the inbound record and request receipt. */
+export type ChatAdmission =
+  | { readonly turn: ChatTurn; readonly fresh: boolean; readonly messages: readonly ChatMessage[] }
+  | { readonly record: ConversationMessage };
+
+/** Bind a user request and its sole selected recipient before admitting any model dispatch. */
 export function admitChat(
   deps: ConversationServiceDeps,
   request: DirectChatRequest,
@@ -33,12 +36,20 @@ export function admitChat(
     !validConversationText(request.text, 16384)
   )
     return conversationFailure('invalid_input');
-  const binding = JSON.stringify(['SendDirect', request.workspaceId, request.roomId, request.text]);
+  // Preserve the existing M2 identity exactly when no new recipient option is supplied.
+  const binding = JSON.stringify([
+    'SendDirect',
+    request.workspaceId,
+    request.roomId,
+    request.text,
+    ...(request.to === undefined ? [] : [request.to]),
+  ]);
   return deps.store.atomic((tx) => {
     const receipt = tx.receipt(request.requestId);
     if (receipt !== null) {
-      if (receipt.binding !== binding || receipt.reply.kind !== 'turn')
-        return conversationFailure('request_conflict');
+      if (receipt.binding !== binding) return conversationFailure('request_conflict');
+      if (receipt.reply.kind === 'message') return ok({ record: receipt.reply.data });
+      if (receipt.reply.kind !== 'turn') return conversationFailure('request_conflict');
       const turn = tx.chatTurn(receipt.reply.data.id);
       if (turn === null) throw new Error('chat receipt has no turn');
       return ok({ turn, fresh: false, messages: [] });
@@ -47,39 +58,46 @@ export function admitChat(
       return conversationFailure('workspace_conflict');
     const room = tx.room(request.roomId);
     if (room === null) return conversationFailure('unknown_room');
-    const bot = tx.bot(room.botId);
-    if (bot === null) return conversationFailure('unknown_bot');
+    const address = roomAddress(request.text, request.to);
+    if (!address.ok) return address;
+    const memberIds = room.kind === 'direct' ? [room.botId] : room.botIds;
+    const selected =
+      address.value === null
+        ? room.kind === 'direct'
+          ? tx.bot(room.botId)
+          : null
+        : (tx.botByHandle(address.value) ?? tx.bot(address.value));
+    if (address.value !== null && selected === null) return conversationFailure('unknown_bot');
+    if (selected !== null && !memberIds.includes(selected.id))
+      return conversationFailure('not_member');
+    if (selected === null) {
+      const record: ConversationMessage = {
+        id: deps.nextId(),
+        workspaceId: request.workspaceId,
+        roomId: room.id,
+        seq: tx.nextSequence(room.id),
+        author: 'user',
+        targetBotId: null,
+        body: request.text,
+        createdAt: deps.clock.now().toISOString(),
+      };
+      tx.putMessage(record);
+      tx.putReceipt(request.requestId, { binding, reply: { kind: 'message', data: record } });
+      return ok({ record });
+    }
     const active = tx.activeChatTurn(room.id);
     if (active !== null)
       return conversationFailure(active.status === 'uncertain' ? 'recovery_required' : 'room_busy');
-    if (provider === null) return conversationFailure('provider_unavailable');
     if (
-      provider.id !== bot.provider ||
-      !provider.models.includes(bot.model) ||
+      provider === null ||
+      provider.id !== selected.provider ||
+      !provider.models.includes(selected.model) ||
       !provider.capabilities.streaming ||
       !provider.capabilities.usage
     )
       return conversationFailure('provider_unavailable');
-    const messages: ChatMessage[] = [{ role: 'system', content: bot.role }];
-    let after = 0;
-    let characters = bot.role.length + request.text.length;
-    for (;;) {
-      const page = tx.history(room.id, after, 200);
-      for (const message of page) {
-        characters += message.body.length;
-        if (characters > 65536) return conversationFailure('context_limit');
-        messages.push({
-          role: message.author === 'bot' ? 'assistant' : 'user',
-          content: message.body,
-        });
-      }
-      if (page.length < 200) break;
-      after = page.at(-1)?.seq ?? after;
-    }
-    messages.push({ role: 'user', content: request.text });
-    // A conservative local ceiling bounds request memory; never silently truncate history.
-    if (!validConversationText(messages.map((m) => m.content).join('\n'), 65536))
-      return conversationFailure('context_limit');
+    const context = roomContext(tx, room, selected, request.text);
+    if (!context.ok) return context;
     const id = deps.nextId();
     const messageId = deps.nextId();
     const seq = tx.nextSequence(room.id);
@@ -91,7 +109,7 @@ export function admitChat(
       taskRunId: 'tr_' + id,
       inboundMessageId: messageId,
       readThroughSeq: seq,
-      bot,
+      bot: selected,
       status: 'accepted',
       text: '',
       preparedVersion: null,
@@ -103,16 +121,16 @@ export function admitChat(
       roomId: room.id,
       seq,
       author: 'user',
-      targetBotId: bot.id,
+      targetBotId: selected.id,
       body: request.text,
       createdAt: deps.clock.now().toISOString(),
     });
     tx.putChatTurn(turn);
     tx.putReceipt(request.requestId, { binding, reply: { kind: 'turn', data: turn } });
-    return ok({ turn, fresh: true, messages });
+    return ok({ turn, fresh: true, messages: context.value });
   });
 }
-/** Update only a still-matching durable phase; late results cannot release another turn. */
+/** Update only a matching durable phase. Late results cannot release another turn. */
 export function updateChat(store: ConversationStore, expected: ChatTurn, next: ChatTurn): void {
   store.atomic((tx) => {
     const current = tx.chatTurn(expected.id);

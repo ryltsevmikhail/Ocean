@@ -1,4 +1,5 @@
 import { afterEach, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { initializeSchema } from './schema.js';
 import { ConversationService } from '@runnets/application';
@@ -11,58 +12,44 @@ afterEach(() => {
 function versionTwo() {
   const db = new DatabaseSync(':memory:', { enableForeignKeyConstraints: true });
   dbs.push(db);
-  initializeSchema(db);
-  let id = 0;
+  db.exec(readFileSync(new URL('./fixtures/ocean-schema-v2.sql', import.meta.url), 'utf8'));
+  db.exec("INSERT INTO ocean_workspace VALUES(1,'w','/project')");
+  db.exec("INSERT INTO ocean_bots VALUES('1','w','dev','Dev','Role','deepseek','test',1)");
+  db.exec("INSERT INTO ocean_rooms VALUES('2','w','direct','1')");
+  db.exec("INSERT INTO ocean_members VALUES('w','2','1')");
+  db.exec(
+    "INSERT INTO ocean_messages VALUES('3','w','2',1,'user','1','saved in M1','2026-11-02T00:00:00Z')",
+  );
   const s = new ConversationService({
     store: new SqliteConversationStore(db),
     clock: { now: () => new Date('2026-11-02T00:00:00Z') },
-    nextId: () => String(++id),
+    nextId: () => {
+      throw new Error('read only fixture');
+    },
   });
-  s.execute({ type: 'BindWorkspace', requestId: 'init', workspaceId: 'w', root: '/project' });
-  s.execute({
-    type: 'CreateBot',
-    requestId: 'bot',
-    workspaceId: 'w',
-    handle: 'dev',
-    name: 'Dev',
-    role: 'Role',
-    provider: 'deepseek',
-    model: 'test',
-  });
-  s.execute({ type: 'OpenDirectRoom', requestId: 'room', workspaceId: 'w', botId: '1' });
-  s.execute({
-    type: 'RecordUserMessage',
-    requestId: 'message',
-    workspaceId: 'w',
-    roomId: '2',
-    text: 'saved in M1',
-  });
-  // Reproduce the M1 message table shape and version while retaining all M1 data.
-  db.exec(`ALTER TABLE ocean_messages RENAME TO messages_v3;
-    CREATE TABLE ocean_messages(
-      id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, room_id TEXT NOT NULL,
-      seq INTEGER NOT NULL, author TEXT NOT NULL CHECK(author='user'),target_bot_id TEXT NOT NULL,
-      body TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(room_id,seq),
-      FOREIGN KEY(workspace_id,room_id) REFERENCES ocean_rooms(workspace_id,id),
-      FOREIGN KEY(room_id,target_bot_id) REFERENCES ocean_members(room_id,bot_id)
-    ) STRICT;
-    INSERT INTO ocean_messages SELECT id,workspace_id,room_id,seq,author,target_bot_id,body,created_at FROM messages_v3;
-    DROP TABLE messages_v3;
-    DROP TABLE ocean_chat_turns;
-    UPDATE meta SET value='2' WHERE key='schema_version';
-  `);
   return { db, s };
 }
-it('preserves actual M1 message rows, profiles, memberships and receipts in schema 2→3', () => {
+it('preserves actual M1 message rows, profiles, memberships and receipts in schema 2→4', () => {
   const { db, s } = versionTwo();
   const tables = ['ocean_bots', 'ocean_rooms', 'ocean_members', 'ocean_receipts'];
-  const before = tables.map((t) => db.prepare('SELECT * FROM ' + t).all());
+  const snapshot = () =>
+    tables.map((t) =>
+      db
+        .prepare(
+          t === 'ocean_rooms'
+            ? 'SELECT id,workspace_id,kind,bot_id FROM ocean_rooms'
+            : 'SELECT * FROM ' + t,
+        )
+        .all(),
+    );
+  const before = snapshot();
   const history = s.history('w', '2');
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '3',
+    '4',
   );
-  expect(tables.map((t) => db.prepare('SELECT * FROM ' + t).all())).toEqual(before);
+  expect(snapshot()).toEqual(before);
+  expect(db.prepare('SELECT title FROM ocean_rooms').get()?.['title']).toBeNull();
   expect(s.history('w', '2')).toEqual(history);
   initializeSchema(db);
   expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);

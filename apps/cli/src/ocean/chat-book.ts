@@ -16,7 +16,7 @@ export class ChatRunBook implements RunBookPort {
   #controller: AbortController | null = null;
   #cancelRequested = false;
   readonly #workspaceId = 'ws_ocean';
-  #name = '';
+  #names = new Map<string, string>();
   model = '';
   providerId: string | null = null;
   constructor(runtime: Runtime, roomId: string, provider: ProviderPort | null) {
@@ -37,13 +37,11 @@ export class ChatRunBook implements RunBookPort {
   restore(): Promise<void> {
     const room = this.#runtime.conversations.room(this.#workspaceId, this.#roomId);
     if (!room.ok) throw new Error(room.error.code);
-    const bots = this.#runtime.conversations.bots(this.#workspaceId);
+    const bots = this.#runtime.conversations.members(this.#workspaceId, this.#roomId);
     if (!bots.ok) throw new Error(bots.error.code);
-    const bot = bots.value.find((b) => b.id === room.value.botId);
-    if (bot === undefined) throw new Error('unknown_bot');
-    this.#name = bot.name;
-    this.model = bot.model;
-    this.providerId = bot.provider;
+    this.#names = new Map(bots.value.map((b) => [b.id, b.name]));
+    this.model = bots.value.map((b) => '@' + b.handle + ' / ' + b.model).join(', ');
+    this.providerId = room.value.kind === 'direct' ? (bots.value[0]?.provider ?? null) : 'group';
     return Promise.resolve();
   }
   /** New screen entry retains the same direct room; transcript comes from committed history. */
@@ -90,11 +88,19 @@ export class ChatRunBook implements RunBookPort {
         emit,
         onAdmitted: (turn) => {
           entry.taskRunId = taskRunId(turn.taskRunId);
+          this.model = '@' + turn.bot.handle + ' / ' + turn.bot.model;
+          this.providerId = turn.bot.provider;
         },
       });
       if (!result.ok) throw new Error(result.error.code);
       entry.stream = this.#transcript();
       const turn = result.value;
+      if (turn.status === 'recorded')
+        return {
+          kind: 'completed',
+          text: 'Message recorded without model dispatch',
+          stopReason: 'end_turn',
+        };
       if (turn.status === 'completed')
         return { kind: 'completed', text: turn.text, stopReason: turn.stopReason };
       if (turn.status === 'cancelled')
@@ -127,7 +133,9 @@ export class ChatRunBook implements RunBookPort {
         lines.push({
           kind: message.author === 'bot' ? 'text' : 'user',
           text: message.body,
-          ...(message.author === 'bot' ? { label: this.#name } : {}),
+          ...(message.author === 'bot'
+            ? { label: this.#names.get(message.authorBotId ?? '') ?? 'Bot' }
+            : {}),
         });
       if (result.value.length < 200) break;
       after = result.value.at(-1)?.seq ?? after;

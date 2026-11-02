@@ -22,6 +22,8 @@ export async function runDirectTui(options: DirectTuiOptions): Promise<number> {
     await runtime.ready;
     const provider =
       options.provider === undefined ? createProviderFromEnv(process.env) : options.provider;
+    const room = runtime.conversations.room('ws_ocean', options.roomId);
+    if (!room.ok) throw new Error(room.error.code);
     const book = new ChatRunBook(runtime, options.roomId, provider);
     app = new TuiApp({
       service: runtime.service,
@@ -29,7 +31,7 @@ export async function runDirectTui(options: DirectTuiOptions): Promise<number> {
       book,
       input: options.input ?? process.stdin,
       output: options.output ?? process.stdout,
-      workspace: options.roomId,
+      workspace: room.value.kind === 'group' ? room.value.title : options.roomId,
     });
     await app.start();
     await app.whenExit();

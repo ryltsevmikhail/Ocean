@@ -85,7 +85,7 @@ describe('schema initialization', () => {
 
   it('fails closed on a newer schema version', () => {
     const db = memoryDatabase();
-    db.prepare(`UPDATE meta SET value = '4' WHERE key = 'schema_version'`).run();
+    db.prepare(`UPDATE meta SET value = '5' WHERE key = 'schema_version'`).run();
 
     expect(() => {
       initializeSchema(db);

@@ -55,6 +55,6 @@ A failed migration keeps the previous version and rolls back newly created table
 ## Remaining milestones
 
 CLI/TUI profile commands, bot replies, model context reconstruction and TaskRun
-assignment are implemented in [M2](direct-chat.md). Group rooms and membership changes belong to M3. The
+assignment are implemented in [M2](direct-chat.md). Group rooms are implemented in [M3](group-chat.md). Membership changes remain a later feature. The
 full target schema and command interface in docs/ocean describe those future
 milestones; M1 implements only the direct user-history subset.

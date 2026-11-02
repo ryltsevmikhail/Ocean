@@ -24,7 +24,7 @@ transaction. Duplicate commands return the original receipt before checking the
 current aggregate version. Reusing an id with another task, actor, expected
 version, type or payload returns an error. In-memory logs use the same semantics.
 
-Schema 3 migrates versions 1 and 2 transactionally, retains M1 conversation tables, adds durable direct-chat turns and bot replies, and preserves existing task records. Migration refuses a live or unverifiable runtime owner. See [direct history](conversations.md). The legacy compatibility extensions still include a nullable `request_binding` receipt column,
+Schema 4 migrates versions 1–3 transactionally, retains conversation history and task records, and adds group rooms and untargeted shared messages. See [group chats](group-chat.md). Migration refuses a live or unverifiable runtime owner. See [direct history](conversations.md). The legacy compatibility extensions still include a nullable `request_binding` receipt column,
 `tool_invocations_v2`, ownership metadata and durable identity counters.
 Existing rows remain intact. Old receipts without request bindings cannot prove
 which request committed: retries fail closed rather than returning unverifiable

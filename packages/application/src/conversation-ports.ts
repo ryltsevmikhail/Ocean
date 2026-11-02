@@ -4,6 +4,7 @@ import type {
   BotProfileInput,
   ConversationMessage,
   DirectRoom,
+  Room,
   Workspace,
 } from '@runnets/domain';
 
@@ -16,6 +17,11 @@ export type ConversationCommand =
   | (Request & BotProfileInput & { readonly type: 'CreateBot' })
   | (Request & { readonly type: 'OpenDirectRoom'; readonly botId: string })
   | (Request & {
+      readonly type: 'CreateGroupRoom';
+      readonly title: string;
+      readonly botIds: readonly string[];
+    })
+  | (Request & {
       readonly type: 'RecordUserMessage';
       readonly roomId: string;
       readonly text: string;
@@ -23,7 +29,7 @@ export type ConversationCommand =
 export type ConversationReply =
   | { readonly kind: 'workspace'; readonly data: Workspace }
   | { readonly kind: 'bot'; readonly data: Bot }
-  | { readonly kind: 'room'; readonly data: DirectRoom }
+  | { readonly kind: 'room'; readonly data: Room }
   | { readonly kind: 'message'; readonly data: ConversationMessage }
   | { readonly kind: 'turn'; readonly data: ChatTurn };
 export interface ConversationReceipt {
@@ -42,9 +48,10 @@ export interface ConversationTransaction {
   botByHandle(handle: string): Bot | null;
   bots(): readonly Bot[];
   putBot(bot: Bot): void;
-  room(id: string): DirectRoom | null;
+  room(id: string): Room | null;
+  rooms(): readonly Room[];
   directRoom(botId: string): DirectRoom | null;
-  putRoom(room: DirectRoom): void;
+  putRoom(room: Room): void;
   history(roomId: string, after: number, limit: number): readonly ConversationMessage[];
   nextSequence(roomId: string): number;
   putMessage(message: ConversationMessage): void;

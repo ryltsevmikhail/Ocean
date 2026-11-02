@@ -6,7 +6,7 @@ import {
   type Bot,
   type ConversationMessage,
   type ConversationResult,
-  type DirectRoom,
+  type Room,
 } from '@runnets/domain';
 import type { Clock } from './ports.js';
 import type {
@@ -31,6 +31,8 @@ export class ConversationService {
 
   /** Bind a complete immutable request to its receipt before returning success. */
   execute(command: ConversationCommand): ConversationResult<ConversationReply> {
+    // Detach the only nested input before any adapter or identity callback can observe it.
+    if (command.type === 'CreateGroupRoom') command = { ...command, botIds: [...command.botIds] };
     const binding = JSON.stringify(
       Object.entries(command).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
     );
@@ -61,7 +63,7 @@ export class ConversationService {
   }
 
   /** Resolve a room only within the bound workspace. */
-  room(workspaceId: string, roomId: string): ConversationResult<DirectRoom> {
+  room(workspaceId: string, roomId: string): ConversationResult<Room> {
     return this.#deps.store.atomic((tx) => {
       if (tx.workspace()?.id !== workspaceId) return conversationFailure('workspace_conflict');
       const room = tx.room(roomId);
@@ -69,6 +71,29 @@ export class ConversationService {
     });
   }
 
+  /** Enumerate the bound workspace's rooms and their explicitly selected members. */
+  rooms(workspaceId: string): ConversationResult<readonly Room[]> {
+    return this.#deps.store.atomic((tx) =>
+      tx.workspace()?.id === workspaceId
+        ? ok(tx.rooms())
+        : conversationFailure('workspace_conflict'),
+    );
+  }
+  /** Resolve membership only after checking room scope. */
+  members(workspaceId: string, roomId: string): ConversationResult<readonly Bot[]> {
+    const room = this.room(workspaceId, roomId);
+    if (!room.ok) return room;
+    return this.#deps.store.atomic((tx) => {
+      const ids = room.value.kind === 'direct' ? [room.value.botId] : room.value.botIds;
+      return ok(
+        ids.map((id) => {
+          const b = tx.bot(id);
+          if (b === null) throw new Error('Missing room member');
+          return b;
+        }),
+      );
+    });
+  }
   /** Return an ordered, room-scoped page without loading another room's history. */
   history(
     workspaceId: string,
@@ -140,6 +165,26 @@ export class ConversationService {
         tx.putRoom(data);
         return ok({ kind: 'room', data });
       }
+      case 'CreateGroupRoom': {
+        if (
+          !validConversationText(command.title, 256) ||
+          command.botIds.length < 2 ||
+          command.botIds.length > 32 ||
+          new Set(command.botIds).size !== command.botIds.length
+        )
+          return conversationFailure('invalid_input');
+        for (const id of command.botIds)
+          if (tx.bot(id) === null) return conversationFailure('unknown_bot');
+        const data = {
+          id: this.#deps.nextId(),
+          workspaceId: workspace.id,
+          kind: 'group' as const,
+          title: command.title,
+          botIds: [...command.botIds].sort(),
+        };
+        tx.putRoom(data);
+        return ok({ kind: 'room', data });
+      }
       case 'RecordUserMessage': {
         if (tx.activeChatTurn(command.roomId) !== null) return conversationFailure('room_busy');
         if (!validConversationText(command.text, 16384))
@@ -152,7 +197,7 @@ export class ConversationService {
           roomId: room.id,
           seq: tx.nextSequence(room.id),
           author: 'user',
-          targetBotId: room.botId,
+          targetBotId: room.kind === 'direct' ? room.botId : null,
           body: command.text,
           createdAt: this.#deps.clock.now().toISOString(),
         };

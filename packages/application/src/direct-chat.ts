@@ -17,6 +17,12 @@ import type { TurnUpdate } from './turn-update.js';
 import { executeStep } from './commands.js';
 import { runTurn } from './turn.js';
 
+export interface RecordedRoomMessage {
+  readonly status: 'recorded';
+  readonly roomId: string;
+  readonly messageId: string;
+  readonly taskRunId: null;
+}
 export interface DirectChatDeps extends ConversationServiceDeps {
   readonly tasks: TaskRunService;
 }
@@ -33,9 +39,16 @@ export class DirectChatService {
     this.#deps = deps;
   }
   /** A request receipt can observe a turn, but can never authorize another dispatch. */
-  async send(input: SendDirectInput): Promise<ConversationResult<ChatTurn>> {
+  async send(input: SendDirectInput): Promise<ConversationResult<ChatTurn | RecordedRoomMessage>> {
     const admitted = admitChat(this.#deps, input, input.provider);
     if (!admitted.ok) return admitted;
+    if ('record' in admitted.value)
+      return ok({
+        status: 'recorded',
+        roomId: admitted.value.record.roomId,
+        messageId: admitted.value.record.id,
+        taskRunId: null,
+      });
     let turn = admitted.value.turn;
     input.onAdmitted?.(turn);
     if (!admitted.value.fresh) return ok(turn);

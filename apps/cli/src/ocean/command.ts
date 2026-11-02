@@ -24,6 +24,8 @@ export async function runOceanCommand(
   try {
     const args = oceanArguments(argv);
     const { command, positional, flags } = args;
+    if (args.bots.length > 1 && !(command === 'room' && positional[0] === 'group'))
+      throw new Error('Repeated --bot is only valid for group creation');
     if (command === 'tui') {
       const { runDirectTui } = await import('./tui.js');
       return await runDirectTui({
@@ -74,6 +76,31 @@ export async function runOceanCommand(
       const bot = bots.value.find((bot) => bot.handle === handle || bot.id === handle);
       if (bot === undefined) throw new Error('unknown_bot');
       data = execute({ type: 'OpenDirectRoom', requestId, workspaceId, botId: bot.id });
+    } else if (command === 'room' && positional[0] === 'group') {
+      const bots = runtime.conversations.bots(workspaceId);
+      if (!bots.ok) throw new Error(bots.error.code);
+      const ids = args.bots.map((handle) => {
+        const bot = bots.value.find((b) => b.handle === handle || b.id === handle);
+        if (bot === undefined) throw new Error('unknown_bot');
+        return bot.id;
+      });
+      data = execute({
+        type: 'CreateGroupRoom',
+        requestId,
+        workspaceId,
+        title: required(flags, 'name'),
+        botIds: ids,
+      });
+    } else if (command === 'room' && positional[0] === 'list') {
+      const result = runtime.conversations.rooms(workspaceId);
+      if (!result.ok) throw new Error(result.error.code);
+      data = result.value;
+    } else if (command === 'room' && positional[0] === 'members') {
+      const roomId = positional[1];
+      if (roomId === undefined) throw new Error('room ID required');
+      const result = runtime.conversations.members(workspaceId, roomId);
+      if (!result.ok) throw new Error(result.error.code);
+      data = result.value;
     } else if (command === 'history') {
       const roomId = positional[0];
       if (roomId === undefined) throw new Error('room ID required');
@@ -98,6 +125,7 @@ export async function runOceanCommand(
           roomId,
           requestId,
           text: required(flags, 'text'),
+          to: flags.get('to'),
           provider:
             options.provider === undefined ? createProviderFromEnv(process.env) : options.provider,
           signal: controller.signal,
@@ -109,7 +137,7 @@ export async function runOceanCommand(
         if (!result.ok) throw new Error(result.error.code);
         data = result.value;
         output.write(JSON.stringify({ version: 1, ok: true, data }) + '\n');
-        return result.value.status === 'completed' ? 0 : 4;
+        return result.value.status === 'completed' || result.value.status === 'recorded' ? 0 : 4;
       } finally {
         process.off('SIGINT', cancel);
         process.off('SIGTERM', cancel);
