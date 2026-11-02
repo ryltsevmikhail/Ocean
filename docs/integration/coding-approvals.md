@@ -14,3 +14,10 @@ These types grant no authority on their own. Application admission must
 validate task ownership, lease and pending claims, persist the exact preview
 and trusted owner decision, then atomically consume an allowed decision
 before dispatch. Restored decisions remain unusable.
+
+The application service now requests an atomic preview record before prompting
+the trusted owner port, then rechecks task admission, exact binding and expiry
+after the owner returns. It supports allow-once, deny and cancel. Restored
+instances refuse requests and decisions. Regression tests cover expiry while
+the owner prompt is open and restored request refusal. Concrete durable storage,
+atomic consumption and host integration remain pending.

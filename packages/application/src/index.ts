@@ -26,3 +26,5 @@ export * from './coding-service.js';
 export * from './changeset-ports.js';
 
 export * from './changeset.js';
+
+export * from './coding-approval.js';
