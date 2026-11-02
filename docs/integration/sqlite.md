@@ -24,7 +24,7 @@ transaction. Duplicate commands return the original receipt before checking the
 current aggregate version. Reusing an id with another task, actor, expected
 version, type or payload returns an error. In-memory logs use the same semantics.
 
-Existing schema-v1 databases gain a nullable `request_binding` receipt column,
+Schema 2 migrates version 1 transactionally, adds the M1 conversation tables, and preserves existing task records. Migration refuses a live or unverifiable runtime owner. See [direct history](conversations.md). The legacy compatibility extensions still include a nullable `request_binding` receipt column,
 `tool_invocations_v2`, ownership metadata and durable identity counters.
 Existing rows remain intact. Old receipts without request bindings cannot prove
 which request committed: retries fail closed rather than returning unverifiable

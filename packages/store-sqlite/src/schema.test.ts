@@ -57,7 +57,18 @@ describe('schema initialization', () => {
   it('creates the store tables and records the schema version', () => {
     const db = memoryDatabase();
 
-    expect(tableNames(db).sort()).toEqual(['checkpoints', 'command_receipts', 'events', 'meta']);
+    expect(tableNames(db).sort()).toEqual([
+      'checkpoints',
+      'command_receipts',
+      'events',
+      'meta',
+      'ocean_bots',
+      'ocean_members',
+      'ocean_messages',
+      'ocean_receipts',
+      'ocean_rooms',
+      'ocean_workspace',
+    ]);
     expect(db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()?.['value']).toBe(
       String(SCHEMA_VERSION),
     );
@@ -73,7 +84,7 @@ describe('schema initialization', () => {
 
   it('fails closed on a newer schema version', () => {
     const db = memoryDatabase();
-    db.prepare(`UPDATE meta SET value = '2' WHERE key = 'schema_version'`).run();
+    db.prepare(`UPDATE meta SET value = '3' WHERE key = 'schema_version'`).run();
 
     expect(() => {
       initializeSchema(db);

@@ -12,3 +12,6 @@ export * from './tool-round.js';
 export * from './turn-update.js';
 export * from './reconciliation.js';
 export * from './turn-target.js';
+
+export * from './conversation-ports.js';
+export * from './conversations.js';

@@ -9,9 +9,15 @@
 
 import { DatabaseSync } from 'node:sqlite';
 
+import {
+  CONVERSATION_TABLES,
+  migrateConversations,
+  assertMigrationOwnerAbsent,
+} from './conversation-schema.js';
+
 import { readText } from './rows.js';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -82,8 +88,10 @@ export function openDatabase(path: string, busyTimeoutMs: number): DatabaseSync 
   assertBusyTimeout(busyTimeoutMs);
   const db = new DatabaseSync(path, { enableForeignKeyConstraints: true });
   try {
-    applyDurabilityProfile(db, busyTimeoutMs);
+    db.exec('PRAGMA synchronous = FULL');
+    db.exec('PRAGMA busy_timeout = ' + String(busyTimeoutMs));
     initializeSchema(db);
+    applyDurabilityProfile(db, busyTimeoutMs);
     if (path !== ':memory:') assertWalMode(db);
     return db;
   } catch (error) {
@@ -116,6 +124,7 @@ export function initializeSchema(db: DatabaseSync): void {
   db.exec('BEGIN IMMEDIATE');
   try {
     const existing = userTables(db);
+    let previousVersion = 1;
     if (!existing.has('meta')) {
       if (existing.size > 0) {
         throw new Error(
@@ -127,17 +136,28 @@ export function initializeSchema(db: DatabaseSync): void {
         String(SCHEMA_VERSION),
       );
     } else {
-      assertSchemaVersion(db);
+      previousVersion = assertSchemaVersion(db);
       for (const table of REQUIRED_TABLES) {
         if (!existing.has(table)) {
           throw new Error(`database schema is missing table ${table}`);
         }
       }
     }
+    if (previousVersion === 1) assertMigrationOwnerAbsent(db);
     // Additive v1 extension preserves old stores and marks old receipts as unbound.
     const receiptColumns = db.prepare('PRAGMA table_info(command_receipts)').all();
     if (!receiptColumns.some((column) => column['name'] === 'request_binding')) {
       db.exec('ALTER TABLE command_receipts ADD COLUMN request_binding TEXT');
+    }
+    if (previousVersion === 1) {
+      migrateConversations(db);
+      if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
+        throw new Error('Schema migration failed foreign key check');
+      db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(SCHEMA_VERSION));
+    } else {
+      for (const table of CONVERSATION_TABLES) {
+        if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
+      }
     }
     db.exec('COMMIT');
   } catch (error) {
@@ -165,7 +185,7 @@ function assertPragma(
   }
 }
 
-function assertSchemaVersion(db: DatabaseSync): void {
+function assertSchemaVersion(db: DatabaseSync): number {
   const row = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get();
   if (row === undefined) {
     throw new Error('database is not a RunneTS store: meta has no schema_version row');
@@ -180,11 +200,12 @@ function assertSchemaVersion(db: DatabaseSync): void {
       `database schema version ${version} is newer than the supported version ${SCHEMA_VERSION}`,
     );
   }
-  if (version < SCHEMA_VERSION) {
+  if (version < 1) {
     throw new Error(
       `database schema version ${version} is older than the supported version ${SCHEMA_VERSION} and no migration exists`,
     );
   }
+  return version;
 }
 
 function userTables(db: DatabaseSync): ReadonlySet<string> {

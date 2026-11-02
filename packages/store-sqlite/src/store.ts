@@ -12,9 +12,12 @@ import type {
   EventLogPort,
   IdGenerator,
   ToolJournalPort,
+  ConversationStore,
 } from '@runnets/application';
 import type { TaskRunId } from '@runnets/domain';
 import type { DatabaseSync } from 'node:sqlite';
+
+import { SqliteConversationStore } from './conversations.js';
 
 import { SqliteCheckpointStore, type CheckpointStore } from './checkpoints.js';
 import { SqliteCommandDedup } from './command-dedup.js';
@@ -34,6 +37,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  readonly conversations: ConversationStore;
   readonly log: EventLogPort;
   readonly dedup: CommandDedupPort;
   readonly checkpoints: CheckpointStore;
@@ -71,6 +75,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
   return {
+    conversations: new SqliteConversationStore(db),
     log,
     dedup,
     checkpoints,

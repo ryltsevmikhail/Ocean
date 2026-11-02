@@ -11,3 +11,5 @@ export * from './in-memory-event-log.js';
 export * from './command-dedup.js';
 export * from './projection.js';
 export * from './tool-journal.js';
+
+export * from './conversations.js';
