@@ -137,7 +137,7 @@ it('restored text requires fresh consent, preserves context and blocks legacy/TU
     'restore_restricted',
   );
   const { runDirectTui } = await import('./tui.js');
-  await expect(runDirectTui({ profile: restored, roomId: room, provider })).rejects.toThrow(
+  await expect(runDirectTui({ profile: restored, roomId: room })).rejects.toThrow(
     'restore_restricted',
   );
 });

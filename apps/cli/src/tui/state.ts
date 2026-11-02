@@ -18,6 +18,8 @@ export interface UiState {
 }
 export interface UiContext {
   readonly runCount: number;
+  readonly remoteActive?: boolean;
+  readonly detachOnQuit?: boolean;
   readonly eventCount: number;
   readonly dialogCount?: number;
   readonly pageSize?: number;
@@ -84,7 +86,7 @@ function scroll(state: UiState, delta: number, context: UiContext): UiState {
 export function reduceKey(state: UiState, key: Key, context: UiContext): UiTransition {
   const cleared = { ...state, ctrlCArmed: false };
   if (key.type === 'ctrl-c') {
-    if (state.busy)
+    if (state.busy || context.remoteActive)
       return transition({ ...cleared, status: 'cancelling turn…' }, { type: 'cancel-turn' });
     return state.ctrlCArmed
       ? transition(cleared, { type: 'quit' })
@@ -102,7 +104,7 @@ export function reduceKey(state: UiState, key: Key, context: UiContext): UiTrans
   if (key.type === 'escape') {
     if (state.focus !== 'prompt' && state.focus !== 'dialog')
       return transition({ ...cleared, focus: 'prompt' });
-    if (state.busy)
+    if (state.busy || context.remoteActive)
       return transition({ ...cleared, status: 'cancelling turn…' }, { type: 'cancel-turn' });
     return transition({ ...cleared, focus: 'prompt' });
   }
@@ -164,9 +166,10 @@ export function reduceKey(state: UiState, key: Key, context: UiContext): UiTrans
   if (key.type === 'enter') {
     const prompt = state.prompt.trim();
     if (!prompt) return transition({ ...cleared, status: 'prompt is empty' });
+    if (prompt === '/quit' && (!state.busy || context.detachOnQuit))
+      return transition(cleared, { type: 'quit' });
     if (state.busy)
       return transition({ ...cleared, status: 'a turn is already running; draft kept' });
-    if (prompt === '/quit') return transition(cleared, { type: 'quit' });
     const next = { ...cleared, prompt: '', cursor: 0, dialogScroll: 0 };
     return transition(
       next,

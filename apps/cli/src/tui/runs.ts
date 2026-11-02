@@ -13,20 +13,23 @@ import {
   type ToolService,
   type TaskRunService,
 } from '@runnets/application';
-import type { SessionUpdate } from '@runnets/contracts';
-import { type EventEnvelope, type TaskRunAggregate, type TaskRunId } from '@runnets/domain';
+import type { LocalRunSnapshot, LocalRunEvent, SessionUpdate } from '@runnets/contracts';
+import { type TaskRunAggregate, type TaskRunId } from '@runnets/domain';
 import type { ProviderPort } from '@runnets/provider-core';
 
 import type { TurnOutcome } from '../engine/types.js';
+import type { DecisionPanel } from './decision-panel.js';
 import { TuiSession } from './session.js';
 import { appendStream } from './state.js';
 import type { StreamLine } from './types.js';
 import type { RunViewData } from './view.js';
 
-export interface RunEntry {
-  taskRunId: TaskRunId;
+export interface RunEntry<Id extends TaskRunId | null = TaskRunId> {
+  taskRunId: Id;
+  remote?: LocalRunSnapshot;
+  performer?: { handle: string; provider: string; model: string };
   aggregate: TaskRunAggregate | null;
-  events: readonly EventEnvelope[];
+  events: readonly Pick<LocalRunEvent, 'sequence' | 'type'>[];
   stream: readonly StreamLine[];
   liveMode: string | null;
   codingLines?: readonly string[];
@@ -40,8 +43,11 @@ export interface RunBookOptions {
 }
 
 /** Human status line for a finished turn. */
-export function turnStatus(outcome: TurnOutcome): string {
+export type BookOutcome = TurnOutcome | { kind: 'notice'; status: string };
+export function turnStatus(outcome: BookOutcome): string {
   switch (outcome.kind) {
+    case 'notice':
+      return outcome.status;
     case 'completed':
       return `turn completed (${outcome.stopReason})`;
     case 'failed':
@@ -54,22 +60,16 @@ export function turnStatus(outcome: TurnOutcome): string {
 }
 
 /** Read-only projection of an entry for the renderer. */
-export function runView(entry: RunEntry): RunViewData {
-  return {
-    taskRunId: entry.taskRunId,
-    aggregate: entry.aggregate,
-    events: entry.events,
-    stream: entry.stream,
-    liveMode: entry.liveMode,
-    ...(entry.codingLines === undefined ? {} : { codingLines: entry.codingLines }),
-  };
+export type ScreenEntry = RunEntry<TaskRunId | null>;
+export function runView(entry: ScreenEntry): RunViewData {
+  return entry;
 }
 
 /**
  * Fold one session update into the entry: provider deltas accumulate in the
  * live stream, and the committed mode id is shown while a turn is running.
  */
-export function applyUpdate(entry: RunEntry, update: SessionUpdate): void {
+export function applyUpdate(entry: ScreenEntry, update: SessionUpdate): void {
   switch (update.sessionUpdate) {
     case 'agent_message_chunk':
       if (update.content.type === 'text') {
@@ -246,20 +246,25 @@ export class RunBook {
   }
 }
 
-export type RunBookPort = Pick<
-  RunBook,
-  | 'model'
-  | 'providerId'
-  | 'runs'
-  | 'views'
-  | 'entry'
-  | 'restore'
-  | 'add'
-  | 'reload'
-  | 'openForTurn'
-  | 'turn'
-  | 'cancel'
-> & {
-  loadChangeset?: (entry: RunEntry) => Promise<void>;
-  setReviewApproval?: (approval: ReviewApprovalPort) => void;
-};
+export interface RunBookPort {
+  readonly model: string;
+  readonly providerId: string | null;
+  readonly runs: readonly ScreenEntry[];
+  views(): readonly RunViewData[];
+  restore(): Promise<void>;
+  add(parent: TaskRunId | null): Promise<ScreenEntry>;
+  reload?(entry: ScreenEntry): Promise<void>;
+  openForTurn?(entry: ScreenEntry): Promise<ScreenEntry>;
+  turn(
+    entry: ScreenEntry,
+    prompt: string,
+    emit: (update: SessionUpdate) => void,
+  ): Promise<BookOutcome>;
+  cancel(entry?: ScreenEntry, submitting?: boolean): void | Promise<string>;
+  detach?(): void;
+  readonly decisionPanel?: Pick<DecisionPanel, 'frame' | 'handle' | 'presented'>;
+  readonly workspace?: string;
+  watch?(redraw: (selection?: ScreenEntry) => void, fail: (e: unknown) => void): void;
+  loadChangeset?(entry: ScreenEntry): Promise<void>;
+  setReviewApproval?(approval: ReviewApprovalPort): void;
+}

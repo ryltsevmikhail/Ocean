@@ -88,9 +88,9 @@ Implementation and independent review completed through `579d858`. The wire meth
 
 ## Task 4: Runtime-owned durable decisions
 
-Implementation is pending independent review. Schema 11 persists owner cards and
+Independent review passed through `fcaf7e2`. Schema 11 persists owner cards and
 CAS outcomes. Shared coding and review ports are available through the SDK.
-The standard TUI migration remains Task 5.
+Task 5 covers the standard TUI decision presentation.
 
 **Files:** application runtime-decision modules, coding-approval and room review owner adapters; domain decision types if needed; memory/SQLite store+migration; host/client decision methods. Task 5 owns the presentation regression for remote decision content.
 
@@ -99,7 +99,7 @@ The standard TUI migration remains Task 5.
 - [x] RED two-client test: same exact preview/id/version; concurrent allow/deny resolves once; loser sees winner, stale version cannot create permission; effect count at most1.
 - [x] Preserve binding/room/task/expiry300000ms/lease/current-source checks and existing consume+journal claim. Persist resolution before waking waiter; race disconnect, expiry, binding mutation and consumption.
 - [x] Add transactional schema migration and memory/SQLite equivalence. Restart/restored allowed/pending/consumed decisions cannot revive grants or replay work. Do not rewrite old schema versions in place.
-- [ ] Cover all existing room TUI coding and review owner prompts explicitly; model cannot invoke decision endpoints or acquire owner credential. Required gates; commit `feat: persist owner decisions independently of clients`; review.
+- [x] Cover all existing room TUI coding and review owner prompts explicitly; model cannot invoke decision endpoints or acquire owner credential. Required gates; commit `feat: persist owner decisions independently of clients`; review.
 
 ## Task 5: Standard room TUI as a remote client
 
@@ -107,10 +107,10 @@ The standard TUI migration remains Task 5.
 
 **Consumes:** Tasks1–4 client; keeps existing RunBookPort renderer semantics and F6/review features through typed remote queries.
 
-- [ ] RED PTY test launches standard `ocean tui --profile PATH --room ROOM`, submits input, captures admitted runId, closes terminal while provider is gated. A second process sees same running run and one final response/provider call1.
-- [ ] Remove openOceanProfile/provider construction/runtime.close from room TUI path. Retain requestId+exact payload until receipt certainty; on reconnect observe original run rather than generating another identity. Distinguish UI quit/detach from explicit cancel key/action.
-- [ ] Render pending decisions from runtime state and send id/version/binding decisions; reconnect refreshes resolved cards. Add a presentation regression for the full remote preview, visible control escapes, scrolling and card state after another client resolves it. Narrow TuiApp service port without fabricating a TaskRunService to satisfy options.
-- [ ] GREEN existing room/group/history/coding panel/review tests and legacy terminal behavior. Required gates; commit `feat: connect room tui to the shared local runtime`; review.
+- [x] RED PTY test launches standard `ocean tui --profile PATH --room ROOM`, submits input, captures admitted runId, closes terminal while provider is gated. A second process sees same running run and one final response/provider call1.
+- [x] Remove openOceanProfile/provider construction/runtime.close from room TUI path. Retain requestId+exact payload until receipt certainty; on reconnect observe original run rather than generating another identity. Distinguish UI quit/detach from explicit cancel key/action.
+- [x] Render pending decisions from runtime state and send id/version/binding decisions; reconnect refreshes resolved cards. Add a presentation regression for the full remote preview, visible control escapes, scrolling and card state after another client resolves it. Narrow TuiApp service port without fabricating a TaskRunService to satisfy options.
+- [x] GREEN existing room/group/history/coding panel/review tests and legacy terminal behavior. Required gates and implementation commit. Independent review follows the Task 5 report.
 
 ## Task 6: CLI ownership routing, ACP and shutdown compatibility
 
@@ -143,8 +143,7 @@ The standard TUI migration remains Task 5.
 
 ## Execution state
 
-Tasks 1–3 passed independent review. Task 4 implements runtime-owned decisions
-and awaits independent review. The room TUI, CLI and Desktop entry-point migrations,
+Tasks 1–4 passed independent review. Task 5 implements the standard room TUI migration and awaits independent review. CLI routing, Desktop migration,
 killed-listener restart and shared-runtime release acceptance remain open.
 The existing Desktop UI was imported from `1c8d8c3`.
 Ocean1.1 previous checkpoint: `5d032ae`, 1032 passed/41 skipped, build/format and

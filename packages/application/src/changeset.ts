@@ -137,9 +137,17 @@ export class CodingChangesetService {
       return codingFailure(error instanceof CodingArtifactError ? error.code : 'recovery_required');
     }
   }
-  async capture(input: CodingAccess, requestId: string): Promise<CodingResult<Changeset>> {
+  capture(input: CodingAccess, requestId: string): Promise<CodingResult<Changeset>> {
+    if (!validConversationText(requestId, 128))
+      return Promise.resolve(codingFailure('invalid_input'));
+    return this.#snapshot(input, requestId);
+  }
+  /** Inspect the same verified tree without publishing an artifact or a capture receipt. */
+  preview(input: CodingAccess): Promise<CodingResult<Changeset>> {
+    return this.#snapshot(input);
+  }
+  async #snapshot(input: CodingAccess, requestId?: string): Promise<CodingResult<Changeset>> {
     const access = structuredClone(input);
-    if (!validConversationText(requestId, 128)) return codingFailure('invalid_input');
     const binding = JSON.stringify([
       access.taskId,
       access.workspaceId,
@@ -150,7 +158,10 @@ export class CodingChangesetService {
     ]);
     const receipt = this.#deps.store.atomic((tx) => {
       const task = this.#task(tx, access, true);
-      return task && access.botId === task.devBotId && access.capability === 'project_read'
+      return requestId !== undefined &&
+        task &&
+        access.botId === task.devBotId &&
+        access.capability === 'project_read'
         ? tx.captureReceipt(requestId)
         : null;
     });
@@ -163,7 +174,7 @@ export class CodingChangesetService {
       if (!task) return null;
       const worktree = tx.worktree(task.id);
       return worktree?.state === 'ready' && this.#deps.leases.owns(worktree.lease)
-        ? { task, worktree, receipt: tx.captureReceipt(requestId) }
+        ? { task, worktree, receipt: requestId === undefined ? null : tx.captureReceipt(requestId) }
         : null;
     });
     if (!selected) return codingFailure('coding_denied');
@@ -189,6 +200,7 @@ export class CodingChangesetService {
         worktree = tx.worktree(access.taskId);
       if (!task || worktree?.state !== 'ready' || !this.#deps.leases.owns(worktree.lease))
         return codingFailure('recovery_required');
+      if (requestId === undefined) return ok(snapshot);
       const old = tx.captureReceipt(requestId);
       if (old)
         return old.binding === binding && tx.changeset(old.hash)

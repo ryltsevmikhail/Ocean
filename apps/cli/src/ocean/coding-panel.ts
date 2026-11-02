@@ -6,23 +6,25 @@ export async function codingPanelLines(
   runtime: Runtime,
   roomId: string,
   taskId: string | undefined,
+  mode: 'inspect' | 'capture' = 'capture',
 ): Promise<readonly string[]> {
   if (taskId === undefined) return ['No coding task selected. Start TUI with --task TASK.'];
   const selected = runtime.coding.inspect('ws_ocean', taskId);
   if (!selected.ok) throw Error(selected.error.code);
   const task = selected.value;
   if (task.ownerRoomId !== roomId) throw Error('coding_denied');
-  const captured = await runtime.codingChanges.capture(
-    {
-      workspaceId: task.workspaceId,
-      taskId,
-      roomId,
-      botId: task.devBotId,
-      policyVersion: task.policyVersion,
-      capability: 'project_read',
-    },
-    'tui-capture-' + randomUUID(),
-  );
+  const access = {
+    workspaceId: task.workspaceId,
+    taskId,
+    roomId,
+    botId: task.devBotId,
+    policyVersion: task.policyVersion,
+    capability: 'project_read' as const,
+  };
+  const captured =
+    mode === 'inspect'
+      ? await runtime.codingChanges.preview(access)
+      : await runtime.codingChanges.capture(access, 'tui-capture-' + randomUUID());
   if (!captured.ok) throw Error(captured.error.code);
   const artifact = captured.value;
   const tests = runtime.codingEvidence?.list(taskId) ?? [];
@@ -31,7 +33,7 @@ export async function codingPanelLines(
     'Changeset ' + artifact.hash,
     'Base ' + artifact.baseCommit,
     'Tree ' + artifact.afterTreeHash,
-    'Frozen snapshot. F6 refreshes; later edits can stale this evidence. This panel grants no application approval.',
+    'Frozen view. F6 refreshes; later edits can stale this evidence. This panel grants no application approval.',
     'Registered tests:',
     ...(task.policy.testPresets.length === 0
       ? ['No registered test presets; application is unverified.']

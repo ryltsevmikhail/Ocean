@@ -1,4 +1,4 @@
-import type { RunBookPort, RunEntry } from './runs.js';
+import type { RunBookPort, ScreenEntry } from './runs.js';
 export function messageOf(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
@@ -7,7 +7,7 @@ export function messageOf(error: unknown): string {
 /** Reading a panel never dispatches a turn or supplies approval authority. */
 export async function refreshChangeset(
   book: RunBookPort,
-  entry: RunEntry | undefined,
+  entry: ScreenEntry | undefined,
   redraw: () => void,
 ): Promise<void> {
   if (!entry) return;

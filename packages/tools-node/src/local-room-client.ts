@@ -155,15 +155,19 @@ export function localRoomClient(send: Send, identity: LocalRuntimeIdentity): Loc
       return rows(await send('rooms.members', q), q.limit, (row) => {
         const id = row['id'],
           handle = row['handle'],
-          name = row['name'];
+          name = row['name'],
+          model = row['model'],
+          provider = row['provider'];
         if (
           !scoped(row, q) ||
           !localId(id) ||
           typeof handle !== 'string' ||
+          typeof model !== 'string' ||
+          typeof provider !== 'string' ||
           typeof name !== 'string'
         )
           invalid();
-        return { workspaceId: q.workspaceId, roomId: q.roomId, id, handle, name };
+        return { workspaceId: q.workspaceId, roomId: q.roomId, id, handle, name, provider, model };
       });
     },
     async history(input) {

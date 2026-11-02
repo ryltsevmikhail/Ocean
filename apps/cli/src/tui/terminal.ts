@@ -64,6 +64,9 @@ export class Terminal {
   }
 
   /** True when frames should own the screen (output is a terminal). */
+  get ownerInteractive(): boolean {
+    return this.#input.isTTY === true && this.interactive;
+  }
   get interactive(): boolean {
     return this.#output.isTTY === true;
   }
@@ -86,22 +89,34 @@ export class Terminal {
     this.#pending = null;
     this.#lastFrame = null;
     this.#blocked = false;
-    if (this.#alternate) {
-      this.#write(`\u001b[?2004l\u001b[?1007l\u001b[?7h${SHOW_CURSOR}${LEAVE_ALT_SCREEN}`);
-      this.#alternate = false;
-    }
+    let hungUp = false;
     if (this.#raw) {
-      this.#input.setRawMode?.(false);
+      // Node emits setRawMode EIO synchronously if the PTY master already hung up.
+      const vanished = (error: NodeJS.ErrnoException) => {
+        if (error.code !== 'EIO') throw error;
+        hungUp = true;
+      };
+      this.#input.on('error', vanished);
+      try {
+        this.#input.setRawMode?.(false);
+      } finally {
+        this.#input.off('error', vanished);
+      }
       this.#raw = false;
+    }
+    if (this.#alternate) {
+      if (!hungUp)
+        this.#write(`\u001b[?2004l\u001b[?1007l\u001b[?7h${SHOW_CURSOR}${LEAVE_ALT_SCREEN}`);
+      this.#alternate = false;
     }
   }
 
   /** Paint changed rows only; under backpressure retain only the latest pending frame. */
-  draw(frame: string): void {
-    if (frame === '') return;
+  draw(frame: string): boolean {
+    if (frame === '') return false;
     if (this.#blocked) {
       this.#pending = frame;
-      return;
+      return false;
     }
     const lines = frame.split('\n');
     const size = this.size();
@@ -123,6 +138,7 @@ export class Terminal {
       this.#blocked = true;
       this.#output.once('drain', this.#drain);
     }
+    return true;
   }
 
   /** Current output dimensions, falling back to the injected size. */

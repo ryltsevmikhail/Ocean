@@ -25,6 +25,7 @@ import {
   ownsLocalRuntimePath,
   unlinkOwnedLocalRuntimePath,
 } from '@runnets/tools-node';
+import { CodingPanelQueries } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
 import { LOCAL_DECISION_METHODS } from '@runnets/contracts';
@@ -80,6 +81,7 @@ export async function startLocalRuntime(
     const recovery = await runtime.ready;
     prepareLocalRuntimePaths(paths);
     decisions = new RuntimeDecisions(runtime.ownerDecisions, runtime.reviews);
+    const panels = new CodingPanelQueries(runtime);
     const identity: LocalRuntimeIdentity = {
       protocol: 1,
       profileId: paths.profileId,
@@ -92,6 +94,7 @@ export async function startLocalRuntime(
         'runs.get',
         ...LOCAL_ROOM_METHODS,
         ...LOCAL_DECISION_METHODS,
+        'coding.panel',
       ],
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
@@ -131,6 +134,7 @@ export async function startLocalRuntime(
                   turns.drain(),
                   options.drain ? options.drain() : 'settled',
                   decisions.drain(),
+                  panels.drain(),
                 ]);
                 return jobs === 'settled' && extra === 'settled' ? 'settled' : 'uncertain';
               }, drainDeadlineMs)) !== 'settled'
@@ -169,9 +173,11 @@ export async function startLocalRuntime(
       dispatch: (method, params, detached) =>
         databaseClosed
           ? { error: { code: 'runtime_draining' } }
-          : method.startsWith('decisions.') || method.startsWith('reviews.')
-            ? decisions.dispatch(method, params)
-            : turns.dispatch(method, params, detached),
+          : method === 'coding.panel'
+            ? panels.dispatch(params, detached)
+            : method.startsWith('decisions.') || method.startsWith('reviews.')
+              ? decisions.dispatch(method, params)
+              : turns.dispatch(method, params, detached),
       status: () => host.status(),
       stop: () => host.stop(),
     });

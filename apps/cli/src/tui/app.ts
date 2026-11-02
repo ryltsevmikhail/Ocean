@@ -1,3 +1,4 @@
+import { TuiPending } from './pending.js';
 import { refreshChangeset, messageOf } from './changeset.js';
 /** Terminal input and rendering; RunBook composes the runtime and turn engine. */
 
@@ -10,7 +11,7 @@ import { createRunBook } from './book.js';
 import { TuiApproval } from './approval.js';
 import type { Key } from './keys.js';
 import { KeyInput } from './input.js';
-import { applyUpdate, runView, turnStatus, type RunEntry, type RunBookPort } from './runs.js';
+import { applyUpdate, runView, turnStatus, type ScreenEntry, type RunBookPort } from './runs.js';
 import { initialUiState, reduceKey, type UiState } from './state.js';
 import { Terminal } from './terminal.js';
 import type { TuiAppOptions } from './options.js';
@@ -38,13 +39,10 @@ export class TuiApp {
   #ui: UiState = initialUiState();
   readonly #keys = new KeyInput((keys) => this.#onKeys(keys));
   #batching = false;
-  #pending = new Set<Promise<void>>();
+  readonly #pending = new TuiPending();
   #started = false;
   #stopped = false;
 
-  codingOwner(signal: AbortSignal) {
-    return this.#approval.codingOwner(signal);
-  }
   constructor(options: TuiAppOptions) {
     this.#input = options.input;
     this.#workspace = options.workspace;
@@ -57,12 +55,8 @@ export class TuiApp {
     this.#approval = new TuiApproval(() => this.#redraw());
     this.#book = createRunBook(options, this.#approval);
     this.#dataHandler = (chunk) => this.#keys.read(chunk);
-    this.#endHandler = (): void => {
-      this.#quit();
-    };
-    this.#resizeHandler = (): void => {
-      this.#redraw();
-    };
+    this.#endHandler = () => this.stop();
+    this.#resizeHandler = () => this.#redraw();
     this.#exitPromise = new Promise<void>((resolve) => {
       this.#resolveExit = resolve;
     });
@@ -79,13 +73,23 @@ export class TuiApp {
     this.#redraw();
     await this.#book.restore();
     await this.#createRun(null);
+    if (!this.#stopped)
+      this.#book.watch?.(
+        (selection) => {
+          if (selection)
+            this.#ui = { ...this.#ui, selectedIndex: this.#book.runs.indexOf(selection) };
+          this.#redraw();
+        },
+        (e) => this.#fail(e),
+      );
   }
 
   /** Restore the terminal and detach listeners; safe to call more than once. */
   stop(): void {
     if (this.#stopped) return;
     this.#stopped = true;
-    this.#cancelTurn();
+    if (this.#book.detach) this.#book.detach();
+    else this.#cancelTurn();
     this.#input.off('data', this.#dataHandler);
     this.#input.off('end', this.#endHandler);
     this.#input.pause();
@@ -110,7 +114,11 @@ export class TuiApp {
 
   /** Current screen, exactly as it would be drawn; used by tests and diagnostics. */
   frame(): string {
-    return this.#approval.frame(this.#terminal.size()) ?? renderFrame(this.#frameInput());
+    return (
+      this.#book.decisionPanel?.frame(this.#terminal.size()) ??
+      this.#approval.frame(this.#terminal.size()) ??
+      renderFrame(this.#frameInput())
+    );
   }
 
   selectedRun(): RunViewData | null {
@@ -119,12 +127,8 @@ export class TuiApp {
   }
 
   /** Await every pending runtime action, including cancellation settlement. */
-  async idle(): Promise<void> {
-    while (this.#pending.size > 0) {
-      const batch = Array.from(this.#pending);
-      this.#pending.clear();
-      await Promise.allSettled(batch);
-    }
+  idle() {
+    return this.#pending.idle();
   }
 
   #onKeys(keys: readonly Key[]): void {
@@ -140,8 +144,17 @@ export class TuiApp {
 
   #handleKey(key: Key): void {
     if (this.#stopped || this.#approval.handle(key)) return;
+    const decision = this.#book.decisionPanel?.handle(key, this.#terminal.ownerInteractive);
+    if (decision) {
+      if (decision instanceof Promise) this.#track(decision.finally(() => this.#redraw()));
+      return;
+    }
     const transition = reduceKey(this.#ui, key, {
       runCount: this.#book.runs.length,
+      detachOnQuit: this.#book.detach !== undefined,
+      remoteActive: ['accepted', 'dispatching', 'prepared'].includes(
+        this.selectedRun()?.remote?.turnStatus ?? '',
+      ),
       ...navigationContext(this.#frameInput()),
     });
     this.#ui = transition.state;
@@ -151,13 +164,13 @@ export class TuiApp {
       );
     switch (transition.action.type) {
       case 'quit':
-        this.#quit();
+        this.stop();
         return;
       case 'cancel-turn':
         this.#cancelTurn();
         break;
       case 'create-run':
-        this.#newRun();
+        this.#track(this.#createRun(null));
         break;
       case 'send-turn':
         this.#sendTurn(transition.action.prompt);
@@ -166,10 +179,6 @@ export class TuiApp {
         break;
     }
     this.#redraw();
-  }
-
-  #newRun(): void {
-    this.#track(this.#createRun(null));
   }
 
   #sendTurn(prompt: string): void {
@@ -182,14 +191,18 @@ export class TuiApp {
       this.#setStatus('no run selected — press n to create one');
       return;
     }
-    this.#ui = { ...this.#ui, busy: true, status: `turn started on ${entry.taskRunId}` };
+    this.#ui = {
+      ...this.#ui,
+      busy: true,
+      status: this.#book.detach ? 'submitting…' : `turn started on ${entry.taskRunId}`,
+    };
     this.#track(this.#performTurn(entry, prompt));
   }
 
-  async #performTurn(entry: RunEntry, prompt: string): Promise<void> {
+  async #performTurn(entry: ScreenEntry, prompt: string): Promise<void> {
     let target = entry;
     await this.#loadEntry(target);
-    const opened = await this.#book.openForTurn(target);
+    const opened = (await this.#book.openForTurn?.(target)) ?? target;
     if (opened !== target) {
       // The continuation run is a new list row; show it as the selection.
       this.#ui = {
@@ -216,7 +229,7 @@ export class TuiApp {
     }
   }
 
-  #onUpdate(entry: RunEntry, update: SessionUpdate): void {
+  #onUpdate(entry: ScreenEntry, update: SessionUpdate): void {
     const previous = entry.stream;
     applyUpdate(entry, update);
     if (this.#book.runs[this.#ui.selectedIndex] === entry)
@@ -229,7 +242,8 @@ export class TuiApp {
   }
 
   #cancelTurn(): void {
-    this.#book.cancel();
+    const result = this.#book.cancel(this.#book.runs[this.#ui.selectedIndex], this.#ui.busy);
+    if (result) this.#track(result.then((message) => this.#setStatus(message)));
     if (this.#ui.busy) this.#ui = { ...this.#ui, status: 'cancelling turn…' };
   }
 
@@ -237,23 +251,23 @@ export class TuiApp {
     const entry = await this.#book.add(parentTaskRunId);
     this.#ui = {
       ...this.#ui,
-      selectedIndex: this.#book.runs.length - 1,
+      selectedIndex: this.#book.runs.indexOf(entry),
       eventScroll: 0,
-      status: `created ${entry.taskRunId}`,
+      status: entry.taskRunId ? `selected ${entry.taskRunId}` : 'room ready',
     };
     this.#redraw();
     await this.#loadEntry(entry);
   }
 
-  async #loadEntry(entry: RunEntry): Promise<void> {
-    await this.#book.reload(entry);
+  async #loadEntry(entry: ScreenEntry): Promise<void> {
+    await this.#book.reload?.(entry);
     this.#redraw();
   }
 
   #frameInput(): FrameInput {
     return {
       ui: this.#ui,
-      workspace: this.#workspace,
+      workspace: this.#book.workspace ?? this.#workspace,
       runs: this.#book.views(),
       model: this.#book.model,
       provider: this.#book.providerId,
@@ -263,7 +277,7 @@ export class TuiApp {
 
   #redraw(): void {
     if (this.#stopped || this.#batching) return;
-    this.#terminal.draw(this.frame());
+    if (this.#terminal.draw(this.frame())) this.#book.decisionPanel?.presented();
   }
 
   #setStatus(status: string): void {
@@ -271,20 +285,8 @@ export class TuiApp {
     this.#redraw();
   }
 
-  #quit(): void {
-    this.stop();
-    this.#resolveExit();
-  }
-
   #track(task: Promise<void>): void {
-    const guarded = task.catch((error: unknown) => {
-      this.#fail(error);
-    });
-    this.#pending.add(guarded);
-    const cleanup = (): void => {
-      this.#pending.delete(guarded);
-    };
-    void guarded.then(cleanup, cleanup);
+    this.#pending.track(task, (e) => this.#fail(e));
   }
 
   #fail(error: unknown): void {

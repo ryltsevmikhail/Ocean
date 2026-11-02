@@ -36,6 +36,8 @@ export interface LocalRoomSummary {
 export interface LocalMemberSummary extends LocalRoomScope {
   readonly id: string;
   readonly handle: string;
+  readonly provider: string;
+  readonly model: string;
   readonly name: string;
 }
 export interface LocalMessage extends LocalRoomScope {

@@ -1,7 +1,6 @@
 import { PassThrough } from 'node:stream';
 import { expect, it, vi } from 'vitest';
 import { taskRunId } from '@runnets/domain';
-import { createService } from '../lifecycle.js';
 import { TuiApp } from './app.js';
 import { runView, type RunEntry, type RunBookPort } from './runs.js';
 it('loads and refreshes a private changeset panel without sending a turn or losing its draft', async () => {
@@ -24,7 +23,6 @@ it('loads and refreshes a private changeset panel without sending a turn or losi
     providerId: null,
     runs: [entry],
     views: () => [runView(entry)],
-    entry: () => entry,
     restore: async () => {},
     add: async () => entry,
     reload: async () => {},
@@ -33,7 +31,7 @@ it('loads and refreshes a private changeset panel without sending a turn or losi
     cancel: () => {},
     loadChangeset,
   };
-  const app = new TuiApp({ input, output, book, service: createService(), provider: null });
+  const app = new TuiApp({ input, output, book });
   try {
     await app.start();
     input.write('keep draft');

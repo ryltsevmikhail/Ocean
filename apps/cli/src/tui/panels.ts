@@ -18,6 +18,9 @@ export const HELP = [
 /** Secondary information fills the body only when its panel is explicitly opened. */
 export function details(run: RunViewData | undefined, workspace: string | undefined): string[] {
   if (run === undefined) return ['No task selected.'];
+  if (run.remote)
+    return Object.entries(run.remote).map(([key, value]) => key + ': ' + JSON.stringify(value));
+  if (run.taskRunId === null) return ['Room · no run selected'];
   const state = run.aggregate;
   if (state === null || state.status === 'absent') return [run.taskRunId, 'status: loading'];
   return [
@@ -60,6 +63,6 @@ export function taskLines(input: FrameInput, height: number): string[] {
     .slice(start, start + height)
     .map(
       (run, offset) =>
-        `${start + offset === input.ui.selectedIndex ? '>' : ' '} ${start + offset + 1}. ${run.taskRunId} ${run.liveMode ?? run.aggregate?.status ?? 'loading'}`,
+        `${start + offset === input.ui.selectedIndex ? '>' : ' '} ${start + offset + 1}. ${run.taskRunId ?? 'Room'} ${run.remote?.taskStatus ?? run.liveMode ?? run.aggregate?.status ?? (run.taskRunId === null ? 'ready' : 'loading')}`,
     );
 }

@@ -169,7 +169,7 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
       checkRoom(scope);
       return db
         .prepare(
-          `SELECT b.id,b.handle,b.name FROM ocean_members m JOIN ocean_bots b ON b.id=m.bot_id AND m.workspace_id=b.workspace_id
+          `SELECT b.id,b.handle,b.name,b.model,b.provider FROM ocean_members m JOIN ocean_bots b ON b.id=m.bot_id AND m.workspace_id=b.workspace_id
         WHERE m.room_id=? AND m.workspace_id=? AND m.bot_id>? ORDER BY m.bot_id LIMIT ?`,
         )
         .all(scope.roomId, scope.workspaceId, after, limit)
@@ -179,6 +179,8 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
           id: readText(row, 'id'),
           handle: readText(row, 'handle'),
           name: readText(row, 'name'),
+          provider: readText(row, 'provider'),
+          model: readText(row, 'model'),
         }));
     },
     *history(scope, after, limit) {

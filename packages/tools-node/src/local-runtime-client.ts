@@ -1,3 +1,4 @@
+import { localPanelClient, type LocalPanelClient } from './local-panel-client.js';
 import { randomUUID } from 'node:crypto';
 import { connect, type Socket } from 'node:net';
 import {
@@ -22,7 +23,7 @@ import { readLocalRuntimeDescriptor } from './local-runtime-paths.js';
 import { LocalRuntimeFrames, writeLocalRuntimeFrame } from './local-runtime-framing.js';
 import { localRoomClient, validatedParams, type LocalRoomClient } from './local-room-client.js';
 import { localDecisionClient, type LocalDecisionClient } from './local-decision-client.js';
-export interface LocalRuntimeClient extends LocalRoomClient, LocalDecisionClient {
+export interface LocalRuntimeClient extends LocalRoomClient, LocalDecisionClient, LocalPanelClient {
   readonly identity: LocalRuntimeIdentity;
   submit(request: LocalTurnRequest): Promise<LocalTurnReceipt>;
   getReceipt(query: LocalReceiptQuery): Promise<LocalTurnReceipt | null>;
@@ -92,9 +93,13 @@ class Peer {
 /** Connect only; absence/authentication failure never opens SQLite or spawns an owner. */
 export async function connectLocalRuntime(options: {
   readonly profile: string;
+  readonly signal?: AbortSignal | undefined;
 }): Promise<LocalRuntimeClient> {
   const descriptor = readLocalRuntimeDescriptor(options.profile);
-  const socket = connect(descriptor.endpoint);
+  const socket = connect({
+    path: descriptor.endpoint,
+    ...(options.signal ? { signal: options.signal } : {}),
+  });
   const peer = new Peer(socket);
   try {
     const identity = await peer.request('hello', descriptor);
@@ -106,6 +111,7 @@ export async function connectLocalRuntime(options: {
       throw Error('identity_mismatch');
     return {
       identity,
+      ...localPanelClient(peer.request.bind(peer)),
       ...localDecisionClient(peer.request.bind(peer)),
       ...localRoomClient(peer.request.bind(peer), identity),
       async submit(input) {

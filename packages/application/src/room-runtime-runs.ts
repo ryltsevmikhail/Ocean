@@ -28,7 +28,10 @@ export interface RoomSummary {
   title: string | null;
   botId: string | null;
 }
-export type MemberSummary = Pick<Bot, 'workspaceId' | 'id' | 'handle' | 'name'> & {
+export type MemberSummary = Pick<
+  Bot,
+  'workspaceId' | 'id' | 'handle' | 'name' | 'model' | 'provider'
+> & {
   roomId: string;
 };
 export interface RoomRunEvent {

@@ -2,7 +2,7 @@
 
 Status: authenticated lifecycle, durable turn admission and scoped receipt/run
 reads, runtime observation, versioned explicit cancellation, durable coding decisions
-and room-scoped text-only review continuation are implemented. Client migrations remain proposed. See [implemented commands, methods and limits](../integration/local-runtime.md).
+and room-scoped text-only review continuation are implemented. The standard room TUI uses the runtime. CLI routing and Desktop migration remain planned. See [implemented commands, methods and limits](../integration/local-runtime.md).
 Owner request on 2026-11-02 supersedes
 continuing the remaining coding-backup work as the immediate priority. Ocean 1.1
 stages 1–6 and reviewed stage-7 work through `5d032ae` remain implemented; their
@@ -24,11 +24,7 @@ layers, conversation model and recovery semantics rather than copying Rust APIs.
 
 ## Current evidence
 
-- `apps/cli/src/ocean/tui.ts` opens the profile, awaits recovery, constructs the
-  provider and ChatRunBook, binds coding decisions to TuiApp, then closes runtime.
-- `chat-book.ts` generates requestId inside turn, owns its AbortController, and
-  reads TaskRunService directly. Recreating the UI cannot recover that in-memory
-  operation identity reliably.
+- The standard room TUI connects to the authenticated endpoint. It retains a pending submission's exact payload and request ID in memory, observes room and run projections and restores committed room history on open. Its exit closes only its client.
 - `DirectChatService.send` already calls atomic `admitChat`, with a durable
   request binding and receipt before `onAdmitted`. Identical request IDs observe
   the same turn; changed bindings fail. Legacy send waits for execution. The
@@ -37,7 +33,7 @@ layers, conversation model and recovery semantics rather than copying Rust APIs.
   effect journal. Ownership must remain exclusive before exposing ready state.
 - Coding approvals persist exact bindings, expire after 300000ms and atomically
   transition/consume. The shared host resolves an authenticated durable decision.
-  The legacy room TUI still binds its local owner callback until Task 5.
+  The room TUI reads the complete server preview and submits the observed card version and binding.
 - Normal Ocean commands open the profile themselves. Existing ACP has its own
   stdio lifecycle and must keep its advertised protocol and permissions.
 

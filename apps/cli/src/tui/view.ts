@@ -1,5 +1,6 @@
 /** A single scrollable body, a bottom editor and secondary panels on demand. */
-import type { EventEnvelope, TaskRunAggregate, TaskRunId } from '@runnets/domain';
+import type { TaskRunAggregate, TaskRunId } from '@runnets/domain';
+import type { LocalRunSnapshot, LocalRunEvent } from '@runnets/contracts';
 import type { UiState } from './state.js';
 import type { Size, StreamLine } from './types.js';
 import { fit, wrap } from './text.js';
@@ -7,9 +8,11 @@ import { transcriptLines, tailPage } from './transcript.js';
 import { details, eventLines, HELP, taskLines } from './panels.js';
 
 export interface RunViewData {
-  readonly taskRunId: TaskRunId;
+  readonly taskRunId: TaskRunId | null;
+  readonly remote?: LocalRunSnapshot;
+  readonly performer?: { handle: string; provider: string; model: string };
   readonly aggregate: TaskRunAggregate | null;
-  readonly events: readonly EventEnvelope[];
+  readonly events: readonly Pick<LocalRunEvent, 'sequence' | 'type'>[];
   readonly stream: readonly StreamLine[];
   readonly liveMode: string | null;
   readonly codingLines?: readonly string[];
@@ -39,6 +42,11 @@ function draftRows(input: FrameInput, width: number): string[] {
 }
 function status(input: FrameInput): string {
   const selected = input.runs[input.ui.selectedIndex];
+  if (selected?.remote) {
+    const run = selected.remote;
+    return `${run.runId} · ${run.taskStatus} · ${run.turnStatus} · v${run.version} · ${input.ui.status ?? ''}`;
+  }
+  if (selected?.taskRunId === null) return 'Room · ' + (input.ui.status ?? 'ready');
   const state = selected?.aggregate;
   const tokens =
     state === undefined || state === null || state.status === 'absent'
@@ -146,7 +154,8 @@ export function anchorDialogue(
 export function renderFrame(input: FrameInput): string {
   const { columns, rows } = dimensions(input.size);
   const editor = draftRows(input, columns);
-  const header = `RunneTS TUI · ${input.provider ?? 'offline'} / ${input.model}${input.workspace === undefined ? '' : ` · ${input.workspace}`}`;
+  const bot = input.runs[input.ui.selectedIndex]?.performer;
+  const header = `RunneTS TUI · ${bot?.provider ?? input.provider ?? 'offline'} / ${bot ? '@' + bot.handle + ' / ' + bot.model : input.model}${input.workspace === undefined ? '' : ` · ${input.workspace}`}`;
   if (rows < 9) {
     const selected = input.runs[input.ui.selectedIndex];
     const latest = selected === undefined ? [] : transcriptLines(selected.stream, columns, false);

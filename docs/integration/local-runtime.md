@@ -3,10 +3,9 @@
 One foreground Linux process owns the canonical private profile, SQLite recovery
 and the provider for shared room turns. Authenticated clients can submit a turn
 and reconnect to its persisted room history, run events and result. Explicit
-versioned cancellation is available to authenticated clients. The standard room
-TUI and desktop migrations remain future delivery stages. The runtime also serves
+versioned cancellation is available to authenticated clients. The standard room TUI connects to this runtime. Desktop migration remains planned. The runtime also serves
 exact coding approvals and text-only room review decisions.
-Existing CLI room commands still open the profile directly and report
+Other CLI room commands still open the profile directly and report
 `owner_busy` while the shared runtime holds it. See the
 [shared-runtime plan](../ocean/shared-runtime.md) for the migration sequence.
 
@@ -52,6 +51,35 @@ earlier process remains in durable room/run state and cannot authorize replay.
 Clients receive exit 4 for an incomplete stop. `owner_busy`, `runtime_absent`,
 `runtime_unreachable` and `endpoint_exists` use exit 3. Other invalid input or
 security refusals use exit 2, except inherited `restore_restricted` (exit 4).
+
+## Room terminal
+
+Create the room using the offline CLI before starting the runtime. Keep the foreground owner running and open another terminal using the same profile and runtime directory.
+
+```sh
+pnpm ocean tui --profile /absolute/private/profile --room ROOM_ID
+pnpm ocean tui --profile /absolute/private/profile --room ROOM_ID --task TASK_ID
+```
+
+The header uses room members and the admitted performer. Enter submits a message. In a group, a leading `@handle` addresses one bot. Unaddressed posts have a message receipt and no run. The TUI displays an admitted run ID while generation is still underway. F2 selects a run, F3 shows scoped event names and sequence numbers, and F4 shows the run version, performer, result ID and pending decision IDs. The dialogue follows committed room history, including posts from other clients.
+
+`/quit`, EOF, terminal hangup and SIGTERM detach. Escape in the dialogue or Ctrl+C on a selected active run requests version-bound cancellation. The receipt confirms the request. Run and turn state report eventual settlement. Escape in a panel closes it. Closing the client during an owner decision leaves the decision pending. The legacy standalone `tui` without `--room` retains its embedded execution lifecycle.
+
+A living client retries a lost submission acknowledgement with the original request ID and exact payload. A malformed acknowledgement holds that binding for an explicit retry of the original text. Opening a new terminal reads committed history and runs. A missing runtime returns `runtime_absent` on an initialized profile. Authentication and protocol failures propagate.
+
+A room decision displays its ID, version, status and expiry. Type `/decision ID` to inspect the complete escaped operation. Page through the preview before pressing `y` for one approval, or press `n` to deny. Another client's vote updates the card. For interrupted work, `/review` reads a scoped snapshot and `/continue text-only <reason>` requests a decision bound to that exact version. The applied receipt confirms the future text-only policy.
+
+F6 in a task-bound room requests `coding.panel` with workspace, room and task identifiers. The runtime checks the owning room, registered task and leases and scans the worktree twice. The frozen view includes the changeset hash, base and tree, complete diff, available test hashes/output and stale-binding labels. F6 refreshes the view. It publishes no changeset or approval. Offline capture, review and apply continue to use stored artifacts. The SDK `codingPanel` verifies the scoped digest and complete bounded chunks (32768 UTF-16 code units per chunk, 16 Mi code-unit view limit). The owner serves up to two concurrent scans and retains at most two multi-chunk views. An evicted view returns `stale_capture`.
+
+Reproduce the terminal and opt-in native coding checks using synthetic profiles and providers.
+
+```sh
+pnpm build
+pnpm exec vitest run apps/cli/src/ocean/room-tui-{process,reconnect,decisions,changeset}.test.ts
+OCEAN_SANDBOX_NATIVE=1 pnpm exec vitest run apps/cli/src/ocean/room-tui-coding-native.test.ts
+```
+
+The Linux PTY driver requires Python 3. It starts the built CLI, submits, captures its run ID, physically closes the controlling PTY master while the provider waits, and separately checks raw-mode restoration after SIGTERM. An independent SDK process observes the running task and its single final result. Reopening the standard TUI reads the same committed answer. The persisted provider call count is one.
 
 ## Endpoint and independent clients
 
@@ -274,5 +302,4 @@ fragmentation, oversized frames and foreign descriptor preservation. Separate ow
 and a persisted dispatch counter to verify detach, retry, single publication,
 provider failure and incomplete stop. Separate SIGKILL tests reopen the
 application database twice at admission and after an effect claim. These qualify
-local persistence and headless process behavior. Standard TUI, desktop
-shared-runtime, live provider and full Ocean 1.1 acceptance gates remain open.
+local persistence and headless process behavior. The separate room PTY test covers the standard terminal entry point. Desktop shared-runtime, asset-complete backup/restore and installed/live Ocean 1.1 acceptance remain open.
