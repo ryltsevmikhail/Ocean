@@ -25,6 +25,10 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
       };
       return work({
         task: (id) => decodeTask(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
+        participates: (ws, room, bot) =>
+          db
+            .prepare('SELECT 1 FROM ocean_members WHERE workspace_id=? AND room_id=? AND bot_id=?')
+            .get(ws, room, bot) !== undefined,
         approval,
         putApproval: (value) => {
           assertCodingApprovalTransition(approval(value.id), value);

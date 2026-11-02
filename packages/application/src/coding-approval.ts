@@ -10,6 +10,7 @@ import {
 
 export interface CodingApprovalTransaction {
   task?(id: string): CodingTask | null;
+  participates?(workspaceId: string, roomId: string, botId: string): boolean;
   approval(id: string): CodingApproval | null;
   putApproval(value: CodingApproval): void;
   /** Creates the durable dispatch claim in this same transaction. */

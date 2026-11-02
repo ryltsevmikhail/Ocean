@@ -11,6 +11,8 @@ import { randomUUID, createHash } from 'node:crypto';
 import {
   TaskRunService,
   CodingTaskService,
+  CodingApprovalService,
+  codingApprovalAdmission,
   CodingChangesetService,
   ConversationService,
   DirectChatService,
@@ -26,6 +28,7 @@ import { openSqliteStore, ownSqliteRuntime } from '@runnets/store-sqlite';
 import {
   InMemoryCommandDedup,
   InMemoryCodingStore,
+  InMemoryCodingApprovalStore,
   InMemoryProjectLeases,
   InMemoryConversationStore,
   InMemoryToolJournal,
@@ -37,6 +40,7 @@ import {
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
   readonly coding: CodingTaskService;
+  readonly codingApprovals: CodingApprovalService;
   readonly codingChanges: CodingChangesetService;
   readonly service: TaskRunService;
   readonly conversations: ConversationService;
@@ -107,6 +111,12 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return {
       service,
       coding: new CodingTaskService(codingDeps),
+      codingApprovals: new CodingApprovalService({
+        store: new InMemoryCodingApprovalStore(),
+        now: () => deps.clock.now().getTime(),
+        admit: () => false,
+        restored: false,
+      }),
       codingChanges: new CodingChangesetService({
         ...codingDeps,
         worktrees: new GitCodingWorktrees(),
@@ -146,6 +156,12 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return {
       service,
       coding: new CodingTaskService(codingDeps),
+      codingApprovals: new CodingApprovalService({
+        store: store.codingApprovals,
+        now: () => deps.clock.now().getTime(),
+        admit: (binding, tx) => codingApprovalAdmission(binding, tx, codingDeps),
+        restored: codingDeps.restored,
+      }),
       codingChanges: new CodingChangesetService({
         ...codingDeps,
         worktrees: new GitCodingWorktrees(),

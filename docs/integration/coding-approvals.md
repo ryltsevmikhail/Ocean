@@ -66,3 +66,12 @@ SQLite exposes authoritative task reads on that view without opening a nested
 coding transaction. Memory storage accepts a synchronous task reader.
 A regression verifies all four admission checkpoints run within the transaction.
 Production authority policy and runtime wiring remain pending.
+
+Runtime now composes codingApprovals over durable storage and transaction-local
+task/member reads. Admission checks exact project/worktree, policy capabilities,
+task owner, current membership, live project lease and unresolved legacy/global
+tool claims. Apply remains unavailable until its separate stage-6 authority
+flow exists. Ephemeral runtime refuses coding approvals. Regression coverage
+includes foreign room/bot/worktree, pending effects, lost lease and membership.
+Claim reconciliation across the approval and legacy journal paths still needs
+integration before dispatch can be enabled.
