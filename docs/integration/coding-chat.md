@@ -94,3 +94,10 @@ no provider tool definitions, review bots are refused task tools before model
 dispatch, and shared history contains only the owner message and final bot
 reply. Exact tool evidence remains private to the turn rather than being
 automatically published to the room.
+
+Independent stage-5 review found missing CLI progress and TUI evidence retention.
+CLI now writes sanitized typed tool updates/results to stderr, preserving JSON
+stdout. ChatRunBook retains private tool lines when replacing the screen stream
+with committed room history at completion. Regressions cover escaped CLI status,
+task/cancellation forwarding and retention of cleanup evidence on the final TUI
+screen. Shared room history remains unchanged.

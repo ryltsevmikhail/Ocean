@@ -107,7 +107,8 @@ export class ChatRunBook implements RunBookPort {
         },
       });
       if (!result.ok) throw new Error(result.error.code);
-      entry.stream = this.#transcript();
+      const privateEvidence = entry.stream.filter((line) => line.kind === 'tool');
+      entry.stream = [...this.#transcript(), ...privateEvidence];
       const turn = result.value;
       if (turn.status === 'recorded')
         return {

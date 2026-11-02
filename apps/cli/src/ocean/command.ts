@@ -1,3 +1,4 @@
+import { codingProgress } from './coding-progress.js';
 import { readFileSync, statSync } from 'node:fs';
 import { registeredCodingTools } from './coding-project-host.js';
 import { registerCodingProject } from './coding-projects.js';
@@ -190,6 +191,7 @@ export async function runOceanCommand(
             options.provider === undefined ? createProviderFromEnv(process.env) : options.provider,
           signal: controller.signal,
           emit: (update) => {
+            codingProgress(update, error);
             if (!json && update.sessionUpdate === 'agent_message_chunk')
               error.write(terminalText(update.content.text));
           },
