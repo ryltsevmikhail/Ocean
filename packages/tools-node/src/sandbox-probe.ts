@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { ToolError } from '@runnets/application';
 import type { CodingTestPreset } from '@runnets/domain';
 import { blockedName, checkedPath, type WorkspaceBackend, type FileEntry } from './backend.js';
+import { validateMounts } from './sandbox-mounts.js';
 import { sandboxFile } from './sandbox-files.js';
 import {
   runSandbox,
@@ -55,6 +56,8 @@ export async function probeSandbox(options: SandboxOptions): Promise<SandboxQual
 }
 export interface SandboxCommandEvidence extends SandboxEvidence {
   readonly invocationHash: string;
+  readonly dependencyHash: string;
+  readonly dependenciesUnchanged: boolean;
   readonly beforeTreeHash: string;
   readonly afterTreeHash: string;
   readonly sourceUnchanged: boolean;
@@ -67,8 +70,9 @@ export async function sandboxCommand(
   snapshot: () => Promise<string>,
 ): Promise<SandboxCommandEvidence> {
   const beforeTreeHash = await snapshot();
+  const dependencyHash = await validateMounts(options.mounts ?? [], options.dependencyProjectRoot);
   const invocationHash = createHash('sha256')
-    .update(JSON.stringify({ preset, limits: sandboxLimits, options }))
+    .update(JSON.stringify({ preset, limits: sandboxLimits, options, dependencyHash }))
     .digest('hex');
   const result = await runSandbox({
     ...options,
@@ -81,6 +85,10 @@ export async function sandboxCommand(
   return {
     ...result,
     invocationHash,
+    dependencyHash,
+    dependenciesUnchanged:
+      dependencyHash ===
+      (await validateMounts(options.mounts ?? [], options.dependencyProjectRoot)),
     beforeTreeHash,
     afterTreeHash,
     sourceUnchanged: beforeTreeHash === afterTreeHash,
@@ -131,7 +139,8 @@ export async function createSandboxBackend(
           !result.cleanupConfirmed ||
           result.exitCode !== 0 ||
           result.reason !== 'exit' ||
-          !result.sourceUnchanged,
+          !result.sourceUnchanged ||
+          !result.dependenciesUnchanged,
         ...(!result.cleanupConfirmed ? { uncertain: true } : {}),
       };
     },

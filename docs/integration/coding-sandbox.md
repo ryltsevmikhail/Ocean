@@ -144,3 +144,11 @@ directory. Mutation still requires exclusive task ownership; file-content
 comparison and rename do not form a kernel-level compare-and-swap against
 arbitrary concurrent writers. Isolation tests now create and verify readable
 synthetic host key, profile, backup and SSH files before testing worker denial.
+
+Dependency inventory now returns a deterministic SHA-256 digest covering paths,
+modes, file bytes and symlink text. File reads use O_NOFOLLOW and compare
+descriptor metadata before and after hashing. Command evidence includes that
+digest in its invocation hash and verifies it again after execution. Changed
+dependencies make the command result an error. A regression replaces package
+contents at the same path and verifies a different digest. Binding the running
+Node binary and the qualification lifetime still remains open.

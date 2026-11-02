@@ -27,7 +27,11 @@ describe('sandbox mount refusal', () => {
       await mkdir(source);
       await expect(validateMounts([{ source: root, target }], root)).rejects.toThrow();
       await expect(validateMounts([{ source: root, target: '/toolchain/pnpm' }])).rejects.toThrow();
-      await expect(validateMounts([{ source, target }], root)).resolves.toBeUndefined();
+      await expect(validateMounts([{ source, target }], root)).resolves.toMatch(/^[a-f0-9]{64}$/);
+      await writeFile(join(source, 'package'), 'before');
+      const originalHash = await validateMounts([{ source, target }], root);
+      await writeFile(join(source, 'package'), 'after');
+      expect(await validateMounts([{ source, target }], root)).not.toBe(originalHash);
       await symlink('/etc/passwd', join(source, 'escape'));
       await expect(validateMounts([{ source, target }], root)).rejects.toThrow();
       await rm(join(source, 'escape'));

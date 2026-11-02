@@ -1,4 +1,6 @@
-import { lstat, realpath, readdir, readlink } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { constants } from 'node:fs';
+import { open, lstat, realpath, readdir, readlink } from 'node:fs/promises';
 import { join, resolve, relative } from 'node:path';
 import { ToolError } from '@runnets/application';
 export interface SandboxMount {
@@ -9,7 +11,28 @@ export interface SandboxMount {
 export async function validateMounts(
   mounts: readonly SandboxMount[],
   projectRoot?: string,
-): Promise<void> {
+): Promise<string> {
+  const hash = createHash('sha256');
+  async function fingerprint(path: string, target: string): Promise<void> {
+    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      const before = await file.stat({ bigint: true });
+      if (!before.isFile()) throw new Error('dependency file changed');
+      hash.update(JSON.stringify([target, String(before.mode), String(before.size)]));
+      for await (const chunk of file.createReadStream({ autoClose: false }))
+        hash.update(chunk as Buffer);
+      const after = await file.stat({ bigint: true });
+      if (
+        before.ino !== after.ino ||
+        before.size !== after.size ||
+        before.mtimeNs !== after.mtimeNs ||
+        before.ctimeNs !== after.ctimeNs
+      )
+        throw new Error('dependency file changed');
+    } finally {
+      await file.close();
+    }
+  }
   const mapped = [
     ...mounts,
     ...(projectRoot ? [{ source: projectRoot, target: '/workspace' }] : []),
@@ -24,6 +47,7 @@ export async function validateMounts(
     if (mount.target === '/toolchain/pnpm/bin/pnpm') {
       if (!stat.isFile() || stat.nlink !== 1 || (stat.mode & 0o111) === 0)
         throw new ToolError('containment_unavailable', 'expected standalone pnpm executable');
+      await fingerprint(mount.source, mount.target);
       continue;
     }
     if (
@@ -39,6 +63,7 @@ export async function validateMounts(
       const stat = await lstat(path);
       if (stat.isSymbolicLink()) {
         const link = await readlink(path);
+        hash.update(JSON.stringify([relative(mount.source, path), link]));
         const actual = await realpath(path);
         const owner = mapped.find((m) => actual === m.source || actual.startsWith(m.source + '/'));
         const current = resolve(mount.target, relative(mount.source, path), '..', link);
@@ -52,10 +77,13 @@ export async function validateMounts(
             'dependency symlink escapes explicit mount closure',
           );
       } else if (stat.isDirectory()) {
-        for (const entry of await readdir(path)) await walk(join(path, entry));
+        hash.update(JSON.stringify([relative(mount.source, path), stat.mode]));
+        for (const entry of (await readdir(path)).sort()) await walk(join(path, entry));
       } else if (!stat.isFile() || stat.nlink !== 1)
         throw new ToolError('containment_unavailable', 'special dependency file');
+      else await fingerprint(path, join(mount.target, relative(mount.source, path)));
     }
     await walk(mount.source);
   }
+  return hash.digest('hex');
 }
