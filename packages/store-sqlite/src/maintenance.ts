@@ -1,3 +1,7 @@
+import { ownerBusy, ownerAlive as alive } from './maintenance-owner.js';
+import { readCodingBackupInventory } from './coding-backup-inventory.js';
+import { snapshotFileHash } from './backup-file.js';
+import type { CodingBackupInventory } from '@runnets/domain';
 import { unresolvedEffectSql } from './tool-effect-resolution.js';
 /** Local, non-dispatching inspection and exclusive SQLite online backup. */
 import { backup, DatabaseSync } from 'node:sqlite';
@@ -19,20 +23,6 @@ export interface DatabaseSummary {
 export type DatabaseInspection =
   | { readonly status: 'ok'; readonly summary: DatabaseSummary }
   | { readonly status: 'owner_busy' | 'unsupported_schema' | 'invalid_database' };
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
-  }
-}
-function ownerBusy(db: DatabaseSync): boolean {
-  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE name='runtime_owner_v1'").get()) return false;
-  const owner = db.prepare('SELECT pid FROM runtime_owner_v1 WHERE singleton=1').get();
-  if (!owner) return false;
-  return typeof owner['pid'] !== 'number' || owner['pid'] <= 0 || alive(owner['pid']);
-}
 function schema(db: DatabaseSync): number {
   return Number(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']);
 }
@@ -105,6 +95,28 @@ export async function snapshotDatabase(
   path: string,
   destination: string,
 ): Promise<DatabaseSummary> {
+  return (await snapshotOwned(path, destination)).summary;
+}
+export interface CodingDatabaseSnapshot<T> {
+  readonly summary: DatabaseSummary;
+  readonly inventory: CodingBackupInventory;
+  readonly assets: T;
+}
+/** Low-level capture port. The host must verify and publish its complete asset manifest separately. */
+export async function snapshotCodingDatabase<T>(
+  path: string,
+  destination: string,
+  capture: (inventory: CodingBackupInventory) => Promise<T>,
+): Promise<CodingDatabaseSnapshot<T>> {
+  const result = await snapshotOwned(path, destination, capture);
+  if (!result.inventory) throw Error('invalid_coding_inventory');
+  return { summary: result.summary, inventory: result.inventory, assets: result.assets as T };
+}
+async function snapshotOwned<T>(
+  path: string,
+  destination: string,
+  capture?: (inventory: CodingBackupInventory) => Promise<T>,
+): Promise<{ summary: DatabaseSummary; inventory?: CodingBackupInventory; assets?: T }> {
   if (!existsSync(path) || !lstatSync(path).isFile() || lstatSync(path).isSymbolicLink())
     throw new Error('profile_missing');
   if (existsSync(destination)) throw new Error('destination_exists');
@@ -119,18 +131,27 @@ export async function snapshotDatabase(
       throw new Error('owner_busy');
     }
     const original = summary(db);
-    if (original.externalCodingAssets) throw new Error('coding_assets_unavailable');
+    if (original.externalCodingAssets && !capture) throw new Error('coding_assets_unavailable');
     await backup(db, destination);
     chmodSync(destination, 0o600);
     const snapshot = new DatabaseSync(destination);
     try {
-      snapshot.exec('DELETE FROM runtime_owner_v1');
+      snapshot.exec('PRAGMA journal_mode=DELETE; DELETE FROM runtime_owner_v1');
       const copy = summary(snapshot);
       if (JSON.stringify(original) !== JSON.stringify(copy)) throw new Error('snapshot_mismatch');
     } finally {
       snapshot.close();
     }
-    return original;
+    if (!capture) return { summary: original };
+    const inventory = readCodingBackupInventory(destination),
+      digest = snapshotFileHash(destination);
+    const assets = await capture(structuredClone(inventory));
+    if (
+      snapshotFileHash(destination) !== digest ||
+      readCodingBackupInventory(destination).hash !== inventory.hash
+    )
+      throw Error('snapshot_mismatch');
+    return { summary: original, inventory, assets };
   } finally {
     try {
       release?.();
