@@ -14,7 +14,8 @@ export interface CodingReviewTransaction {
   changeset(hash: string): Changeset | null;
   reviewRequest(id: string): CodingReviewRequest | null;
   putReviewRequest(request: CodingReviewRequest): void;
-  putReviewVerdict(verdict: CodingReviewVerdict): void;
+  putReviewVerdict(requestId: string, verdict: CodingReviewVerdict): void;
+  reviewVerdict(requestId: string): CodingReviewVerdict | null;
   evidenceHashes(taskId: string): readonly string[];
 }
 export interface CodingReviewStore {
@@ -121,7 +122,7 @@ export class CodingReviewService {
         !value.findings.every((f) => codingReviewFindingValid(f, changeset))
       )
         return codingFailure('coding_denied');
-      tx.putReviewVerdict(value);
+      tx.putReviewVerdict(requestId, value);
       tx.putReviewRequest({ ...request, status: 'completed' });
       return ok(value);
     });

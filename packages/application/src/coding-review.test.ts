@@ -66,7 +66,8 @@ it('hands off only the frozen artifact and explicit context then rejects stale e
           putReviewRequest: (value) => {
             request = structuredClone(value);
           },
-          putReviewVerdict: (value) => {
+          reviewVerdict: () => null,
+          putReviewVerdict: (_requestId, value) => {
             verdicts.push(structuredClone(value));
           },
           evidenceHashes: () => evidence,

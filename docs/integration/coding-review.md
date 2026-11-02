@@ -50,3 +50,11 @@ asserts one passed persisted record for allow-once and no record for denial.
 Typecheck, ordinary tests, native flows, build and changed-source formatting
 pass. Full root check is blocked by parallel design-assets import-rule errors;
 lint with that unrelated directory excluded passes.
+
+Public SQLite storage now exposes codingReviews with transaction-local
+task/artifact/evidence reads and immutable handoff transitions. Verdicts bind
+an explicit request ID and can be inserted only once for its exact reviewer,
+room and artifact binding. Completion requires a stored verdict. Disk-backed
+tests verify rollback of verdict plus completion, duplicate/mutation refusal
+and exact data after reopen. Root check is still blocked by parallel asset lint
+errors; scoped lint, full tests, build and changed-source formatting pass.
