@@ -26,3 +26,27 @@ it.each(
 )('refuses ambiguous or misplaced coding task %j', (args) => {
   expect(() => oceanArguments(args)).toThrow();
 });
+
+it('parses explicit coding start authority without a bulk approval option', () => {
+  const args = oceanArguments([
+    'coding',
+    'start',
+    '--project',
+    '/project',
+    '--dev',
+    'dev',
+    '--review',
+    'review',
+    '--room',
+    'dev-room',
+    '--review-room',
+    'review-room',
+    '--task-id',
+    'task',
+  ]);
+  expect(args.command).toBe('coding');
+  expect(args.positional).toEqual(['start']);
+  expect(args.flags.get('project')).toBe('/project');
+  expect(() => oceanArguments(['coding', 'start', '--yes'])).toThrow();
+  expect(oceanArguments(['coding', 'show', 'task']).positional).toEqual(['show', 'task']);
+});

@@ -1,3 +1,4 @@
+import { runCodingCommand } from './coding-command.js';
 import { checkRestoredAccess } from './restored.js';
 import { runOperations } from './operations.js';
 import { runReviewCommand, terminalReviewApproval } from './review.js';
@@ -69,7 +70,9 @@ export async function runOceanCommand(
       return result.value;
     };
     let data: unknown;
-    if (command === 'init') {
+    if (command === 'coding') {
+      data = await runCodingCommand(runtime, args, requestId);
+    } else if (command === 'init') {
       data = execute({
         type: 'BindWorkspace',
         requestId: flags.get('request-id') ?? 'ocean-init',

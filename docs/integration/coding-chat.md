@@ -46,3 +46,12 @@ can receive trusted codingTools configuration from the host command API.
 Without that configuration a task send fails closed. Persistent owner-managed
 project/dependency registration and end-user coding start/show commands remain
 pending; no automatic toolchain mount selection was introduced.
+
+CLI now exposes coding start with --project, --dev, --review, --room,
+--review-room and optional --task-id. It resolves named bots, uses trusted
+interactive reservation/worktree previews and calls the existing task/worktree
+services. coding show TASK reads the owner-profile task. No bulk confirmation
+flag exists and redirected input refuses ownership confirmation.
+Presets currently remain empty for this direct-project start path; persistent
+project registration, owner-managed dependency configuration and full command
+acceptance remain pending.

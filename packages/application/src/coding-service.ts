@@ -151,6 +151,14 @@ export class CodingTaskService {
       return codingFailure('recovery_required');
     return codingFailure(code);
   }
+  inspect(workspaceId: string, taskId: string): CodingResult<CodingTask> {
+    return this.#deps.store.atomic((tx) => {
+      const task = tx.task(taskId);
+      return task && task.workspaceId === workspaceId && task.lease.ownerId === this.#deps.ownerId
+        ? ok(task)
+        : codingFailure('coding_denied');
+    });
+  }
   authorize(
     access: CodingAccess,
   ): CodingResult<{ readonly taskId: string; readonly executionEnabled: false }> {
