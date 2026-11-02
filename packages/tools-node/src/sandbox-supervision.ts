@@ -33,7 +33,10 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   await sandboxRoot(request.root, request.mounts, request.dependencyProjectRoot);
   const timeoutMs = Math.min(request.timeoutMs ?? sandboxLimits.timeoutMs, sandboxLimits.timeoutMs);
   if (timeoutMs < 1 || !Number.isFinite(timeoutMs)) throw new Error('invalid sandbox timeout');
-  const outputBytes = Math.min(request.outputBytes ?? sandboxLimits.outputBytes, 1048576);
+  const retainedBytes = request.outputBytes ?? sandboxLimits.outputBytes;
+  if (!Number.isSafeInteger(retainedBytes) || retainedBytes < 1)
+    throw new Error('invalid sandbox output limit');
+  const outputBytes = Math.min(retainedBytes, 1048576);
   const unit = 'ocean-worker-' + randomUUID() + '.service';
   const ready = 'OCEAN_READY_' + randomUUID();
   const script = `

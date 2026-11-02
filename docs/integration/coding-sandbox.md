@@ -160,3 +160,8 @@ inputs require a new backend qualification. A native regression replaces a
 dependency after qualification and verifies refusal before the write marker
 is created. This still requires closing the interval between verification and
 mount creation before declaring the complete qualification gate passed.
+
+Supervisor input validation also refuses nonfinite, fractional, zero and
+negative retained-output limits before starting a service. Five regression
+cases previously dispatched a worker rather than rejecting invalid limits.
+The verification-to-mount race remains open and prevents stage-3 completion.
