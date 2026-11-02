@@ -89,7 +89,16 @@ export async function runOceanCommand(
         terminalCodingConfirm,
       );
     } else if (command === 'coding') {
-      data = await runCodingCommand(runtime, args, requestId);
+      data = await runCodingCommand(
+        runtime,
+        args,
+        requestId,
+        args.positional[0] === 'review'
+          ? options.provider === undefined
+            ? createProviderFromEnv(process.env)
+            : options.provider
+          : null,
+      );
     } else if (command === 'init') {
       data = execute({
         type: 'BindWorkspace',

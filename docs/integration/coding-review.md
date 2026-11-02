@@ -78,3 +78,12 @@ A deterministic-provider integration test checks a seeded defect, no tools,
 isolated input and terminal succeeded TaskRun. No external provider is called.
 Typecheck, scoped lint, tests and build pass; whole-workspace lint/format gates
 remain blocked by parallel design-assets/config changes.
+
+Durable runtime now composes CodingReviewService over SQLite. CLI coding diff
+TASK captures the complete current artifact; coding review TASK --to REVIEWER
+checks the exact assigned reviewer/provider, owner-confirms the frozen handoff
+and dispatches a separate metered reviewer run with cancellation.
+Native direct/group fixtures now exercise CLI diff against real changed/new
+artifact capture, checking exact before/after source. No live provider is used.
+Typecheck, scoped lint, tests, build and global formatting pass in the current
+workspace; root check still fails on unrelated design-assets import restrictions.

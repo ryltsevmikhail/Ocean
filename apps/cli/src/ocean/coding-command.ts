@@ -1,3 +1,5 @@
+import { runCodingReviewCommand } from './coding-review-command.js';
+import type { ProviderPort } from '@runnets/application';
 import { readCodingProjects } from './coding-projects.js';
 import { createInterface } from 'node:readline/promises';
 import { randomUUID } from 'node:crypto';
@@ -20,7 +22,10 @@ export async function runCodingCommand(
   runtime: Runtime,
   args: OceanArguments,
   requestId: string,
+  provider: ProviderPort | null = null,
 ): Promise<unknown> {
+  if (['diff', 'review'].includes(args.positional[0] ?? ''))
+    return runCodingReviewCommand(runtime, args, requestId, provider);
   const workspaceId = 'ws_ocean';
   if (args.positional[0] === 'show') {
     const id = args.positional[1];

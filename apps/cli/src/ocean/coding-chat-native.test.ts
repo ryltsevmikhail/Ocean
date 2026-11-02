@@ -1,3 +1,6 @@
+import { runCodingReviewCommand } from './coding-review-command.js';
+import { oceanArguments } from './arguments.js';
+import type { Changeset } from '@runnets/domain';
 import { codingTestPassed } from '@runnets/domain';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
@@ -57,7 +60,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       let id = 0;
       const execute = (command: Record<string, unknown>) => {
         const result = runtime.conversations.execute({
-          workspaceId: 'ws_fixture',
+          workspaceId: 'ws_ocean',
           requestId: String(++id),
           ...command,
         } as ConversationCommand);
@@ -85,7 +88,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       expect(
         await runtime.coding.start(
           {
-            workspaceId: 'ws_fixture',
+            workspaceId: 'ws_ocean',
             taskId: 'task',
             requestId: 'start',
             projectRoot: project,
@@ -111,7 +114,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       ).toMatchObject({ ok: true });
       const prepared = await runtime.codingChanges.prepare(
         {
-          workspaceId: 'ws_fixture',
+          workspaceId: 'ws_ocean',
           taskId: 'task',
           roomId: room,
           botId: dev,
@@ -138,7 +141,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         };
         await expect(
           runtime.chat.send({
-            workspaceId: 'ws_fixture',
+            workspaceId: 'ws_ocean',
             roomId: room,
             requestId: 'restored',
             taskId: 'task',
@@ -193,7 +196,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         },
       };
       const result = await runtime.chat.send({
-        workspaceId: 'ws_fixture',
+        workspaceId: 'ws_ocean',
         roomId: room,
         requestId: 'send',
         taskId: 'task',
@@ -213,7 +216,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       );
       expect(await readFile(join(project, 'source.txt'), 'utf8')).toBe('before');
       expect(runtime.toolJournal?.inspectPending?.()).toEqual([]);
-      const history = runtime.conversations.history('ws_fixture', room);
+      const history = runtime.conversations.history('ws_ocean', room);
       expect(history.ok).toBe(true);
       if (history.ok) {
         expect(history.value.map((message) => message.body)).toEqual([
@@ -222,6 +225,18 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         ]);
         expect(JSON.stringify(history.value)).not.toContain('sourceUnchanged');
       }
+      const frozen = (await runCodingReviewCommand(
+        runtime,
+        oceanArguments(['coding', 'diff', 'task']),
+        'diff',
+        null,
+      )) as Changeset;
+      expect(frozen.taskId).toBe('task');
+      if (decision === 'allow-once') {
+        expect(frozen.files).toMatchObject([
+          { path: 'source.txt', before: { text: 'before' }, after: { text: 'after' } },
+        ]);
+      } else expect(frozen.files).toEqual([]);
       let plainCalls = 0;
       const plain: ProviderPort = {
         ...provider,
@@ -235,7 +250,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       };
       expect(
         await runtime.chat.send({
-          workspaceId: 'ws_fixture',
+          workspaceId: 'ws_ocean',
           roomId: room,
           requestId: 'plain',
           to: 'dev',
@@ -248,7 +263,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       expect(plainCalls).toBe(1);
       await expect(
         runtime.chat.send({
-          workspaceId: 'ws_fixture',
+          workspaceId: 'ws_ocean',
           roomId: reviewRoom,
           requestId: 'review-tool-refusal',
           taskId: 'task',

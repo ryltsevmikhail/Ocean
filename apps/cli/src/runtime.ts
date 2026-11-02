@@ -12,6 +12,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import {
   TaskRunService,
   CodingTaskService,
+  CodingReviewService,
   CodingApprovalService,
   codingApprovalAdmission,
   CodingChangesetService,
@@ -42,6 +43,7 @@ import {
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
   readonly coding: CodingTaskService;
+  readonly codingReview?: CodingReviewService;
   readonly codingEvidence?: CodingTestEvidenceStore;
   readonly codingApprovals: CodingApprovalService;
   readonly codingChanges: CodingChangesetService;
@@ -185,6 +187,14 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       coding,
       codingApprovals,
       codingEvidence: store.codingEvidence,
+      codingReview: new CodingReviewService(
+        store.codingReviews,
+        (task) =>
+          !codingDeps.restored &&
+          task.lease.ownerId === codingDeps.ownerId &&
+          task.policy.reviewCapabilities.includes('changeset_read'),
+      ),
+
       codingChanges: new CodingChangesetService({
         ...codingDeps,
         worktrees: new GitCodingWorktrees(options.codingWorktreeDirectory),
