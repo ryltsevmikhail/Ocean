@@ -1,16 +1,26 @@
 import { constants } from 'node:fs';
 import { mkdir, realpath, open } from 'node:fs/promises';
 import { dirname, resolve, join } from 'node:path';
-import type { CodingApplyProjectPort, CodingApplyObservationPort } from '@runnets/application';
+import type {
+  CodingApplyProjectPort,
+  CodingApplyObservationPort,
+  CodingApplyTreePort,
+} from '@runnets/application';
 import type { CodingTask, CodingFileChange } from '@runnets/domain';
 import { GitCodingProject } from './coding-project.js';
 import { GitCodingSnapshots } from './coding-snapshot.js';
 import { GitCodingWorktrees } from './coding-worktree.js';
 import { codingGit, codingText } from './coding-git.js';
+import { captureCodingProjectTree } from './coding-project-tree.js';
 import { observeCodingFiles } from './coding-apply-observation.js';
 import { applyCodingFile } from './coding-apply-file.js';
 /** Trusted owner-application adapter; never stages, commits, cleans or invokes project code. */
-export class GitCodingApplyProject implements CodingApplyProjectPort, CodingApplyObservationPort {
+export class GitCodingApplyProject
+  implements CodingApplyProjectPort, CodingApplyObservationPort, CodingApplyTreePort
+{
+  tree(root: string, expectedBase: string): Promise<string> {
+    return captureCodingProjectTree(root, expectedBase);
+  }
   observe(
     root: string,
     paths: readonly string[],

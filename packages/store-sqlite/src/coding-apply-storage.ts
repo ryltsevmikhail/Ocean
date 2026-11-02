@@ -1,6 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { CodingApplyStore, CodingApplyTransaction } from '@runnets/application';
-import { assertCodingApplyTransition, type CodingApplyReceipt } from '@runnets/domain';
+import {
+  assertCodingApplyTransition,
+  type CodingApplyReceipt,
+  type CodingApplyResolution,
+} from '@runnets/domain';
 import { task as decodeTask, participates } from './coding-store.js';
 import { changesetStorage } from './changeset-storage.js';
 import { SqliteCodingTestEvidenceStore } from './coding-test-evidence.js';
@@ -35,6 +39,14 @@ export class SqliteCodingApplyStore implements CodingApplyStore {
         },
         evidence: (id) => new SqliteCodingTestEvidenceStore(db).list(id),
         application,
+        resolution: (id) => {
+          const row = db
+            .prepare(
+              "SELECT payload FROM tool_effect_resolutions_v1 WHERE id=? AND task_run_id=? AND attempt_id='apply'",
+            )
+            .get(id, 'apply-' + id);
+          return row ? (JSON.parse(String(row['payload'])) as CodingApplyResolution) : null;
+        },
         pendingApplications: () =>
           db
             .prepare(

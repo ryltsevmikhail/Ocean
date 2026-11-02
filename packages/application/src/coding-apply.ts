@@ -9,6 +9,7 @@ import {
   type CodingReviewVerdict,
   type CodingTestEvidence,
   type CodingApplyReceipt,
+  type CodingApplyResolution,
   type CodingResult,
 } from '@runnets/domain';
 export interface CodingApplyTransaction {
@@ -19,6 +20,7 @@ export interface CodingApplyTransaction {
   verdict(requestId: string): CodingReviewVerdict | null;
   evidence(taskId: string): readonly CodingTestEvidence[];
   application(id: string): CodingApplyReceipt | null;
+  resolution?(applicationId: string): CodingApplyResolution | null;
   pendingApplications(): readonly CodingApplyReceipt[];
   putApplication(receipt: CodingApplyReceipt): void;
   claimApplication(receipt: CodingApplyReceipt): boolean;

@@ -1,7 +1,8 @@
 # Ocean 1.1 coding recovery development
 
-Status: stage 7 in progress. Interrupted apply receipt recovery is implemented;
-owner-confirmed content reconciliation, complete coding-operation fault qualification,
+Status: stage 7 in progress. Interrupted apply recovery, read-only inspection
+and exact owner apply resolution are implemented. Other coding-operation
+reconciliation, complete fault qualification,
 asset-complete backup/restore and release acceptance remain open.
 
 ## Interrupted application receipts
@@ -56,9 +57,58 @@ listing and restored-profile refusal. Deterministic read-boundary tests change
 file bytes or move a parent mid-read and require unavailable rather than a
 matching hash. Domain tests distinguish additions/deletions, modes and declared
 refactors. Independent review found no blocking issue in this diagnostic layer.
-`pnpm check` now passes 816 tests (39 opt-in skipped); build and format pass on
-the same qualified Linux/Node/pnpm versions. Owner reconciliation decisions,
-full-tree validation and any explicit hold-release protocol remain open.
+At the diagnostic-layer checkpoint, `pnpm check` passed 816 tests (39 opt-in skipped); build and format pass on
+the same qualified Linux/Node/pnpm versions. The exact owner resolution protocol for fixed host application is described
+below; this diagnostic command itself still releases nothing.
+
+## Exact owner resolution for fixed host application
+
+`ocean coding reconcile-apply RECEIPT_ID --accept before|after --reason TEXT`
+requires a separate interactive owner confirmation. It accepts an observed
+eligible-tree snapshot; it never retries, repairs or completes an unknown apply.
+Both before and after hashes use the same full manifest policy as the immutable
+artifact: base/cached/Git-eligible untracked files, exact bytes and modes,
+protected/ignored exclusions and existing 1,000-file/32-MiB limits. Two scans and
+canonical-root/current-HEAD checks reject changed base or unstable captures.
+This includes unchanged eligible files, not just the changed-file list. It does
+not claim ignored/private data or the whole host was unchanged.
+
+Only the exact single uncertain coding_apply effect can be resolved: task,
+workspace, receipt, artifact, base, original owner, context and fingerprint are
+bound. Both original/worktree leases must still be live. A restored profile,
+lost authority/lease, another unresolved effect or a tree matching neither exact
+snapshot refuses. The full tree is checked before and after confirmation;
+authority/binding are checked again in the commit transaction. Confirmation is
+one-use and expires after five minutes, including backward/invalid-clock refusal.
+A mixed partial application remains held until the owner manually brings the
+project to an exact accepted before or after snapshot. Ocean does no automatic
+stash/reset/clean/restore or deletion of retained originals.
+
+The decision is append-only journal metadata in tool_effect_resolutions_v1,
+independently versioned like tool_invocations_v1/v2. Its one SQLite commit also
+changes the pending/claim predicate for that exact context/fingerprint. The
+original uncertain invocation and per-file receipt remain unchanged forever;
+their identities still prohibit replay. No separate settlement window exists.
+A rolled-back decision retains the hold, and a duplicate decision refuses.
+Doctor uses the same unresolved predicate; old metadata without this table
+remains conservatively held. Older readers that ignore resolutions also retain
+the original uncertainty rather than replaying it.
+
+`inspect-apply` shows the saved owner resolution alongside the unchanged receipt.
+The result still states holdReleased=false because inspection changes no state.
+This protocol is limited to the fixed trusted host file-application adapter. It
+cannot resolve sandbox writes/tests, prove child-process termination, claim a
+historical outcome or guarantee absence of later external edits. Other unresolved
+effects remain blocked and need their own supervision/content reconciliation.
+
+Real temporary Git/SQLite tests cover accepted before/after, denial, stale
+confirmation, unrelated user files, restored profiles and lost leases. Journal
+scope/rollback tests verify unchanged uncertain history, exact fingerprint/context,
+other-effect refusal and preserved replay protection. Expiry/clock regressions
+and disk reopen verify decision scope/persistence. Independent review found no
+blocking issue. Root check passes 835 tests (39 opt-in skipped), build and format
+pass. The focused sandbox workflow plus SIGKILL suite passes 8 tests (2 native
+sandbox scenarios and 6 process boundaries) after the shared-manifest refactor.
 
 ## Process fault evidence
 
@@ -85,15 +135,15 @@ that a missing destination means cancellation or restore it automatically.
 Unit/store tests cover no project-port calls, idempotence, existing journal
 uncertainty and transaction rollback on contradictory completed evidence.
 
-On 2026-11-02, Linux x86_64 / Node 26.13.0 / pnpm 12.16.1: `pnpm check` passes
-807 tests (39 opt-in skipped); `pnpm build` and `pnpm format:check` pass. This
+At the initial recovery checkpoint on 2026-11-02, Linux x86_64 / Node 26.13.0 /
+pnpm 12.16.1: `pnpm check` passed 807 tests (39 opt-in skipped); `pnpm build` and `pnpm format:check` pass. This
 covers process SIGKILL, not power loss. No external provider or real profile is
 used. Independent review found no blocking issue in this recovery increment.
 
 ## Remaining release gates
 
-Implement content reconciliation against exact before/after artifacts without
-redispatching unknown effects. Qualify interruptions after approval decision,
+Extend reconciliation to other coding effects without redispatching unknown
+operations. Qualify interruptions after approval decision,
 write/test spawn/result and artifact capture, including process supervision.
 Snapshot format 2 must include all referenced worktrees, Git administration and
 recovery assets with verified manifests; old format-1 backup still refuses

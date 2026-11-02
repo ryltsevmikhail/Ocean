@@ -1,3 +1,5 @@
+import { SqliteCodingApplyResolutionStore } from './coding-apply-resolution.js';
+import type { CodingApplyResolutionStore } from '@runnets/application';
 import { SqliteCodingApplyStore } from './coding-apply-storage.js';
 import type { CodingApplyStore } from '@runnets/application';
 import { SqliteCodingReviewStore } from './coding-review-storage.js';
@@ -48,6 +50,7 @@ export interface OpenSqliteStoreOptions {
 export interface SqliteStore {
   readonly coding: CodingStore;
   readonly codingApplications: CodingApplyStore;
+  readonly codingResolutions: CodingApplyResolutionStore;
   readonly codingReviews: CodingReviewStore;
   readonly codingEvidence: CodingTestEvidenceStore;
   readonly codingApprovals: CodingApprovalStore;
@@ -91,6 +94,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   return {
     coding: new SqliteCodingStore(db),
     codingApplications: new SqliteCodingApplyStore(db),
+    codingResolutions: new SqliteCodingApplyResolutionStore(db),
     codingReviews: new SqliteCodingReviewStore(db),
     codingEvidence: new SqliteCodingTestEvidenceStore(db),
     codingApprovals: new SqliteCodingApprovalStore(db),

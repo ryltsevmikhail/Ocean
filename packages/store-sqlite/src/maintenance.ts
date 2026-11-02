@@ -1,3 +1,4 @@
+import { unresolvedEffectSql } from './tool-effect-resolution.js';
 /** Local, non-dispatching inspection and exclusive SQLite online backup. */
 import { backup, DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
@@ -67,7 +68,7 @@ function summary(db: DatabaseSync): DatabaseSummary {
       db,
       `SELECT
       (SELECT count(*) FROM tool_invocations_v1 WHERE outcome IN ('started','uncertain')) +
-      (SELECT count(*) FROM tool_invocations_v2 WHERE outcome IN ('started','uncertain')) AS n`,
+      (SELECT count(*) FROM tool_invocations_v2 e WHERE ${db.prepare("SELECT 1 FROM sqlite_master WHERE name='tool_effect_resolutions_v1'").get() ? unresolvedEffectSql('e') : "e.outcome IN ('started','uncertain')"}) AS n`,
     ),
     unfinishedRuns: count(
       db,

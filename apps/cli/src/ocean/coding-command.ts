@@ -25,6 +25,22 @@ export async function runCodingCommand(
   requestId: string,
   provider: ProviderPort | null = null,
 ): Promise<unknown> {
+  if (args.positional[0] === 'reconcile-apply') {
+    const applicationId = args.positional[1],
+      accepted = required(args.flags, 'accept');
+    if (
+      !applicationId ||
+      !runtime.codingApplyResolution ||
+      (accepted !== 'before' && accepted !== 'after')
+    )
+      throw Error('invalid_input');
+    const result = await runtime.codingApplyResolution.reconcile(
+      { workspaceId: 'ws_ocean', applicationId, accepted, reason: required(args.flags, 'reason') },
+      { confirm: terminalCodingConfirm },
+    );
+    if (!result.ok) throw Error(result.error.code);
+    return result.value;
+  }
   if (args.positional[0] === 'pending') {
     if (!runtime.toolJournal) throw Error('coding_unavailable');
     const effects = await runtime.toolJournal.pending();

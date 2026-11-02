@@ -9,23 +9,11 @@ import {
   type CodingFileContent,
   type CodingFileChange,
 } from '@runnets/domain';
-import { codingGit, codingPath, codingText } from './coding-git.js';
-import { codingTree, TREE_BYTES, TREE_FILES, FILE_BYTES } from './coding-tree.js';
-import { codingFile, type CodingFile } from './coding-file.js';
+import { type CodingFile } from './coding-file.js';
 import { codingDiff } from './coding-diff.js';
 import { GitCodingWorktrees } from './coding-worktree.js';
-import { blockedName } from './backend.js';
+import { codingBaseFiles, codingWorkingTree, codingManifest } from './coding-working-tree.js';
 const hash = (body: Buffer | string) => createHash('sha256').update(body).digest('hex');
-const forbidden = (path: string) => path.split('/').some(blockedName);
-function manifest(files: ReadonlyMap<string, CodingFile>): string {
-  return hash(
-    JSON.stringify(
-      [...files]
-        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .map(([p, f]) => [p, f.mode, hash(f.body)]),
-    ),
-  );
-}
 function text(file: CodingFile | undefined): CodingFileContent | null {
   if (!file) return null;
   if (file.body.length > 131072 || file.body.includes(0))
@@ -48,56 +36,17 @@ export class GitCodingSnapshots implements ChangesetPort {
   constructor(options: { readonly betweenScans?: () => void | Promise<void> } = {}) {
     this.#betweenScans = options.betweenScans;
   }
-  async #scan(
-    binding: WorktreeBinding,
-    base: ReadonlyMap<string, CodingFile>,
-  ): Promise<Map<string, CodingFile>> {
-    const cached = codingText(await codingGit(binding.root, ['ls-files', '-z', '--cached']))
-      .split('\0')
-      .filter(Boolean);
-    if (cached.some(forbidden)) throw new CodingArtifactError('unsupported_file');
-    const untracked = codingText(
-      await codingGit(binding.root, ['ls-files', '-z', '--others', '--exclude-standard']),
-    )
-      .split('\0')
-      .filter(Boolean)
-      .filter((p) => !forbidden(p));
-    const paths = [...new Set([...base.keys(), ...cached, ...untracked])].sort();
-    if (paths.length > TREE_FILES) throw new CodingArtifactError('changeset_limit');
-    const result = new Map<string, CodingFile>();
-    let bytes = 0;
-    for (const path of paths) {
-      codingPath(path);
-      if (forbidden(path)) throw new CodingArtifactError('unsupported_file');
-      const file = await codingFile(binding.root, path);
-      if (file) {
-        bytes += file.body.length;
-        if (bytes > TREE_BYTES) throw new CodingArtifactError('changeset_limit');
-        result.set(path, file);
-      }
-    }
-    return result;
-  }
   async capture(task: CodingTask, binding: WorktreeBinding): Promise<Changeset> {
     const worktrees = new GitCodingWorktrees(dirname(binding.root));
     await worktrees.verify(task, binding);
-    const entries = await codingTree(binding.root, task.baseCommit),
-      base = new Map<string, CodingFile>();
-    let total = 0;
-    for (const entry of entries) {
-      if (forbidden(entry.path)) throw new CodingArtifactError('unsupported_file');
-      const body = await codingGit(binding.root, ['cat-file', 'blob', entry.objectId], FILE_BYTES);
-      total += body.length;
-      if (total > TREE_BYTES) throw new CodingArtifactError('changeset_limit');
-      base.set(entry.path, { body, mode: entry.mode });
-    }
-    const after = await this.#scan(binding, base),
-      beforeTreeHash = manifest(base),
-      afterTreeHash = manifest(after);
+    const base = await codingBaseFiles(binding.root, task.baseCommit);
+    const after = await codingWorkingTree(binding.root, base),
+      beforeTreeHash = codingManifest(base),
+      afterTreeHash = codingManifest(after);
     await this.#betweenScans?.();
-    const confirm = await this.#scan(binding, base);
+    const confirm = await codingWorkingTree(binding.root, base);
     await worktrees.verify(task, binding);
-    if (manifest(confirm) !== afterTreeHash) throw new CodingArtifactError('stale_capture');
+    if (codingManifest(confirm) !== afterTreeHash) throw new CodingArtifactError('stale_capture');
     const paths = [...new Set([...base.keys(), ...after.keys()])].sort(),
       files: CodingFileChange[] = [];
     let size = 0;

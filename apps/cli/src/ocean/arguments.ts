@@ -32,6 +32,7 @@ const valueFlags = new Set([
   'to',
   'from',
   'reason',
+  'accept',
   'review-version',
 ]);
 /** Parse once, rejecting ambiguous flags and duplicate options before accessing a profile. */

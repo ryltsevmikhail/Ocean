@@ -5,6 +5,7 @@ import {
   type CodingApplyFileObservation,
   type CodingApplyFileComparison,
   type CodingApplyReceipt,
+  type CodingApplyResolution,
   type CodingTask,
   type CodingResult,
 } from '@runnets/domain';
@@ -16,6 +17,7 @@ export interface CodingApplyInspection {
   readonly receipt: CodingApplyReceipt;
   readonly projectRoot: string;
   readonly holdReleased: false;
+  readonly resolution: CodingApplyResolution | null;
   readonly files: readonly (CodingApplyFileObservation & {
     readonly comparison: CodingApplyFileComparison;
   })[];
@@ -63,7 +65,12 @@ export class CodingApplyInspectionService {
           JSON.stringify(changeset.files.map((file) => file.path))
       )
         return null;
-      return structuredClone({ receipt, task, changeset });
+      return structuredClone({
+        receipt,
+        task,
+        changeset,
+        resolution: tx.resolution?.(receipt.id) ?? null,
+      });
     };
     const prepared = this.#store.atomic(resolve);
     if (!prepared) return codingFailure('coding_denied');
@@ -87,6 +94,7 @@ export class CodingApplyInspectionService {
       receipt: prepared.receipt,
       projectRoot: prepared.task.projectRoot,
       holdReleased: false,
+      resolution: prepared.resolution,
       files: actual.map((value, index) => ({
         ...value,
         comparison: classifyCodingApplyFile(

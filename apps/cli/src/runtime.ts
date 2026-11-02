@@ -16,6 +16,7 @@ import {
   CodingReviewService,
   CodingApplyService,
   CodingApplyInspectionService,
+  CodingApplyResolutionService,
   codingApplyAdmission,
   CodingApprovalService,
   codingApprovalAdmission,
@@ -50,6 +51,7 @@ export interface Runtime {
   readonly codingReview?: CodingReviewService;
   readonly codingApply?: CodingApplyService;
   readonly codingApplyInspection?: CodingApplyInspectionService;
+  readonly codingApplyResolution?: CodingApplyResolutionService;
   readonly codingEvidence?: CodingTestEvidenceStore;
   readonly codingApprovals: CodingApprovalService;
   readonly codingChanges: CodingChangesetService;
@@ -202,6 +204,33 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       codingApprovals,
       codingEvidence: store.codingEvidence,
       codingApply,
+      codingApplyResolution: new CodingApplyResolutionService(
+        store.codingResolutions,
+        new GitCodingApplyProject(),
+        {
+          ownerId: codingDeps.ownerId,
+          clock: codingDeps.clock,
+          admit: (task, tx) => {
+            const worktree = tx.worktree(task.id);
+            return (
+              !codingDeps.restored &&
+              task.status === 'reserved' &&
+              worktree !== null &&
+              worktree.state === 'ready' &&
+              worktree.root === task.worktreeRoot &&
+              worktree.projectRoot === task.projectRoot &&
+              worktree.baseCommit === task.baseCommit &&
+              worktree.workspaceId === task.workspaceId &&
+              worktree.taskId === task.id &&
+              worktree.lease.ownerId === codingDeps.ownerId &&
+              worktree.lease.projectRoot === worktree.root &&
+              task.lease.projectRoot === task.projectRoot &&
+              codingDeps.leases.owns(task.lease) &&
+              codingDeps.leases.owns(worktree.lease)
+            );
+          },
+        },
+      ),
       codingApplyInspection: new CodingApplyInspectionService(
         store.codingApplications,
         new GitCodingApplyProject(),
