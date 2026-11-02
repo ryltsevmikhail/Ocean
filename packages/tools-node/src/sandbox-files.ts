@@ -68,9 +68,25 @@ try {
         fs.writeFileSync(fd,input.content);fs.fchmodSync(fd,mode);fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;
         verifyDirectory(parent,directory);
         if(readFile(dest)!==input.expected) throw Error('stale_read');
-        if(input.expected===null) fs.linkSync(temp,dest);else fs.renameSync(temp,dest);
+        if(input.expected===null) fs.linkSync(temp,dest);
+        else {
+          const displaced=path.join(pinned,'.ocean-recovery-'+crypto.randomUUID());
+          fs.renameSync(dest,displaced);
+          installed=true;
+          fs.fsyncSync(directory);
+          try {
+            if(readFile(displaced)!==input.expected) throw Error('stale_read');
+            verifyDirectory(parent,directory);
+            fs.linkSync(temp,dest);
+          } catch(error) {
+            try {fs.linkSync(displaced,dest);fs.unlinkSync(displaced);fs.fsyncSync(directory);}
+            catch {}
+            throw error;
+          }
+          fs.unlinkSync(displaced);
+        }
         installed=true;
-        if(input.expected===null) fs.unlinkSync(temp);
+        fs.unlinkSync(temp);
         owned=false;
         fs.fsyncSync(directory);
         result=true;

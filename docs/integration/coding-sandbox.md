@@ -267,3 +267,14 @@ The reviewer also reproduced an unresolved concurrent-writer interval between
 the final content comparison and rename. A noncooperating host writer can lose
 an edit in that interval. Task leases serialize Ocean operations but do not
 serialize arbitrary host editors; the filesystem admission gate remains open.
+
+Replacement now atomically moves the current target to a unique recovery name
+before comparing its actual displaced content. Installation uses link, refusing
+to overwrite any newly created destination. On conflict the worker restores
+the displaced file only into an absent destination, otherwise retains recovery
+content, and reports effect_uncertain. A native regression writes a concurrent
+owner edit at the displacement boundary and verifies that it survives.
+
+A crash after displacement requires reconciliation of .ocean-recovery-* assets.
+A writer retaining an open descriptor to the displaced inode can still modify
+it after comparison; qualification and recovery must account for that case.
