@@ -54,3 +54,13 @@ export function codingReviewFindingValid(
     finding.explanation.length <= 16384
   );
 }
+
+export interface CodingReviewRequest {
+  readonly id: string;
+  readonly workspaceId: string;
+  readonly reviewRoomId: string;
+  readonly reviewerBotId: string;
+  readonly binding: CodingReviewBinding;
+  readonly contextGrant: readonly string[];
+  readonly status: 'requested' | 'completed';
+}
