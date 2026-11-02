@@ -306,3 +306,12 @@ The intent is persisted before link and removed only after installation and
 directory fsync. A native crash immediately after link leaves both the new
 file and its exact creation intent, and subsequent admission remains held.
 Intent cleanup also follows directory durability for successful replacements.
+
+A native open-descriptor regression writes to the displaced original immediately
+after the replacement is linked. The worker now rechecks displaced content
+before removing it. A changed original and its intent remain available for
+reconciliation and the result is effect_uncertain. The regression failed
+before this check and passes afterward. This check narrows the concurrent
+writer interval; a fully arbitrary writer can still act between the final
+check and unlink, so exclusive ownership and recovery qualification remain
+unresolved rather than being inferred from this test.

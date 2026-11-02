@@ -91,6 +91,7 @@ try {
             catch {}
             throw error;
           }
+          if(readFile(displaced)!==input.expected) throw Error('concurrent_original_write');
           fs.unlinkSync(displaced);
         }
         installed=true;
