@@ -97,3 +97,12 @@ then executes and settles the shared journal claim. It does not claim twice.
 Regression tests verify owner→claim→execute→settle ordering, no claim/effect for
 deny/cancel/stale source, and uncertainty on execution failure after claim.
 Host task operation preparation and chat invocation wiring remain pending.
+
+The tools-node host factory now prepares bounded new-file/test operations
+against a qualified task backend and computes hashes from exact call/preview,
+limits, source snapshot and actual toolchain/dependencies. Owner preview
+includes the fixed environment and limits. A native regression verifies
+preparation creates no target file. The factory is public for host integration.
+Session-scoped read history for existing-file edits and conversation wiring
+remain pending; existing-file edits still fail the inherited read-before-write
+guard when prepared without that history.
