@@ -50,9 +50,51 @@ checks and deterministic inventory even if the project is subsequently absent.
 That last case proves metadata isolation, not that missing assets are acceptable
 for a full backup. Record-limit tests refuse before parsing unbounded history.
 Ownership tests check the callback interval, standalone copy and database-tamper
-failure. On Linux x86_64 / Node 26.13.0 / pnpm 12.16.1, root check passes 839 tests
+failure. At the inventory checkpoint on Linux x86_64 / Node 26.13.0 / pnpm
+12.16.1, root check passed 839 tests
 (39 opt-in skipped), build and format pass. Independent review found no blocking
 issue in this foundation; it did not qualify a complete archive or restore.
+
+## Selected-root file manifest
+
+captureCodingAssetTree now captures a chosen Linux root through pinned directory
+FDs, without following filesystem symlinks. Portable manifests preserve raw
+binary bytes by SHA-256/size, ordinary modes, empty directories, internal hardlink
+relationships and inert symlink target text. First full file data is counted once
+per inode within the root. External aliases/targets are not implicitly captured.
+This is a selected-root manifest, not proof that the complete referenced graph
+has been selected or archived.
+
+Source identity evidence (device/inode/mode/owner/link count/size/mtime/ctime)
+is separate from the portable manifest hash. File/parent/root checks and two
+complete passes refuse observed changes. A copied root can have the same portable
+manifest and a different source identity. Invalid UTF-8 names, special file types,
+special permission bits, foreign owners and unplanned file/directory child mounts
+refuse rather than being silently omitted. Linux own-FD mount IDs are checked
+before file reads; no source project code is invoked.
+
+Limits: 2 GiB unique file bytes, 100,000 total entries, 128 levels, 4 KiB relative
+paths/link targets and 32 MiB serialized entry/signature plus queued-name budget.
+Options can only lower these limits. File hashing reuses a 1 MiB buffer. Directory
+names are read in bounded batches and share one global pending count/byte budget,
+including ancestor lists; processed Buffer references are released before descent.
+Independent review found an initial ancestor-list accounting gap; its nested-wide
+regression failed before the fix and now refuses within the global bound.
+
+Tests cover exact binary/BOM/CRLF bytes, modes, empty dirs, hardlinks, inert escaping
+links, portability, unsupported inputs/limits and content/parent swaps mid-read.
+A simulated child mount refuses before body reads. Separately,
+`OCEAN_SANDBOX_NATIVE=1 pnpm test packages/tools-node/src/coding-asset-native.test.ts`
+passes on the target laptop: the built scanner runs inside the qualified isolated
+worker, verifies distinct real mount IDs and equal UID, refuses a read-only
+mounted dependency subtree, and confirms cgroup cleanup. No real profile/key is
+used. Root check passes 846 tests (40 opt-in skipped), build and format pass.
+Independent review confirms the resource-bound fix and mount-check delta.
+
+Asset selection, credential/path policy, external symlink/object closure,
+copy/materialization and full archive verification still belong to the next
+layer. This scanner neither chooses host roots nor publishes a backup, and its
+symlink records must not be treated as permission to follow those targets.
 
 ## Remaining format-2 work
 

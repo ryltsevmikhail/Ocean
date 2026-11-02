@@ -38,3 +38,4 @@ export * from './coding-apply-state.js';
 export * from './coding-apply-observation.js';
 export * from './coding-apply-resolution.js';
 export * from './coding-backup.js';
+export * from './coding-asset-manifest.js';
