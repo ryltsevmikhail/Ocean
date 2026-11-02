@@ -114,3 +114,11 @@ reading and preservation of a file changed after preparation. Current root
 pnpm check is blocked by unrelated untracked design-assets/ocean-motion.js
 outside the TypeScript lint project. Typecheck, lint with that directory
 excluded, the ordinary suite, native session tests, build and formatting pass.
+
+Native host integration now exercises the public tools-node preparation factory,
+SQLite approval service, exact owner preview, shared journal and real sandboxed
+write together. Allow-once creates the file and consumes the approval; denial
+leaves it absent with no pending journal effect. Duplicate consumption is
+refused. These fixture tests inject trusted admission; runtime authority has
+separate tests. The ordinary root check passes again in the current workspace,
+along with build and formatting.
