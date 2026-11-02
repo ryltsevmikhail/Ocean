@@ -264,6 +264,49 @@ project configuration, explicit dependency roots and external-link mapping still
 need graph selection/verification. No execution authority is restored, no source
 checkout paths are rebound and the user-facing format-1 backup refusal remains.
 
+## Selected legacy apply-recovery assets
+
+captureCodingApplyRecovery observes one explicitly selected private recovery root
+and an explicit set of original project roots from the frozen task bindings. The
+coding-recovery scanner policy checks the entire namespace before any body reads:
+only flat UUID before/after/json/json.next files are accepted, with no directories,
+symlinks or multiply-linked JSON records. Main/next JSON is capped at 2 MiB before
+reading; total bytes/entries/metadata retain the selected-root scanner limits.
+The policy and limits stay attached through archive rechecks.
+
+Version-1 intent validation requires exact types/keys, project/path scope, ordinary
+file modes, complete bounded before/after text with matching content hashes and
+UUID-relative backup/staged names. Missing originals claimed by a completed record
+refuse. A conflicting retained original is preserved as actual evidence, not
+replaced with the old expected text. Status is descriptive data only: it never
+settles a runtime receipt, proves a historical external outcome or authorizes replay.
+
+A partial or invalid-UTF-8 .json.next is preserved as opaque bytes only alongside
+a valid main record for that UUID. A fully decoded next record must agree with the
+same immutable intent. Orphans, malformed main records and foreign project records
+refuse before a capture can be consumed as valid. Source identities and body hashes
+are checked during record reads and by a final full capture. Unknown files are
+never removed, missing data is never reconstructed, and original checkout files
+are never observed or changed by this collector.
+
+Tests use real temporary apply operations and archives: original bytes, partial
+next bytes, conflicting evidence, missing completed originals, foreign/malformed
+intents, strict modes/status and mutation during decoding. Independent review found
+status coercion could accept an array and bypass the missing-original check; its
+regression failed before exact string validation and now passes. Native worker
+canaries separately prove recovery-policy credential refusal with zero body reads.
+
+This is a project-scoped legacy asset collector. Version-1 records do not identify
+a profile, task or application; project scope alone must not be presented as exact
+profile-operation attribution. The complete graph still needs explicit binding of
+these legacy records and scoped recovery layout for new applications, plus frozen
+configuration/dependency closure, publication and quarantined profile restore.
+User-facing backup continues to refuse external coding assets until those gates
+pass. No approvals or execution authority are restored by this API.
+At this checkpoint root check passes 905 tests (41 opt-in skipped), build and
+format pass; the separate built-code worker credential/mount and quarantine
+SIGKILL tests pass 2/2 on the target laptop.
+
 ## Remaining format-2 work
 
 Build the complete bounded external graph from these references, including all

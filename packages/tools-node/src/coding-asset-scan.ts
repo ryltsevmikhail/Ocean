@@ -15,7 +15,7 @@ export const CODING_ASSET_LIMITS: CodingAssetLimits = {
   entries: 100000,
   depth: 128,
 };
-export type CodingAssetPolicy = 'all' | 'coding-worktree';
+export type CodingAssetPolicy = 'all' | 'coding-worktree' | 'coding-recovery';
 export interface CodingAssetCapture {
   readonly policy: CodingAssetPolicy;
   readonly limits: CodingAssetLimits;
@@ -129,6 +129,16 @@ function scan(
       )
         throw Error('protected_coding_asset');
     }
+    if (
+      policy === 'coding-recovery' &&
+      relative &&
+      (!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\.(?:before|after|json(?:\.next)?)$/.test(
+        relative,
+      ) ||
+        !before.isFile() ||
+        (relative.includes('.json') && (before.nlink !== 1n || before.size > 2097152n)))
+    )
+      throw Error('protected_coding_asset');
     const mode = Number(before.mode & 0o777n);
     if (before.isSymbolicLink()) {
       const target = text(fs.readlinkSync(path, { encoding: 'buffer' }));
@@ -256,7 +266,8 @@ export function captureCodingAssetTree(
   options: Partial<CodingAssetLimits> = {},
   policy: CodingAssetPolicy = 'all',
 ): CodingAssetCapture {
-  if (policy !== 'all' && policy !== 'coding-worktree') throw Error('unsupported_coding_asset');
+  if (!['all', 'coding-worktree', 'coding-recovery'].includes(policy))
+    throw Error('unsupported_coding_asset');
   const limits = { ...CODING_ASSET_LIMITS, ...options };
   for (const key of ['bytes', 'entries', 'depth'] as const)
     if (
@@ -266,7 +277,7 @@ export function captureCodingAssetTree(
     )
       throw Error('coding_asset_limit');
   const expected =
-    policy === 'coding-worktree'
+    policy !== 'all'
       ? new Map(scan(root, limits, policy, undefined, true).sourceEntries)
       : undefined;
   const first = scan(root, limits, policy, expected),

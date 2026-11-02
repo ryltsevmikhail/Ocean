@@ -29,3 +29,7 @@ export {
   type CodingWorktreeAssetInput,
   type CodingWorktreeAssetRecord,
 } from './coding-backup-worktrees.js';
+export {
+  captureCodingApplyRecovery,
+  type CodingApplyRecoveryCapture,
+} from './coding-backup-recovery.js';

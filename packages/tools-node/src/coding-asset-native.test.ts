@@ -52,6 +52,10 @@ fs.default.readSync=(...args)=>{bodyReads++;return originalRead(...args);};syncB
 try {
   try {captureCodingAssetTree('/workspace/project',{},'coding-worktree');throw Error('protected capture unexpectedly succeeded');}
   catch(error){if(error.message!=='protected_coding_asset')throw error;}
+  fs.mkdirSync('/tmp/recovery',{mode:0o700});
+  fs.writeFileSync('/tmp/recovery/private.key','synthetic recovery canary');
+  try {captureCodingAssetTree('/tmp/recovery',{},'coding-recovery');throw Error('recovery credential capture unexpectedly succeeded');}
+  catch(error){if(error.message!=='protected_coding_asset')throw error;}
   if(bodyReads!==0)throw Error('protected body was read');
 } finally {fs.default.readSync=originalRead;syncBuiltinESMExports();}
 try {captureCodingAssetTree('/workspace/project');throw Error('cross-mount capture unexpectedly succeeded');}
