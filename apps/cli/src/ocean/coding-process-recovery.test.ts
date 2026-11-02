@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import { createRuntime } from '../runtime.js';
+import { codingApplyRecoverySlot } from '@runnets/tools-node';
 const repository =
   process.env['OCEAN_RC_INSTALL'] ??
   resolve(fileURLToPath(new URL('../../../..', import.meta.url)));
@@ -27,6 +28,8 @@ const [root,path,project,phase]=process.argv.slice(1);
 const halt=()=>{fs.writeSync(1,phase+'\n');Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);};
 const rename=fs.renameSync;
 fs.renameSync=(from,to)=>{rename(from,to);if(phase==='rename'&&String(to).endsWith('.before'))halt();};
+const fsync=fs.fsyncSync;
+fs.fsyncSync=fd=>{fsync(fd);if(phase==='scope_header'&&fs.readlinkSync('/proc/self/fd/'+fd).endsWith('/scope.json'))halt();};
 syncBuiltinESMExports();
 registerHooks({resolve(specifier,context,next){
  if(specifier.startsWith('@runnets/')) {
@@ -45,7 +48,7 @@ const {openSqliteStore,ownSqliteRuntime}=await import('@runnets/store-sqlite');
 const {GitCodingApplyProject}=await import('@runnets/tools-node');
 const release=ownSqliteRuntime(path), store=openSqliteStore({path});
 const content=text=>({text,mode:'100644',sha256:createHash('sha256').update(text).digest('hex')});
-let receipt={id:'apply',taskId:'task',changesetHash:'hash',reviewRequestId:'review',expectedBase:'base',status:'applying',files:['a','b','c'].map(path=>({path,status:'pending'}))};
+let receipt={id:'apply',taskId:'task',changesetHash:'a'.repeat(64),reviewRequestId:'review',expectedBase:'base',status:'applying',files:['a','b','c'].map(path=>({path,status:'pending'}))};
 store.codingApplications.atomic(tx=>{if(!tx.claimApplication(receipt))throw Error('fixture claim refused');});
 if(phase==='intent')halt();
 const adapter=new GitCodingApplyProject();
@@ -54,7 +57,7 @@ for(const [index,name] of ['a','b','c'].entries()) {
  store.codingApplications.atomic(tx=>tx.putApplication(receipt));
  if(phase==='started'&&index===0)halt();
  fs.appendFileSync(path+'.effects',name+'\n');
- await adapter.applyFile(project,{path:name,before:content('old-'+name),after:content('new-'+name)});
+ await adapter.applyFile(project,{path:name,before:content('old-'+name),after:content('new-'+name)},{ownerId:'fixture',taskId:'task',applicationId:receipt.id,changesetHash:receipt.changesetHash});
  if((phase==='file'&&index===0)||(phase==='partial'&&index===1))halt();
  receipt={...receipt,files:receipt.files.map((f,n)=>n===index?{...f,status:'completed'}:f)};
  store.codingApplications.atomic(tx=>tx.putApplication(receipt));
@@ -100,7 +103,7 @@ async function killAt(path: string, project: string, phase: string): Promise<voi
 }
 it
   .runIf(process.platform === 'linux')
-  .each(['intent', 'started', 'rename', 'file', 'partial', 'all_files'])(
+  .each(['intent', 'started', 'scope_header', 'rename', 'file', 'partial', 'all_files'])(
   'holds a real apply process killed at %s without replay or inferred completion',
   async (phase) => {
     const directory = mkdtempSync(join(tmpdir(), 'ocean-coding-crash-'));
@@ -128,6 +131,31 @@ it
         existsSync(join(project, name)) ? readFileSync(join(project, name), 'utf8') : null,
       );
       const effects = existsSync(path + '.effects') ? readFileSync(path + '.effects', 'utf8') : '';
+      const scope = join(
+        project,
+        '.git/ocean-apply-recovery-v2',
+        codingApplyRecoverySlot(project, {
+          ownerId: 'fixture',
+          taskId: 'task',
+          applicationId: 'apply',
+          changesetHash: 'a'.repeat(64),
+        }),
+      );
+      const header = phase === 'scope_header' ? readFileSync(join(scope, 'scope.json')) : null;
+      if (header) {
+        expect(header.toString()).toBe(
+          JSON.stringify({
+            version: 2,
+            root: project,
+            ownerId: 'fixture',
+            taskId: 'task',
+            applicationId: 'apply',
+            changesetHash: 'a'.repeat(64),
+          }) + '\n',
+        );
+        expect(before).toEqual(['old-a', 'old-b', 'old-c']);
+        expect(existsSync(join(scope, 'files'))).toBe(false);
+      }
       for (let reopen = 0; reopen < 2; reopen++) {
         const runtime = createRuntime({ dbPath: path });
         try {
@@ -159,6 +187,11 @@ it
         } finally {
           runtime.close();
         }
+        if (header) {
+          expect(readFileSync(join(scope, 'scope.json'))).toEqual(header);
+          expect(existsSync(join(scope, 'files'))).toBe(false);
+          expect(readdirSync(scope)).toEqual(['scope.json']);
+        }
       }
       expect(
         ['a', 'b', 'c'].map((name) =>
@@ -172,7 +205,7 @@ it
       expect(git('diff', '--cached')).toBe('');
       if (phase === 'rename') {
         expect(before[0]).toBeNull();
-        const recovery = join(project, '.git/ocean-apply-recovery');
+        const recovery = join(scope, 'files');
         expect(
           readFileSync(
             join(

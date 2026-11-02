@@ -150,7 +150,13 @@ it.each(['success', 'failure', 'denied', 'dirty', 'race', 'base-race', 'refactor
         }),
         sourceTree: async () =>
           mode === 'race' && claims > 0 ? 'changed-after-claim' : artifact.afterTreeHash,
-        applyFile: async (_root, file) => {
+        applyFile: async (_root, file, context) => {
+          expect(context).toEqual({
+            ownerId: task.lease.ownerId,
+            taskId: task.id,
+            applicationId: 'apply',
+            changesetHash: artifact.hash,
+          });
           expect(
             receipts.get('apply')?.files.find((entry) => entry.path === file.path)?.status,
           ).toBe('started');

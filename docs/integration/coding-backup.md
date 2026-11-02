@@ -299,13 +299,47 @@ canaries separately prove recovery-policy credential refusal with zero body read
 This is a project-scoped legacy asset collector. Version-1 records do not identify
 a profile, task or application; project scope alone must not be presented as exact
 profile-operation attribution. The complete graph still needs explicit binding of
-these legacy records and scoped recovery layout for new applications, plus frozen
-configuration/dependency closure, publication and quarantined profile restore.
+these legacy records, plus frozen configuration/dependency closure, publication
+and quarantined profile restore. New applications use the separate scoped layout
+described below; this collector does not yet select or verify that layout.
 User-facing backup continues to refuse external coding assets until those gates
 pass. No approvals or execution authority are restored by this API.
 At this checkpoint root check passes 905 tests (41 opt-in skipped), build and
 format pass; the separate built-code worker credential/mount and quarantine
 SIGKILL tests pass 2/2 on the target laptop.
+
+## Exact scope for new application recovery
+
+New GitCodingApplyProject effects retain evidence under the canonical Git common
+directory at ocean-apply-recovery-v2/SLOT/scope.json and files/. Legacy
+ocean-apply-recovery is untouched. SLOT is SHA-256 of canonical JSON with keys in
+order: version (2), root, ownerId, taskId, applicationId, changesetHash. The header
+is those exact JSON bytes plus one newline. The application supplies identity from
+its trusted task, owner lease, receipt and immutable changeset only after the
+per-file started receipt is durably stored. No model argument or filesystem
+metadata confers that identity or grants execution authority.
+
+The Linux adapter creates private owned directories through pinned directory FDs
+with O_NOFOLLOW, verifies canonical paths and exact existing headers, and syncs
+the header and directories before any project file effect. Existing missing or
+corrupt headers/files directories refuse without repair or deletion. Unknown
+contents and retained originals remain evidence. Scope identifies an operation;
+it never authorizes replay, resolves uncertainty or proves historical completion.
+
+Focused tests cover identity separation, exact header reuse, legacy preservation,
+corrupt/missing header and missing-files refusal. A real SIGKILL immediately after
+scope.json fsync leaves only the header: two runtime openings retain its exact
+bytes, preserve unchanged project files and the unresolved hold, refuse replay,
+and do not recreate files/. These are synthetic trusted seeded-receipt crash
+fixtures, not admission or power-loss qualification. Separate direct/group native
+workflows qualify actual admitted application. See [coding recovery](coding-recovery.md).
+
+At the 7.1 checkpoint, root check passes 909 tests (41 opt-in skipped), build and
+format pass; the separate seven-boundary SIGKILL plus direct/group native suite
+passes 9 tests on the target Linux laptop. Installed 1.0 artifacts are unchanged.
+Full scoped-asset graph capture and legacy attribution, configuration/dependency
+closure, format-2 publication/restore and installed/interactive/RC qualification
+remain open. User-facing backup retains its external-assets refusal.
 
 ## Remaining format-2 work
 

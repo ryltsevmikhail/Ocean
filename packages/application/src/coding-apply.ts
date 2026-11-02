@@ -9,6 +9,7 @@ import {
   type CodingReviewVerdict,
   type CodingTestEvidence,
   type CodingApplyReceipt,
+  type CodingApplyContext,
   type CodingApplyResolution,
   type CodingResult,
 } from '@runnets/domain';
@@ -31,7 +32,7 @@ export interface CodingApplyStore {
 export interface CodingApplyProjectPort {
   inspect(root: string): Promise<{ readonly clean: boolean; readonly baseCommit: string }>;
   sourceTree(task: CodingTask): Promise<string>;
-  applyFile(root: string, change: CodingFileChange): Promise<void>;
+  applyFile(root: string, change: CodingFileChange, context: CodingApplyContext): Promise<void>;
 }
 export interface CodingApplyOwnerPort {
   confirm(
@@ -151,7 +152,12 @@ export class CodingApplyService {
           ),
         };
         this.#store.atomic((tx) => tx.putApplication(receipt));
-        await this.#project.applyFile(prepared.task.projectRoot, file);
+        await this.#project.applyFile(prepared.task.projectRoot, file, {
+          ownerId: prepared.task.lease.ownerId,
+          taskId: prepared.task.id,
+          applicationId: receipt.id,
+          changesetHash: prepared.changeset.hash,
+        });
         receipt = {
           ...receipt,
           files: receipt.files.map((entry, n) =>

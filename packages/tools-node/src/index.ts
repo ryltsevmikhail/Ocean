@@ -33,3 +33,4 @@ export {
   captureCodingApplyRecovery,
   type CodingApplyRecoveryCapture,
 } from './coding-backup-recovery.js';
+export { codingApplyRecoverySlot, codingApplyRecoveryScope } from './coding-apply-scope.js';

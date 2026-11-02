@@ -35,7 +35,12 @@ it.runIf(process.platform === 'linux')(
             files: [{ path: 'math.cjs', status: 'started' }],
           }),
         );
-        await new GitCodingApplyProject().applyFile(f.project, artifact.files[0]!);
+        await new GitCodingApplyProject().applyFile(f.project, artifact.files[0]!, {
+          ownerId: store.coding.atomic((tx) => tx.task('task')!).lease.ownerId,
+          taskId: 'task',
+          applicationId: 'apply',
+          changesetHash: artifact.hash,
+        });
         f.runtime.codingApply!.recover();
         const before = store.codingApplications.atomic((tx) => tx.application('apply'));
         const pending = await f.runtime.toolJournal!.pending();

@@ -37,7 +37,12 @@ it
         }),
       );
       if (mode !== 'before')
-        await new GitCodingApplyProject().applyFile(f.project, artifact.files[0]!);
+        await new GitCodingApplyProject().applyFile(f.project, artifact.files[0]!, {
+          ownerId: store.coding.atomic((tx) => tx.task('task')!).lease.ownerId,
+          taskId: 'task',
+          applicationId: 'apply',
+          changesetHash: artifact.hash,
+        });
       runtime.codingApply!.recover();
       const receipt = store.codingApplications.atomic((tx) => tx.application('apply'));
       if (mode === 'conflict') writeFileSync(join(f.project, 'unrelated-user'), 'keep');

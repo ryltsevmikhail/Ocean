@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { expect, it } from 'vitest';
 import type { CodingTask } from '@runnets/domain';
+import { codingApplyRecoverySlot } from './coding-apply-scope.js';
 import { GitCodingApplyProject } from './coding-apply-project.js';
 import { GitCodingWorktrees } from './coding-worktree.js';
 import { GitCodingSnapshots } from './coding-snapshot.js';
@@ -64,13 +65,21 @@ it('observes the exact task tree and applies its immutable artifact without stag
     const project = new GitCodingApplyProject();
     expect(await project.sourceTree(bound)).toBe(artifact.afterTreeHash);
     expect(await project.inspect(root)).toMatchObject({ clean: true, baseCommit });
-    await project.applyFile(root, artifact.files[0]!);
+    const context = {
+      ownerId: task.lease.ownerId,
+      taskId: task.id,
+      applicationId: 'apply',
+      changesetHash: artifact.hash,
+    };
+    await project.applyFile(root, artifact.files[0]!, context);
     expect(readFileSync(join(root, 'file'), 'utf8')).toBe('after');
     expect(await project.inspect(root)).toMatchObject({ clean: false, baseCommit });
     expect(git('diff', '--cached')).toBe('');
     expect(git('rev-parse', 'HEAD')).toBe(baseCommit);
     expect(
-      readdirSync(join(root, '.git/ocean-apply-recovery')).some((name) => name.endsWith('.before')),
+      readdirSync(
+        join(root, '.git/ocean-apply-recovery-v2', codingApplyRecoverySlot(root, context), 'files'),
+      ).some((name) => name.endsWith('.before')),
     ).toBe(true);
   } finally {
     rmSync(directory, { recursive: true, force: true });

@@ -5,6 +5,14 @@ and exact owner apply resolution are implemented. Other coding-operation
 reconciliation, complete fault qualification,
 asset-complete backup/restore and release acceptance remain open.
 
+New applications now place retained evidence in the exact version-2 owner/task/
+application/changeset scope described in [coding backup](coding-backup.md#exact-scope-for-new-application-recovery).
+The trusted application supplies this context only after the durable per-file
+started receipt. Private canonical FD-pinned directories and the exact scope
+header must be synced before project effects. Existing missing/corrupt scope
+state refuses without repair; legacy recovery data remains untouched. This
+identity evidence grants no approval, replay permission or completion inference.
+
 ## Interrupted application receipts
 
 Exclusive durable runtime startup recovers apply receipts before generic tool
@@ -119,6 +127,7 @@ Its temporary Git fixture covers:
 
 - committed apply intent, before any file starts;
 - committed file started, before its external effect;
+- scope.json fsynced, before files/ creation or any project file effect;
 - original renamed into retained recovery storage, destination absent;
 - replacement published, before its file completion receipt;
 - first file completed and second changed but not recorded complete;
@@ -132,6 +141,9 @@ Two fresh runtime openings must preserve file bytes and effect-dispatch counts,
 retain exact completed/uncertain/pending states and refuse receipt replay. The
 rename-gap case also checks the retained original bytes; runtime does not infer
 that a missing destination means cancellation or restore it automatically.
+The scope-header case checks unchanged source bytes, exact retained header bytes
+and continued absence of files/ after each reopening. No recovery directory is
+repaired and the uncertain receipt cannot be claimed again.
 Unit/store tests cover no project-port calls, idempotence, existing journal
 uncertainty and transaction rollback on contradictory completed evidence.
 
@@ -139,6 +151,15 @@ At the initial recovery checkpoint on 2026-11-02, Linux x86_64 / Node 26.13.0 /
 pnpm 12.16.1: `pnpm check` passed 807 tests (39 opt-in skipped); `pnpm build` and `pnpm format:check` pass. This
 covers process SIGKILL, not power loss. No external provider or real profile is
 used. Independent review found no blocking issue in this recovery increment.
+
+At the separate 7.1 scope checkpoint, root check passes 909 tests (41 opt-in
+skipped), build and format pass. The opt-in Linux command
+`OCEAN_SANDBOX_NATIVE=1 pnpm test apps/cli/src/ocean/coding-process-recovery.test.ts apps/cli/src/ocean/coding-workflow-native.test.ts`
+passes 9 tests: seven process boundaries plus two direct/group workflows with
+actual admitted application. Crash fixtures remain trusted seeded receipts;
+they do not replace admission qualification. No provider/key or installed 1.0
+artifact was used or changed. Fresh independent packaged review remains with
+the controller; this checkpoint does not complete Task 7.
 
 ## Remaining release gates
 

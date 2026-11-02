@@ -53,3 +53,11 @@ export interface CodingApplyReceipt {
     readonly status: 'pending' | 'started' | 'completed' | 'uncertain';
   }[];
 }
+
+/** Identity metadata for already-claimed host application effects; not execution authority. */
+export interface CodingApplyContext {
+  readonly ownerId: string;
+  readonly taskId: string;
+  readonly applicationId: string;
+  readonly changesetHash: string;
+}
