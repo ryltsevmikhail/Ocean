@@ -35,3 +35,12 @@ pending→allowed/denied→consumed transitions and a unique invocation claim.
 Regression tests cover rollback after claim plus consumed update, repeated
 claims, immutable preview refusal and consumption without a claim.
 SQLite migration and durable adapter remain next.
+
+Schema 8 adds approval records and unique approval/invocation dispatch claims
+through the existing immediate migration transaction. The SQLite adapter uses
+BEGIN IMMEDIATE for preview/decision/consumption transactions, validates
+immutable transitions and requires the matching claim for consumed status.
+The adapter regression suite covers rollback, duplicate claims and schema 7
+upgrade. Legacy migration tests and format-1 restore now recognize schema 8.
+Runtime admission integration, on-disk reopen/concurrency qualification and
+owner UI remain pending.

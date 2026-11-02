@@ -73,7 +73,7 @@ it('migrates frozen schema6 additively without altering its tables or unresolved
   initializeSchema(db);
   for (const [table, rows] of before)
     expect(db.prepare('SELECT * FROM "' + table + '"').all()).toEqual(rows);
-  expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe('7');
+  expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe('8');
   for (const name of ['ocean_worktrees', 'ocean_changesets', 'ocean_capture_receipts'])
     expect(db.prepare('SELECT * FROM ' + name).all()).toEqual([]);
   expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
@@ -90,5 +90,5 @@ it('rolls back worktree schema on receipt-table failure and can retry', () => {
   expect(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys).toBe(1);
   db.exec('DROP TABLE ocean_capture_receipts');
   initializeSchema(db);
-  expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe('7');
+  expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe('8');
 });

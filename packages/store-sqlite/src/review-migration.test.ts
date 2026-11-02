@@ -65,7 +65,7 @@ it('migrates M3 uncertainty without releasing any hold or tool claim', async () 
   const payload = db.prepare('SELECT payload FROM ocean_chat_turns').get();
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '7',
+    '8',
   );
   expect(db.prepare('SELECT payload FROM ocean_chat_turns').get()).toEqual(payload);
   expect(await journal.pending()).toEqual(before);

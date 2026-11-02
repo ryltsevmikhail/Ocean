@@ -15,3 +15,5 @@ export { ownSqliteRuntime } from './ownership.js';
 
 export { inspectDatabase, snapshotDatabase } from './maintenance.js';
 export type { DatabaseSummary, DatabaseInspection } from './maintenance.js';
+
+export { SqliteCodingApprovalStore } from './coding-approval-storage.js';
