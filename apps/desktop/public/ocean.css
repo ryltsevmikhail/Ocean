@@ -1,0 +1,65 @@
+* { box-sizing: border-box }
+:root { color-scheme:light; font:14px/1.45 -apple-system,BlinkMacSystemFont,sans-serif;color:#182e33;background:#f9faf8 }
+body { margin:0;display:grid;grid-template-columns:220px minmax(340px,1fr) 238px;height:100vh;overflow:hidden }
+button,select,input,textarea {font:inherit;color:inherit}
+button,select {cursor:pointer}
+button {border:1px solid #c9d4cf;background:#fff;border-radius:8px;padding:7px 12px}
+button:hover:not(:disabled) {background:#e7efea}
+button:disabled {opacity:.52;cursor:default}
+button.primary {background:#0d685d;color:white;border-color:#0d685d;font-weight:600}
+button.primary:hover:not(:disabled) {background:#105449}
+:focus-visible {outline:2px solid #1e9682;outline-offset:2px}
+h1,h2,h3,p {margin:0}
+h1 {font-size:27px;letter-spacing:-.03em;overflow-wrap:anywhere}
+h2 {font-size:17px;letter-spacing:-.02em}
+small {display:block;font-size:12px;color:#536b65}
+.rail {background:#112e34;color:#e5f0eb;display:flex;flex-direction:column;padding:22px 14px;min-height:0}
+.brand {font-size:27px;letter-spacing:-1.4px;font-weight:650;display:flex;align-items:center;gap:10px;margin:0 7px 35px}
+.mark,.wave {display:inline-grid;place-items:center;background:#bfe7d7;color:#144d48;border-radius:10px;font:700 36px/1 Georgia;width:39px;height:39px}
+.section,.actions,.top {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rail .section {padding:0 7px 10px}
+.rail .section h2 {font:600 12px -apple-system,sans-serif;letter-spacing:.04em;color:#abcdc5}
+.rail button {color:inherit;background:transparent;border:0}
+.rail button:hover:not(:disabled),.rail nav button[aria-current=true] {background:#235054}
+.rail nav {overflow:auto;flex:1}
+.rail nav button {display:flex;width:100%;align-items:center;gap:10px;text-align:left;margin:2px 0;padding:10px;overflow-wrap:anywhere}
+.glyph {font-weight:650;color:#9ad7c2;min-width:15px}
+.rail footer {padding:12px 4px 0;border-top:1px solid #335052}
+.rail small {color:#bbd4ce;padding:6px 12px}
+main {min-width:0;min-height:0;display:flex;flex-direction:column}
+.top {padding:18px 26px;border-bottom:1px solid #d8dfd9;background:#fff}
+.top small,.details>small {letter-spacing:.07em;font-weight:600}
+#welcome {margin:auto;max-width:460px;padding:28px}
+#welcome h2 {font-size:28px;letter-spacing:-.04em;margin:17px 0 8px}
+#welcome p,.details p {color:#506660}
+#welcome button {margin:18px 0 6px}
+#history {flex:1;min-height:0;overflow:auto;padding:22px 26px}
+.post {margin-bottom:14px;display:flex;align-items:flex-start;gap:10px}
+.avatar {flex:none;display:grid;place-items:center;width:31px;height:31px;border-radius:10px;background:#dfede6;color:#185547;font-weight:600}
+.post.user .avatar {background:#e5e8f2;color:#3b5077}
+.post section {min-width:0}
+.post header {font-size:13px;font-weight:650;overflow-wrap:anywhere}
+.post time {font-size:11px;font-weight:400;margin-left:8px;color:#62716e}
+.post p {white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px;user-select:text}
+#feedback {margin:0 24px;color:#5a5141;font-size:13px;overflow-wrap:anywhere}
+#feedback:not(:empty){padding:8px 0}
+#composer {margin:8px 22px 20px;background:white;border:1px solid #becdc6;border-radius:14px;box-shadow:0 3px 12px #20382d0a;padding:12px}
+.target {font-size:12px;color:#54655f}
+select,input,textarea {background:#fff;border:1px solid #bccbc3;border-radius:6px;padding:6px 8px}
+#recipient {margin-left:6px;max-width:80%}
+#draft {width:100%;resize:vertical;max-height:26vh;min-height:54px;border:0;padding:10px 0}
+.actions small {margin-right:auto}
+.details {background:#f0f4ee;border-left:1px solid #d8dfd9;padding:27px 20px;overflow:auto}
+.details h2 {margin:5px 0 12px}
+.details p {font-size:13px;margin:10px 0}
+.details hr {border:0;border-top:1px solid #cbd7cc;margin:24px 0}
+.badge {border-radius:20px;background:#dde4da;color:#475a4f;padding:3px 9px;font-size:12px}
+.person {margin:10px 0;overflow-wrap:anywhere}
+#runs {font-size:12px;margin-top:18px}
+dialog {width:440px;max-height:85vh;overflow:auto;border:1px solid #becbc3;border-radius:14px;padding:22px;color:inherit}
+dialog::backdrop {background:#102a2f66}
+#fields label {display:block;margin:10px 0}
+#fields input:not([type=checkbox]),#fields textarea,#fields select {display:block;width:100%;margin-top:4px}
+#form-error {color:#984128;margin-bottom:8px}
+[hidden] {display:none!important}
+@media(max-width:980px){body{grid-template-columns:170px minmax(320px,1fr) 184px}.details{padding:22px 14px}.top{padding:14px 18px}}
