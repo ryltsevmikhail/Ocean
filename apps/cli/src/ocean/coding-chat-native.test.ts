@@ -4,13 +4,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import type { ProviderPort, ConversationCommand } from '@runnets/application';
-import { createRuntime } from '../runtime.js';
+import { type RuntimeOptions, createRuntime } from '../runtime.js';
 
-it
-  .runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')
-  .each(['direct', 'group'])(
-  'runs approved dev edits and tests through a %s conversation',
-  async (kind) => {
+it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1').each([
+  { kind: 'direct', decision: 'allow-once' as const },
+  { kind: 'group', decision: 'allow-once' as const },
+  { kind: 'direct', decision: 'deny' as const },
+  { kind: 'group', decision: 'deny' as const },
+  { kind: 'direct', decision: 'restored' as const },
+])(
+  'handles $decision dev edits and tests through a $kind conversation',
+  async ({ kind, decision }) => {
     const root = await mkdtemp(join(tmpdir(), 'ocean-chat-native-')),
       project = join(root, 'project');
     await mkdir(project);
@@ -32,7 +36,7 @@ it
       'fixture',
     );
     const previews: string[] = [];
-    const runtime = createRuntime({
+    const options: RuntimeOptions = {
       dbPath: join(root, 'runtime.sqlite'),
       codingWorktreeDirectory: join(root, 'worktrees'),
       codingTools: {
@@ -40,11 +44,13 @@ it
         owner: () => ({
           decide: async (approval) => {
             previews.push(approval.binding.operation);
-            return 'allow-once';
+            return decision === 'restored' ? 'deny' : decision;
           },
         }),
       },
-    });
+    };
+    let runtime = createRuntime(options);
+
     try {
       await runtime.ready;
       let id = 0;
@@ -114,6 +120,40 @@ it
         { confirm: async () => true },
       );
       if (!prepared.ok) throw Error(prepared.error.code);
+      if (decision === 'restored') {
+        runtime.close();
+        await writeFile(join(root, 'restore-guard.json'), '{}');
+        runtime = createRuntime({ ...options, restoredAccess: true });
+        await runtime.ready;
+        let calls = 0;
+        const provider: ProviderPort = {
+          id: 'fixture',
+          models: ['fixture'],
+          capabilities: { streaming: true, usage: true, reasoning: false },
+          async *stream() {
+            calls++;
+            yield { type: 'completed', stopReason: 'stop', rawStopReason: 'stop' };
+          },
+        };
+        await expect(
+          runtime.chat.send({
+            workspaceId: 'ws_fixture',
+            roomId: room,
+            requestId: 'restored',
+            taskId: 'task',
+            to: 'dev',
+            text: 'Try restored tools',
+            provider,
+            signal: new AbortController().signal,
+            emit: () => {},
+          }),
+        ).rejects.toMatchObject({ code: 'coding_denied' });
+        expect(calls).toBe(0);
+        expect(previews).toEqual([]);
+        expect(await readFile(join(prepared.value.root, 'source.txt'), 'utf8')).toBe('before');
+        return;
+      }
+
       let round = 0;
       const provider: ProviderPort = {
         id: 'fixture',
@@ -135,8 +175,10 @@ it
             const evidence = request.messages.at(-1);
             expect(evidence?.role).toBe('tool');
             if (evidence?.role === 'tool') {
-              expect(evidence.content).toContain('"exitCode":0');
-              expect(evidence.content).toContain('"sourceUnchanged":true');
+              if (decision === 'allow-once') {
+                expect(evidence.content).toContain('"exitCode":0');
+                expect(evidence.content).toContain('"sourceUnchanged":true');
+              } else expect(evidence.content).toContain('approval_required');
             }
           }
           if (call) yield { type: 'tool_call', call };
@@ -162,7 +204,9 @@ it
       });
       expect(result).toMatchObject({ ok: true, value: { status: 'completed' } });
       expect(previews).toEqual(['write', 'test']);
-      expect(await readFile(join(prepared.value.root, 'source.txt'), 'utf8')).toBe('after');
+      expect(await readFile(join(prepared.value.root, 'source.txt'), 'utf8')).toBe(
+        decision === 'allow-once' ? 'after' : 'before',
+      );
       expect(await readFile(join(project, 'source.txt'), 'utf8')).toBe('before');
       expect(runtime.toolJournal?.inspectPending?.()).toEqual([]);
       const history = runtime.conversations.history('ws_fixture', room);

@@ -101,3 +101,10 @@ stdout. ChatRunBook retains private tool lines when replacing the screen stream
 with committed room history at completion. Regressions cover escaped CLI status,
 task/cancellation forwarding and retention of cleanup evidence on the final TUI
 screen. Shared room history remains unchanged.
+
+Native acceptance additionally covers owner-denied edits and tests in direct
+and group rooms: the task source remains before, no command evidence claims a
+run, and the shared journal has no unresolved effects. Reopening the same
+fixture with a restore guard and an existing ready task refuses task tools
+before provider dispatch or owner approval. These tests use the configured
+runtime path, not injected admission.
