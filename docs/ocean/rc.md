@@ -58,7 +58,7 @@ Each behavior fix has a regression test. Earlier failed rounds are retained in p
 
 Private evidence and synthetic test profiles are retained on BigPC under `~/.local/share/ocean-rc/2026-11-02/`. The evidence directory contains the summary, installed-contract log, raw Q11 timings, operation timings and stdio/native outcomes. Neither credentials nor transcripts are committed. The temporary credential file was deleted after the final live requests.
 
-**Decision: RC gates passed; ready for the owner's 1.0 release decision.** No production deployment, public release tag or 1.0 distribution was performed. To release, preserve this exact artifact and checksum, follow [operations](operations.md), record the actual installation and smoke result, and obtain the owner's release authorization.
+**Historical RC decision (2026-11-02): RC gates passed; ready for the owner's 1.0 release decision.** At that checkpoint no release had been published. The subsequent authorization, publication and installation are recorded below.
 
 ## Release record — 2026-11-02
 
