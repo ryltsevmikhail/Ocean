@@ -1,12 +1,12 @@
 import type { Socket } from 'node:net';
 import { LOCAL_RUNTIME_MAX_FRAME } from '@runnets/contracts';
-/** Bounded byte framing. A consumer returning false permanently ends this decoder. */
+/** Bounded byte framing. Consumer results are discarded except literal false, which permanently ends decoding. */
 export class LocalRuntimeFrames {
   private pending = Buffer.alloc(1024);
   private length = 0;
   private ended = false;
-  private readonly receive: (value: unknown) => void | false;
-  constructor(receive: (value: unknown) => void | false) {
+  private readonly receive: (value: unknown) => unknown;
+  constructor(receive: (value: unknown) => unknown) {
     this.receive = receive;
   }
   push(chunk: Buffer): void {
