@@ -113,7 +113,21 @@ export class InMemoryConversationStore implements ConversationStore {
         state.messages.set(value.id, value);
       },
       receipt: (id) => state.receipts.get(id) ?? null,
+      completeReviewRequest: (id, decisionId, binding, review) => {
+        const old = state.receipts.get(id);
+        if (
+          old?.binding !== binding ||
+          old.reply.kind !== 'review_request' ||
+          old.reply.data.id !== decisionId ||
+          old.reply.data.workspaceId !== review.workspaceId ||
+          old.reply.data.roomId !== review.roomId ||
+          old.reply.data.taskRunId !== review.taskRunId
+        )
+          throw Error('request_conflict');
+        state.receipts.set(id, { binding, reply: { kind: 'review', data: review } });
+      },
       putReceipt: (id, value) => {
+        if (state.receipts.has(id)) throw Error('request_conflict');
         state.receipts.set(id, value);
       },
     };

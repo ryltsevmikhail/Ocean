@@ -1,3 +1,4 @@
+import { reviewDecisionId } from '@runnets/application';
 import { digest, ownerPreview } from './decision-preview.js';
 import type {
   ChatReviewService,
@@ -37,7 +38,8 @@ export class RuntimeReviews {
   readonly #service: ChatReviewService;
   readonly #owner: RuntimeOwnerDecisions;
   readonly #closing = new AbortController();
-  readonly #jobs = new Map<string, { decisionId: string; completion: Promise<void> }>();
+  readonly #jobs = new Map<string, Promise<void>>();
+  #jobFailure: Error | null = null;
   constructor(service: ChatReviewService, owner: RuntimeOwnerDecisions) {
     this.#service = service;
     this.#owner = owner;
@@ -53,11 +55,15 @@ export class RuntimeReviews {
       workspaceId,
       roomId,
       runId,
-      decisionId: 'review-' + digest(JSON.stringify([workspaceId, requestId])),
+      decisionId: reviewDecisionId(workspaceId, requestId, digest),
     };
     const existing = () => {
       const card = this.#owner.store.find(ref);
-      if (!card) return null;
+      if (!card) {
+        if (this.#owner.store.has(ref.decisionId) || this.#service.hasRequest(requestId))
+          throw Error('request_conflict');
+        return null;
+      }
       const preview = JSON.parse(this.#owner.store.preview(ref)!) as {
         reason: string;
         snapshot: LocalReviewSnapshot;
@@ -87,19 +93,27 @@ export class RuntimeReviews {
     if (raced) return raced;
     if (this.#jobs.has(runId)) throw Error('decision_pending');
     const signal = this.#closing.signal;
-    const wait = this.#owner.open(card, preview, signal, async () => {
-      const current = await this.read(q);
-      return (
-        current.raw.version === raw.version &&
-        current.view.canAcknowledge &&
-        current.view.runId === runId
-      );
-    });
+    const input = { workspaceId, taskRunId: runId, requestId, reviewVersion: raw.version, reason };
+    const wait = this.#owner.open(
+      card,
+      preview,
+      signal,
+      async () => {
+        const current = await this.read(q);
+        return (
+          current.raw.version === raw.version &&
+          current.view.canAcknowledge &&
+          current.view.runId === runId
+        );
+      },
+      (insert) => this.#service.reserve(input, roomId, card.decisionId, insert),
+    );
     // Only this request's live continuation owns the full raw version. Restart never resumes it.
     const job = wait.then(async (outcome) => {
       if (outcome !== 'allowed') return;
-      const ack = await this.#service.acknowledge(
-        { workspaceId, taskRunId: runId, requestId, reviewVersion: raw.version, reason },
+      // The scoped receipt independently records successful application; an expected refusal writes none.
+      await this.#service.acknowledge(
+        input,
         {
           confirm: (snapshot) =>
             Promise.resolve(
@@ -112,11 +126,15 @@ export class RuntimeReviews {
             ),
         },
         signal,
+        card.decisionId,
       );
-      if (!ack.ok) throw Error(ack.error.code);
     });
-    this.#jobs.set(runId, { decisionId: card.decisionId, completion: job });
-    void job.finally(() => this.#jobs.delete(runId)).catch(() => {});
+    const supervised = job
+      .catch((cause: unknown) => {
+        this.#jobFailure = new Error('review_settlement_unknown', { cause });
+      })
+      .finally(() => this.#jobs.delete(runId));
+    this.#jobs.set(runId, supervised);
     return card;
   }
   applied(ref: OwnerDecisionRef) {
@@ -140,12 +158,9 @@ export class RuntimeReviews {
       receipt.reason === preview.reason
     );
   }
-  currentJob(ref: OwnerDecisionRef) {
-    const job = this.#jobs.get(ref.runId);
-    return job?.decisionId === ref.decisionId ? job.completion : undefined;
-  }
   async drain() {
     this.#closing.abort();
-    await Promise.allSettled(Array.from(this.#jobs.values(), (j) => j.completion));
+    await Promise.all(this.#jobs.values());
+    if (this.#jobFailure) throw this.#jobFailure;
   }
 }

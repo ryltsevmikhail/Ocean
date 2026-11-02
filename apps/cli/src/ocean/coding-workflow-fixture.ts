@@ -3,9 +3,11 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteProjectLeases } from '@runnets/tools-node';
-import type { ProjectLease } from '@runnets/domain';
+import type { CodingTask, ProjectLease } from '@runnets/domain';
 import type { ConversationCommand, ProviderPort } from '@runnets/application';
 import { createRuntime } from '../runtime.js';
+
+const sandboxRoot = (task: CodingTask) => Promise.resolve({ root: task.worktreeRoot! });
 
 export const initialMath = 'module.exports=(a,b)=>0;\n';
 export const faultyMath = 'module.exports=(a,b)=>a-b;\n';
@@ -36,7 +38,8 @@ export async function codingWorkflowFixture(kind: 'direct' | 'group') {
     dbPath: join(directory, 'runtime.sqlite'),
     codingWorktreeDirectory: join(directory, 'worktrees'),
     codingTools: {
-      sandbox: (task) => Promise.resolve({ root: task.worktreeRoot! }),
+      sandbox: sandboxRoot,
+      inspectSandbox: sandboxRoot,
       owner: () => ({
         decide: (approval) => {
           previews.push(approval.binding.operation);

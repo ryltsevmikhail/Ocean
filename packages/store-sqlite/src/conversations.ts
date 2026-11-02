@@ -1,3 +1,4 @@
+import { legacyReviewKey } from './owner-decisions.js';
 import type {
   ConversationReceipt,
   ConversationStore,
@@ -14,13 +15,16 @@ import { readText } from './rows.js';
 /** SQLite writes and request receipts commit under one immediate write lock. */
 export class SqliteConversationStore implements ConversationStore {
   readonly #db: DatabaseSync;
+  readonly #legacyKey: (id: string) => ConversationReceipt | null;
   constructor(db: DatabaseSync) {
     this.#db = db;
+    this.#legacyKey = legacyReviewKey(db);
   }
 
   /** Roll back profile, room, history and sequence allocation if any receipt write fails. */
   atomic<T>(work: (transaction: ConversationTransaction) => T): T {
-    const db = this.#db;
+    const db = this.#db,
+      legacyKey = this.#legacyKey;
     const decodeRoom = (row: Record<string, unknown>) =>
       roomRow(
         row,
@@ -115,19 +119,38 @@ export class SqliteConversationStore implements ConversationStore {
         },
         receipt(id) {
           const row = db.prepare('SELECT * FROM ocean_receipts WHERE request_id=?').get(id);
-          if (row === undefined) return null;
+          if (row === undefined) return legacyKey(id);
           const reply: unknown = JSON.parse(readText(row, 'reply'));
           if (
             reply === null ||
             typeof reply !== 'object' ||
             !('kind' in reply) ||
-            !['workspace', 'bot', 'room', 'message', 'turn', 'review'].includes(
+            !['workspace', 'bot', 'room', 'message', 'turn', 'review', 'review_request'].includes(
               String(reply.kind),
             ) ||
             !('data' in reply)
           )
             throw new Error('Invalid conversation receipt');
           return { binding: readText(row, 'binding'), reply } as ConversationReceipt;
+        },
+        completeReviewRequest(id, decisionId, binding, review) {
+          const changed = db
+            .prepare(
+              `UPDATE ocean_receipts SET reply=? WHERE request_id=? AND binding=?
+            AND json_extract(reply,'$.kind')='review_request' AND json_extract(reply,'$.data.id')=?
+            AND json_extract(reply,'$.data.workspaceId')=? AND json_extract(reply,'$.data.roomId')=?
+            AND json_extract(reply,'$.data.taskRunId')=?`,
+            )
+            .run(
+              JSON.stringify({ kind: 'review', data: review }),
+              id,
+              binding,
+              decisionId,
+              review.workspaceId,
+              review.roomId,
+              review.taskRunId,
+            );
+          if (changed.changes !== 1) throw Error('request_conflict');
         },
         putReceipt(id, r) {
           db.prepare('INSERT INTO ocean_receipts VALUES(?,?,?)').run(

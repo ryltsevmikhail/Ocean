@@ -1,3 +1,4 @@
+import type { ChatReview } from '@runnets/domain';
 import { expect, it } from 'vitest';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import * as memory from '@runnets/store';
@@ -71,6 +72,63 @@ it.each(['memory', 'sqlite'])(
       store.insert(card, 'a🌊b');
       expect(store.preview(card, 1, 1)).toBe('\ud83c');
       expect(store.preview(card, 2, 1)).toBe('\udf0a');
+    } finally {
+      sql.close();
+    }
+  },
+);
+
+it.each(['memory', 'sqlite'])(
+  '%s permits only a matching review reservation promotion',
+  (backend) => {
+    const sql = openSqliteStore({ path: ':memory:' }),
+      store = backend === 'memory' ? new memory.InMemoryConversationStore() : sql.conversations;
+    const workspaceId = 'w',
+      roomId = 'r',
+      taskRunId = 'run',
+      reservation = {
+        kind: 'review_request' as const,
+        data: { workspaceId, roomId, taskRunId, id: 'decision' },
+      };
+    try {
+      store.atomic((tx) => tx.putReceipt('request', { binding: 'exact', reply: reservation }));
+      expect(() =>
+        store.atomic((tx) =>
+          tx.putReceipt('request', { binding: 'different', reply: reservation }),
+        ),
+      ).toThrow();
+      const review: ChatReview = {
+        workspaceId,
+        roomId,
+        taskRunId,
+        id: 'ack',
+        reason: 'inspected',
+        mode: 'text_only',
+        actor: 'owner',
+        turnId: 'turn',
+        noticeMessageId: 'notice',
+        observedVersion: 'seen',
+        createdAt: 'now',
+      };
+      for (const [id, binding, scope] of [
+        ['other', 'exact', roomId],
+        ['decision', 'different', roomId],
+        ['decision', 'exact', 'other'],
+      ] as const) {
+        expect(() =>
+          store.atomic((tx) =>
+            tx.completeReviewRequest('request', id, binding, { ...review, roomId: scope }),
+          ),
+        ).toThrow('request_conflict');
+      }
+      store.atomic((tx) => tx.completeReviewRequest('request', 'decision', 'exact', review));
+      expect(store.atomic((tx) => tx.receipt('request'))).toEqual({
+        binding: 'exact',
+        reply: { kind: 'review', data: review },
+      });
+      expect(() =>
+        store.atomic((tx) => tx.completeReviewRequest('request', 'decision', 'exact', review)),
+      ).toThrow('request_conflict');
     } finally {
       sql.close();
     }

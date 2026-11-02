@@ -43,7 +43,10 @@ export interface LocalRuntimeHost {
 export interface LocalRuntimeHostOptions {
   readonly profile: string;
   /** Host-only composition. Providers and coding authority never arrive over the wire. */
-  readonly codingTools?: Pick<NonNullable<RuntimeOptions['codingTools']>, 'sandbox'>;
+  readonly codingTools?: Pick<
+    NonNullable<RuntimeOptions['codingTools']>,
+    'sandbox' | 'inspectSandbox'
+  >;
   readonly provider?: ProviderPort | null;
   /** Additional host supervision joins runtime-owned execution before SQLite close. */
   readonly drain?: () => Promise<'settled' | 'uncertain'>;
@@ -65,7 +68,7 @@ export async function startLocalRuntime(
   let decisions: RuntimeDecisions;
   const runtime = openOceanProfile(paths.profile, false, {
     codingTools: {
-      sandbox: (options.codingTools ?? registeredCodingTools(paths.profile)).sandbox,
+      ...(options.codingTools ?? registeredCodingTools(paths.profile)),
       owner: (turn, signal) => decisions.coding(turn, signal),
     },
   });

@@ -31,6 +31,8 @@ export interface CodingTurnFactoryDeps {
   readonly approvals: CodingApprovalService;
   readonly journal: ToolJournalPort;
   readonly sandbox: (task: CodingTask) => Promise<SandboxOptions>;
+  /** Registered projects reread policy and verify existing targets without setting up a worker. */
+  readonly inspectSandbox?: (task: CodingTask) => Promise<SandboxOptions>;
   readonly owner: (turn: ChatTurn, signal: AbortSignal) => CodingApprovalOwnerPort;
 }
 /** Host composition only. Configuration is supplied by the owner, never model arguments. */
@@ -95,8 +97,9 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
           return {
             ...operation,
             currentBinding: async () => {
-              const registered = await deps.sandbox(task);
-              if (JSON.stringify(registered) !== JSON.stringify(sandbox))
+              if (!deps.inspectSandbox)
+                throw new ToolError('coding_denied', 'read-only sandbox inspection required');
+              if (JSON.stringify(await deps.inspectSandbox(task)) !== JSON.stringify(sandbox))
                 throw new ToolError('coding_denied', 'registration changed');
               return operation.currentBinding();
             },

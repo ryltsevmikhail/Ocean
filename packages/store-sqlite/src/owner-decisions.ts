@@ -1,6 +1,8 @@
-import { assertNewOwnerDecision } from '@runnets/application';
+import { createHash } from 'node:crypto';
+import { assertNewOwnerDecision, reviewDecisionId } from '@runnets/application';
 import type { DatabaseSync } from 'node:sqlite';
 import type {
+  ConversationReceipt,
   DecisionOutcome,
   OwnerDecision,
   OwnerDecisionRef,
@@ -49,6 +51,12 @@ export class SqliteOwnerDecisions implements OwnerDecisionStore {
         Buffer.from(preview, 'utf16le'),
       );
   }
+  has(id: string) {
+    return (
+      this.db.prepare('SELECT 1 FROM ocean_owner_decisions WHERE decisionId=?').get(id) !==
+      undefined
+    );
+  }
   find(ref: OwnerDecisionRef) {
     return (
       (this.db
@@ -87,4 +95,35 @@ export class SqliteOwnerDecisions implements OwnerDecisionStore {
       "UPDATE ocean_owner_decisions SET status='interrupted',version=version+1,revision=(SELECT max(revision)+1 FROM ocean_owner_decisions) WHERE status='pending'",
     );
   }
+}
+
+// Early schema-11 review cards predate receipt reservations. Preserve their key as a
+// read-only request tombstone. It has no acknowledgement binding and cannot be promoted.
+export function legacyReviewKey(db: DatabaseSync): (id: string) => ConversationReceipt | null {
+  if (
+    !db
+      .prepare("SELECT 1 FROM sqlite_master WHERE name='ocean_owner_decisions' AND type='table'")
+      .get()
+  )
+    return () => null;
+  const workspace = db.prepare('SELECT id FROM ocean_workspace WHERE singleton=1');
+  const legacy = db.prepare(
+    "SELECT roomId,runId FROM ocean_owner_decisions WHERE decisionId=? AND workspaceId=? AND kind='continue-text-only'",
+  );
+  return (requestId) => {
+    const workspaceId = workspace.get()?.['id'];
+    if (typeof workspaceId !== 'string') return null;
+    const id = reviewDecisionId(workspaceId, requestId, (text) =>
+      createHash('sha256').update(text).digest('hex'),
+    );
+    const row = legacy.get(id, workspaceId);
+    if (!row) return null;
+    return {
+      binding: 'retired-review-request',
+      reply: {
+        kind: 'review_request',
+        data: { id, workspaceId, roomId: String(row['roomId']), taskRunId: String(row['runId']) },
+      },
+    };
+  };
 }

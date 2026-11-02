@@ -206,15 +206,15 @@ tool catalog contains project reads, exact writes and registered test presets.
 Decision endpoints are available through the owner socket only. Closing a client
 leaves a pending card available to other clients.
 
-| Wire method         | Node client           | Parameters and result                                                                                                                                                                                                             |
-| ------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `decisions.list`    | `listDecisions`       | Workspace and room, optional exclusive decision ID `after` and `limit` (default 50, maximum 200). Returns historical and pending card metadata.                                                                                   |
-| `decisions.get`     | `getDecision`         | Workspace, room, run and decision ID. Returns kind, status, version, SHA-256 `bindingDigest`, creation and expiry in Unix milliseconds, and preview length in UTF-16 code units.                                                  |
-| `decisions.preview` | `decisionPreview`     | Same reference plus a zero-based code-unit `offset` on the wire. Each response repeats the card and offset with up to 32768 code units of `text`. The SDK assembles the complete serialized JSON preview and verifies its digest. |
-| `decisions.resolve` | `resolveDecision`     | Same reference plus `expectedVersion`, `bindingDigest` and `choice` (`allow-once`, `deny`, or `cancel`). Returns the persisted winner.                                                                                            |
-| `reviews.get`       | `reviewRoom`          | Workspace and room. The SDK reads the exact scoped snapshot in bounded chunks. Wire requests include `offset` and, on subsequent chunks, the opaque review `version`.                                                             |
-| `reviews.continue`  | `requestContinuation` | Workspace, room, run, request ID, observed `reviewVersion` and nonempty `reason` (up to 2048 UTF-8 bytes). Creates or returns the bound continuation card. A competing request for the same held run returns `decision_pending`.  |
-| `reviews.result`    | `continuationApplied` | Decision reference. Returns the bound reference and `applied`. The SDK returns the boolean backed by the exact committed acknowledgement receipt.                                                                                 |
+| Wire method         | Node client           | Parameters and result                                                                                                                                                                                                                                                                                                                           |
+| ------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `decisions.list`    | `listDecisions`       | Workspace and room, optional exclusive decision ID `after` and `limit` (default 50, maximum 200). Returns historical and pending card metadata.                                                                                                                                                                                                 |
+| `decisions.get`     | `getDecision`         | Workspace, room, run and decision ID. Returns kind, status, version, SHA-256 `bindingDigest`, creation and expiry in Unix milliseconds, and preview length in UTF-16 code units.                                                                                                                                                                |
+| `decisions.preview` | `decisionPreview`     | Same reference plus a zero-based code-unit `offset` on the wire. Each response repeats the card and offset with up to 32768 code units of `text`. The SDK assembles the complete serialized JSON preview and verifies its digest.                                                                                                               |
+| `decisions.resolve` | `resolveDecision`     | Same reference plus `expectedVersion`, `bindingDigest` and `choice` (`allow-once`, `deny`, or `cancel`). Returns the persisted winner.                                                                                                                                                                                                          |
+| `reviews.get`       | `reviewRoom`          | Workspace and room. The SDK reads the exact scoped snapshot in bounded chunks. Wire requests include `offset` and, on subsequent chunks, the opaque review `version`.                                                                                                                                                                           |
+| `reviews.continue`  | `requestContinuation` | Workspace, room, run, request ID, observed `reviewVersion` and nonempty `reason` (up to 2048 UTF-8 bytes). Creates or returns the bound continuation card. The request ID is reserved atomically with the card and conflicts with reuse by other conversation operations. A competing request for the same held run returns `decision_pending`. |
+| `reviews.result`    | `continuationApplied` | Decision reference. Returns the bound reference and `applied`. The SDK returns the boolean backed by the exact committed acknowledgement receipt.                                                                                                                                                                                               |
 
 Review, display the full card, then resolve its ID, version and digest. A coding
 card contains the exact operation preview and its workspace, room, bot, task,
@@ -233,20 +233,21 @@ a pending card returns `version_conflict`. A matching digest against a resolved
 card returns its current state. A different digest returns `binding_conflict`.
 The runtime clock enforces the existing 300000 ms lifetime and refuses a clock
 earlier than creation. Explicit operation cancellation wakes a pending waiter.
-Disconnecting an observer has no effect on the waiter.
+Disconnecting an observer has no effect on the waiter. If the decision write fails, the runtime holds the run, refuses further grants for it and retains profile ownership on incomplete stop. An operator can still read the durable decision.
 
 SQLite schema 11 adds owner decisions alongside the existing coding grants and
 journal. Startup retires orphaned pending cards. An allowed card records owner
 consent. Coding still rechecks the binding, registered sandbox, task membership,
 source and both leases before the approval transition and atomic consumption.
+The registered adapter prepares mountpoints at setup and inspects existing targets read-only during a vote and consumption. Custom host sandbox setup must provide a separate read-only inspector to authorize a mutation. A missing inspector refuses the operation.
 A typed admission refusal before sandbox launch can settle a failed turn after
 the runtime verifies its committed phase. Unexpected qualification failures and
 unresolved work retain the owner on incomplete stop. The existing claim precedes execution. Each durable runtime has a fresh approval
 authority identity so previous allowed grants cannot be consumed after reopen.
-A continuation requires the original review version and the existing atomic room
+A losing or concurrent resolver reads the same committed owner fact even if acknowledgement later refuses changed evidence. A continuation requires the original review version and the existing atomic room
 policy and receipt write. Use `continuationApplied` to distinguish an applied
 continuation from consent interrupted before that commit. Acknowledgement keeps
-the earlier outcome and billing unknown. No prior work is scheduled on reconnect
+the earlier outcome and billing unknown. An original schema-11 card created before receipt reservations still occupies its request key. Lookup preserves that key without writing a new receipt or applying an old vote. No prior work is scheduled on reconnect
 or recovery.
 
 ## Safety and qualification limits

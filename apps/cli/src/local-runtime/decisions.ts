@@ -29,6 +29,7 @@ const errors = new Set([
   'workspace_conflict',
   'invalid_input',
   'decision_inactive',
+  'decision_persistence_failed',
   'decision_pending',
   'approval_required',
 ]);
@@ -108,9 +109,7 @@ export class RuntimeDecisions {
         case 'decisions.resolve':
           if (isDecisionReply(p)) {
             if (this.#draining) throw Error('runtime_draining');
-            const job = this.reviews.currentJob(p);
             const card = await this.owner.resolve(p, p.bindingDigest, p.expectedVersion, p.choice);
-            await job;
             return { result: card };
           }
           break;

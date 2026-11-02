@@ -1,3 +1,4 @@
+import { DecisionPersistenceError } from './owner-decisions.js';
 import type { CodingTestPreset } from '@runnets/domain';
 import type { CodingApprovalOwnerPort, CodingApprovalService } from './coding-approval.js';
 import { dispatchCodingOperation, type PreparedCodingOperation } from './coding-dispatch.js';
@@ -123,10 +124,19 @@ export class CodingTurnTools {
       if (result.uncertain) this.#held = true;
       return result;
     } catch (error) {
-      if (error instanceof ToolError && error.code === 'effect_uncertain') this.#held = true;
+      if (
+        error instanceof DecisionPersistenceError ||
+        (error instanceof ToolError && error.code === 'effect_uncertain')
+      )
+        this.#held = true;
       return {
         isError: true,
-        output: error instanceof ToolError ? error.code : 'coding tool request failed',
+        output:
+          error instanceof DecisionPersistenceError
+            ? error.message
+            : error instanceof ToolError
+              ? error.code
+              : 'coding tool request failed',
         ...(this.#held ? { uncertain: true } : {}),
       };
     }

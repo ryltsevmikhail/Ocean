@@ -72,7 +72,7 @@ export interface Runtime {
 }
 export interface RuntimeOptions {
   readonly codingWorktreeDirectory?: string;
-  readonly codingTools?: Pick<CodingTurnFactoryDeps, 'sandbox' | 'owner'>;
+  readonly codingTools?: Pick<CodingTurnFactoryDeps, 'sandbox' | 'owner' | 'inspectSandbox'>;
   readonly restoredAccess?: boolean;
   readonly clock?: Clock;
   readonly dbPath?: string | undefined;

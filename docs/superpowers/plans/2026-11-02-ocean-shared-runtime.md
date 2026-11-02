@@ -92,7 +92,7 @@ Implementation is pending independent review. Schema 11 persists owner cards and
 CAS outcomes. Shared coding and review ports are available through the SDK.
 The standard TUI migration remains Task 5.
 
-**Files:** application runtime-decision modules, coding-approval and room review owner adapters; domain decision types if needed; memory/SQLite store+migration; host/client decision methods; TUI decision presentation tests.
+**Files:** application runtime-decision modules, coding-approval and room review owner adapters; domain decision types if needed; memory/SQLite store+migration; host/client decision methods. Task 5 owns the presentation regression for remote decision content.
 
 **Produces:** durable decision identity/version/projection and CAS resolution; trusted runtime owner adapter for existing approval/review services, no UI-local authority.
 
@@ -109,7 +109,7 @@ The standard TUI migration remains Task 5.
 
 - [ ] RED PTY test launches standard `ocean tui --profile PATH --room ROOM`, submits input, captures admitted runId, closes terminal while provider is gated. A second process sees same running run and one final response/provider call1.
 - [ ] Remove openOceanProfile/provider construction/runtime.close from room TUI path. Retain requestId+exact payload until receipt certainty; on reconnect observe original run rather than generating another identity. Distinguish UI quit/detach from explicit cancel key/action.
-- [ ] Render pending decisions from runtime state and send id/version/binding decisions; reconnect refreshes resolved cards. Narrow TuiApp service port without fabricating a TaskRunService to satisfy options.
+- [ ] Render pending decisions from runtime state and send id/version/binding decisions; reconnect refreshes resolved cards. Add a presentation regression for the full remote preview, visible control escapes, scrolling and card state after another client resolves it. Narrow TuiApp service port without fabricating a TaskRunService to satisfy options.
 - [ ] GREEN existing room/group/history/coding panel/review tests and legacy terminal behavior. Required gates; commit `feat: connect room tui to the shared local runtime`; review.
 
 ## Task 6: CLI ownership routing, ACP and shutdown compatibility

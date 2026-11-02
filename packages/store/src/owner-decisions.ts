@@ -13,6 +13,9 @@ export class InMemoryOwnerDecisions implements OwnerDecisionStore {
     if (this.#rows.has(card.decisionId)) throw Error('decision_conflict');
     this.#rows.set(card.decisionId, { card: { ...card }, preview });
   }
+  has(id: string) {
+    return this.#rows.has(id);
+  }
   find(ref: OwnerDecisionRef) {
     const card = this.#rows.get(ref.decisionId)?.card;
     return card &&

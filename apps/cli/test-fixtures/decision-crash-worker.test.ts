@@ -13,7 +13,7 @@ function halt(at: string) {
   }
 }
 const r = openOceanProfile(profile, false, {
-  codingTools: { sandbox: registeredCodingTools(profile).sandbox, owner: (t, s) => d.coding(t, s) },
+  codingTools: { ...registeredCodingTools(profile), owner: (t, s) => d.coding(t, s) },
 });
 await r.ready;
 const d = new RuntimeDecisions(r.ownerDecisions, r.reviews);

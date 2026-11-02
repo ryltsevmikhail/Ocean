@@ -44,7 +44,7 @@ export class ConversationService {
     return this.#deps.store.atomic((tx) => {
       const previous = tx.receipt(command.requestId);
       if (previous !== null)
-        return previous.binding === binding
+        return previous.binding === binding && previous.reply.kind !== 'review_request'
           ? ok(previous.reply)
           : conversationFailure('request_conflict');
       const result = this.#decide(tx, command);

@@ -1,6 +1,6 @@
 import { runCodingReviewCommand } from './coding-review-command.js';
 import { oceanArguments } from './arguments.js';
-import type { Changeset } from '@runnets/domain';
+import type { CodingTask, Changeset } from '@runnets/domain';
 import { codingTestPassed } from '@runnets/domain';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
@@ -9,6 +9,8 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import type { ProviderPort, ConversationCommand } from '@runnets/application';
 import { type RuntimeOptions, createRuntime } from '../runtime.js';
+
+const sandboxRoot = (task: CodingTask) => Promise.resolve({ root: task.worktreeRoot! });
 
 it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1').each([
   { kind: 'direct', decision: 'allow-once' as const },
@@ -44,7 +46,8 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       dbPath: join(root, 'runtime.sqlite'),
       codingWorktreeDirectory: join(root, 'worktrees'),
       codingTools: {
-        sandbox: async (task) => ({ root: task.worktreeRoot! }),
+        sandbox: sandboxRoot,
+        inspectSandbox: sandboxRoot,
         owner: () => ({
           decide: async (approval) => {
             previews.push(approval.binding.operation);
