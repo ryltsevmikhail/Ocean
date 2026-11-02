@@ -1,5 +1,6 @@
+import { SqliteCodingApprovalStore } from './coding-approval-storage.js';
 import { SqliteCodingStore } from './coding-store.js';
-import type { CodingStore } from '@runnets/application';
+import type { CodingApprovalStore, CodingStore } from '@runnets/application';
 /**
  * Public factory for the durable SQLite store.
  *
@@ -40,6 +41,7 @@ export interface OpenSqliteStoreOptions {
 
 export interface SqliteStore {
   readonly coding: CodingStore;
+  readonly codingApprovals: CodingApprovalStore;
   readonly conversations: ConversationStore;
   readonly log: EventLogPort;
   readonly dedup: CommandDedupPort;
@@ -79,6 +81,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   let closed = false;
   return {
     coding: new SqliteCodingStore(db),
+    codingApprovals: new SqliteCodingApprovalStore(db),
     conversations: new SqliteConversationStore(db),
     log,
     dedup,

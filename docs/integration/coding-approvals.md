@@ -52,3 +52,10 @@ reopen durability, not simultaneous cross-process lock contention.
 Memory/SQLite parity tests also require that the claim belongs to the exact
 approval ID; memory storage now records that owner instead of only the
 invocation key.
+
+The public openSqliteStore factory now exposes codingApprovals over the same
+durable connection and lifecycle as the other ports. A file-backed regression
+writes through this public port, closes the store, reopens it and verifies the
+exact pending preview. Runtime admission wiring must avoid nesting a coding
+BEGIN IMMEDIATE inside an approval transaction on that connection; authority
+reads and consumption need a shared transaction view.
