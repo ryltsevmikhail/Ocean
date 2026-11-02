@@ -32,3 +32,12 @@ Regression cases reject zero-exit results with stale source or incomplete
 cleanup/logs. Durable evidence recording and review consumption remain pending.
 Root check and build pass; global format check remains blocked by parallel
 design-assets files, while changed source formatting passes.
+
+Schema 9 adds immutable test evidence plus review request/verdict tables through
+the existing migration transaction. Public SQLite storage can append/list
+task-scoped evidence and refuses ID/hash replacement. A disk-backed regression
+verifies exact evidence after reopen and task filtering. Existing migration and
+restore compatibility now includes schema 9. Root check/build pass; formatting
+remains blocked by parallel design-assets/vitest configuration changes outside
+this task. Changed store files pass formatting. Runtime evidence capture and
+review table adapters remain pending.

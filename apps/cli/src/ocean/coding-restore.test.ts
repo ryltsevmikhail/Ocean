@@ -86,7 +86,7 @@ it('backup keeps schema7 task/rights; restored runtime refuses all coding author
   store.close();
   const snapshot = join(root, 'backup'),
     restored = join(root, 'restored');
-  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(8);
+  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(9);
   restoreProfile(snapshot, restored);
   const copy = openSqliteStore({ path: join(restored, 'runtime.sqlite') });
   expect(copy.coding.atomic((tx) => tx.task('task'))).toEqual(created.ok ? created.value : null);
