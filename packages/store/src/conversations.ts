@@ -1,3 +1,4 @@
+import { InMemoryOwnerDecisions, type MemoryDecisionRows } from './owner-decisions.js';
 import type {
   ConversationReceipt,
   ConversationStore,
@@ -14,6 +15,7 @@ import type {
 } from '@runnets/domain';
 
 interface State {
+  decisions: MemoryDecisionRows;
   reviews: Map<string, ChatReview>;
   policies: Map<string, RoomExecutionPolicy>;
   turns: Map<string, ChatTurn>;
@@ -23,9 +25,14 @@ interface State {
   messages: Map<string, ConversationMessage>;
   receipts: Map<string, ConversationReceipt>;
 }
+// Immutable decision rows can share their preview strings between snapshots.
+function copyState({ decisions, ...conversation }: State): State {
+  return { ...structuredClone(conversation), decisions: new Map(decisions) };
+}
 /** Detached transaction copies prevent caller mutation and roll back on failed commits. */
 export class InMemoryConversationStore implements ConversationStore {
   #state: State = {
+    decisions: new Map(),
     reviews: new Map(),
     policies: new Map(),
     turns: new Map(),
@@ -35,13 +42,16 @@ export class InMemoryConversationStore implements ConversationStore {
     messages: new Map(),
     receipts: new Map(),
   };
-  #active = false;
+  #draft: State | null = null;
+  readonly ownerDecisions = new InMemoryOwnerDecisions(
+    () => (this.#draft ?? this.#state).decisions,
+  );
 
   /** Publish the snapshot only after the whole synchronous transaction succeeds. */
   atomic<T>(work: (transaction: ConversationTransaction) => T): T {
-    if (this.#active) throw new Error('nested conversation transaction');
-    this.#active = true;
-    const state = structuredClone(this.#state);
+    if (this.#draft) throw new Error('nested conversation transaction');
+    const state = copyState(this.#state);
+    this.#draft = state;
     const tx: ConversationTransaction = {
       review: (id) => state.reviews.get(id) ?? null,
       putReview: (r) => {
@@ -133,10 +143,10 @@ export class InMemoryConversationStore implements ConversationStore {
     };
     try {
       const result = structuredClone(work(tx));
-      this.#state = structuredClone(state);
+      this.#state = copyState(state);
       return result;
     } finally {
-      this.#active = false;
+      this.#draft = null;
     }
   }
 }

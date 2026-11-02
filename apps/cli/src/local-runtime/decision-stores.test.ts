@@ -134,3 +134,47 @@ it.each(['memory', 'sqlite'])(
     }
   },
 );
+
+it.each(['memory', 'sqlite'])(
+  '%s rolls back a staged decision change when a nested conversation transaction refuses',
+  (backend) => {
+    const sqlite = openSqliteStore({ path: ':memory:' });
+    const memoryProfile = new memory.InMemoryConversationStore();
+    const conversations = backend === 'sqlite' ? sqlite.conversations : memoryProfile;
+    const decisions = backend === 'sqlite' ? sqlite.ownerDecisions : memoryProfile.ownerDecisions;
+    const card: OwnerDecision = {
+      workspaceId: 'w',
+      roomId: 'r',
+      runId: 'run',
+      decisionId: 'card',
+      kind: 'write',
+      version: 1,
+      status: 'pending',
+      bindingDigest: 'a'.repeat(64),
+      createdAt: 5,
+      expiresAt: 300005,
+      previewLength: 5,
+    };
+    try {
+      decisions.insert(card, 'exact');
+      expect(() =>
+        conversations.atomic((tx) => {
+          tx.putReceipt('request', {
+            binding: 'bound',
+            reply: {
+              kind: 'review_request',
+              data: { workspaceId: 'w', roomId: 'r', taskRunId: 'run', id: 'review' },
+            },
+          });
+          expect(decisions.settle(card, 'denied')).toBe(true);
+          conversations.atomic((inner) => inner.receipt('request'));
+        }),
+      ).toThrow(/nested|within a transaction/i);
+      expect(decisions.find(card)).toEqual(card);
+      expect(conversations.atomic((tx) => tx.receipt('request'))).toBeNull();
+      expect(decisions.settle(card, 'denied')).toBe(true);
+    } finally {
+      sqlite.close();
+    }
+  },
+);

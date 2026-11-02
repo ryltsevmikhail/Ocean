@@ -6,8 +6,16 @@ import type {
   OwnerDecisionScope,
   OwnerDecisionStore,
 } from '@runnets/application';
+export type MemoryDecisionRows = Map<string, Readonly<{ card: OwnerDecision; preview: string }>>;
 export class InMemoryOwnerDecisions implements OwnerDecisionStore {
-  readonly #rows = new Map<string, { card: OwnerDecision; preview: string }>();
+  readonly #currentRows: () => MemoryDecisionRows;
+  get #rows() {
+    return this.#currentRows();
+  }
+  constructor(currentRows?: () => MemoryDecisionRows) {
+    const standalone: MemoryDecisionRows = new Map();
+    this.#currentRows = currentRows ?? (() => standalone);
+  }
   insert(card: OwnerDecision, preview: string) {
     assertNewOwnerDecision(card, preview);
     if (this.#rows.has(card.decisionId)) throw Error('decision_conflict');
@@ -52,7 +60,11 @@ export class InMemoryOwnerDecisions implements OwnerDecisionStore {
       card.bindingDigest !== expected.bindingDigest
     )
       return false;
-    this.#rows.get(card.decisionId)!.card = { ...card, version: card.version + 1, status: outcome };
+    const previous = this.#rows.get(card.decisionId)!;
+    this.#rows.set(card.decisionId, {
+      ...previous,
+      card: { ...card, version: card.version + 1, status: outcome },
+    });
     return true;
   }
   retirePending() {

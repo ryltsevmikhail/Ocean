@@ -36,7 +36,6 @@ import {
 } from '@runnets/application';
 import { openSqliteStore, ownSqliteRuntime } from '@runnets/store-sqlite';
 import {
-  InMemoryOwnerDecisions,
   InMemoryCommandDedup,
   InMemoryCodingStore,
   InMemoryCodingApprovalStore,
@@ -129,7 +128,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       clock: deps.clock,
     };
     return {
-      ownerDecisions: new InMemoryOwnerDecisions(),
+      ownerDecisions: deps.store.ownerDecisions,
       service,
       coding: new CodingTaskService(codingDeps),
       codingApprovals: new CodingApprovalService({

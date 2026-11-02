@@ -7,14 +7,16 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, it, vi } from 'vitest';
+import { createRuntime } from '../runtime.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { RuntimeDecisions } from './decisions.js';
 import { rooms } from '../../test-fixtures/local-runtime-admission.test.js';
 import type { ProviderPort } from '@runnets/application';
 
-async function fixture() {
+async function fixture(adapter: 'memory' | 'sqlite' = 'sqlite') {
   const path = mkdtempSync(join(tmpdir(), 'ocean-decision-conflict-'));
-  const r = openOceanProfile(path, true);
+  const r =
+    adapter === 'memory' ? createRuntime({ mode: 'ephemeral' }) : openOceanProfile(path, true);
   await r.ready;
   const { workspaceId, roomId, groupId } = rooms(r.conversations);
   const provider: ProviderPort = {
@@ -207,23 +209,42 @@ it('protects an 81c5ec7 review key with no reservation across reopen without app
     await close();
   }
 });
-it('rolls a review reservation and card back together before installing a waiter', async () => {
-  const { one, r, d, close } = await fixture();
-  try {
-    const insert = r.ownerDecisions.insert.bind(r.ownerDecisions);
-    r.ownerDecisions.insert = (card, preview) => {
-      insert(card, preview);
-      throw Error('fault before reservation commit');
-    };
-    await expect(d.reviews.request(one)).rejects.toThrow('fault before reservation commit');
-    expect(r.ownerDecisions.list(one, '', 50)).toEqual([]);
-    expect(r.reviews.hasRequest(one.requestId)).toBe(false);
-    r.ownerDecisions.insert = insert;
-    expect(await d.reviews.request(one)).toMatchObject({ status: 'pending', version: 1 });
-  } finally {
-    await close();
-  }
-});
+it.each(['memory', 'sqlite'] as const)(
+  '%s rolls a review reservation and card back together before installing a waiter',
+  async (adapter) => {
+    const { one, r, d, close } = await fixture(adapter);
+    try {
+      const insert = r.ownerDecisions.insert.bind(r.ownerDecisions);
+      r.ownerDecisions.insert = (card, preview) => {
+        insert(card, preview);
+        throw Error('fault before reservation commit');
+      };
+      await expect(d.reviews.request(one)).rejects.toThrow('fault before reservation commit');
+      expect(r.ownerDecisions.list(one, '', 50)).toEqual([]);
+      expect(r.reviews.hasRequest(one.requestId)).toBe(false);
+      r.ownerDecisions.insert = insert;
+      const card = await d.reviews.request(one);
+      expect(card).toMatchObject({ status: 'pending', version: 1 });
+      expect(r.reviews.hasRequest(one.requestId)).toBe(true);
+      const votes = await Promise.all([
+        d.owner.resolve(card, card.bindingDigest, 1, 'allow-once'),
+        d.owner.resolve(card, card.bindingDigest, 1, 'allow-once'),
+      ]);
+      expect(votes).toEqual([0, 1].map(() => ({ ...card, status: 'allowed', version: 2 })));
+      await vi.waitFor(() => expect(d.reviews.applied(card)).toBe(true));
+      expect(await d.reviews.request(one)).toEqual(votes[0]);
+      expect(r.conversations.history(one.workspaceId, one.roomId)).toMatchObject({
+        value: [{ body: 'held' }, { body: expect.stringContaining('future text-only') }],
+      });
+      expect(r.ownerDecisions.list(one, '', 50)).toEqual([votes[0]]);
+      expect(r.reviews.receipt(one.workspaceId, one.roomId, one.runId, one.requestId)?.mode).toBe(
+        'text_only',
+      );
+    } finally {
+      await close();
+    }
+  },
+);
 
 it('independent SDK clients read the same winning vote after an intervening journal conflict', async () => {
   const { one, r, path, close } = await fixture(),
