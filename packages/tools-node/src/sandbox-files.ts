@@ -71,6 +71,13 @@ try {
         if(input.expected===null) fs.linkSync(temp,dest);
         else {
           const displaced=path.join(pinned,'.ocean-recovery-'+crypto.randomUUID());
+          const intent=displaced+'.json';
+          const record=fs.openSync(intent,'wx',0o600);
+          try {
+            fs.writeFileSync(record,JSON.stringify({version:1,path:input.path,expected:input.expected,content:input.content}));
+            fs.fsyncSync(record);
+          } finally {fs.closeSync(record);}
+          fs.fsyncSync(directory);
           fs.renameSync(dest,displaced);
           installed=true;
           fs.fsyncSync(directory);
@@ -79,11 +86,12 @@ try {
             verifyDirectory(parent,directory);
             fs.linkSync(temp,dest);
           } catch(error) {
-            try {fs.linkSync(displaced,dest);fs.unlinkSync(displaced);fs.fsyncSync(directory);}
+            try {fs.linkSync(displaced,dest);fs.unlinkSync(displaced);fs.unlinkSync(intent);fs.fsyncSync(directory);}
             catch {}
             throw error;
           }
           fs.unlinkSync(displaced);
+          fs.unlinkSync(intent);
         }
         installed=true;
         fs.unlinkSync(temp);

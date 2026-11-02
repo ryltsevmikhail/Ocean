@@ -40,10 +40,16 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
           { op: 'write', path: 'src/file', expected: 'before', content: 'after' },
         ),
       ).rejects.toMatchObject({ code: 'effect_uncertain' });
-      const recovery = (await readdir(join(root, 'src'))).find((name) =>
-        name.startsWith('.ocean-recovery-'),
+      const recovery = (await readdir(join(root, 'src'))).find(
+        (name) => name.startsWith('.ocean-recovery-') && !name.endsWith('.json'),
       );
       expect(recovery).toBeDefined();
+      expect(JSON.parse(await readFile(join(root, 'src', recovery! + '.json'), 'utf8'))).toEqual({
+        version: 1,
+        path: 'src/file',
+        expected: 'before',
+        content: 'after',
+      });
       expect(await readFile(join(root, 'src', recovery!), 'utf8')).toBe('before');
       await expect(
         sandboxFile({ root }, { op: 'write', path: 'new', expected: null, content: 'unexpected' }),

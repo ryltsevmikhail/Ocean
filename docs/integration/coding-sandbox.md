@@ -291,3 +291,12 @@ symlink strings in the hash stream. Files exceeding the remaining 1 GiB
 inventory budget are rejected from descriptor metadata before reading them.
 A sparse-file regression exceeds that budget without allocating or reading
 a gigabyte of content.
+
+Before displacing an existing file, the filesystem worker now creates a
+mode-0600 recovery intent containing format version, project-relative target,
+exact expected contents and proposed contents. It fsyncs the record and
+directory before rename. Successful completion or confirmed conflict restoration
+removes the record; interrupted operations retain it with the displaced file.
+The native crash test verifies both the original bytes and the exact recorded
+intent. These records provide reconciliation evidence; they are not executable
+approvals and remain blocked from model file tools.
