@@ -91,7 +91,7 @@ export function restoreProfile(from: string, to: string): Snapshot {
       !/^[a-f0-9]{64}$/.test(manifest.sha256) ||
       !Number.isSafeInteger(manifest.bytes) ||
       manifest.bytes <= 0 ||
-      manifest.summary.schema !== 5 ||
+      ![5, 6].includes(manifest.summary.schema) ||
       !Number.isFinite(Date.parse(manifest.createdAt))
     )
       throw new Error();

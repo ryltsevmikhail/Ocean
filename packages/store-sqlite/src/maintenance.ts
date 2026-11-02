@@ -83,7 +83,7 @@ export function inspectDatabase(path: string): DatabaseInspection {
   let db: DatabaseSync | undefined;
   try {
     db = new DatabaseSync(path, { readOnly: true });
-    if (schema(db) !== SCHEMA_VERSION) return { status: 'unsupported_schema' };
+    if (![5, SCHEMA_VERSION].includes(schema(db))) return { status: 'unsupported_schema' };
     if (ownerBusy(db)) return { status: 'owner_busy' };
     db.exec('BEGIN');
     const result = summary(db);
@@ -106,7 +106,7 @@ export async function snapshotDatabase(
   const db = new DatabaseSync(path);
   let release: (() => void) | undefined;
   try {
-    if (schema(db) !== SCHEMA_VERSION) throw new Error('unsupported_schema');
+    if (![5, SCHEMA_VERSION].includes(schema(db))) throw new Error('unsupported_schema');
     if (ownerBusy(db)) throw new Error('owner_busy');
     try {
       release = acquireOwnership(db, { id: randomUUID(), pid: process.pid }, alive);

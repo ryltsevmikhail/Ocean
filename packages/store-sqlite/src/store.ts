@@ -1,3 +1,5 @@
+import { SqliteCodingStore } from './coding-store.js';
+import type { CodingStore } from '@runnets/application';
 /**
  * Public factory for the durable SQLite store.
  *
@@ -37,6 +39,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  readonly coding: CodingStore;
   readonly conversations: ConversationStore;
   readonly log: EventLogPort;
   readonly dedup: CommandDedupPort;
@@ -75,6 +78,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
   return {
+    coding: new SqliteCodingStore(db),
     conversations: new SqliteConversationStore(db),
     log,
     dedup,

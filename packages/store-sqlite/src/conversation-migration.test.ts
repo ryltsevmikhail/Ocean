@@ -50,6 +50,8 @@ function setup() {
 }
 /** Remove only new tables to recreate the original v1 tables with their exact runtime records. */
 function downgradeFixture(db: DatabaseSync) {
+  db.exec('DROP TABLE ocean_coding_receipts');
+  db.exec('DROP TABLE ocean_coding_tasks');
   db.exec('DROP TABLE ocean_room_policies');
   db.exec('DROP TABLE ocean_reviews');
   db.exec('DROP TABLE ocean_messages');
@@ -96,7 +98,7 @@ it('migrates v1 without changing task events, receipts, checkpoints or unknown t
   );
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '5',
+    '6',
   );
   expect(
     ['events', 'command_receipts', 'checkpoints', 'tool_invocations_v1'].map((t) =>
@@ -123,7 +125,7 @@ it('rolls back an interrupted migration before version advancement, then allows 
   db.exec('DROP TABLE ocean_messages');
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '5',
+    '6',
   );
 });
 it('refuses schema migration beneath a live runtime owner without changing the database', () => {

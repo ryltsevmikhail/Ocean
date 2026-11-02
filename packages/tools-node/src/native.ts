@@ -1,3 +1,5 @@
+import { legacyMutation } from './native-lease.js';
+import type { ProjectLeasePort } from '@runnets/application';
 import { constants } from 'node:fs';
 import { lstat, realpath, open, readdir, rename, unlink, link } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -11,7 +13,10 @@ function missing(error: unknown): boolean {
 }
 
 /** Canonical project root plus a no-symlink policy for every selected path component. */
-export async function createNativeBackend(workspace: string): Promise<WorkspaceBackend> {
+export async function createNativeBackend(
+  workspace: string,
+  options: { readonly leases?: ProjectLeasePort } = {},
+): Promise<WorkspaceBackend> {
   const root = await realpath(workspace);
   if (!(await lstat(root)).isDirectory())
     throw new ToolError('workspace', 'workspace must be a directory');
@@ -76,27 +81,47 @@ export async function createNativeBackend(workspace: string): Promise<WorkspaceB
         .sort((a, b) => a.name.localeCompare(b.name));
     },
     async write(input, content, expected) {
-      if ((await read(input)) !== expected)
-        throw new ToolError('stale_read', 'file changed while awaiting approval');
-      const path = await pathOf(input, true);
-      const temp = join(dirname(path), `.runne-${randomUUID()}.tmp`);
-      const original = expected === null ? null : await lstat(path);
-      const file = await open(temp, 'wx', original === null ? 0o600 : original.mode & 0o777);
-      try {
-        await file.writeFile(content, 'utf8');
-        await file.sync();
-        await file.close();
-        if ((await read(input)) !== expected)
-          throw new ToolError('stale_read', 'file changed before commit');
-        if (expected === null) await link(temp, path);
-        else await rename(temp, path);
-      } finally {
-        await file.close().catch(() => {});
-        await unlink(temp).catch(() => {});
-      }
+      return legacyMutation(
+        root,
+        'legacy-write',
+        async (dispatch) => {
+          if ((await read(input)) !== expected)
+            throw new ToolError('stale_read', 'file changed while awaiting approval');
+          const path = await pathOf(input, true);
+          const temp = join(dirname(path), `.runne-${randomUUID()}.tmp`);
+          const original = expected === null ? null : await lstat(path);
+          dispatch();
+          const file = await open(temp, 'wx', original === null ? 0o600 : original.mode & 0o777);
+          try {
+            await file.writeFile(content, 'utf8');
+            await file.sync();
+            await file.close();
+            if ((await read(input)) !== expected)
+              throw new ToolError('stale_read', 'file changed before commit');
+            if (expected === null) await link(temp, path);
+            else await rename(temp, path);
+          } finally {
+            await file.close().catch(() => {});
+            await unlink(temp).catch(() => {});
+          }
+        },
+        options.leases,
+      );
     },
     async command(program, args, cwd, signal) {
-      return runCommand(program, args, await pathOf(cwd), signal);
+      signal.throwIfAborted();
+      const directory = await pathOf(cwd);
+      signal.throwIfAborted();
+      return legacyMutation(
+        root,
+        'legacy-command',
+        async (dispatch) => {
+          signal.throwIfAborted();
+          dispatch();
+          return runCommand(program, args, directory, signal);
+        },
+        options.leases,
+      );
     },
   };
 }

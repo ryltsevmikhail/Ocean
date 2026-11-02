@@ -1,9 +1,11 @@
+import { GitCodingProject, SqliteProjectLeases } from '@runnets/tools-node';
 /** Host composition: ephemeral state or a single-owner durable runtime with reconciliation. */
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import {
   TaskRunService,
+  CodingTaskService,
   ConversationService,
   DirectChatService,
   ChatReviewService,
@@ -17,6 +19,8 @@ import {
 import { openSqliteStore, ownSqliteRuntime } from '@runnets/store-sqlite';
 import {
   InMemoryCommandDedup,
+  InMemoryCodingStore,
+  InMemoryProjectLeases,
   InMemoryConversationStore,
   InMemoryToolJournal,
   InMemoryEventLog,
@@ -26,6 +30,7 @@ import {
 
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
+  readonly coding: CodingTaskService;
   readonly service: TaskRunService;
   readonly conversations: ConversationService;
   readonly chat: DirectChatService;
@@ -85,6 +90,15 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     };
     return {
       service,
+      coding: new CodingTaskService({
+        store: new InMemoryCodingStore(deps.store),
+        leases: new InMemoryProjectLeases(),
+        projects: new GitCodingProject(),
+        journal,
+        ownerId: 'ephemeral-' + randomUUID(),
+        enabled: false,
+        clock: deps.clock,
+      }),
       conversations: new ConversationService(deps),
       chat: new DirectChatService({ ...deps, tasks: service }),
       reviews: new ChatReviewService({ ...deps, tasks: service, journal }),
@@ -109,6 +123,15 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     const ready = chat.recover().then(() => reconcileInterrupted(service, store.tools));
     return {
       service,
+      coding: new CodingTaskService({
+        store: store.coding,
+        leases: new SqliteProjectLeases(),
+        projects: new GitCodingProject(),
+        journal: store.tools,
+        ownerId: createHash('sha256').update(realpathSync(dbPath)).digest('hex'),
+        clock: deps.clock,
+        restored: existsSync(join(dirname(dbPath), 'restore-guard.json')),
+      }),
       conversations: new ConversationService(deps),
       chat,
       reviews: new ChatReviewService({ ...deps, tasks: service, journal: store.tools }),

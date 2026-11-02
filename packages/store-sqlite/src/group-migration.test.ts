@@ -33,7 +33,7 @@ function oldProfile() {
   const chat = new DirectChatService({ store, tasks, clock, nextId });
   return { db, conversations, chat };
 }
-it('preserves M2 replies, turns, TaskRun events and exact retry identity when migrating 3→5', async () => {
+it('preserves M2 replies, turns, TaskRun events and exact retry identity when migrating 3→6', async () => {
   const c = oldProfile();
   let calls = 0;
   const provider: ProviderPort = {
@@ -82,7 +82,7 @@ it('preserves M2 replies, turns, TaskRun events and exact retry identity when mi
   const room = c.conversations.room('ws_test', '0002');
   initializeSchema(c.db);
   expect(c.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '5',
+    '6',
   );
   expect(snapshot()).toEqual(before);
   expect(c.db.prepare('SELECT review_id FROM ocean_chat_turns').get()?.['review_id']).toBeNull();
