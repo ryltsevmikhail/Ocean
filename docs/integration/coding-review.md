@@ -23,3 +23,12 @@ stale-evidence refusal and one verdict per request. Concrete durable storage,
 provider review dispatch and exact application remain pending.
 Root check/build pass; global formatting is still blocked by parallel untracked
 character-atlas files, while the changed source formatting passes.
+
+Test evidence now has a domain representation binding exact approval identity,
+invocation/source/dependency hashes, exit/termination status, cleanup and retained
+output. codingTestPassed requires exit 0, confirmed cleanup, untruncated output,
+unchanged dependencies and the exact approved source before/after hashes.
+Regression cases reject zero-exit results with stale source or incomplete
+cleanup/logs. Durable evidence recording and review consumption remain pending.
+Root check and build pass; global format check remains blocked by parallel
+design-assets files, while changed source formatting passes.
