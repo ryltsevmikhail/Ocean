@@ -1,3 +1,4 @@
+import { fingerprintFile } from './sandbox-mounts.js';
 import { lstat } from 'node:fs/promises';
 /** Trusted bootstrap executed inside the supervised unit before bubblewrap.
  * Mount source descriptors are inherited by bubblewrap, avoiding host proc access.
@@ -12,10 +13,11 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
     identities[source] = [stat.dev, stat.ino, stat.mode, stat.size, stat.mtimeNs, stat.ctimeNs].map(
       String,
     );
+    if (stat.isFile()) identities[source].push(await fingerprintFile(source));
     i += 2;
   }
   return `
-    const fs=require('node:fs'), cp=require('node:child_process');
+    const fs=require('node:fs'), cp=require('node:child_process'),crypto=require('node:crypto');
     const argv=${JSON.stringify(argv)}, identities=${JSON.stringify(identities)}, descriptors=[];
     try {
       for(let i=0;i<argv.length;i++) {
@@ -25,6 +27,18 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
         descriptors.push(fd);
         const stat=fs.fstatSync(fd,{bigint:true});
         const actual=[stat.dev,stat.ino,stat.mode,stat.size,stat.mtimeNs,stat.ctimeNs].map(String);
+        if(stat.isFile()) {
+          const hash=crypto.createHash('sha256');
+          hash.update(JSON.stringify([String(stat.mode),String(stat.size)]));
+          const buffer=Buffer.alloc(65536);
+          let length;
+          while((length=fs.readSync(fd,buffer,0,buffer.length,null))>0)
+            hash.update(buffer.subarray(0,length));
+          actual.push(hash.digest('hex'));
+          const after=fs.fstatSync(fd,{bigint:true});
+          if(after.ctimeNs!==stat.ctimeNs || after.mtimeNs!==stat.mtimeNs || after.size!==stat.size)
+            throw Error('mount source changed while hashing');
+        }
         if(JSON.stringify(actual)!==JSON.stringify(identities[argv[i+1]]))
           throw Error('mount source changed before opening');
         if(!stat.isFile()&&!stat.isDirectory()) throw Error('unsupported mount source');

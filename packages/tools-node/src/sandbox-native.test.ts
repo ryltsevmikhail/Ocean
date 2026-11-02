@@ -190,12 +190,12 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
           root,
           program: '/toolchain/node',
           args: ['-e', 'setInterval(()=>{},100)'],
-          timeoutMs: 200,
+          timeoutMs: 1000,
         });
         expect(timed.reason).toBe('timeout');
         expect(timed.cleanupConfirmed).toBe(true);
         const controller = new AbortController();
-        setTimeout(() => controller.abort(), 200);
+        setTimeout(() => controller.abort(), 1000);
         const cancelled = await runSandbox({
           root,
           program: '/toolchain/node',

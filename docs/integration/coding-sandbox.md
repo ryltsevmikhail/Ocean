@@ -192,3 +192,12 @@ bootstrap preparation and verifies refusal before bubblewrap starts.
 This detects source replacement before opening; directory metadata alone
 does not attest descendant contents, so content qualification still needs
 a mounted-tree verification before command admission.
+
+Bootstrap file sources (Node and standalone pnpm) are now SHA-256 checked
+through their opened descriptors against host fingerprints before bubblewrap.
+Descriptor metadata is rechecked after hashing. Replacement and in-place
+rewrites after bootstrap preparation are rejected by regression tests.
+The added hashing increased startup time, so the native timeout/cancellation
+test uses one second instead of 200 ms to exercise an admitted worker.
+Directory descendant attestation and protection against in-place modification
+after hashing still need qualification.
