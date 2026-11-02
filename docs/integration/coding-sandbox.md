@@ -176,3 +176,11 @@ the supervised service cannot traverse those host proc descriptors. The
 experiment was removed. A solution must transfer descriptors into the
 supervised unit (or prepare immutable mount assets there); host proc paths
 cannot be assumed usable. No qualification gate is relaxed by this result.
+
+The next native experiment succeeded: a trusted Node bootstrap inside the
+supervised unit opens mount sources and inherits those descriptors directly
+into bubblewrap's --bind-fd/--ro-bind-fd. The supervisor now uses this bootstrap
+and all 25 focused tests pass. Mount source pathname replacement after opening
+cannot redirect those mounts. The fixed /dev/null mask remains a direct bind.
+Qualification still needs to bind the opened descriptor contents to the
+pre-approved identity, including the interval before the bootstrap opens them.

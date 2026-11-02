@@ -1,3 +1,4 @@
+import { sandboxLauncher } from './sandbox-launcher.js';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readdir, readFile, realpath } from 'node:fs/promises';
@@ -89,8 +90,10 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
       '--property=TasksMax=' + sandboxLimits.processes,
       '--property=NoNewPrivileges=yes',
       '--property=ProtectControlGroups=yes',
-      '/usr/bin/bwrap',
-      ...sandboxArgv(request.root, script, request.mounts, nodeBinary),
+      nodeBinary,
+      '--input-type=commonjs',
+      '-e',
+      sandboxLauncher(sandboxArgv(request.root, script, request.mounts, nodeBinary)),
     ],
     { env, stdio: ['pipe', 'pipe', 'pipe'], shell: false },
   );
