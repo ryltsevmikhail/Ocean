@@ -81,3 +81,10 @@ sourceUnchanged evidence. The original checkout retains its initial content
 and the shared journal has no unresolved effect. Runtime can place task assets
 in an explicitly configured directory, used by tests to keep all fixture assets
 under their temporary root. No provider API calls are used by this acceptance.
+
+ocean tui --room ROOM --task TASK now carries the task through ChatRunBook to
+the same conversation service. Registered sandbox configuration is reused;
+coding approvals are routed to the TUI's exclusive approval screen with the
+turn cancellation signal. Without a ready screen they cancel. The run_test
+progress update is typed as execute. CLI parsing regression covers the TUI
+task flag. Native interactive screen acceptance remains part of final RC.

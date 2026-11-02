@@ -13,6 +13,7 @@ export class ChatRunBook implements RunBookPort {
   readonly #runtime: Runtime;
   readonly #reviews: RoomReviewController;
   readonly #roomId: string;
+  readonly #taskId: string | undefined;
   readonly #provider: ProviderPort | null;
   readonly #entries: RunEntry[] = [];
   #controller: AbortController | null = null;
@@ -21,8 +22,9 @@ export class ChatRunBook implements RunBookPort {
   #names = new Map<string, string>();
   model = '';
   providerId: string | null = null;
-  constructor(runtime: Runtime, roomId: string, provider: ProviderPort | null) {
+  constructor(runtime: Runtime, roomId: string, provider: ProviderPort | null, taskId?: string) {
     this.#runtime = runtime;
+    this.#taskId = taskId;
     this.#reviews = new RoomReviewController(runtime, roomId);
     this.#roomId = roomId;
     this.#provider = provider;
@@ -94,6 +96,7 @@ export class ChatRunBook implements RunBookPort {
         roomId: this.#roomId,
         requestId: randomUUID(),
         text: prompt,
+        ...(this.#taskId === undefined ? {} : { taskId: this.#taskId }),
         provider: this.#provider,
         signal: controller.signal,
         emit,

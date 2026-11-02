@@ -47,6 +47,9 @@ export class TuiApp {
   #started = false;
   #stopped = false;
 
+  codingOwner(signal: AbortSignal) {
+    return this.#approval.codingOwner(signal);
+  }
   constructor(options: TuiAppOptions) {
     this.#input = options.input;
     this.#workspace = options.workspace;

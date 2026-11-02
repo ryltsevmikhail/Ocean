@@ -54,6 +54,7 @@ export async function runOceanCommand(
       return await runDirectTui({
         profile: flags.get('profile'),
         roomId: required(flags, 'room'),
+        ...(flags.has('task') ? { taskId: required(flags, 'task') } : {}),
         provider: options.provider,
       });
     }

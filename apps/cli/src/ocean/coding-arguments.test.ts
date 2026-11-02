@@ -50,3 +50,9 @@ it('parses explicit coding start authority without a bulk approval option', () =
   expect(() => oceanArguments(['coding', 'start', '--yes'])).toThrow();
   expect(oceanArguments(['coding', 'show', 'task']).positional).toEqual(['show', 'task']);
 });
+
+it('binds TUI to an explicitly selected task', () => {
+  const args = oceanArguments(['tui', '--room', 'room', '--task', 'task']);
+  expect(args.command).toBe('tui');
+  expect(args.flags.get('task')).toBe('task');
+});
