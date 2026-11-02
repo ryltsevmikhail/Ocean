@@ -184,3 +184,11 @@ and all 25 focused tests pass. Mount source pathname replacement after opening
 cannot redirect those mounts. The fixed /dev/null mask remains a direct bind.
 Qualification still needs to bind the opened descriptor contents to the
 pre-approved identity, including the interval before the bootstrap opens them.
+
+The bootstrap now compares each opened mount descriptor's device, inode,
+mode, size and nanosecond modification/change times with host observations
+captured before service creation. A regression exchanges a file after
+bootstrap preparation and verifies refusal before bubblewrap starts.
+This detects source replacement before opening; directory metadata alone
+does not attest descendant contents, so content qualification still needs
+a mounted-tree verification before command admission.

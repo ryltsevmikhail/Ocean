@@ -72,6 +72,9 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   let closed = false;
   let stopping: Promise<void> | undefined;
   const nodeBinary = await realpath(process.execPath);
+  const launcher = await sandboxLauncher(
+    sandboxArgv(request.root, script, request.mounts, nodeBinary),
+  );
   request.signal?.throwIfAborted();
   const child = spawn(
     '/usr/bin/systemd-run',
@@ -93,7 +96,7 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
       nodeBinary,
       '--input-type=commonjs',
       '-e',
-      sandboxLauncher(sandboxArgv(request.root, script, request.mounts, nodeBinary)),
+      launcher,
     ],
     { env, stdio: ['pipe', 'pipe', 'pipe'], shell: false },
   );
