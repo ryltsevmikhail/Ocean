@@ -4,12 +4,14 @@ import {
   codingFailure,
   ok,
   type CodingTask,
+  type CodingWorktree,
   type CodingApproval,
   type CodingApprovalBinding,
   type CodingResult,
 } from '@runnets/domain';
 
 export interface CodingApprovalTransaction {
+  worktree?(id: string): CodingWorktree | null;
   task?(id: string): CodingTask | null;
   participates?(workspaceId: string, roomId: string, botId: string): boolean;
   approval(id: string): CodingApproval | null;
@@ -21,9 +23,13 @@ export interface CodingApprovalStore {
   atomic<T>(work: (tx: CodingApprovalTransaction) => T): T;
 }
 export interface CodingApprovalOwnerPort {
-  decide(preview: CodingApproval): Promise<'allow-once' | 'deny' | 'cancel'>;
+  decide(
+    preview: CodingApproval,
+    current?: () => Promise<boolean>,
+  ): Promise<'allow-once' | 'deny' | 'cancel'>;
 }
 export interface CodingApprovalDependencies {
+  readonly authorityId?: string;
   readonly store: CodingApprovalStore;
   readonly now: () => number;
   /** Checks current task/room/bot authority, project lease and unresolved claims. */
@@ -58,6 +64,7 @@ export class CodingApprovalService {
       if (tx.approval(id)) return codingFailure('request_conflict');
       const approval: CodingApproval = {
         id,
+        ...(this.deps.authorityId ? { authorityId: this.deps.authorityId } : {}),
         binding: input,
         preview,
         createdAt: now,
@@ -72,6 +79,7 @@ export class CodingApprovalService {
     id: string,
     current: CodingApprovalBinding,
     owner: CodingApprovalOwnerPort,
+    readBinding?: () => Promise<CodingApprovalBinding>,
   ): Promise<CodingResult<CodingApproval>> {
     const binding = structuredClone(current);
     if (this.deps.restored) return codingFailure('recovery_required');
@@ -80,6 +88,7 @@ export class CodingApprovalService {
     );
     if (
       !approval ||
+      approval.authorityId !== this.deps.authorityId ||
       approval.status !== 'pending' ||
       !codingApprovalMatches(
         approval.binding,
@@ -90,16 +99,32 @@ export class CodingApprovalService {
       )
     )
       return codingFailure('approval_required');
-    const decision = await owner.decide(structuredClone(approval));
+    const currentAtConsent = async () => {
+      const observed = readBinding ? await readBinding() : binding;
+      return this.deps.store.atomic(
+        (tx) =>
+          tx.approval(id)?.status === 'pending' &&
+          this.deps.admit(observed, tx) &&
+          codingApprovalMatches(
+            approval.binding,
+            observed,
+            approval.createdAt,
+            approval.expiresAt,
+            this.deps.now(),
+          ),
+      );
+    };
+    const decision = await owner.decide(structuredClone(approval), currentAtConsent);
+    const observed = decision === 'allow-once' && readBinding ? await readBinding() : binding;
     return this.deps.store.atomic((tx) => {
       const pending = tx.approval(id);
       if (
         !pending ||
         pending.status !== 'pending' ||
-        !this.deps.admit(binding, tx) ||
+        !this.deps.admit(observed, tx) ||
         !codingApprovalMatches(
           pending.binding,
-          binding,
+          observed,
           pending.createdAt,
           pending.expiresAt,
           this.deps.now(),
@@ -121,6 +146,7 @@ export class CodingApprovalService {
       const approval = tx.approval(id);
       if (
         !approval ||
+        approval.authorityId !== this.deps.authorityId ||
         approval.status !== 'allowed' ||
         !this.deps.admit(binding, tx) ||
         !codingApprovalMatches(

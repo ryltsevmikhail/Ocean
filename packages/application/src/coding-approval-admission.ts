@@ -9,8 +9,19 @@ export function codingApprovalAdmission(
   deps: Readonly<{ ownerId: string; leases: ProjectLeasePort; journal: ToolJournalPort }>,
 ): boolean {
   const task = tx.task?.(binding.taskId);
+  const worktree = tx.worktree?.(binding.taskId);
   if (
     !task ||
+    !worktree ||
+    worktree.state !== 'ready' ||
+    worktree.root !== binding.worktreeRoot ||
+    worktree.workspaceId !== binding.workspaceId ||
+    worktree.taskId !== binding.taskId ||
+    worktree.projectRoot !== task.projectRoot ||
+    worktree.baseCommit !== task.baseCommit ||
+    worktree.lease.projectRoot !== worktree.root ||
+    worktree.lease.ownerId !== deps.ownerId ||
+    !deps.leases.owns(worktree.lease) ||
     binding.operation === 'apply' ||
     !deps.journal.inspectPending ||
     deps.journal.inspectPending().length > 0 ||

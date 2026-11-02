@@ -76,6 +76,7 @@ describe('schema initialization', () => {
       'ocean_coding_test_evidence',
       'ocean_members',
       'ocean_messages',
+      'ocean_owner_decisions',
       'ocean_receipts',
       'ocean_reviews',
       'ocean_room_policies',

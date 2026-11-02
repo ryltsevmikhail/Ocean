@@ -1,10 +1,11 @@
-# Local runtime lifecycle, durable turns and observation
+# Local runtime lifecycle, durable turns and owner decisions
 
 One foreground Linux process owns the canonical private profile, SQLite recovery
 and the provider for shared room turns. Authenticated clients can submit a turn
 and reconnect to its persisted room history, run events and result. Explicit
 versioned cancellation is available to authenticated clients. The standard room
-TUI, desktop and owner decisions remain future delivery stages.
+TUI and desktop migrations remain future delivery stages. The runtime also serves
+exact coding approvals and text-only room review decisions.
 Existing CLI room commands still open the profile directly and report
 `owner_busy` while the shared runtime holds it. See the
 [shared-runtime plan](../ocean/shared-runtime.md) for the migration sequence.
@@ -123,8 +124,9 @@ both `turnId` and `runId` null.
 Submission commits before execution. Each fresh addressed turn gets one
 runtime-owned controller and completion promise. Duplicate submissions observe
 the existing receipt. Task-bound submissions require a coding adapter supplied
-by the trusted host. The foreground command currently refuses a fresh
-task-bound submit with `invalid_input` until the runtime decision adapter ships.
+by the trusted host. The foreground command uses the private registered project,
+task policy, sandbox qualification and runtime owner decision adapter. A room
+released for text-only continuation refuses fresh task-bound admission.
 
 Run reads expose `admitted_before_run` at version zero when a turn has been
 accepted and its TaskRun has yet to be created. Recovery marks interrupted
@@ -160,10 +162,10 @@ gaps within a returned page produce `resync_required`.
 An initial observation returns `kind: "snapshot"`, workspace/room IDs,
 `instanceId`, the committed `roomSeq` and an opaque cursor. Run observation
 also includes `snapshot` with the performer, admission phase, TaskRun status
-and version, result message ID and any unexpired pending coding decision IDs
-bound to the same workspace, room, run, task and bot. These IDs are read-only
-references. Room observation works for an empty room or an unaddressed group
-post. Room changes wake observers when committed history advances.
+and version, result message ID and unexpired pending owner decision IDs
+bound to the same workspace, room and run. Coding references also match the
+performer and coding task. Room observation works for an empty room or an unaddressed group
+post. Room observation also detects committed owner decision changes.
 
 Supply the cursor again to check for changes or wait up to 30000 ms.
 `changed` and `timeout` both include the current watermarks. `resync` supplies
@@ -196,6 +198,56 @@ run state. A lost stream can leave the run cancelling and the turn uncertain,
 with no committed cleanup. Actual usage for the same active attempt still
 settles during cancellation. An overrun commits the budget terminal event and
 retains the cancellation cause. The effect and room uncertainty remain visible.
+
+## Owner decisions and text-only continuation
+
+Both clients authenticate with the existing private profile capability. The model
+tool catalog contains project reads, exact writes and registered test presets.
+Decision endpoints are available through the owner socket only. Closing a client
+leaves a pending card available to other clients.
+
+| Wire method         | Node client           | Parameters and result                                                                                                                                                                                                             |
+| ------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `decisions.list`    | `listDecisions`       | Workspace and room, optional exclusive decision ID `after` and `limit` (default 50, maximum 200). Returns historical and pending card metadata.                                                                                   |
+| `decisions.get`     | `getDecision`         | Workspace, room, run and decision ID. Returns kind, status, version, SHA-256 `bindingDigest`, creation and expiry in Unix milliseconds, and preview length in UTF-16 code units.                                                  |
+| `decisions.preview` | `decisionPreview`     | Same reference plus a zero-based code-unit `offset` on the wire. Each response repeats the card and offset with up to 32768 code units of `text`. The SDK assembles the complete serialized JSON preview and verifies its digest. |
+| `decisions.resolve` | `resolveDecision`     | Same reference plus `expectedVersion`, `bindingDigest` and `choice` (`allow-once`, `deny`, or `cancel`). Returns the persisted winner.                                                                                            |
+| `reviews.get`       | `reviewRoom`          | Workspace and room. The SDK reads the exact scoped snapshot in bounded chunks. Wire requests include `offset` and, on subsequent chunks, the opaque review `version`.                                                             |
+| `reviews.continue`  | `requestContinuation` | Workspace, room, run, request ID, observed `reviewVersion` and nonempty `reason` (up to 2048 UTF-8 bytes). Creates or returns the bound continuation card. A competing request for the same held run returns `decision_pending`.  |
+| `reviews.result`    | `continuationApplied` | Decision reference. Returns the bound reference and `applied`. The SDK returns the boolean backed by the exact committed acknowledgement receipt.                                                                                 |
+
+Review, display the full card, then resolve its ID, version and digest. A coding
+card contains the exact operation preview and its workspace, room, bot, task,
+project, worktree, run, attempt, invocation, policy, limits, toolchain, operation
+and source hashes. A review card contains the original scoped snapshot, reason,
+request ID and `text_only` mode. JSON escaping preserves exact content. Render
+untrusted text safely in the client. The owner retains the full underlying
+review version, including global journal evidence. Remote review exposes a
+global count, an opaque version and effects scoped to this run. Any change to
+the global version invalidates a pending confirmation.
+
+A pending card starts at version 1. A single conditional update commits version
+2 before waking the operation. Terminal outcomes are `allowed`, `denied`,
+`cancelled`, `expired`, `invalidated` or `interrupted`. A stale version against
+a pending card returns `version_conflict`. A matching digest against a resolved
+card returns its current state. A different digest returns `binding_conflict`.
+The runtime clock enforces the existing 300000 ms lifetime and refuses a clock
+earlier than creation. Explicit operation cancellation wakes a pending waiter.
+Disconnecting an observer has no effect on the waiter.
+
+SQLite schema 11 adds owner decisions alongside the existing coding grants and
+journal. Startup retires orphaned pending cards. An allowed card records owner
+consent. Coding still rechecks the binding, registered sandbox, task membership,
+source and both leases before the approval transition and atomic consumption.
+A typed admission refusal before sandbox launch can settle a failed turn after
+the runtime verifies its committed phase. Unexpected qualification failures and
+unresolved work retain the owner on incomplete stop. The existing claim precedes execution. Each durable runtime has a fresh approval
+authority identity so previous allowed grants cannot be consumed after reopen.
+A continuation requires the original review version and the existing atomic room
+policy and receipt write. Use `continuationApplied` to distinguish an applied
+continuation from consent interrupted before that commit. Acknowledgement keeps
+the earlier outcome and billing unknown. No prior work is scheduled on reconnect
+or recovery.
 
 ## Safety and qualification limits
 

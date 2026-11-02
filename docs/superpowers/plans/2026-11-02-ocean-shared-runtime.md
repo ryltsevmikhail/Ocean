@@ -43,9 +43,9 @@ Paths below are planned, not claims of existing modules. Split modules as needed
 - `apps/cli/test-fixtures/local-runtime-*.ts`, process tests and PTY acceptance driver: synthetic provider/effect gates, persisted counters, separate client processes.
 - `examples/local-runtime-client.mjs`, `docs/integration/local-runtime.md`: desktop-compatible runnable protocol example, reproducible commands/evidence.
 
-Protocol methods: `hello`, `rooms.list`, `rooms.members`, `history.list`, `conversations.execute`, `turns.submit`, `receipts.get`, `runs.list`, `runs.get`, `runs.events`, `observe`, `runs.cancel`, `decisions.list`, `decisions.get`, `decisions.decide`, `runtime.status`, `runtime.stop`. Additional v1 methods are `coding.show`, `coding.diff`, `coding.pending`, `coding.inspectApply`, `reviews.room`, `reviews.run`, `reviews.acknowledge`. They expose existing authorized reads and exact text-only continuation with durable owner decision; never a generic function/path executor. Coding start/review/apply/reconcile-apply are explicitly offline maintenance operations in v1; they do not get mutation RPCs in this delivery.
+Original protocol sketch (implemented names and parameters are recorded in [the integration contract](../../integration/local-runtime.md)): `hello`, `rooms.list`, `rooms.members`, `history.list`, `conversations.execute`, `turns.submit`, `receipts.get`, `runs.list`, `runs.get`, `runs.events`, `observe`, `runs.cancel`, `decisions.list`, `decisions.get`, `decisions.decide`, `runtime.status`, `runtime.stop`. Additional v1 methods are `coding.show`, `coding.diff`, `coding.pending`, `coding.inspectApply`, `reviews.room`, `reviews.run`, `reviews.acknowledge`. They expose existing authorized reads and exact text-only continuation with durable owner decision; never a generic function/path executor. Coding start/review/apply/reconcile-apply are explicitly offline maintenance operations in v1; they do not get mutation RPCs in this delivery.
 
-`LocalRuntimeClient` provides those typed async methods, `close():void` detaches only. Submit input is existing DirectChatRequest data; receipt includes requestId, roomId, messageId/turnId and `runId:string|null`. Run snapshot includes committed version/state/result and pending decision references. `observe({workspaceId,roomId,runId?,cursor?,waitMs?})` returns the authoritative watermarks and a scoped cursor or explicit resync. Numeric history and event positions are paged separately. `decisions.decide({decisionId,expectedVersion,bindingHash,decision})` returns persisted winner/current conflict. Transport authenticates trusted client role; no caller owner boolean.
+`LocalRuntimeClient` provides those typed async methods, `close():void` detaches only. Submit input is existing DirectChatRequest data; receipt includes requestId, roomId, messageId/turnId and `runId:string|null`. Run snapshot includes committed version/state/result and pending decision references. `observe({workspaceId,roomId,runId?,cursor?,waitMs?})` returns the authoritative watermarks and a scoped cursor or explicit resync. Numeric history and event positions are paged separately. `decisions.resolve({workspaceId,roomId,runId,decisionId,expectedVersion,bindingDigest,choice})` returns persisted winner/current conflict. Transport authenticates trusted client role; no caller owner boolean.
 
 ## Task 1: Profile endpoint and explicit runtime lifecycle
 
@@ -75,7 +75,7 @@ qualified separately from actual stale-endpoint restart, retained for Tasks 6/8.
 
 ## Task 3: Run observation, reconnect and cancellation
 
-Implementation pending independent review. The wire method `observe` supplies room or run snapshots and an opaque, scope- and instance-bound cursor. `history.list`, `runs.events` and `runs.result` supply committed data. Task 6/8 still owns killed-listener restart and real entry-point qualification.
+Implementation and independent review completed through `579d858`. The wire method `observe` supplies room or run snapshots and an opaque, scope- and instance-bound cursor. `history.list`, `runs.events` and `runs.result` supply committed data. Task 6/8 still owns killed-listener restart and real entry-point qualification.
 
 **Files:** application room-runtime-runs; contracts snapshots/cursors; host dispatch/observation; client; process tests.
 
@@ -84,17 +84,21 @@ Implementation pending independent review. The wire method `observe` supplies ro
 - [x] RED tests: disconnect during stream, attach second process to same run, reconstruct history/result once; stale/unknown cursor causes explicit resync, bounded slow observer does not delay provider completion or retain unbounded output.
 - [x] Implement snapshot-first reconnect over existing committed events/history. Keep transient chunks optional and private tool data excluded. Runtime restart changes instance identity while durable run cursors remain interpretable.
 - [x] RED→GREEN cancellation request/retry/version conflict, provider failure, cleanup uncertain and client detach: only explicit cancel touches controller; never infer confirmed stop from acknowledgement.
-- [ ] Required gates; commit `feat: observe and cancel durable runs across local clients`; review.
+- [x] Required gates; commit `feat: observe and cancel durable runs across local clients`; review.
 
 ## Task 4: Runtime-owned durable decisions
+
+Implementation is pending independent review. Schema 11 persists owner cards and
+CAS outcomes. Shared coding and review ports are available through the SDK.
+The standard TUI migration remains Task 5.
 
 **Files:** application runtime-decision modules, coding-approval and room review owner adapters; domain decision types if needed; memory/SQLite store+migration; host/client decision methods; TUI decision presentation tests.
 
 **Produces:** durable decision identity/version/projection and CAS resolution; trusted runtime owner adapter for existing approval/review services, no UI-local authority.
 
-- [ ] RED two-client test: same exact preview/id/version; concurrent allow/deny resolves once; loser sees winner, stale version cannot create permission; effect count at most1.
-- [ ] Preserve binding/room/task/expiry300000ms/lease/current-source checks and existing consume+journal claim. Persist resolution before waking waiter; race disconnect, expiry, binding mutation and consumption.
-- [ ] Add transactional schema migration and memory/SQLite equivalence. Restart/restored allowed/pending/consumed decisions cannot revive grants or replay work. Do not rewrite old schema versions in place.
+- [x] RED two-client test: same exact preview/id/version; concurrent allow/deny resolves once; loser sees winner, stale version cannot create permission; effect count at most1.
+- [x] Preserve binding/room/task/expiry300000ms/lease/current-source checks and existing consume+journal claim. Persist resolution before waking waiter; race disconnect, expiry, binding mutation and consumption.
+- [x] Add transactional schema migration and memory/SQLite equivalence. Restart/restored allowed/pending/consumed decisions cannot revive grants or replay work. Do not rewrite old schema versions in place.
 - [ ] Cover all existing room TUI coding and review owner prompts explicitly; model cannot invoke decision endpoints or acquire owner credential. Required gates; commit `feat: persist owner decisions independently of clients`; review.
 
 ## Task 5: Standard room TUI as a remote client
@@ -139,9 +143,10 @@ Implementation pending independent review. The wire method `observe` supplies ro
 
 ## Execution state
 
-Shared-runtime planning only. The existing Desktop UI is imported from `1c8d8c3`;
-its worker-per-request GUI qualification is separate from this future contract.
-No shared-runtime product code or shared-runtime GUI acceptance is claimed here.
+Tasks 1–3 passed independent review. Task 4 implements runtime-owned decisions
+and awaits independent review. The room TUI, CLI and Desktop entry-point migrations,
+killed-listener restart and shared-runtime release acceptance remain open.
+The existing Desktop UI was imported from `1c8d8c3`.
 Ocean1.1 previous checkpoint: `5d032ae`, 1032 passed/41 skipped, build/format and
 14 native tests recorded; these are previous coding recovery evidence, not proof
 of shared-runtime acceptance. Workpackage7.5 was stopped before implementation:

@@ -25,6 +25,9 @@ import {
   ownsLocalRuntimePath,
   unlinkOwnedLocalRuntimePath,
 } from '@runnets/tools-node';
+import { RuntimeDecisions } from './decisions.js';
+import { registeredCodingTools } from '../ocean/coding-project-host.js';
+import { LOCAL_DECISION_METHODS } from '@runnets/contracts';
 import { RuntimeTurns } from './turns.js';
 import { createProviderFromEnv } from '../engine/provider.js';
 import type { RuntimeOptions } from '../runtime.js';
@@ -40,7 +43,7 @@ export interface LocalRuntimeHost {
 export interface LocalRuntimeHostOptions {
   readonly profile: string;
   /** Host-only composition. Providers and coding authority never arrive over the wire. */
-  readonly codingTools?: NonNullable<RuntimeOptions['codingTools']>;
+  readonly codingTools?: Pick<NonNullable<RuntimeOptions['codingTools']>, 'sandbox'>;
   readonly provider?: ProviderPort | null;
   /** Additional host supervision joins runtime-owned execution before SQLite close. */
   readonly drain?: () => Promise<'settled' | 'uncertain'>;
@@ -59,11 +62,13 @@ export async function startLocalRuntime(
     throw Error('invalid_input');
   const paths = localRuntimePaths(options.profile);
   assertNotRestored(paths.profile);
-  const runtime = openOceanProfile(
-    paths.profile,
-    false,
-    options.codingTools ? { codingTools: options.codingTools } : {},
-  );
+  let decisions: RuntimeDecisions;
+  const runtime = openOceanProfile(paths.profile, false, {
+    codingTools: {
+      sandbox: (options.codingTools ?? registeredCodingTools(paths.profile)).sandbox,
+      owner: (turn, signal) => decisions.coding(turn, signal),
+    },
+  });
   let transport: Awaited<ReturnType<typeof listenLocalRuntime>> | undefined;
   let socketOwned: Stats | undefined;
   let descriptorOwned: Stats | undefined;
@@ -71,6 +76,7 @@ export async function startLocalRuntime(
     // Refuse stale paths under ownership before recovery or publication; never guess a takeover.
     const recovery = await runtime.ready;
     prepareLocalRuntimePaths(paths);
+    decisions = new RuntimeDecisions(runtime.ownerDecisions, runtime.reviews);
     const identity: LocalRuntimeIdentity = {
       protocol: 1,
       profileId: paths.profileId,
@@ -82,6 +88,7 @@ export async function startLocalRuntime(
         'receipts.get',
         'runs.get',
         ...LOCAL_ROOM_METHODS,
+        ...LOCAL_DECISION_METHODS,
       ],
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
@@ -120,6 +127,7 @@ export async function startLocalRuntime(
                 const [jobs, extra] = await Promise.all([
                   turns.drain(),
                   options.drain ? options.drain() : 'settled',
+                  decisions.drain(),
                 ]);
                 return jobs === 'settled' && extra === 'settled' ? 'settled' : 'uncertain';
               }, drainDeadlineMs)) !== 'settled'
@@ -158,7 +166,9 @@ export async function startLocalRuntime(
       dispatch: (method, params, detached) =>
         databaseClosed
           ? { error: { code: 'runtime_draining' } }
-          : turns.dispatch(method, params, detached),
+          : method.startsWith('decisions.') || method.startsWith('reviews.')
+            ? decisions.dispatch(method, params)
+            : turns.dispatch(method, params, detached),
       status: () => host.status(),
       stop: () => host.stop(),
     });

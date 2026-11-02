@@ -28,7 +28,8 @@ import { REVIEW_TABLES, migrateReviews } from './review-schema.js';
 
 import { readText } from './rows.js';
 
-export const SCHEMA_VERSION = 10;
+import { migrateOwnerDecisions } from './owner-decisions.js';
+export const SCHEMA_VERSION = 11;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -210,6 +211,9 @@ function initializeSchemaTransaction(db: DatabaseSync): void {
     else
       for (const table of CODING_APPLY_TABLES)
         if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
+    if (previousVersion < 11) migrateOwnerDecisions(db);
+    else if (!existing.has('ocean_owner_decisions'))
+      throw Error('database schema is missing table ocean_owner_decisions');
     if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
       throw new Error('Schema foreign key check failed');
     db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(SCHEMA_VERSION));

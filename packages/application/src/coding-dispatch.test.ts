@@ -69,6 +69,8 @@ it.each(['allow-once', 'deny', 'cancel', 'stale', 'failure'] as const)(
         },
       },
       {
+        pending: async () => [],
+        recover: async () => {},
         claim: async () => {
           throw Error('must not claim twice');
         },
@@ -90,3 +92,49 @@ it.each(['allow-once', 'deny', 'cancel', 'stale', 'failure'] as const)(
     }
   },
 );
+
+it('refuses changed source before allowing a coding approval even when consume is never reached', async () => {
+  const values = new Map<string, CodingApproval>();
+  const approvals = new CodingApprovalService({
+    now: () => 100,
+    restored: false,
+    admit: () => true,
+    store: {
+      atomic: (work) =>
+        work({
+          approval: (id) => values.get(id) ?? null,
+          putApproval: (value) => {
+            values.set(value.id, value);
+          },
+          claimApprovalOperation: () => {
+            throw Error('must not claim');
+          },
+        }),
+    },
+  });
+  await dispatchCodingOperation(
+    {
+      approvalId: 'stale',
+      binding,
+      currentBinding: async () => ({ ...binding, sourceTreeHash: 'other' }),
+      tool: {
+        kind: 'edit',
+        title: 'write',
+        preview: 'exact',
+        execute: async () => {
+          throw Error('must not execute');
+        },
+      },
+    },
+    approvals,
+    { decide: async () => 'allow-once' },
+    {
+      claim: async () => false,
+      settle: async () => {},
+      pending: async () => [],
+      recover: async () => {},
+    },
+    new AbortController().signal,
+  );
+  expect(values.get('stale')?.status).not.toBe('allowed');
+});

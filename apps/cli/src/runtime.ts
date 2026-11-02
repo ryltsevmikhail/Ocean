@@ -26,6 +26,7 @@ import {
   DirectChatService,
   ChatReviewService,
   reconcileInterrupted,
+  type OwnerDecisionStore,
   type Clock,
   type CodingTestEvidenceStore,
   type CommandDedupPort,
@@ -35,6 +36,7 @@ import {
 } from '@runnets/application';
 import { openSqliteStore, ownSqliteRuntime } from '@runnets/store-sqlite';
 import {
+  InMemoryOwnerDecisions,
   InMemoryCommandDedup,
   InMemoryCodingStore,
   InMemoryCodingApprovalStore,
@@ -48,6 +50,7 @@ import {
 
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
+  readonly ownerDecisions: OwnerDecisionStore;
   openRoomRuns?(): RoomRuntimeRuns;
   readonly coding: CodingTaskService;
   readonly codingReview?: CodingReviewService;
@@ -126,6 +129,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       clock: deps.clock,
     };
     return {
+      ownerDecisions: new InMemoryOwnerDecisions(),
       service,
       coding: new CodingTaskService(codingDeps),
       codingApprovals: new CodingApprovalService({
@@ -170,6 +174,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     };
     const coding = new CodingTaskService(codingDeps);
     const codingApprovals = new CodingApprovalService({
+      authorityId: randomUUID(),
       store: store.codingApprovals,
       now: () => deps.clock.now().getTime(),
       admit: (binding, tx) => codingApprovalAdmission(binding, tx, codingDeps),
@@ -202,6 +207,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     });
     return {
       service,
+      ownerDecisions: store.ownerDecisions,
       openRoomRuns: () =>
         new RoomRuntimeRuns(
           store.openRoomReads(() => deps.clock.now().getTime()),

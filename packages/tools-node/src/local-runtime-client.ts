@@ -21,7 +21,8 @@ import {
 import { readLocalRuntimeDescriptor } from './local-runtime-paths.js';
 import { LocalRuntimeFrames, writeLocalRuntimeFrame } from './local-runtime-framing.js';
 import { localRoomClient, validatedParams, type LocalRoomClient } from './local-room-client.js';
-export interface LocalRuntimeClient extends LocalRoomClient {
+import { localDecisionClient, type LocalDecisionClient } from './local-decision-client.js';
+export interface LocalRuntimeClient extends LocalRoomClient, LocalDecisionClient {
   readonly identity: LocalRuntimeIdentity;
   submit(request: LocalTurnRequest): Promise<LocalTurnReceipt>;
   getReceipt(query: LocalReceiptQuery): Promise<LocalTurnReceipt | null>;
@@ -105,6 +106,7 @@ export async function connectLocalRuntime(options: {
       throw Error('identity_mismatch');
     return {
       identity,
+      ...localDecisionClient(peer.request.bind(peer)),
       ...localRoomClient(peer.request.bind(peer), identity),
       async submit(input) {
         const request = validatedParams(input, isLocalTurnRequest);

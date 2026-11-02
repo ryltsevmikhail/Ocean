@@ -150,8 +150,24 @@ it.each(['fresh', 'retry', 'changed binding'])(
       limitsHash: 'l',
       toolchainHash: 't',
     };
-    for (let i = 0; i < 201; i++)
+    for (let i = 0; i < 201; i++) {
       expect(approvals.request('decision-' + i, binding, 'synthetic preview').ok).toBe(true);
+      const createdAt = Date.now();
+      store.ownerDecisions.insert(
+        {
+          ...run,
+          decisionId: 'decision-' + i,
+          kind: 'write',
+          createdAt,
+          expiresAt: createdAt + 300000,
+          status: 'pending',
+          version: 1,
+          previewLength: 5,
+          bindingDigest: 'a'.repeat(64),
+        },
+        'exact',
+      );
+    }
     await expect(client.getRun(run)).rejects.toThrow('query_limit');
     if (mode === 'changed binding') {
       for (const changed of [

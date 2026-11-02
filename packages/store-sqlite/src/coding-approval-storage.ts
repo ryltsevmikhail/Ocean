@@ -1,3 +1,4 @@
+import { changesetStorage } from './changeset-storage.js';
 import { SqliteToolJournal } from './tool-journal.js';
 import { task as decodeTask } from './coding-store.js';
 import type { DatabaseSync } from 'node:sqlite';
@@ -27,6 +28,7 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
         return value;
       };
       return work({
+        worktree: (id) => changesetStorage(db).worktree(id),
         task: (id) => decodeTask(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
         participates: (ws, room, bot) =>
           db

@@ -53,6 +53,17 @@ it('requires authoritative task scope current membership live lease and no unres
     member = true;
   const tx = {
     task: () => task,
+    worktree: () => ({
+      taskId: task.id,
+      workspaceId: task.workspaceId,
+      root: '/wt',
+      branch: 'task',
+      gitCommonDir: '/p/.git',
+      projectRoot: '/p',
+      baseCommit: task.baseCommit,
+      state: 'ready' as const,
+      lease: { ...task.lease, projectRoot: '/wt' },
+    }),
     participates: () => member,
     approval: () => null,
     putApproval: () => {},
@@ -70,8 +81,21 @@ it('requires authoritative task scope current membership live lease and no unres
     journal: {
       claim: async () => false,
       settle: async () => {},
+      pending: async () => [],
+      recover: async () => {},
       inspectPending: () =>
-        pending ? [{ id: 'unknown', tool: 'command', outcome: 'uncertain' as const }] : [],
+        pending
+          ? [
+              {
+                id: 'unknown',
+                taskRunId: 'run',
+                attemptId: 'a',
+                fingerprint: 'f',
+                tool: 'command',
+                outcome: 'uncertain' as const,
+              },
+            ]
+          : [],
     },
   };
   expect(codingApprovalAdmission(binding, tx, deps)).toBe(true);

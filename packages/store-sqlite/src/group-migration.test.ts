@@ -82,7 +82,7 @@ it('preserves M2 replies, turns, TaskRun events and exact retry identity when mi
   const room = c.conversations.room('ws_test', '0002');
   initializeSchema(c.db);
   expect(c.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '10',
+    '11',
   );
   expect(snapshot()).toEqual(before);
   expect(c.db.prepare('SELECT review_id FROM ocean_chat_turns').get()?.['review_id']).toBeNull();

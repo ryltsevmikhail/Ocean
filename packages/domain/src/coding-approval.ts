@@ -17,6 +17,7 @@ export interface CodingApprovalBinding {
   readonly toolchainHash: string;
 }
 export interface CodingApproval {
+  readonly authorityId?: string;
   readonly id: string;
   readonly binding: CodingApprovalBinding;
   readonly preview: string;

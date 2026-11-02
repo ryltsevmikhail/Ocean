@@ -1,3 +1,4 @@
+import { SqliteOwnerDecisions } from './owner-decisions.js';
 import { SqliteCodingApplyResolutionStore } from './coding-apply-resolution.js';
 import type { CodingApplyResolutionStore } from '@runnets/application';
 import { SqliteCodingApplyStore } from './coding-apply-storage.js';
@@ -19,6 +20,7 @@ import type { CodingApprovalStore, CodingStore } from '@runnets/application';
  */
 
 import type {
+  OwnerDecisionStore,
   CommandDedupPort,
   EventLogPort,
   IdGenerator,
@@ -50,6 +52,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  readonly ownerDecisions: OwnerDecisionStore;
   openRoomReads(now: () => number): RoomRunReadPort;
   readonly coding: CodingStore;
   readonly codingApplications: CodingApplyStore;
@@ -95,6 +98,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
   return {
+    ownerDecisions: new SqliteOwnerDecisions(db),
     openRoomReads: (now) => roomRuntimeReads(db, now),
     coding: new SqliteCodingStore(db),
     codingApplications: new SqliteCodingApplyStore(db),

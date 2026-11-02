@@ -26,7 +26,7 @@ export async function dispatchCodingOperation(
   const recordResult = operation.recordResult?.bind(operation);
   const requested = approvals.request(approvalId, binding, preview);
   if (!requested.ok) return { isError: true, output: requested.error.code };
-  const decision = await approvals.decide(approvalId, binding, owner);
+  const decision = await approvals.decide(approvalId, binding, owner, currentBinding);
   signal.throwIfAborted();
   if (!decision.ok || decision.value.status !== 'allowed')
     return { isError: true, output: 'approval_required' };

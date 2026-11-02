@@ -1,3 +1,4 @@
+import { SqliteOwnerDecisions } from './owner-decisions.js';
 import { expect, it } from 'vitest';
 import { openDatabase } from './schema.js';
 import { roomRuntimeReads } from './room-runtime-reads.js';
@@ -43,6 +44,20 @@ it('projects the exact run’s unexpired pending decision IDs and redacts restri
       ['wrong-task', { taskId: 'other' }, now + 300000, 'pending'],
       ['wrong-bot', { botId: 'other' }, now + 300000, 'pending'],
     ] as const) {
+      new SqliteOwnerDecisions(db).insert(
+        {
+          ...binding,
+          decisionId: id,
+          kind: 'write',
+          createdAt: expiresAt - 300000,
+          expiresAt,
+          previewLength: 5,
+          bindingDigest: 'a'.repeat(64),
+          status: 'pending',
+          version: 1,
+        },
+        'exact',
+      );
       db.prepare('INSERT INTO ocean_coding_approvals VALUES(?,?)').run(
         id,
         JSON.stringify({

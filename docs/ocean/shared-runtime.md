@@ -1,8 +1,8 @@
 # Shared local Ocean runtime
 
 Status: authenticated lifecycle, durable turn admission and scoped receipt/run
-reads, runtime observation and versioned explicit cancellation are implemented.
-Owner decisions and client migration remain proposed. See [implemented commands, methods and limits](../integration/local-runtime.md).
+reads, runtime observation, versioned explicit cancellation, durable coding decisions
+and room-scoped text-only review continuation are implemented. Client migrations remain proposed. See [implemented commands, methods and limits](../integration/local-runtime.md).
 Owner request on 2026-11-02 supersedes
 continuing the remaining coding-backup work as the immediate priority. Ocean 1.1
 stages 1–6 and reviewed stage-7 work through `5d032ae` remain implemented; their
@@ -36,7 +36,8 @@ layers, conversation model and recovery semantics rather than copying Rust APIs.
 - `createRuntime` owns SQLite and recovers chat publication, coding apply and the
   effect journal. Ownership must remain exclusive before exposing ready state.
 - Coding approvals persist exact bindings, expire after 300000ms and atomically
-  transition/consume. The owner callback is currently host/UI-local.
+  transition/consume. The shared host resolves an authenticated durable decision.
+  The legacy room TUI still binds its local owner callback until Task 5.
 - Normal Ocean commands open the profile themselves. Existing ACP has its own
   stdio lifecycle and must keep its advertised protocol and permissions.
 

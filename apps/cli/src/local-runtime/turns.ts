@@ -1,3 +1,4 @@
+import { CodingTurnRefusal } from '../coding-turn-factory.js';
 import type { DirectChatService, ProviderPort, RoomRuntimeRuns } from '@runnets/application';
 import { isLocalReceiptQuery, isLocalTurnRequest } from '@runnets/contracts';
 
@@ -8,6 +9,7 @@ type Settlement = 'settled' | 'uncertain';
 export class RuntimeTurns {
   readonly #jobs = new Map<string, { controller: AbortController; settled: Promise<void> }>();
   readonly #queries: RuntimeQueries;
+  readonly #runs: RoomRuntimeRuns;
   #uncertain = false;
   #draining = false;
   readonly #chat: DirectChatService;
@@ -18,6 +20,7 @@ export class RuntimeTurns {
     runs: RoomRuntimeRuns,
     instance: string,
   ) {
+    this.#runs = runs;
     this.#queries = new RuntimeQueries(runs, instance);
     this.#chat = chat;
     this.#provider = provider;
@@ -52,7 +55,19 @@ export class RuntimeTurns {
               (turn) => {
                 if (turn.status === 'uncertain') this.#uncertain = true;
               },
-              () => {
+              (error: unknown) => {
+                // Only a proven pre-launch refusal AND its persisted failed phase permit close.
+                try {
+                  if (
+                    error instanceof CodingTurnRefusal &&
+                    receipt.runId &&
+                    this.#runs.reads.cancelTarget({ ...receipt, runId: receipt.runId })
+                      ?.turnStatus === 'failed'
+                  )
+                    return;
+                } catch {
+                  /* unreadable authoritative state remains uncertain */
+                }
                 this.#uncertain = true;
               },
             )

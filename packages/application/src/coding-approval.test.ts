@@ -131,3 +131,32 @@ it('checks authority within the transaction for request decision and consumption
   expect(service.consume('approval', binding).ok).toBe(true);
   expect(checks).toBe(4);
 });
+
+it('a newly opened runtime cannot decide or consume an earlier runtime approval', async () => {
+  const values = new Map<string, CodingApproval>();
+  const service = (authorityId: string) =>
+    new CodingApprovalService({
+      authorityId,
+      now: () => 100,
+      restored: false,
+      admit: () => true,
+      store: {
+        atomic: (work) =>
+          work({
+            approval: (id) => values.get(id) ?? null,
+            putApproval: (value) => {
+              values.set(value.id, value);
+            },
+            claimApprovalOperation: () => true,
+          }),
+      },
+    });
+  const first = service('first'),
+    next = service('next');
+  const allow = { decide: async () => 'allow-once' as const };
+  first.request('pending', binding, 'patch');
+  first.request('allowed', binding, 'patch');
+  await first.decide('allowed', binding, allow);
+  expect((await next.decide('pending', binding, allow)).ok).toBe(false);
+  expect(next.consume('allowed', binding).ok).toBe(false);
+});

@@ -43,7 +43,13 @@ export class RuntimeObservers {
         if (run && !snapshot) throw Error('unknown_run');
         const roomSeq = this.#read.roomSequence(q);
         const projection = createHash('sha256')
-          .update(JSON.stringify([snapshot?.turnStatus, snapshot?.pendingDecisionIds]))
+          .update(
+            JSON.stringify([
+              snapshot?.turnStatus,
+              snapshot?.pendingDecisionIds,
+              run ? undefined : this.#read.decisionRevision?.(q),
+            ]),
+          )
           .digest('base64url');
         const version = snapshot?.version ?? 0;
         const mark = [version, roomSeq, projection].join('.');

@@ -7,7 +7,7 @@ it('migrates schema 9 application receipts atomically and refuses a missing curr
   try {
     initializeSchema(db);
     db.exec(
-      "DROP TABLE ocean_coding_applications; UPDATE meta SET value='9' WHERE key='schema_version'",
+      "DROP TABLE ocean_owner_decisions; DROP TABLE ocean_coding_applications; UPDATE meta SET value='9' WHERE key='schema_version'",
     );
     db.exec('CREATE TABLE ocean_coding_applications(collision TEXT)');
     expect(() => initializeSchema(db)).toThrow();
@@ -18,7 +18,7 @@ it('migrates schema 9 application receipts atomically and refuses a missing curr
     initializeSchema(db);
     expect(db.prepare('SELECT * FROM ocean_coding_applications').all()).toEqual([]);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '10',
+      '11',
     );
     db.exec('DROP TABLE ocean_coding_applications');
     expect(() => initializeSchema(db)).toThrow('missing table ocean_coding_applications');

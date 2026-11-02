@@ -66,6 +66,8 @@ export function admitChat(
       return conversationFailure('workspace_conflict');
     const room = tx.room(request.roomId);
     if (room === null) return conversationFailure('unknown_room');
+    if (request.taskId !== undefined && tx.roomPolicy(room.id)?.mode === 'text_only')
+      return conversationFailure('recovery_required');
     const address = roomAddress(request.text, request.to);
     if (!address.ok) return address;
     const memberIds = room.kind === 'direct' ? [room.botId] : room.botIds;

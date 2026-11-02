@@ -52,6 +52,23 @@ export class ChatReviewService {
     });
     return id === null ? conversationFailure('review_unavailable') : this.review(workspaceId, id);
   }
+  receipt(
+    workspaceId: string,
+    roomId: string,
+    taskRunId: string,
+    requestId: string,
+  ): ChatReview | null {
+    return this.#deps.store.atomic((tx) => {
+      const reply = tx.receipt(requestId)?.reply;
+      if (reply?.kind !== 'review') return null;
+      const review = reply.data;
+      return review.workspaceId === workspaceId &&
+        review.roomId === roomId &&
+        review.taskRunId === taskRunId
+        ? review
+        : null;
+    });
+  }
   async acknowledge(
     submitted: AcknowledgeChatInput,
     approval: ReviewApprovalPort,

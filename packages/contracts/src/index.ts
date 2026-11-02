@@ -10,3 +10,4 @@ export * from './acp.js';
 export * from './local-runtime.js';
 export * from './local-runtime-turns.js';
 export * from './local-runtime-queries.js';
+export * from './local-runtime-decisions.js';

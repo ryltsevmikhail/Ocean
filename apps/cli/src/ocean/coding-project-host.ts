@@ -1,3 +1,4 @@
+import { CodingTurnRefusal } from '../coding-turn-factory.js';
 import { mkdir, realpath, lstat } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import type { RuntimeOptions } from '../runtime.js';
@@ -16,7 +17,7 @@ export function registeredCodingTools(
         !task.worktreeRoot ||
         JSON.stringify(project.testPresets) !== JSON.stringify(task.policy.testPresets)
       )
-        throw Error('project registration does not match task policy');
+        throw new CodingTurnRefusal('project registration does not match task policy');
       for (const mount of project.mounts) {
         if (!mount.target.startsWith('/workspace/')) continue;
         const destination = join(task.worktreeRoot, relative('/workspace', mount.target));

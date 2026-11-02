@@ -17,6 +17,13 @@ import {
   type SandboxOptions,
 } from '@runnets/tools-node';
 
+// Raised only by host admission checks before launching any sandbox or provider.
+export class CodingTurnRefusal extends ToolError {
+  constructor(message: string) {
+    super('coding_denied', message);
+  }
+}
+
 export interface CodingTurnFactoryDeps {
   readonly store: CodingStore;
   readonly evidence: CodingTestEvidenceStore;
@@ -31,7 +38,7 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
   return {
     async forTurn(turn: ChatTurn, signal: AbortSignal): Promise<CodingTurnTools> {
       signal.throwIfAborted();
-      if (!turn.codingTaskId) throw new ToolError('coding_denied', 'explicit task required');
+      if (!turn.codingTaskId) throw new CodingTurnRefusal('explicit task required');
       const access = {
         taskId: turn.codingTaskId,
         workspaceId: turn.workspaceId,
@@ -41,20 +48,26 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
         capability: 'project_read' as const,
       };
       const authorized = () => deps.tasks.authorize(access).ok;
-      if (!authorized()) throw new ToolError('coding_denied', 'task read admission refused');
+      const admission = deps.tasks.authorize(access);
+      if (!admission.ok) {
+        if (admission.error.code === 'recovery_required')
+          throw new ToolError('coding_denied', 'coding recovery required');
+        throw new CodingTurnRefusal('task read admission refused');
+      }
       const resolved = deps.store.atomic((tx) => ({
         task: tx.task(access.taskId),
         worktree: tx.worktree(access.taskId),
       }));
       if (!resolved.task || resolved.worktree?.state !== 'ready')
-        throw new ToolError('coding_denied', 'ready worktree required');
+        throw new CodingTurnRefusal('ready worktree required');
       const task = resolved.task,
         worktree = resolved.worktree;
       const snapshots = new GitCodingSnapshots();
       const snapshot = async () => (await snapshots.capture(task, worktree)).afterTreeHash;
+      const sandbox = await deps.sandbox(task);
       const session = await createCodingOperationSession({
         task,
-        sandbox: await deps.sandbox(task),
+        sandbox,
         snapshot,
         recordEvidence: (value) => deps.evidence.put(value),
         scope: {
@@ -77,7 +90,18 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
         nextId: () => randomUUID(),
         admit: () => authorized(),
         read: (call, signal) => session.read(call, signal),
-        prepare: (id, call, context) => session.prepare(id, call, context.attemptId),
+        prepare: async (id, call, context) => {
+          const operation = await session.prepare(id, call, context.attemptId);
+          return {
+            ...operation,
+            currentBinding: async () => {
+              const registered = await deps.sandbox(task);
+              if (JSON.stringify(registered) !== JSON.stringify(sandbox))
+                throw new ToolError('coding_denied', 'registration changed');
+              return operation.currentBinding();
+            },
+          };
+        },
       });
     },
   };

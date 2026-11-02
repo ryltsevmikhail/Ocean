@@ -80,20 +80,20 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
     if (!taskStatus || (!event && version !== 0)) throw Error('invalid_committed_state');
     const task = readNullableText(t, 'task');
     const at = now();
-    const pendingDecisionIds =
-      task === null
-        ? []
-        : db
-            .prepare(
-              `SELECT id FROM ocean_coding_approvals WHERE
-      json_extract(payload,'$.binding.runId')=? AND json_extract(payload,'$.binding.workspaceId')=?
-      AND json_extract(payload,'$.binding.roomId')=? AND json_extract(payload,'$.binding.botId')=?
-      AND json_extract(payload,'$.binding.taskId')=? AND json_extract(payload,'$.status')='pending'
-      AND json_extract(payload,'$.expiresAt')>? AND json_extract(payload,'$.createdAt')<=?
-      ORDER BY json_extract(payload,'$.expiresAt'), id LIMIT 201`,
-            )
-            .all(runId, workspaceId, roomId, performerId, task, at, at)
-            .map((row) => readText(row, 'id'));
+    const pendingDecisionIds = db
+      .prepare(
+        `SELECT d.decisionId AS id FROM ocean_owner_decisions d
+      WHERE d.workspaceId=? AND d.roomId=? AND d.runId=? AND d.status='pending'
+      AND d.createdAt<=? AND d.expiresAt>? AND (d.kind='continue-text-only' OR EXISTS (
+        SELECT 1 FROM ocean_coding_approvals a WHERE a.id=d.decisionId AND
+        json_extract(a.payload,'$.binding.workspaceId')=d.workspaceId AND
+        json_extract(a.payload,'$.binding.roomId')=d.roomId AND json_extract(a.payload,'$.binding.runId')=d.runId AND
+        json_extract(a.payload,'$.binding.botId')=? AND json_extract(a.payload,'$.binding.taskId')=? AND
+        json_extract(a.payload,'$.status')='pending'))
+      ORDER BY d.decisionId LIMIT 201`,
+      )
+      .all(workspaceId, roomId, runId, at, at, performerId, task)
+      .map((row) => readText(row, 'id'));
     if (pendingDecisionIds.length > 200) throw Error('query_limit');
     return {
       workspaceId,
@@ -136,6 +136,15 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
     return row !== undefined && readInteger(row, 'n') === through - first + 1;
   }
   return {
+    decisionRevision: ({ workspaceId, roomId }) =>
+      readInteger(
+        db
+          .prepare(
+            'SELECT coalesce(max(revision),0) AS n FROM ocean_owner_decisions WHERE workspaceId=? AND roomId=?',
+          )
+          .get(workspaceId, roomId)!,
+        'n',
+      ),
     hasPositions,
     cancelTarget,
     run,

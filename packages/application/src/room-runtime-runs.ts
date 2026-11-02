@@ -44,6 +44,7 @@ export interface RoomRunReadPort {
   cancelTarget(query: RunQuery): Pick<RoomRunState, 'turnStatus' | 'version'> | null;
   run(query: RunQuery): RoomRunState | null;
   hasPositions(scope: ChatRoomScope | RunQuery, after: number, through: number): boolean;
+  decisionRevision?(scope: ChatRoomScope): number;
   roomSequence(scope: ChatRoomScope): number;
   events(query: RunQuery, after: number, limit: number): readonly RoomRunEvent[];
   result(query: RunQuery): ConversationMessage | null;

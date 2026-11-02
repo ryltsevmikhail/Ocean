@@ -43,7 +43,14 @@ export interface LocalRoomClient {
   cancelRun(query: LocalCancelRequest): Promise<LocalCancelReceipt>;
 }
 export function validatedParams<T>(input: unknown, valid: (value: unknown) => value is T): T {
-  if (!localRuntimeRecord(input)) throw Error('invalid_params');
+  if (
+    !localRuntimeRecord(input) ||
+    'toJSON' in input ||
+    Reflect.ownKeys(input).some(
+      (k) => typeof k !== 'string' || !Object.prototype.propertyIsEnumerable.call(input, k),
+    )
+  )
+    throw Error('invalid_params');
   const snapshot = { ...input };
   if (!valid(snapshot)) throw Error('invalid_params');
   return snapshot;
