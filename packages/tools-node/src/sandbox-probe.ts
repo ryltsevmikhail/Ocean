@@ -29,10 +29,16 @@ assert.equal(fs.existsSync('/sys/fs/cgroup'),false);
 assert.equal(fs.existsSync('/run/user'),false);
 assert.equal(fs.existsSync('/home/ryltsevmg'),false);
 assert.throws(()=>fs.writeFileSync('/usr/ocean-canary','x'));
+const child=require('node:child_process').spawn('/toolchain/node',
+  ['-e','setInterval(()=>{},100)'],{detached:true,stdio:'ignore'});
+child.on('error',()=>process.exit(4));
+child.on('spawn',()=>{
+child.unref();
 const net=require('node:net'),s=net.connect({host:'1.1.1.1',port:443});
 s.on('connect',()=>process.exit(2));
 s.on('error',()=>process.exit(0));
 setTimeout(()=>process.exit(3),500);
+});
 `;
 export async function probeSandbox(options: SandboxOptions): Promise<SandboxQualification> {
   const platform = process.platform + '/' + process.arch;

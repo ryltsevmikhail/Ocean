@@ -315,3 +315,19 @@ before this check and passes afterward. This check narrows the concurrent
 writer interval; a fully arbitrary writer can still act between the final
 check and unlink, so exclusive ownership and recovery qualification remain
 unresolved rather than being inferred from this test.
+
+## Current ownership boundary
+
+Independent review clarified that the final displaced-file check/unlink interval
+requires a noncooperating trusted host writer with an open descriptor. Task
+execution requires an exclusively runtime-owned task worktree, serialized Ocean
+effects and confirmed cleanup before the next effect. Under this precondition,
+the final interval is outside the worker threat model and does not by itself
+block stage 3. Arbitrary same-UID host editors must not modify an active task
+worktree. Earlier notes describing arbitrary-writer CAS as a qualification
+requirement are superseded by this explicit boundary. Detected conflicts still
+retain evidence and remain uncertain.
+
+The runtime probe now starts a live detached child before its network canary
+exits. Qualification requires confirmed cgroup cleanup for this descendant-bearing
+execution, in addition to filesystem/network assertions.
