@@ -24,7 +24,7 @@ transaction. Duplicate commands return the original receipt before checking the
 current aggregate version. Reusing an id with another task, actor, expected
 version, type or payload returns an error. In-memory logs use the same semantics.
 
-Schema 4 migrates versions 1–3 transactionally, retains conversation history and task records, and adds group rooms and untargeted shared messages. See [group chats](group-chat.md). Migration refuses a live or unverifiable runtime owner. See [direct history](conversations.md). The legacy compatibility extensions still include a nullable `request_binding` receipt column,
+Schema 5 migrates versions 1–4 transactionally, retains conversation history and task records, and retains group rooms, shared messages and all effect claims. It adds audited text-only continuation references and room policies. See [recovery](recovery.md). See [group chats](group-chat.md). Migration refuses a live or unverifiable runtime owner. See [direct history](conversations.md). The legacy compatibility extensions still include a nullable `request_binding` receipt column,
 `tool_invocations_v2`, ownership metadata and durable identity counters.
 Existing rows remain intact. Old receipts without request bindings cannot prove
 which request committed: retries fail closed rather than returning unverifiable
@@ -57,8 +57,7 @@ and the task CLI prints a recovery notice.
 Legacy task/ACP conversation history, sessions, approvals and read snapshots are process-local. Persistent Ocean rooms use [the M2 path](direct-chat.md).
 They are not reconstructed from lifecycle events. Recovered tasks cannot accept
 continuation with invented empty history. `/new` starts a separate conversation;
-it does not clear unresolved effects. There is no automatic or interactive
-mechanism to certify an unknown process tree stopped or resolve uncertain effects.
+it does not clear unresolved effects. There is no mechanism to certify an unknown process tree stopped. Ocean room acknowledgement only permits new text-only messages and preserves uncertain effects.
 Operator inspection is required; preserve the database for reconciliation.
 
 ## Checkpoints

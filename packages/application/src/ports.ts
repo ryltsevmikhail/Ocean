@@ -42,6 +42,7 @@ export type AppendOutcome =
 export interface EventLogPort {
   /** When present, events and request-bound receipts share one commit boundary. */
   readonly commands?: CommandCommitPort;
+  headVersion?(taskRunId: TaskRunId): number;
   listTaskRuns?(): Promise<readonly TaskRunId[]>;
   load(taskRunId: TaskRunId): Promise<readonly EventEnvelope[]>;
   append(

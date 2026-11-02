@@ -1,7 +1,8 @@
+import { RoomReviewController } from './room-review.js';
 import { randomUUID } from 'node:crypto';
 import { taskRunId, type TaskRunId } from '@runnets/domain';
 import type { SessionUpdate } from '@runnets/contracts';
-import type { ProviderPort, TurnOutcome } from '@runnets/application';
+import type { ReviewApprovalPort, ProviderPort, TurnOutcome } from '@runnets/application';
 import type { Runtime } from '../runtime.js';
 import type { RunBookPort, RunEntry } from '../tui/runs.js';
 import { runView } from '../tui/runs.js';
@@ -10,6 +11,7 @@ import type { StreamLine } from '../tui/types.js';
 /** Adapt durable direct-room turns to the existing terminal renderer. */
 export class ChatRunBook implements RunBookPort {
   readonly #runtime: Runtime;
+  readonly #reviews: RoomReviewController;
   readonly #roomId: string;
   readonly #provider: ProviderPort | null;
   readonly #entries: RunEntry[] = [];
@@ -21,8 +23,12 @@ export class ChatRunBook implements RunBookPort {
   providerId: string | null = null;
   constructor(runtime: Runtime, roomId: string, provider: ProviderPort | null) {
     this.#runtime = runtime;
+    this.#reviews = new RoomReviewController(runtime, roomId);
     this.#roomId = roomId;
     this.#provider = provider;
+  }
+  setReviewApproval(approval: ReviewApprovalPort): void {
+    this.#reviews.setApproval(approval);
   }
   get runs(): readonly RunEntry[] {
     return this.#entries;
@@ -78,6 +84,11 @@ export class ChatRunBook implements RunBookPort {
     }
     entry.stream = [...this.#transcript(), { kind: 'user', text: prompt }];
     try {
+      const notice = await this.#reviews.handle(prompt, controller.signal);
+      if (notice !== null) {
+        entry.stream = [...this.#transcript(), { kind: 'text', label: 'Ocean', text: notice }];
+        return { kind: 'completed', text: notice, stopReason: 'end_turn' };
+      }
       const result = await this.#runtime.chat.send({
         workspaceId: this.#workspaceId,
         roomId: this.#roomId,

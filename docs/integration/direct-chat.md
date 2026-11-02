@@ -48,7 +48,7 @@ A send request binds its key to room, workspace and exact text before dispatch.
 Repeat with the same request ID to inspect the existing outcome. A new request ID
 authorizes a new paid request. Missing credentials or an unsupported profile
 provider/model fail before writing the prompt. An interrupted or uncertain call
-blocks new turns in that room for review. M4 will add the operator review flow.
+blocks new turns in that room for review. The [M4 operator review flow](recovery.md) permits explicitly acknowledged text-only continuation.
 
 Full validated model output is prepared durably after token settlement and before
 TaskRun completion. Startup finishes local completion/publication before generic

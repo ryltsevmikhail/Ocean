@@ -96,6 +96,8 @@ export class DirectChatService {
       updateChat(store, turn, dispatched);
       turn = dispatched;
       const outcome = await runTurn({
+        // Room continuations never inherit tool authority from a legacy CLI or ACP session.
+        tools: undefined,
         service: tasks,
         provider: input.provider,
         taskRunId: id,

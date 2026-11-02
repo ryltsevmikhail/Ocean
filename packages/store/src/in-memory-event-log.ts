@@ -58,6 +58,11 @@ export class InMemoryEventLog implements EventLogPort {
     );
   }
 
+  /** Current head without a suspension inside an application transaction. */
+  headVersion(id: TaskRunId): number {
+    return this.#streams.get(id)?.length ?? 0;
+  }
+
   /** The port is asynchronous; this adapter resolves without scheduling work. */
   load(taskRunId: TaskRunId): Promise<readonly EventEnvelope[]> {
     return Promise.resolve(this.#streams.get(taskRunId) ?? EMPTY_STREAM);

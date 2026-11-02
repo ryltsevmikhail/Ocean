@@ -16,6 +16,8 @@ export async function publishChat(
     const current = tx.chatTurn(turn.id);
     if (current === null) throw new Error('chat turn missing');
     if (current.status === 'completed') return current;
+    if (current.continuationReviewId !== undefined)
+      throw new Error('Reviewed turns cannot publish late output');
     if (current.status !== 'prepared') throw new Error('chat answer is not prepared');
     tx.putMessage({
       id: 'reply_' + turn.id,

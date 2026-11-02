@@ -17,6 +17,9 @@ function decode(row: Record<string, unknown>): ChatTurn {
     value.status !== row['status']
   )
     throw new Error('Invalid persisted chat turn');
+  const marker = 'continuationReviewId' in value ? value.continuationReviewId : null;
+  if ('review_id' in row && row['review_id'] !== marker)
+    throw new Error('Inconsistent continuation review');
   return value as ChatTurn;
 }
 /** Chat phase updates share the surrounding conversation transaction and SQLite constraints. */
@@ -30,15 +33,15 @@ export function chatStorage(db: DatabaseSync): ChatStorage {
     activeChatTurn(roomId) {
       const row = db
         .prepare(
-          "SELECT * FROM ocean_chat_turns WHERE room_id=? AND status IN ('accepted','dispatching','prepared','uncertain')",
+          "SELECT * FROM ocean_chat_turns WHERE room_id=? AND status IN ('accepted','dispatching','prepared','uncertain') AND review_id IS NULL",
         )
         .get(roomId);
       return row === undefined ? null : decode(row);
     },
     putChatTurn(turn) {
       db.prepare(
-        `INSERT INTO ocean_chat_turns VALUES(?,?,?,?,?,?)
-        ON CONFLICT(id) DO UPDATE SET status=excluded.status,payload=excluded.payload`,
+        `INSERT INTO ocean_chat_turns(id,workspace_id,room_id,task_run_id,status,payload,review_id) VALUES(?,?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET status=excluded.status,payload=excluded.payload,review_id=excluded.review_id`,
       ).run(
         turn.id,
         turn.workspaceId,
@@ -46,6 +49,7 @@ export function chatStorage(db: DatabaseSync): ChatStorage {
         turn.taskRunId,
         turn.status,
         JSON.stringify(turn),
+        turn.continuationReviewId ?? null,
       );
     },
   };

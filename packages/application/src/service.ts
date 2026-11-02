@@ -118,6 +118,11 @@ export class TaskRunService {
     return ok(receipt);
   }
 
+  /** Synchronous committed head for decisions sharing an adapter transaction. */
+  committedVersion(id: TaskRunId): number | null {
+    return this.#deps.log.headVersion?.(id) ?? null;
+  }
+
   /** Enumerate persisted task runs when the adapter supports recovery discovery. */
   async listTaskRuns(): Promise<readonly TaskRunId[]> {
     return this.#deps.log.listTaskRuns?.() ?? [];

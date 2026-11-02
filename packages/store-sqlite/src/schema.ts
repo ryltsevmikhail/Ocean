@@ -19,9 +19,11 @@ import { CHAT_TABLES, migrateChats } from './chat-schema.js';
 
 import { migrateGroups } from './group-schema.js';
 
+import { REVIEW_TABLES, migrateReviews } from './review-schema.js';
+
 import { readText } from './rows.js';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -179,6 +181,10 @@ function initializeSchemaTransaction(db: DatabaseSync): void {
         if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
       }
     if (previousVersion < 4) migrateGroups(db);
+    if (previousVersion < 5) migrateReviews(db);
+    else
+      for (const table of REVIEW_TABLES)
+        if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
     if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
       throw new Error('Schema foreign key check failed');
     db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(SCHEMA_VERSION));

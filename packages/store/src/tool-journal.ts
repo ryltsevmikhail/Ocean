@@ -64,6 +64,10 @@ export class InMemoryToolJournal implements ToolJournalPort {
     );
   }
 
+  /** Evidence read without yielding while an acknowledgement is committed. */
+  inspectPending(): readonly ToolEffectRecord[] {
+    return [...this.#records.values()].filter(unresolved);
+  }
   /** Recovery lowers certainty and never removes a claim or authorizes replay. */
   recover(id: string, context: ToolEffectContext): Promise<void> {
     const key = identity(id, context);

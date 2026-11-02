@@ -1,6 +1,7 @@
+import { runReviewCommand, terminalReviewApproval } from './review.js';
 import { randomUUID } from 'node:crypto';
-import type { Writable } from 'node:stream';
-import type { ProviderPort, ConversationReply } from '@runnets/application';
+import type { Readable, Writable } from 'node:stream';
+import type { ReviewApprovalPort, ProviderPort, ConversationReply } from '@runnets/application';
 import { createProviderFromEnv } from '../engine/provider.js';
 import { terminalText } from '../tui/approval.js';
 import { canonicalWorkspace, openOceanProfile } from './profile.js';
@@ -8,6 +9,8 @@ import { oceanArguments, required } from './arguments.js';
 import type { Runtime } from '../runtime.js';
 
 export interface OceanCommandOptions {
+  readonly input?: Readable;
+  readonly reviewApproval?: ReviewApprovalPort;
   readonly provider?: ProviderPort | null;
   readonly output?: Writable;
   readonly error?: Writable;
@@ -112,6 +115,23 @@ export async function runOceanCommand(
       );
       if (!result.ok) throw new Error(result.error.code);
       data = result.value;
+    } else if (command === 'run') {
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      process.on('SIGINT', cancel);
+      process.on('SIGTERM', cancel);
+      try {
+        data = await runReviewCommand(
+          runtime,
+          args,
+          requestId,
+          options.reviewApproval ?? terminalReviewApproval(options.input ?? process.stdin, error),
+          controller.signal,
+        );
+      } finally {
+        process.off('SIGINT', cancel);
+        process.off('SIGTERM', cancel);
+      }
     } else if (command === 'send') {
       const roomId = positional[0];
       if (roomId === undefined) throw new Error('room ID required');
@@ -156,7 +176,14 @@ export async function runOceanCommand(
     else error.write(terminalText(message) + '\n');
     return ['owner_busy', 'room_busy'].includes(safe)
       ? 3
-      : ['provider_unavailable', 'recovery_required', 'context_limit'].includes(safe)
+      : [
+            'provider_unavailable',
+            'recovery_required',
+            'context_limit',
+            'review_conflict',
+            'review_unavailable',
+            'approval_required',
+          ].includes(safe)
         ? 4
         : 2;
   } finally {

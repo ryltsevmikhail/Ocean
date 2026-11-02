@@ -29,7 +29,7 @@ function versionTwo() {
   });
   return { db, s };
 }
-it('preserves actual M1 message rows, profiles, memberships and receipts in schema 2→4', () => {
+it('preserves actual M1 message rows, profiles, memberships and receipts in schema 2→5', () => {
   const { db, s } = versionTwo();
   const tables = ['ocean_bots', 'ocean_rooms', 'ocean_members', 'ocean_receipts'];
   const snapshot = () =>
@@ -46,7 +46,7 @@ it('preserves actual M1 message rows, profiles, memberships and receipts in sche
   const history = s.history('w', '2');
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '4',
+    '5',
   );
   expect(snapshot()).toEqual(before);
   expect(db.prepare('SELECT title FROM ocean_rooms').get()?.['title']).toBeNull();

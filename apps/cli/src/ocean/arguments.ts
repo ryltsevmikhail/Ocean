@@ -3,6 +3,7 @@ export interface OceanArguments {
   readonly positional: readonly string[];
   readonly flags: ReadonlyMap<string, string>;
   readonly json: boolean;
+  readonly textOnly: boolean;
   readonly bots: readonly string[];
 }
 const valueFlags = new Set([
@@ -20,16 +21,23 @@ const valueFlags = new Set([
   'limit',
   'room',
   'to',
+  'reason',
+  'review-version',
 ]);
 /** Parse once, rejecting ambiguous flags and duplicate options before accessing a profile. */
 export function oceanArguments(argv: readonly string[]): OceanArguments {
   const flags = new Map<string, string>();
   const positional: string[] = [];
   let json = false;
+  let textOnly = false;
   const bots: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined) continue;
+    if (token === '--text-only') {
+      textOnly = true;
+      continue;
+    }
     if (token === '--json') {
       json = true;
       continue;
@@ -48,7 +56,14 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
       if (key === 'bot') bots.push(value);
     } else positional.push(token);
   }
-  return { command: positional[0] ?? '', positional: positional.slice(1), flags, json, bots };
+  return {
+    command: positional[0] ?? '',
+    positional: positional.slice(1),
+    flags,
+    json,
+    bots,
+    textOnly,
+  };
 }
 /** Required options fail before writes or model dispatch. */
 export function required(flags: ReadonlyMap<string, string>, key: string): string {

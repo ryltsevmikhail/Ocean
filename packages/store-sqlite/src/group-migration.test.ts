@@ -33,7 +33,7 @@ function oldProfile() {
   const chat = new DirectChatService({ store, tasks, clock, nextId });
   return { db, conversations, chat };
 }
-it('preserves M2 replies, turns, TaskRun events and exact retry identity when migrating 3→4', async () => {
+it('preserves M2 replies, turns, TaskRun events and exact retry identity when migrating 3→5', async () => {
   const c = oldProfile();
   let calls = 0;
   const provider: ProviderPort = {
@@ -56,7 +56,9 @@ it('preserves M2 replies, turns, TaskRun events and exact retry identity when mi
     signal: new AbortController().signal,
     emit: () => {},
   };
+  c.db.exec('ALTER TABLE ocean_chat_turns ADD COLUMN review_id TEXT');
   const original = await c.chat.send(input);
+  c.db.exec('ALTER TABLE ocean_chat_turns DROP COLUMN review_id');
   expect(original.ok).toBe(true);
   const tables = [
     'events',
@@ -66,13 +68,24 @@ it('preserves M2 replies, turns, TaskRun events and exact retry identity when mi
     'ocean_messages',
     'ocean_members',
   ];
-  const before = tables.map((t) => c.db.prepare('SELECT * FROM ' + t).all());
+  const snapshot = () =>
+    tables.map((t) =>
+      c.db
+        .prepare(
+          t === 'ocean_chat_turns'
+            ? 'SELECT id,workspace_id,room_id,task_run_id,status,payload FROM ocean_chat_turns'
+            : 'SELECT * FROM ' + t,
+        )
+        .all(),
+    );
+  const before = snapshot();
   const room = c.conversations.room('ws_test', '0002');
   initializeSchema(c.db);
   expect(c.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '4',
+    '5',
   );
-  expect(tables.map((t) => c.db.prepare('SELECT * FROM ' + t).all())).toEqual(before);
+  expect(snapshot()).toEqual(before);
+  expect(c.db.prepare('SELECT review_id FROM ocean_chat_turns').get()?.['review_id']).toBeNull();
   expect(c.conversations.room('ws_test', '0002')).toEqual(room);
   expect(await c.chat.send(input)).toEqual(original);
   expect(calls).toBe(1);

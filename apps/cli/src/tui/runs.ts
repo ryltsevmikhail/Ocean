@@ -7,7 +7,12 @@
  * runtime.
  */
 
-import { selectTurnTask, type ToolService, type TaskRunService } from '@runnets/application';
+import {
+  selectTurnTask,
+  type ReviewApprovalPort,
+  type ToolService,
+  type TaskRunService,
+} from '@runnets/application';
 import type { SessionUpdate } from '@runnets/contracts';
 import { type EventEnvelope, type TaskRunAggregate, type TaskRunId } from '@runnets/domain';
 import type { ProviderPort } from '@runnets/provider-core';
@@ -252,4 +257,4 @@ export type RunBookPort = Pick<
   | 'openForTurn'
   | 'turn'
   | 'cancel'
->;
+> & { setReviewApproval?: (approval: ReviewApprovalPort) => void };

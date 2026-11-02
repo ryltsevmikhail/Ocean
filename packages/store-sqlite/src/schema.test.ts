@@ -67,6 +67,8 @@ describe('schema initialization', () => {
       'ocean_members',
       'ocean_messages',
       'ocean_receipts',
+      'ocean_reviews',
+      'ocean_room_policies',
       'ocean_rooms',
       'ocean_workspace',
     ]);
@@ -85,7 +87,7 @@ describe('schema initialization', () => {
 
   it('fails closed on a newer schema version', () => {
     const db = memoryDatabase();
-    db.prepare(`UPDATE meta SET value = '5' WHERE key = 'schema_version'`).run();
+    db.prepare(`UPDATE meta SET value = '6' WHERE key = 'schema_version'`).run();
 
     expect(() => {
       initializeSchema(db);

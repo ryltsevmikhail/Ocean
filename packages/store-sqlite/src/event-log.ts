@@ -61,6 +61,13 @@ export class SqliteEventLog implements EventLogPort {
     );
   }
 
+  /** Current head from the transaction's SQLite snapshot. */
+  headVersion(id: TaskRunId): number {
+    const value = this.#db.prepare(SELECT_VERSION_SQL).get(id)?.['version'];
+    if (typeof value !== 'number' || !Number.isSafeInteger(value))
+      throw new Error('Invalid task version');
+    return value;
+  }
   /** Read one aggregate stream in committed order. */
   load(taskRunId: TaskRunId): Promise<readonly EventEnvelope[]> {
     return toPromise(() => this.#stream(taskRunId));

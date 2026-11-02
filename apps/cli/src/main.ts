@@ -20,6 +20,8 @@ Usage:
   ocean room list | ocean room members roomId
   ocean send roomId --text "message" [--to dev] [--request-id id] [--json]
   ocean history roomId | ocean tui --room roomId
+  ocean run list | ocean run review taskRunId
+  ocean run acknowledge taskRunId --text-only --review-version token --reason "..."
   runne                 open TUI in the current directory
   runne demo [--json]   run a scripted TaskRun lifecycle and print the result
   runne acp             serve the runtime as an ACP agent over stdio
@@ -45,7 +47,7 @@ export async function main(argv: readonly string[]): Promise<number> {
   if (
     command === '--profile' ||
     command === '--json' ||
-    ['init', 'bot', 'room', 'send', 'history'].includes(command ?? '') ||
+    ['init', 'bot', 'room', 'send', 'history', 'run'].includes(command ?? '') ||
     (command === 'tui' && rest.includes('--room'))
   ) {
     const { runOceanCommand } = await import('./ocean/command.js');

@@ -4,6 +4,7 @@ import type {
   ConversationTransaction,
 } from '@runnets/application';
 import type { DatabaseSync } from 'node:sqlite';
+import { reviewStorage } from './review-storage.js';
 import { chatStorage } from './chat-storage.js';
 
 import { withImmediateTransaction } from './transaction.js';
@@ -32,6 +33,7 @@ export class SqliteConversationStore implements ConversationStore {
     return withImmediateTransaction(db, () =>
       work({
         ...chatStorage(db),
+        ...reviewStorage(db),
         workspace() {
           const row = db.prepare('SELECT * FROM ocean_workspace WHERE singleton=1').get();
           return row === undefined ? null : workspaceRow(row);
@@ -119,7 +121,9 @@ export class SqliteConversationStore implements ConversationStore {
             reply === null ||
             typeof reply !== 'object' ||
             !('kind' in reply) ||
-            !['workspace', 'bot', 'room', 'message', 'turn'].includes(String(reply.kind)) ||
+            !['workspace', 'bot', 'room', 'message', 'turn', 'review'].includes(
+              String(reply.kind),
+            ) ||
             !('data' in reply)
           )
             throw new Error('Invalid conversation receipt');

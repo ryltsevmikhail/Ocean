@@ -134,7 +134,11 @@ export function admitChat(
 export function updateChat(store: ConversationStore, expected: ChatTurn, next: ChatTurn): void {
   store.atomic((tx) => {
     const current = tx.chatTurn(expected.id);
-    if (current?.status !== expected.status) throw new Error('chat phase conflict');
+    if (
+      current?.status !== expected.status ||
+      current?.continuationReviewId !== expected.continuationReviewId
+    )
+      throw new Error('chat phase conflict');
     tx.putChatTurn(next);
   });
 }

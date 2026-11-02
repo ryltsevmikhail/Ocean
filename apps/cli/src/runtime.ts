@@ -4,6 +4,7 @@ import {
   TaskRunService,
   ConversationService,
   DirectChatService,
+  ChatReviewService,
   reconcileInterrupted,
   type Clock,
   type CommandDedupPort,
@@ -26,6 +27,7 @@ export interface Runtime {
   readonly service: TaskRunService;
   readonly conversations: ConversationService;
   readonly chat: DirectChatService;
+  readonly reviews: ChatReviewService;
   readonly durable: boolean;
   readonly toolJournal?: ToolJournalPort;
   /** All entry points await recovery before accepting work. */
@@ -72,6 +74,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       false,
       options.clock,
     );
+    const journal = new InMemoryToolJournal();
     const deps = {
       store: new InMemoryConversationStore(),
       clock: options.clock ?? systemClock,
@@ -81,8 +84,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       service,
       conversations: new ConversationService(deps),
       chat: new DirectChatService({ ...deps, tasks: service }),
+      reviews: new ChatReviewService({ ...deps, tasks: service, journal }),
       durable: false,
-      toolJournal: new InMemoryToolJournal(),
+      toolJournal: journal,
       ready: Promise.resolve({ tasks: [], effects: [] }),
       close: () => {},
     };
@@ -102,6 +106,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       service,
       conversations: new ConversationService(deps),
       chat,
+      reviews: new ChatReviewService({ ...deps, tasks: service, journal: store.tools }),
       durable: true,
       toolJournal: store.tools,
       ready,

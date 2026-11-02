@@ -21,3 +21,5 @@ export * from './conversations.js';
 export * from './chat-turn.js';
 
 export * from './room-address.js';
+
+export * from './chat-review.js';

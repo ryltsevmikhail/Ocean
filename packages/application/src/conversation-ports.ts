@@ -1,5 +1,7 @@
 import type {
   ChatTurn,
+  ChatReview,
+  RoomExecutionPolicy,
   Bot,
   BotProfileInput,
   ConversationMessage,
@@ -31,13 +33,18 @@ export type ConversationReply =
   | { readonly kind: 'bot'; readonly data: Bot }
   | { readonly kind: 'room'; readonly data: Room }
   | { readonly kind: 'message'; readonly data: ConversationMessage }
-  | { readonly kind: 'turn'; readonly data: ChatTurn };
+  | { readonly kind: 'turn'; readonly data: ChatTurn }
+  | { readonly kind: 'review'; readonly data: ChatReview };
 export interface ConversationReceipt {
   readonly binding: string;
   readonly reply: ConversationReply;
 }
 /** Synchronous transaction surface; implementations must roll back writes on exceptions. */
 export interface ConversationTransaction {
+  review(id: string): ChatReview | null;
+  putReview(review: ChatReview): void;
+  roomPolicy(roomId: string): RoomExecutionPolicy | null;
+  putRoomPolicy(policy: RoomExecutionPolicy): void;
   chatTurn(id: string): ChatTurn | null;
   chatTurns(): readonly ChatTurn[];
   activeChatTurn(roomId: string): ChatTurn | null;

@@ -43,6 +43,8 @@ export interface ToolEffectRecord extends ToolEffectContext {
   readonly outcome: ToolEffectOutcome;
 }
 export interface ToolJournalPort {
+  /** Optional synchronous evidence for atomic operator reviews. */
+  inspectPending?(): readonly ToolEffectRecord[];
   /** Claim must commit before the external effect; false means never execute again. */
   claim(
     id: string,

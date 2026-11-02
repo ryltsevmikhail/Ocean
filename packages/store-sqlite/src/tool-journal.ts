@@ -75,6 +75,10 @@ export class SqliteToolJournal implements ToolJournalPort {
   /** Includes legacy unresolved claims globally so upgrades cannot hide uncertainty. */
   async pending(taskRunId?: string): Promise<readonly ToolEffectRecord[]> {
     await Promise.resolve();
+    return this.inspectPending(taskRunId);
+  }
+  /** Same SQLite snapshot as the conversation acknowledgement transaction. */
+  inspectPending(taskRunId?: string): readonly ToolEffectRecord[] {
     const rows =
       taskRunId === undefined
         ? this.#db
