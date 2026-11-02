@@ -300,3 +300,9 @@ removes the record; interrupted operations retain it with the displaced file.
 The native crash test verifies both the original bytes and the exact recorded
 intent. These records provide reconciliation evidence; they are not executable
 approvals and remain blocked from model file tools.
+
+New-file creation now uses the same durable intent protocol as replacement.
+The intent is persisted before link and removed only after installation and
+directory fsync. A native crash immediately after link leaves both the new
+file and its exact creation intent, and subsequent admission remains held.
+Intent cleanup also follows directory durability for successful replacements.

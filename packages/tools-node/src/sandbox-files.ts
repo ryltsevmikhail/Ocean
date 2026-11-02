@@ -68,16 +68,17 @@ try {
         fs.writeFileSync(fd,input.content);fs.fchmodSync(fd,mode);fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;
         verifyDirectory(parent,directory);
         if(readFile(dest)!==input.expected) throw Error('stale_read');
+        const displaced=path.join(pinned,'.ocean-recovery-'+crypto.randomUUID());
+        const intent=displaced+'.json';
+        const record=fs.openSync(intent,'wx',0o600);
+        try {
+          fs.writeFileSync(record,JSON.stringify({version:1,path:input.path,expected:input.expected,content:input.content}));
+          fs.fsyncSync(record);
+        } finally {fs.closeSync(record);}
+        fs.fsyncSync(directory);
+        installed=true;
         if(input.expected===null) fs.linkSync(temp,dest);
         else {
-          const displaced=path.join(pinned,'.ocean-recovery-'+crypto.randomUUID());
-          const intent=displaced+'.json';
-          const record=fs.openSync(intent,'wx',0o600);
-          try {
-            fs.writeFileSync(record,JSON.stringify({version:1,path:input.path,expected:input.expected,content:input.content}));
-            fs.fsyncSync(record);
-          } finally {fs.closeSync(record);}
-          fs.fsyncSync(directory);
           fs.renameSync(dest,displaced);
           installed=true;
           fs.fsyncSync(directory);
@@ -91,11 +92,12 @@ try {
             throw error;
           }
           fs.unlinkSync(displaced);
-          fs.unlinkSync(intent);
         }
         installed=true;
         fs.unlinkSync(temp);
         owned=false;
+        fs.fsyncSync(directory);
+        fs.unlinkSync(intent);
         fs.fsyncSync(directory);
         result=true;
       } finally {if(fd!==undefined)fs.closeSync(fd);if(owned)fs.unlinkSync(temp);}
