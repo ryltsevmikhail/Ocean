@@ -1,56 +1,17 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { connectLocalRuntime } from '@runnets/tools-node';
 import type { LocalCancelRequest, LocalTurnReceipt } from '@runnets/contracts';
-import { rooms, gatedProvider } from '../../test-fixtures/local-runtime-admission.test.js';
-import { remoteTerminal } from '../../test-fixtures/remote-terminal.test.js';
-import { openOceanProfile } from './profile.js';
-import { startLocalRuntime } from '../local-runtime/host.js';
+import {
+  gate,
+  roomProfileFixture,
+  remoteTerminal,
+} from '../../test-fixtures/remote-terminal.test.js';
 const cleanup: (() => void | Promise<void>)[] = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
   vi.unstubAllEnvs();
 });
-function gate() {
-  let open!: () => void;
-  const wait = new Promise<void>((r) => {
-    open = r;
-  });
-  return { open, wait };
-}
-async function setup() {
-  const root = mkdtempSync(join(tmpdir(), 'ocean-faults-')),
-    profile = join(root, 'p');
-  cleanup.push(() => rmSync(root, { recursive: true, force: true }));
-  vi.stubEnv('XDG_RUNTIME_DIR', root);
-  const runtime = openOceanProfile(profile, true);
-  await runtime.ready;
-  const { workspaceId, groupId: roomId } = rooms(runtime.conversations);
-  runtime.close();
-  const release = gate();
-  let calls = 0;
-  const start = () =>
-    startLocalRuntime({
-      profile,
-      provider: gatedProvider(
-        () => (calls === 1 ? Promise.resolve() : release.wait),
-        () => {
-          calls++;
-        },
-      ),
-    });
-  const host = await start();
-  cleanup.push(async () => {
-    release.open();
-    await host.stop();
-    await host.closed;
-  });
-  const peer = await connectLocalRuntime({ profile });
-  cleanup.push(() => peer.close());
-  return { profile, scope: { workspaceId, roomId }, host, start, peer };
-}
+const setup = () => roomProfileFixture(cleanup);
 
 it('an idle terminal reauthenticates and discovers peer history after graceful owner restart', async () => {
   const f = await setup();
@@ -211,5 +172,125 @@ it.each(['delayed ack', 'busy review'])(
     release.open();
     await sending;
     await ui.app.idle();
+  },
+);
+
+it.each(['compact', 'clipped'])(
+  'withholds remote cancellation when the %s frame hides a new version',
+  async (mode) => {
+    const f = await setup();
+    const first = await f.peer.submit({ ...f.scope, requestId: 'a', text: '@dev first' });
+    await vi.waitFor(async () =>
+      expect((await f.peer.getRun({ ...f.scope, runId: first.runId! }))?.turnStatus).toBe(
+        'completed',
+      ),
+    );
+    const receipt = await f.peer.submit({ ...f.scope, requestId: 'b', text: '@ops wait' }),
+      runId = receipt.runId!;
+    const cancels: LocalCancelRequest[] = [];
+    const ui = await remoteTerminal(f.profile, f.scope.roomId, undefined, (c) => ({
+      ...c,
+      cancelRun: (q) => {
+        cancels.push(q);
+        return c.cancelRun(q);
+      },
+    }));
+    cleanup.push(() => ui.app.stop());
+    await vi.waitFor(() => expect(ui.app.selectedRun()?.remote?.taskStatus).toBe('running'));
+    ui.resize(mode === 'compact' ? 80 : runId.length + 1, mode === 'compact' ? 6 : 16);
+    const before = ui.app.frame(),
+      previous = ui.app.selectedRun()!.remote!.version;
+    await f.peer.cancelRun({
+      ...f.scope,
+      runId,
+      requestId: 'peer-cancel',
+      expectedVersion: previous,
+    });
+    await vi.waitFor(
+      () => expect(ui.app.selectedRun()?.remote?.version).toBeGreaterThan(previous),
+      { timeout: 3000 },
+    );
+    const version = ui.app.selectedRun()!.remote!.version;
+    expect(ui.app.frame()).toBe(before);
+    expect(before).not.toContain('v' + version);
+    ui.input.write('\x03');
+    await ui.app.idle();
+    expect(cancels).toEqual([]);
+    ui.resize((runId + ' [v' + version).length, 16);
+    expect(ui.app.frame().split('\n')[1]).toBe(runId + ' [v' + version);
+    ui.input.write('\x03');
+    await ui.app.idle();
+    expect(cancels).toEqual([]);
+    ui.resize(128, 16);
+    expect(ui.app.frame()).toContain(runId);
+    expect(ui.app.frame()).toContain('v' + version);
+    ui.input.write('\x03');
+    await ui.app.idle();
+    expect(cancels).toMatchObject([{ runId, expectedVersion: version }]);
+  },
+);
+
+it.each(['enter again', 'detach'])(
+  'keeps the exact different draft during reconciliation until %s',
+  async (mode) => {
+    const f = await setup(),
+      blocked = gate(),
+      release = gate();
+    const sent: string[] = [];
+    const ui = await remoteTerminal(f.profile, f.scope.roomId, undefined, (c) => ({
+      ...c,
+      submit: (q) => {
+        sent.push(q.text);
+        return c.submit(q);
+      },
+      history: async (q) => {
+        if (sent.length) {
+          blocked.open();
+          await release.wait;
+        }
+        return c.history(q);
+      },
+    }));
+    cleanup.push(() => {
+      release.open();
+      ui.app.stop();
+    });
+    await ui.send('first note');
+    await blocked.wait;
+    const second = mode === 'detach' ? '  сохранённый черновик  ' : 'second  note\nwith 🌊 inside';
+    ui.input.write('\x1b[200~' + second + '\x1b[201~\x1b[D');
+    const cursor = ui.app.ui.cursor;
+    ui.input.write('\r');
+    await ui.app.idle();
+    expect(ui.app.ui.prompt).toBe(second);
+    expect(ui.app.ui.cursor).toBe(cursor);
+    expect(ui.app.ui.status).toMatch(/Enter/i);
+    expect(sent).toEqual(['first note']);
+    if (mode === 'detach') ui.app.stop();
+    release.open();
+    if (mode === 'enter again') {
+      await vi.waitFor(() =>
+        expect(
+          ui.app.selectedRun()?.stream.some((m) => m.kind === 'user' && m.text === 'first note'),
+        ).toBe(true),
+      );
+      expect(ui.app.ui.prompt).toBe(second);
+      expect(ui.app.ui.status).toMatch(/ready.*Enter/i);
+      expect(sent).toEqual(['first note']);
+      ui.input.write('\r');
+      await ui.app.idle();
+      expect(sent).toEqual(['first note', second]);
+    } else {
+      const reopened = await remoteTerminal(f.profile, f.scope.roomId);
+      cleanup.push(() => reopened.app.stop());
+      expect(reopened.app.ui.prompt).toBe('');
+      expect(
+        reopened.app
+          .selectedRun()
+          ?.stream.filter((m) => m.kind === 'user')
+          .map((m) => m.text),
+      ).toEqual(['first note']);
+    }
+    expect((await f.peer.history(f.scope)).map((m) => m.body)).toEqual(sent);
   },
 );

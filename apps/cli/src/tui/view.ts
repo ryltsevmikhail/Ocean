@@ -41,11 +41,14 @@ function draftRows(input: FrameInput, width: number): string[] {
   const start = Math.max(0, cursorRow - 2);
   return rows.slice(start, start + 3);
 }
+function runLabel(run: LocalRunSnapshot): string {
+  return run.runId + ' [v' + run.version + ']';
+}
 function status(input: FrameInput): string {
   const selected = input.runs[input.ui.selectedIndex];
   if (selected?.remote) {
     const run = selected.remote;
-    return `${run.runId} · ${run.taskStatus} · ${run.turnStatus} · v${run.version} · ${input.ui.status ?? ''}`;
+    return `${runLabel(run)} · ${run.taskStatus} · ${run.turnStatus} · ${input.ui.status ?? ''}`;
   }
   if (selected?.receipt?.runId) return selected.receipt.runId + ' · admitted · awaiting run state';
   if (selected?.taskRunId === null) return 'Room · ' + (input.ui.status ?? 'ready');
@@ -152,8 +155,15 @@ export function anchorDialogue(
   };
 }
 
-/** Render one full-height frame; normal conversation receives nearly all available rows. */
+export interface PresentedFrame {
+  text: string;
+  cancel?: { run: LocalRunSnapshot; size: Size };
+}
 export function renderFrame(input: FrameInput): string {
+  return presentFrame(input, input.size).text;
+}
+/** Compact frames omit status. Only a complete binding in the actual status row authorizes cancel. */
+export function presentFrame(input: FrameInput, physical: Size): PresentedFrame {
   const { columns, rows } = dimensions(input.size);
   const editor = draftRows(input, columns);
   const bot = input.runs[input.ui.selectedIndex]?.performer;
@@ -168,10 +178,12 @@ export function renderFrame(input: FrameInput): string {
       'F1 help · PgUp/PgDn scroll',
     ];
     while (compact.length < rows) compact.splice(1, 0, '');
-    return compact
-      .slice(0, rows)
-      .map((line) => fit(line, columns))
-      .join('\n');
+    return {
+      text: compact
+        .slice(0, rows)
+        .map((line) => fit(line, columns))
+        .join('\n'),
+    };
   }
   const height = rows - 5 - editor.length;
   const pane = content(input, columns, height);
@@ -179,9 +191,11 @@ export function renderFrame(input: FrameInput): string {
   while (body.length < height) body.push('');
   const footer =
     'Enter send · PgUp/PgDn scroll · F2 tasks · F3 events · F4 details · F5 reasoning · F6 changeset · Esc cancel';
-  return [
+  const run = input.runs[input.ui.selectedIndex]?.remote;
+  const statusRow = fit(status(input), columns);
+  const text = [
     header,
-    status(input),
+    statusRow,
     `─ ${pane.title} `,
     ...body.slice(0, height),
     '─'.repeat(columns),
@@ -190,4 +204,7 @@ export function renderFrame(input: FrameInput): string {
   ]
     .map((line) => fit(line, columns))
     .join('\n');
+  if (run && physical.rows >= 9 && fit(statusRow, physical.columns).startsWith(runLabel(run)))
+    return { text, cancel: { run, size: physical } };
+  return { text };
 }

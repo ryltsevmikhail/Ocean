@@ -266,6 +266,7 @@ export interface RunBookPort {
     prompt: string,
     emit: (update: SessionUpdate) => void,
   ): Promise<BookOutcome>;
+  holdDraft?(prompt: string): string | undefined;
   cancel(target?: LocalRunSnapshot): void | Promise<string>;
   detach?(): void;
   readonly decisionPanel?: Pick<DecisionPanel, 'frame' | 'handle' | 'presented'>;

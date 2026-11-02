@@ -1,8 +1,9 @@
+import { TuiScreen } from './screen.js';
 import { TuiPending } from './pending.js';
 import { refreshChangeset, messageOf } from './changeset.js';
 /** Terminal input and rendering; RunBook composes the runtime and turn engine. */
 
-import type { LocalRunSnapshot, SessionUpdate } from '@runnets/contracts';
+import type { SessionUpdate } from '@runnets/contracts';
 
 import { createRunBook } from './book.js';
 import { TuiApproval } from './approval.js';
@@ -13,13 +14,7 @@ import { initialUiState, reduceKey, type UiState } from './state.js';
 import { Terminal } from './terminal.js';
 import type { TuiAppOptions } from './options.js';
 export type { TuiAppOptions } from './options.js';
-import {
-  renderFrame,
-  navigationContext,
-  anchorDialogue,
-  type FrameInput,
-  type RunViewData,
-} from './view.js';
+import { navigationContext, anchorDialogue, type FrameInput, type RunViewData } from './view.js';
 
 export class TuiApp {
   readonly #options: TuiAppOptions;
@@ -34,8 +29,9 @@ export class TuiApp {
   #ui: UiState = initialUiState();
   readonly #keys = new KeyInput((keys) => this.#onKeys(keys));
   #batching = false;
+  #heldDraft = false;
   readonly #pending = new TuiPending();
-  #displayed: LocalRunSnapshot | undefined;
+  readonly #screen: TuiScreen;
   #started = false;
   #stopped = false;
 
@@ -48,6 +44,7 @@ export class TuiApp {
     });
     this.#approval = new TuiApproval(() => this.#redraw());
     this.#book = createRunBook(options, this.#approval);
+    this.#screen = new TuiScreen(this.#terminal, this.#book, this.#approval);
     this.#dataHandler = (chunk) => this.#keys.read(chunk);
     this.#endHandler = () => this.stop();
     this.#resizeHandler = () => this.#redraw();
@@ -71,6 +68,11 @@ export class TuiApp {
       this.#book.watch?.((selection) => {
         if (selection)
           this.#ui = { ...this.#ui, selectedIndex: this.#book.runs.indexOf(selection) };
+        if (this.#heldDraft && !this.#book.holdDraft?.(this.#ui.prompt.trim())) {
+          this.#heldDraft = false;
+          if (this.#ui.prompt.trim())
+            this.#ui = { ...this.#ui, status: 'Draft ready. Press Enter to send.' };
+        }
         this.#redraw();
       });
   }
@@ -105,11 +107,7 @@ export class TuiApp {
 
   /** Current screen, exactly as it would be drawn; used by tests and diagnostics. */
   frame(): string {
-    return (
-      this.#book.decisionPanel?.frame(this.#terminal.decisionSize) ??
-      this.#approval.frame(this.#terminal.size()) ??
-      renderFrame(this.#frameInput())
-    );
+    return this.#screen.present(this.#frameInput()).text;
   }
 
   selectedRun(): RunViewData | null {
@@ -152,6 +150,15 @@ export class TuiApp {
       ),
       ...navigationContext(this.#frameInput()),
     });
+    const hold =
+      transition.action.type === 'send-turn' && this.#book.holdDraft?.(transition.action.prompt);
+    if (hold) {
+      this.#heldDraft = true;
+      this.#ui = { ...this.#ui, ctrlCArmed: false, status: hold };
+      return;
+    }
+    if (transition.action.type === 'send-turn' || transition.action.type === 'create-run')
+      this.#heldDraft = false;
     this.#ui = transition.state;
     if (key.type === 'panel' && key.panel === 'changeset')
       this.#track(
@@ -237,9 +244,7 @@ export class TuiApp {
   }
 
   #cancelTurn(): void {
-    const result = this.#book.cancel(
-      this.selectedRun()?.taskRunId === this.#displayed?.runId ? this.#displayed : undefined,
-    );
+    const result = this.#book.cancel(this.#screen.cancelTarget(this.selectedRun()?.taskRunId));
     if (result) this.#track(result.then((message) => this.#setStatus(message)));
     if (this.#ui.busy) this.#ui = { ...this.#ui, status: 'cancelling turn…' };
   }
@@ -274,9 +279,7 @@ export class TuiApp {
 
   #redraw(): void {
     if (this.#stopped || this.#batching) return;
-    const drawn = this.#terminal.draw(this.frame());
-    this.#displayed = drawn ? this.selectedRun()?.remote : undefined;
-    if (drawn) this.#book.decisionPanel?.presented();
+    this.#screen.draw(this.#frameInput());
   }
 
   #setStatus(status: string): void {

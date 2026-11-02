@@ -1,9 +1,16 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { vi } from 'vitest';
+import { rooms, gatedProvider } from './local-runtime-admission.test.js';
 import { PassThrough } from 'node:stream';
 import { connectLocalRuntime } from '@runnets/tools-node';
 /* eslint-disable no-restricted-imports -- These injected terminal fixtures exercise the same CLI package's source. */
 import { RoomConnection } from '../src/ocean/room-connection.js';
 import { RemoteChatRunBook } from '../src/ocean/remote-chat-book.js';
 import { TuiApp } from '../src/tui/app.js';
+import { openOceanProfile } from '../src/ocean/profile.js';
+import { startLocalRuntime } from '../src/local-runtime/host.js';
 /* eslint-enable no-restricted-imports */
 
 export async function remoteTerminal(
@@ -33,4 +40,43 @@ export async function remoteTerminal(
       await app.idle();
     },
   };
+}
+
+export function gate() {
+  let open!: () => void;
+  const wait = new Promise<void>((r) => {
+    open = r;
+  });
+  return { open, wait };
+}
+export async function roomProfileFixture(cleanup: (() => void | Promise<void>)[]) {
+  const root = mkdtempSync(join(tmpdir(), 'ocean-faults-')),
+    profile = join(root, 'p');
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+  vi.stubEnv('XDG_RUNTIME_DIR', root);
+  const runtime = openOceanProfile(profile, true);
+  await runtime.ready;
+  const { workspaceId, groupId: roomId } = rooms(runtime.conversations);
+  runtime.close();
+  const release = gate();
+  let calls = 0;
+  const start = () =>
+    startLocalRuntime({
+      profile,
+      provider: gatedProvider(
+        () => (calls === 1 ? Promise.resolve() : release.wait),
+        () => {
+          calls++;
+        },
+      ),
+    });
+  const host = await start();
+  cleanup.push(async () => {
+    release.open();
+    await host.stop();
+    await host.closed;
+  });
+  const peer = await connectLocalRuntime({ profile });
+  cleanup.push(() => peer.close());
+  return { profile, scope: { workspaceId, roomId }, host, start, peer };
 }

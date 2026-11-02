@@ -1,4 +1,4 @@
-import { RemoteDecisions } from './remote-decisions.js';
+import { RemoteDecisions, roomCommand } from './remote-decisions.js';
 import type { LocalRunSnapshot, LocalTurnReceipt } from '@runnets/contracts';
 import { randomUUID } from 'node:crypto';
 import { RoomSubmission } from './room-submission.js';
@@ -59,15 +59,16 @@ export class RemoteChatRunBook implements RunBookPort {
         ).map(visibleControls)
       : ['No coding task selected. Start TUI with --task TASK.'];
   }
+  holdDraft(prompt: string) {
+    if (this.#confirmed && this.#confirmed.prompt !== prompt && roomCommand(prompt) === null)
+      return 'Draft kept. Press Enter again after the previous message appears in history.';
+    return undefined;
+  }
   async turn(_entry: ScreenEntry, prompt: string): Promise<BookOutcome> {
     const status = await this.#decisions.handle(prompt);
     if (status !== null) return { kind: 'notice', status };
-    if (this.#confirmed && this.#confirmed.prompt !== prompt) {
-      return {
-        kind: 'notice',
-        status: 'Waiting for room history to confirm message ' + this.#confirmed.receipt.messageId,
-      };
-    }
+    const hold = this.holdDraft(prompt);
+    if (hold) return { kind: 'notice', status: hold };
     const receipt = this.#confirmed?.receipt ?? (await this.#submission.submit(prompt));
     this.#confirmed = { prompt, receipt };
     const selection = this.#view.confirm(receipt);
@@ -80,7 +81,7 @@ export class RemoteChatRunBook implements RunBookPort {
     };
   }
   async cancel(target?: LocalRunSnapshot) {
-    if (!target) throw Error('no admitted run selected');
+    if (!target) throw Error('Show the full admitted run ID and version before cancelling');
     const command = {
       ...this.#view.scope,
       runId: target.runId,

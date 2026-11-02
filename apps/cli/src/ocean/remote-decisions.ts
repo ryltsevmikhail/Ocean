@@ -10,6 +10,12 @@ const ref = ({ workspaceId, roomId, runId, decisionId }: LocalDecision) => ({
   runId,
   decisionId,
 });
+export function roomCommand(prompt: string) {
+  if (prompt === '/review') return 'review';
+  if (prompt === '/continue' || prompt.startsWith('/continue ')) return 'continue';
+  if (prompt === '/decision' || prompt.startsWith('/decision ')) return 'decision';
+  return null;
+}
 export class RemoteDecisions {
   #seen: LocalReviewSnapshot | null = null;
   #cards: readonly LocalDecision[] = [];
@@ -63,7 +69,8 @@ export class RemoteDecisions {
     this.#room.paint();
   }
   async handle(prompt: string): Promise<string | null> {
-    if (prompt === '/review') {
+    const action = roomCommand(prompt);
+    if (action === 'review') {
       this.#seen = null;
       const review = await this.#connection.withClient((c) => c.reviewRoom(this.#room.scope));
       this.#seen = review;
@@ -75,7 +82,7 @@ export class RemoteDecisions {
       return 'review loaded';
     }
     let card: LocalDecision | undefined;
-    if (prompt === '/continue' || prompt.startsWith('/continue ')) {
+    if (action === 'continue') {
       if (!this.#seen) throw Error('Use /review before continuing');
       const prefix = '/continue text-only ';
       if (!prompt.startsWith(prefix) || !prompt.slice(prefix.length).trim())
@@ -89,7 +96,7 @@ export class RemoteDecisions {
       };
       card = await this.#connection.withClient((c) => c.requestContinuation(command));
       this.#seen = null;
-    } else if (prompt === '/decision' || prompt.startsWith('/decision ')) {
+    } else if (action === 'decision') {
       const id = prompt.slice('/decision '.length);
       await this.refresh();
       card = this.#cards.find((c) => c.decisionId === id);
