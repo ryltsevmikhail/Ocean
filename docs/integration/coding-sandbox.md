@@ -338,3 +338,7 @@ error. Invocation/dependency digests and before/after snapshots are asserted.
 A native observation-fault test returns unconfirmed cleanup after a real
 command and verifies that the same backend refuses subsequent reads, writes
 and commands. A command observation exception also holds that backend.
+
+The backend hold also covers filesystem worker uncertainty. A native
+fault-injection test loses cleanup evidence after a real file read and verifies
+that subsequent reads, writes and commands on that backend are refused.

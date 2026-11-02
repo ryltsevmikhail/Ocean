@@ -139,6 +139,14 @@ export async function createSandboxBackend(
     if ((await identity()) !== qualifiedIdentity)
       throw new ToolError('containment_unavailable', 'sandbox qualification is stale');
   };
+  const fileOperation = async (input: Parameters<typeof sandboxFile>[1], signal?: AbortSignal) => {
+    try {
+      return await sandboxFile(options, input, signal);
+    } catch (error) {
+      if (error instanceof ToolError && error.code === 'effect_uncertain') held = true;
+      throw error;
+    }
+  };
   return {
     capabilities: {
       filesystemContainment: true,
@@ -147,11 +155,11 @@ export async function createSandboxBackend(
     },
     async read(path) {
       await verify();
-      return (await sandboxFile(options, { op: 'read', path })) as string | null;
+      return (await fileOperation({ op: 'read', path })) as string | null;
     },
     async list(path) {
       await verify();
-      const entries = (await sandboxFile(options, { op: 'list', path })) as FileEntry[];
+      const entries = (await fileOperation({ op: 'list', path })) as FileEntry[];
       return entries
         .filter((e) => !blockedName(e.name))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -160,7 +168,7 @@ export async function createSandboxBackend(
       await verify();
       if (Buffer.byteLength(content) > 131072 || content.includes('\0'))
         throw new ToolError('unsupported_file', 'write exceeds text limits');
-      await sandboxFile(options, { op: 'write', path, content, expected }, signal);
+      await fileOperation({ op: 'write', path, content, expected }, signal);
     },
     async command(program, args, cwd, signal) {
       await verify();
