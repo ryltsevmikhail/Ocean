@@ -1,0 +1,118 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { expect, it } from 'vitest';
+import type { CodingApplyReceipt } from '@runnets/domain';
+import { openSqliteStore } from './index.js';
+import { SqliteToolJournal } from './tool-journal.js';
+
+const intent: CodingApplyReceipt = {
+  id: 'apply-one',
+  taskId: 'task',
+  changesetHash: 'changeset',
+  reviewRequestId: 'review',
+  expectedBase: 'base',
+  status: 'applying',
+  files: [
+    { path: 'one.ts', status: 'pending' },
+    { path: 'two.ts', status: 'pending' },
+  ],
+};
+
+it('rolls back intent and shared effect claim together, and retains partial application across reopen', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'ocean-apply-store-'));
+  const path = join(root, 'store.sqlite');
+  try {
+    const store = openSqliteStore({ path });
+    expect(() =>
+      store.codingApplications.atomic((tx) => {
+        expect(tx.claimApplication(intent)).toBe(true);
+        throw Error('crash before commit');
+      }),
+    ).toThrow('crash before commit');
+    expect(store.codingApplications.atomic((tx) => tx.application(intent.id))).toBeNull();
+    store.codingApplications.atomic((tx) => expect(tx.claimApplication(intent)).toBe(true));
+    const started: CodingApplyReceipt = {
+      ...intent,
+      files: [{ path: 'one.ts', status: 'started' }, intent.files[1]!],
+    };
+    store.codingApplications.atomic((tx) => tx.putApplication(started));
+    const firstDone: CodingApplyReceipt = {
+      ...started,
+      files: [{ path: 'one.ts', status: 'completed' }, intent.files[1]!],
+    };
+    store.codingApplications.atomic((tx) => tx.putApplication(firstDone));
+    const secondStarted: CodingApplyReceipt = {
+      ...firstDone,
+      files: [firstDone.files[0]!, { path: 'two.ts', status: 'started' }],
+    };
+    store.codingApplications.atomic((tx) => tx.putApplication(secondStarted));
+    store.close();
+    const reopened = openSqliteStore({ path });
+    const db = new DatabaseSync(path);
+    try {
+      expect(reopened.codingApplications.atomic((tx) => tx.application(intent.id))).toEqual(
+        secondStarted,
+      );
+      const journal = new SqliteToolJournal(db);
+      expect((await journal.pending())[0]).toMatchObject({ id: intent.id, outcome: 'started' });
+      expect(
+        reopened.codingApplications.atomic((tx) => tx.claimApplication({ ...intent, id: 'other' })),
+      ).toBe(false);
+      const uncertain: CodingApplyReceipt = {
+        ...secondStarted,
+        status: 'uncertain',
+        files: [firstDone.files[0]!, { path: 'two.ts', status: 'uncertain' }],
+      };
+      reopened.codingApplications.atomic((tx) => tx.putApplication(uncertain));
+      expect((await journal.pending())[0]?.outcome).toBe('uncertain');
+      expect(() =>
+        reopened.codingApplications.atomic((tx) => tx.putApplication(secondStarted)),
+      ).toThrow();
+      expect(
+        await journal.claim('new', 'write', { taskRunId: 'run', attemptId: 'attempt' }, 'new'),
+      ).toBe(false);
+    } finally {
+      db.close();
+      reopened.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it('rejects skipped file states and settles completed receipt and claim in one transaction', () => {
+  const store = openSqliteStore({ path: ':memory:' });
+  try {
+    store.codingApplications.atomic((tx) => expect(tx.claimApplication(intent)).toBe(true));
+    expect(() =>
+      store.codingApplications.atomic((tx) =>
+        tx.putApplication({ ...intent, status: 'completed' }),
+      ),
+    ).toThrow();
+    expect(() =>
+      store.codingApplications.atomic((tx) =>
+        tx.putApplication({
+          ...intent,
+          files: intent.files.map((f) => ({ ...f, status: 'completed' })),
+        }),
+      ),
+    ).toThrow();
+    let receipt = intent;
+    for (const index of [0, 1])
+      for (const status of ['started', 'completed'] as const) {
+        receipt = {
+          ...receipt,
+          files: receipt.files.map((file, n) => (n === index ? { ...file, status } : file)),
+        };
+        store.codingApplications.atomic((tx) => tx.putApplication(receipt));
+      }
+    store.codingApplications.atomic((tx) => tx.putApplication({ ...receipt, status: 'completed' }));
+    expect(
+      store.codingApplications.atomic((tx) => tx.claimApplication({ ...intent, id: 'next' })),
+    ).toBe(true);
+  } finally {
+    store.close();
+  }
+});

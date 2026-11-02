@@ -66,6 +66,7 @@ describe('schema initialization', () => {
       'ocean_capture_receipts',
       'ocean_changesets',
       'ocean_chat_turns',
+      'ocean_coding_applications',
       'ocean_coding_approval_claims',
       'ocean_coding_approvals',
       'ocean_coding_receipts',

@@ -67,6 +67,13 @@ export class SqliteToolJournal implements ToolJournalPort {
     context?: ToolEffectContext,
   ): Promise<void> {
     await Promise.resolve();
+    this.settleNow(id, outcome, context);
+  }
+  settleNow(
+    id: string,
+    outcome: Exclude<ToolEffectOutcome, 'started'>,
+    context?: ToolEffectContext,
+  ): void {
     if (context === undefined) throw new Error('tool effect context required');
     const result = this.#db
       .prepare(

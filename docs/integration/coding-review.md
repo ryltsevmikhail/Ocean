@@ -105,3 +105,12 @@ mark the active file uncertain. Existing receipts refuse replay. Regression
 tests cover denied/dirty refusal without claims, successful two-file execution,
 partial failure and no replay. Concrete storage/project adapters remain pending.
 Root check, build and format gates pass again in the current workspace.
+
+Schema 10 adds durable application receipts. SQLite commits the initial receipt
+and shared effect claim in one transaction, and commits the terminal receipt
+with journal settlement in one transaction. File transitions cannot skip
+started, rewrite the immutable binding or reopen a terminal receipt. A crash
+with a started file preserves the last committed receipt and global unresolved
+effect hold; neither the same application nor another write can replay it.
+Disk-reopen and rollback regressions exercise these boundaries. The concrete
+filesystem application adapter, runtime composition and CLI apply remain pending.

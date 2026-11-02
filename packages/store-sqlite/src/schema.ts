@@ -1,3 +1,4 @@
+import { CODING_APPLY_TABLES, migrateCodingApplications } from './coding-apply-schema.js';
 import { CODING_REVIEW_TABLES, migrateCodingReviews } from './coding-review-schema.js';
 import { CODING_APPROVAL_TABLES, migrateCodingApprovals } from './coding-approval-schema.js';
 import { CHANGESET_TABLES, migrateChangesets } from './changeset-schema.js';
@@ -27,7 +28,7 @@ import { REVIEW_TABLES, migrateReviews } from './review-schema.js';
 
 import { readText } from './rows.js';
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -204,6 +205,10 @@ function initializeSchemaTransaction(db: DatabaseSync): void {
     if (previousVersion < 9) migrateCodingReviews(db);
     else
       for (const table of CODING_REVIEW_TABLES)
+        if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
+    if (previousVersion < 10) migrateCodingApplications(db);
+    else
+      for (const table of CODING_APPLY_TABLES)
         if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
     if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
       throw new Error('Schema foreign key check failed');
