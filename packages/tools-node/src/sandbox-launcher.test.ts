@@ -80,3 +80,32 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
     }
   },
 );
+
+it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')(
+  'preserves Node self-execution from the private executable copy',
+  async () => {
+    const script = await sandboxLauncher([
+      '--unshare-all',
+      '--ro-bind',
+      '/usr',
+      '/usr',
+      '--symlink',
+      'usr/lib',
+      '/lib',
+      '--symlink',
+      'usr/lib',
+      '/lib64',
+      '--proc',
+      '/proc',
+      '--ro-bind',
+      process.execPath,
+      '/node',
+      '/node',
+      '-e',
+      "const r=require('node:child_process').spawnSync(process.execPath,['-e','process.exit(0)']);process.exit(r.status??1)",
+    ]);
+    await expect(promisify(execFile)(process.execPath, ['-e', script])).resolves.toMatchObject({
+      stderr: '',
+    });
+  },
+);

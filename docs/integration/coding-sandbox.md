@@ -235,3 +235,17 @@ the copied tree before mounting its opened directory. The runtime directory
 is outside the sandbox and copied roots retain relative pnpm links. Focused
 native tests pass. Full Ocean dependency closure and cold preset measurements
 must be repeated with this copying launcher before qualification is complete.
+
+## Private-copy preset rerun
+
+Cold typecheck, lint and build passed with copied dependencies. The first test
+run failed with EPIPE: --ro-bind-data made Node report its executable as
+"/node (deleted)", so child self-execution failed with ENOENT. Executable
+copies now retain their paths in the unit runtime directory until shutdown
+and use read-only descriptor mounts. A native self-execution regression passes.
+
+The test rerun exited 0 in 5.79 s, observed memory.peak 1113550848 bytes and
+pids.peak 184, with untruncated output and confirmed cleanup. The earlier
+copied-dependency runs measured typecheck 3.30 s / 708128768 bytes / 56 tasks,
+lint 6.67 s / 1174491136 bytes / 60 tasks, build 3.39 s / 707084288 bytes /
+56 tasks. The original limits remain sufficient for these observations.

@@ -37,6 +37,7 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
           const hash=crypto.createHash('sha256');
           hash.update(JSON.stringify([String(stat.mode),String(stat.size)]));
           const scratch=fs.mkdtempSync(path.join(process.env.RUNTIME_DIRECTORY || os.tmpdir(),'ocean-executable-'));
+          staged.push(scratch);
           const copyPath=path.join(scratch,'copy');
           const copy=fs.openSync(copyPath,'wx',0o600);
           try {
@@ -56,16 +57,13 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
           fs.closeSync(fd);fd=readonly;descriptors[descriptors.length-1]=fd;
           } finally {
             fs.closeSync(copy);
-            fs.rmSync(scratch,{recursive:true,force:true});
+
           }
         }
         if(JSON.stringify(actual)!==JSON.stringify(identities[argv[i+1]]))
           throw Error('mount source changed before opening');
         if(!stat.isFile()&&!stat.isDirectory()) throw Error('unsupported mount source');
-        if(stat.isFile() && argv[i]==='--ro-bind') {
-          argv.splice(i,1,'--perms',Number(stat.mode&0o777n).toString(8),'--ro-bind-data');
-          i+=2;
-        } else argv[i]=argv[i]==='--bind'?'--bind-fd':'--ro-bind-fd';
+        argv[i]=argv[i]==='--bind'?'--bind-fd':'--ro-bind-fd';
         if(trees[argv[i+1]]) {
           const scratch=fs.mkdtempSync(path.join(process.env.RUNTIME_DIRECTORY || os.tmpdir(),'ocean-dependencies-'));
           staged.push(scratch);
