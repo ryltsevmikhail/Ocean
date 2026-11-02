@@ -1,6 +1,6 @@
 # Coding conversation integration
 
-Status: stage 5 in progress.
+Status: stage 5 implemented in development source; release acceptance remains stage 7.
 
 Chat requests can bind an explicit taskId. That identity is included in request
 deduplication and persisted as codingTaskId on the admitted turn. A plain chat
@@ -108,3 +108,16 @@ run, and the shared journal has no unresolved effects. Reopening the same
 fixture with a restore guard and an existing ready task refuses task tools
 before provider dispatch or owner approval. These tests use the configured
 runtime path, not injected admission.
+
+## Stage-5 acceptance
+
+Verified through 07fa0f9 on Omarchy. Configured runtime native fixtures cover
+direct/group read→approved write→approved test, denied write/test, default
+no-tools sends, review refusal and restored-task refusal. Test evidence is
+checked and original checkout remains unchanged. Private tool logs remain
+outside shared history. CLI/TUI regressions verify exact task forwarding,
+cancellation, preset-only invocation, typed progress and retained local results.
+Independent review found CLI progress loss and TUI completion evidence loss;
+d7ac05c fixes both with regressions. The root check, build and format checks
+passed after these changes. Earlier pending statements describe intermediate
+checkpoints. Interactive installed-terminal qualification remains part of RC.
