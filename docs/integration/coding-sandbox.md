@@ -62,3 +62,20 @@ real child-process lock regression failed before the fix and passed afterward.
 
 No provider credentials or user conversation profiles are part of this transfer.
 The released text-only installation is unchanged.
+
+## Notebook follow-up
+
+Cancellation during asynchronous mount inventory previously allowed the command
+to run. The supervisor now checks the signal again immediately before spawning
+the service, with no await before installing its abort listener. A native test
+reproduced the unwanted successful dispatch and now verifies that the workspace
+marker is absent.
+
+A fresh archive of 570c584 installed all 151 dependencies from the notebook's
+existing pnpm store with zero downloads. The host-side experiment used
+`pnpm install --offline --frozen-lockfile --ignore-scripts --store-dir <store-base> --package-import-method=copy`.
+The explicit store is necessary on tmpfs. The resulting dependency roots were
+the top-level node_modules, apps/cli/node_modules and node_modules under
+packages/{application,provider-core,provider-deepseek,store,store-sqlite,tools-node}.
+The installed pnpm is a standalone executable. This inventory still requires
+read-only worker verification with all four real presets.

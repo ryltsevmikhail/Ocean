@@ -41,6 +41,23 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         await rm(secret);
       }
     }, 20000);
+    it('refuses dispatch when cancelled during filesystem inventory', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'ocean-sandbox-'));
+      try {
+        const controller = new AbortController();
+        const pending = runSandbox({
+          root,
+          signal: controller.signal,
+          program: '/toolchain/node',
+          args: ['-e', "require('node:fs').writeFileSync('/workspace/dispatched','x')"],
+        });
+        controller.abort();
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await expect(readFile(join(root, 'dispatched'))).rejects.toMatchObject({ code: 'ENOENT' });
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
     it('kills detached descendants and proves cgroup emptiness after leader exit', async () => {
       const root = await mkdtemp(join(tmpdir(), 'ocean-sandbox-'));
       try {

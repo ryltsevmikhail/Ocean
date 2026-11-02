@@ -51,6 +51,8 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   let admitted = false;
   let closed = false;
   let stopping: Promise<void> | undefined;
+  const nodeBinary = await realpath(process.execPath);
+  request.signal?.throwIfAborted();
   const child = spawn(
     '/usr/bin/systemd-run',
     [
@@ -69,7 +71,7 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
       '--property=NoNewPrivileges=yes',
       '--property=ProtectControlGroups=yes',
       '/usr/bin/bwrap',
-      ...sandboxArgv(request.root, script, request.mounts, await realpath(process.execPath)),
+      ...sandboxArgv(request.root, script, request.mounts, nodeBinary),
     ],
     { env, stdio: ['pipe', 'pipe', 'pipe'], shell: false },
   );
