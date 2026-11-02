@@ -13,6 +13,11 @@ import { CLI_VERSION, isVersionRequest } from './version.js';
 const HELP = `runne ${CLI_VERSION} — RunneTS command line
 
 Usage:
+  ocean init --workspace dir [--profile /path]
+  ocean bot add --handle dev --name Developer --role "Your role"
+  ocean bot list | ocean room direct --bot dev
+  ocean send roomId --text "message" [--request-id id] [--json]
+  ocean history roomId | ocean tui --room roomId
   runne                 open TUI in the current directory
   runne demo [--json]   run a scripted TaskRun lifecycle and print the result
   runne acp             serve the runtime as an ACP agent over stdio
@@ -35,6 +40,15 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
 
   const [command, ...rest] = argv;
+  if (
+    command === '--profile' ||
+    command === '--json' ||
+    ['init', 'bot', 'room', 'send', 'history'].includes(command ?? '') ||
+    (command === 'tui' && rest.includes('--room'))
+  ) {
+    const { runOceanCommand } = await import('./ocean/command.js');
+    return runOceanCommand(argv);
+  }
 
   if (command === 'help' || command === '--help' || command === '-h') {
     process.stdout.write(HELP);

@@ -12,6 +12,10 @@ import type { TaskRunId } from '@runnets/domain';
 import type { ChatMessage, ProviderPort } from './provider.js';
 
 export interface TurnInput {
+  readonly beforeComplete?: (
+    text: string,
+    stopReason: 'end_turn' | 'max_tokens',
+  ) => void | Promise<void>;
   readonly tools?: ToolService | undefined;
   readonly maxModelRequests?: number;
   readonly onHistory?: (messages: readonly ChatMessage[]) => void;

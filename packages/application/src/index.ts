@@ -15,3 +15,5 @@ export * from './turn-target.js';
 
 export * from './conversation-ports.js';
 export * from './conversations.js';
+
+export * from './direct-chat.js';

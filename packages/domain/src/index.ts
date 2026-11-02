@@ -17,3 +17,5 @@ export * from './budget.js';
 export * from './side-effect.js';
 
 export * from './conversations.js';
+
+export * from './chat-turn.js';

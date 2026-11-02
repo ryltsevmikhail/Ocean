@@ -50,8 +50,11 @@ function setup() {
 }
 /** Remove only new tables to recreate the original v1 tables with their exact runtime records. */
 function downgradeFixture(db: DatabaseSync) {
+  db.exec('DROP TABLE ocean_messages');
+  db.exec('DROP TABLE ocean_chat_turns');
   db.exec('DROP TRIGGER ocean_direct_member');
-  for (const table of [...CONVERSATION_TABLES].reverse()) db.exec('DROP TABLE ' + table);
+  for (const table of [...CONVERSATION_TABLES].reverse().filter((t) => t !== 'ocean_messages'))
+    db.exec('DROP TABLE ' + table);
   db.exec("UPDATE meta SET value='1' WHERE key='schema_version'");
 }
 const create: AnyCommand = {
@@ -91,7 +94,7 @@ it('migrates v1 without changing task events, receipts, checkpoints or unknown t
   );
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '2',
+    '3',
   );
   expect(
     ['events', 'command_receipts', 'checkpoints', 'tool_invocations_v1'].map((t) =>
@@ -118,7 +121,7 @@ it('rolls back an interrupted migration before version advancement, then allows 
   db.exec('DROP TABLE ocean_messages');
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '2',
+    '3',
   );
 });
 it('refuses schema migration beneath a live runtime owner without changing the database', () => {
@@ -175,8 +178,8 @@ it('enforces foreign keys and room membership even on direct database writes', (
   service.execute({ type: 'OpenDirectRoom', requestId: 'room', workspaceId: 'w', botId: 'id_1' });
   expect(() =>
     db
-      .prepare('INSERT INTO ocean_messages VALUES(?,?,?,?,?,?,?,?)')
-      .run('m', 'w', 'id_2', 1, 'user', 'missing', 'text', 'now'),
+      .prepare('INSERT INTO ocean_messages VALUES(?,?,?,?,?,?,?,?,?,?)')
+      .run('m', 'w', 'id_2', 1, 'user', 'missing', 'text', 'now', null, null),
   ).toThrow();
   expect(() =>
     db

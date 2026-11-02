@@ -3,9 +3,10 @@ import type {
   ConversationStore,
   ConversationTransaction,
 } from '@runnets/application';
-import type { Bot, ConversationMessage, DirectRoom, Workspace } from '@runnets/domain';
+import type { ChatTurn, Bot, ConversationMessage, DirectRoom, Workspace } from '@runnets/domain';
 
 interface State {
+  turns: Map<string, ChatTurn>;
   workspace: Workspace | null;
   bots: Map<string, Bot>;
   rooms: Map<string, DirectRoom>;
@@ -15,6 +16,7 @@ interface State {
 /** Detached transaction copies prevent caller mutation and roll back on failed commits. */
 export class InMemoryConversationStore implements ConversationStore {
   #state: State = {
+    turns: new Map(),
     workspace: null,
     bots: new Map(),
     rooms: new Map(),
@@ -29,6 +31,17 @@ export class InMemoryConversationStore implements ConversationStore {
     this.#active = true;
     const state = structuredClone(this.#state);
     const tx: ConversationTransaction = {
+      chatTurn: (id) => state.turns.get(id) ?? null,
+      chatTurns: () => [...state.turns.values()],
+      activeChatTurn: (roomId) =>
+        [...state.turns.values()].find(
+          (t) =>
+            t.roomId === roomId &&
+            ['accepted', 'dispatching', 'prepared', 'uncertain'].includes(t.status),
+        ) ?? null,
+      putChatTurn: (turn) => {
+        state.turns.set(turn.id, turn);
+      },
       workspace: () => state.workspace,
       putWorkspace: (value) => {
         state.workspace = value;

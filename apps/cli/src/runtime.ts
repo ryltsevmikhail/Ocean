@@ -2,6 +2,8 @@
 import { randomUUID } from 'node:crypto';
 import {
   TaskRunService,
+  ConversationService,
+  DirectChatService,
   reconcileInterrupted,
   type Clock,
   type CommandDedupPort,
@@ -12,6 +14,7 @@ import {
 import { openSqliteStore, ownSqliteRuntime } from '@runnets/store-sqlite';
 import {
   InMemoryCommandDedup,
+  InMemoryConversationStore,
   InMemoryToolJournal,
   InMemoryEventLog,
   SequentialIdGenerator,
@@ -21,6 +24,8 @@ import {
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
   readonly service: TaskRunService;
+  readonly conversations: ConversationService;
+  readonly chat: DirectChatService;
   readonly durable: boolean;
   readonly toolJournal?: ToolJournalPort;
   /** All entry points await recovery before accepting work. */
@@ -60,26 +65,43 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     throw new Error('Durable mode requires a persistent RUNNE_DB file');
   if (mode === 'ephemeral' && persistent)
     throw new Error('Ephemeral mode cannot use a persistent RUNNE_DB file');
-  if (mode === 'ephemeral')
+  if (mode === 'ephemeral') {
+    const service = serviceOver(
+      new InMemoryEventLog(),
+      new InMemoryCommandDedup(),
+      false,
+      options.clock,
+    );
+    const deps = {
+      store: new InMemoryConversationStore(),
+      clock: options.clock ?? systemClock,
+      nextId: () => randomUUID().replaceAll('-', ''),
+    };
     return {
-      service: serviceOver(
-        new InMemoryEventLog(),
-        new InMemoryCommandDedup(),
-        false,
-        options.clock,
-      ),
+      service,
+      conversations: new ConversationService(deps),
+      chat: new DirectChatService({ ...deps, tasks: service }),
       durable: false,
       toolJournal: new InMemoryToolJournal(),
       ready: Promise.resolve({ tasks: [], effects: [] }),
       close: () => {},
     };
+  }
   const release = ownSqliteRuntime(dbPath);
   try {
     const store = openSqliteStore({ path: dbPath });
     const service = serviceOver(store.log, store.dedup, true, options.clock);
-    const ready = reconcileInterrupted(service, store.tools);
+    const deps = {
+      store: store.conversations,
+      clock: options.clock ?? systemClock,
+      nextId: () => randomUUID().replaceAll('-', ''),
+    };
+    const chat = new DirectChatService({ ...deps, tasks: service });
+    const ready = chat.recover().then(() => reconcileInterrupted(service, store.tools));
     return {
       service,
+      conversations: new ConversationService(deps),
+      chat,
       durable: true,
       toolJournal: store.tools,
       ready,

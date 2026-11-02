@@ -19,7 +19,7 @@ import type { StreamLine } from './types.js';
 import type { RunViewData } from './view.js';
 
 export interface RunEntry {
-  readonly taskRunId: TaskRunId;
+  taskRunId: TaskRunId;
   aggregate: TaskRunAggregate | null;
   events: readonly EventEnvelope[];
   stream: readonly StreamLine[];
@@ -238,3 +238,18 @@ export class RunBook {
     this.#cancelRequested = true;
   }
 }
+
+export type RunBookPort = Pick<
+  RunBook,
+  | 'model'
+  | 'providerId'
+  | 'runs'
+  | 'views'
+  | 'entry'
+  | 'restore'
+  | 'add'
+  | 'reload'
+  | 'openForTurn'
+  | 'turn'
+  | 'cancel'
+>;

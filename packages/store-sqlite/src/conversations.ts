@@ -4,6 +4,8 @@ import type {
   ConversationTransaction,
 } from '@runnets/application';
 import type { DatabaseSync } from 'node:sqlite';
+import { chatStorage } from './chat-storage.js';
+
 import { withImmediateTransaction } from './transaction.js';
 import { botRow, messageRow, roomRow, workspaceRow } from './conversation-rows.js';
 import { readText } from './rows.js';
@@ -20,6 +22,7 @@ export class SqliteConversationStore implements ConversationStore {
     const db = this.#db;
     return withImmediateTransaction(db, () =>
       work({
+        ...chatStorage(db),
         workspace() {
           const row = db.prepare('SELECT * FROM ocean_workspace WHERE singleton=1').get();
           return row === undefined ? null : workspaceRow(row);
@@ -80,7 +83,7 @@ export class SqliteConversationStore implements ConversationStore {
           return seq;
         },
         putMessage(m) {
-          db.prepare('INSERT INTO ocean_messages VALUES(?,?,?,?,?,?,?,?)').run(
+          db.prepare('INSERT INTO ocean_messages VALUES(?,?,?,?,?,?,?,?,?,?)').run(
             m.id,
             m.workspaceId,
             m.roomId,
@@ -89,6 +92,8 @@ export class SqliteConversationStore implements ConversationStore {
             m.targetBotId,
             m.body,
             m.createdAt,
+            m.authorBotId ?? null,
+            m.turnId ?? null,
           );
         },
         receipt(id) {
@@ -99,7 +104,7 @@ export class SqliteConversationStore implements ConversationStore {
             reply === null ||
             typeof reply !== 'object' ||
             !('kind' in reply) ||
-            !['workspace', 'bot', 'room', 'message'].includes(String(reply.kind)) ||
+            !['workspace', 'bot', 'room', 'message', 'turn'].includes(String(reply.kind)) ||
             !('data' in reply)
           )
             throw new Error('Invalid conversation receipt');

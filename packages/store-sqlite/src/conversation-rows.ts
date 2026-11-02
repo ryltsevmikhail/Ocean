@@ -37,13 +37,17 @@ export function roomRow(row: Row): DirectRoom {
 }
 /** M1 stores user-authored records, never invented assistant completions. */
 export function messageRow(row: Row): ConversationMessage {
-  if (row['author'] !== 'user') throw new Error('Unsupported message author');
+  if (row['author'] !== 'user' && row['author'] !== 'bot')
+    throw new Error('Unsupported message author');
   return {
     id: readText(row, 'id'),
     workspaceId: readText(row, 'workspace_id'),
     roomId: readText(row, 'room_id'),
     seq: integer(row, 'seq'),
-    author: 'user',
+    author: row['author'],
+    ...(row['author'] === 'bot'
+      ? { authorBotId: readText(row, 'author_bot_id'), turnId: readText(row, 'turn_id') }
+      : {}),
     targetBotId: readText(row, 'target_bot_id'),
     body: readText(row, 'body'),
     createdAt: readText(row, 'created_at'),

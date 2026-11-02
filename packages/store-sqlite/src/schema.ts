@@ -15,9 +15,11 @@ import {
   assertMigrationOwnerAbsent,
 } from './conversation-schema.js';
 
+import { CHAT_TABLES, migrateChats } from './chat-schema.js';
+
 import { readText } from './rows.js';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -143,7 +145,7 @@ export function initializeSchema(db: DatabaseSync): void {
         }
       }
     }
-    if (previousVersion === 1) assertMigrationOwnerAbsent(db);
+    if (previousVersion < SCHEMA_VERSION) assertMigrationOwnerAbsent(db);
     // Additive v1 extension preserves old stores and marks old receipts as unbound.
     const receiptColumns = db.prepare('PRAGMA table_info(command_receipts)').all();
     if (!receiptColumns.some((column) => column['name'] === 'request_binding')) {
@@ -153,12 +155,19 @@ export function initializeSchema(db: DatabaseSync): void {
       migrateConversations(db);
       if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
         throw new Error('Schema migration failed foreign key check');
-      db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(SCHEMA_VERSION));
     } else {
       for (const table of CONVERSATION_TABLES) {
         if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
       }
     }
+    if (previousVersion < 3) migrateChats(db);
+    else
+      for (const table of CHAT_TABLES) {
+        if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
+      }
+    if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
+      throw new Error('Schema foreign key check failed');
+    db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(SCHEMA_VERSION));
     db.exec('COMMIT');
   } catch (error) {
     if (db.isTransaction) db.exec('ROLLBACK');

@@ -3,7 +3,7 @@
 M1 exposes a synchronous application service for one workspace, immutable bot
 profiles, one direct room per bot and ordered user messages. Memory and SQLite
 adapters implement the same transaction port. All time and identity are injected.
-No model is called when a message is recorded.
+No model is called by RecordUserMessage. The separate [M2 chat path](direct-chat.md) admits a TaskRun and model dispatch.
 
 ## Public application API
 
@@ -41,7 +41,7 @@ sessions. Use `openSqliteStore({path}).conversations` from
 Application clients sharing a file serialize writes through BEGIN IMMEDIATE.
 Hosts performing execution must still acquire exclusive runtime ownership.
 
-SQLite schema 2 adds workspace, bot, direct room, membership, message and
+SQLite schema 2 added workspace, bot, direct room, membership, message and
 conversation receipt tables. Migration from schema 1 is transactional.
 Existing task events, receipts, checkpoints and tool journals remain intact.
 A live or unverifiable runtime owner prevents migration. A dead owner's record
@@ -55,6 +55,6 @@ A failed migration keeps the previous version and rolls back newly created table
 ## Remaining milestones
 
 CLI/TUI profile commands, bot replies, model context reconstruction and TaskRun
-assignment belong to M2. Group rooms and membership changes belong to M3. The
+assignment are implemented in [M2](direct-chat.md). Group rooms and membership changes belong to M3. The
 full target schema and command interface in docs/ocean describe those future
 milestones; M1 implements only the direct user-history subset.

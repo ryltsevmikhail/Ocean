@@ -25,7 +25,9 @@ export interface ConversationMessage {
   readonly workspaceId: string;
   readonly roomId: string;
   readonly seq: number;
-  readonly author: 'user';
+  readonly author: 'user' | 'bot';
+  readonly authorBotId?: string;
+  readonly turnId?: string;
   readonly targetBotId: string;
   readonly body: string;
   readonly createdAt: string;
@@ -36,7 +38,11 @@ export type ConversationErrorCode =
   | 'workspace_conflict'
   | 'handle_taken'
   | 'unknown_bot'
-  | 'unknown_room';
+  | 'unknown_room'
+  | 'room_busy'
+  | 'recovery_required'
+  | 'provider_unavailable'
+  | 'context_limit';
 export interface ConversationError {
   readonly code: ConversationErrorCode;
   readonly message: string;

@@ -2,14 +2,14 @@
 
 import type { Readable, Writable } from 'node:stream';
 
-import { ToolService } from '@runnets/application';
 import type { SessionUpdate } from '@runnets/contracts';
 import type { TaskRunId } from '@runnets/domain';
 
+import { createRunBook } from './book.js';
 import { TuiApproval } from './approval.js';
 import type { Key } from './keys.js';
 import { KeyInput } from './input.js';
-import { applyUpdate, RunBook, runView, turnStatus, type RunEntry } from './runs.js';
+import { applyUpdate, runView, turnStatus, type RunEntry, type RunBookPort } from './runs.js';
 import { initialUiState, reduceKey, type UiState } from './state.js';
 import { Terminal } from './terminal.js';
 import type { TuiAppOptions } from './options.js';
@@ -33,7 +33,7 @@ export class TuiApp {
   readonly #workspace: string | undefined;
   readonly #output: Writable;
   readonly #terminal: Terminal;
-  readonly #book: RunBook;
+  readonly #book: RunBookPort;
   readonly #approval: TuiApproval;
   readonly #dataHandler: (chunk: Buffer | string) => void;
   readonly #endHandler: () => void;
@@ -57,15 +57,7 @@ export class TuiApp {
       fallbackSize: options.size ?? { columns: 100, rows: 30 },
     });
     this.#approval = new TuiApproval(() => this.#redraw());
-    this.#book = new RunBook({
-      service: options.service,
-      recovered: options.recovered,
-      provider: options.provider,
-      tools:
-        options.executor === undefined
-          ? undefined
-          : new ToolService(options.executor, this.#approval, options.journal),
-    });
+    this.#book = createRunBook(options, this.#approval);
     this.#dataHandler = (chunk) => this.#keys.read(chunk);
     this.#endHandler = (): void => {
       this.#quit();
@@ -102,6 +94,7 @@ export class TuiApp {
     this.#keys.close();
     this.#output.off('resize', this.#resizeHandler);
     this.#terminal.leave();
+    this.#resolveExit();
   }
 
   /** Resolves once the UI has quit. */

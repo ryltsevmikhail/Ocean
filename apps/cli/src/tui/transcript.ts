@@ -23,7 +23,7 @@ export function transcriptLines(
       entry.kind === 'user'
         ? 'You'
         : entry.kind === 'text'
-          ? 'Runne'
+          ? (entry.label ?? 'Runne')
           : entry.kind === 'thought'
             ? 'Thinking'
             : 'Tool';

@@ -1,0 +1,137 @@
+import { randomUUID } from 'node:crypto';
+import { taskRunId, type TaskRunId } from '@runnets/domain';
+import type { SessionUpdate } from '@runnets/contracts';
+import type { ProviderPort, TurnOutcome } from '@runnets/application';
+import type { Runtime } from '../runtime.js';
+import type { RunBookPort, RunEntry } from '../tui/runs.js';
+import { runView } from '../tui/runs.js';
+import type { StreamLine } from '../tui/types.js';
+
+/** Adapt durable direct-room turns to the existing terminal renderer. */
+export class ChatRunBook implements RunBookPort {
+  readonly #runtime: Runtime;
+  readonly #roomId: string;
+  readonly #provider: ProviderPort | null;
+  readonly #entries: RunEntry[] = [];
+  #controller: AbortController | null = null;
+  #cancelRequested = false;
+  readonly #workspaceId = 'ws_ocean';
+  #name = '';
+  model = '';
+  providerId: string | null = null;
+  constructor(runtime: Runtime, roomId: string, provider: ProviderPort | null) {
+    this.#runtime = runtime;
+    this.#roomId = roomId;
+    this.#provider = provider;
+  }
+  get runs(): readonly RunEntry[] {
+    return this.#entries;
+  }
+  views() {
+    return this.#entries.map(runView);
+  }
+  entry(id: TaskRunId) {
+    return this.#entries.find((e) => e.taskRunId === id);
+  }
+  /** Validate the selected room and show its persisted transcript before accepting input. */
+  restore(): Promise<void> {
+    const room = this.#runtime.conversations.room(this.#workspaceId, this.#roomId);
+    if (!room.ok) throw new Error(room.error.code);
+    const bots = this.#runtime.conversations.bots(this.#workspaceId);
+    if (!bots.ok) throw new Error(bots.error.code);
+    const bot = bots.value.find((b) => b.id === room.value.botId);
+    if (bot === undefined) throw new Error('unknown_bot');
+    this.#name = bot.name;
+    this.model = bot.model;
+    this.providerId = bot.provider;
+    return Promise.resolve();
+  }
+  /** New screen entry retains the same direct room; transcript comes from committed history. */
+  add(_parent: TaskRunId | null): Promise<RunEntry> {
+    const entry: RunEntry = {
+      taskRunId: taskRunId('tr_draft_' + randomUUID().replaceAll('-', '')),
+      aggregate: null,
+      events: [],
+      stream: this.#transcript(),
+      liveMode: null,
+    };
+    this.#entries.push(entry);
+    return Promise.resolve(entry);
+  }
+  async reload(entry: RunEntry): Promise<void> {
+    entry.aggregate = await this.#runtime.service.state(entry.taskRunId);
+    entry.events = await this.#runtime.service.events(entry.taskRunId);
+  }
+  openForTurn(entry: RunEntry): Promise<RunEntry> {
+    return entry.aggregate?.status === 'absent'
+      ? Promise.resolve(entry)
+      : this.add(entry.taskRunId);
+  }
+  async turn(
+    entry: RunEntry,
+    prompt: string,
+    emit: (update: SessionUpdate) => void,
+  ): Promise<TurnOutcome> {
+    const controller = new AbortController();
+    this.#controller = controller;
+    if (this.#cancelRequested) {
+      this.#cancelRequested = false;
+      controller.abort();
+    }
+    entry.stream = [...this.#transcript(), { kind: 'user', text: prompt }];
+    try {
+      const result = await this.#runtime.chat.send({
+        workspaceId: this.#workspaceId,
+        roomId: this.#roomId,
+        requestId: randomUUID(),
+        text: prompt,
+        provider: this.#provider,
+        signal: controller.signal,
+        emit,
+        onAdmitted: (turn) => {
+          entry.taskRunId = taskRunId(turn.taskRunId);
+        },
+      });
+      if (!result.ok) throw new Error(result.error.code);
+      entry.stream = this.#transcript();
+      const turn = result.value;
+      if (turn.status === 'completed')
+        return { kind: 'completed', text: turn.text, stopReason: turn.stopReason };
+      if (turn.status === 'cancelled')
+        return { kind: 'cancelled', text: '', stopReason: 'cancelled' };
+      return {
+        kind: 'uncertain',
+        text: 'Inspect interrupted execution before retrying',
+        stopReason: 'refusal',
+      };
+    } finally {
+      this.#controller = null;
+    }
+  }
+  cancel(): void {
+    if (this.#controller === null) this.#cancelRequested = true;
+    else this.#controller.abort();
+  }
+  #transcript(): readonly StreamLine[] {
+    const lines: StreamLine[] = [];
+    let after = 0;
+    for (;;) {
+      const result = this.#runtime.conversations.history(
+        this.#workspaceId,
+        this.#roomId,
+        after,
+        200,
+      );
+      if (!result.ok) throw new Error(result.error.code);
+      for (const message of result.value)
+        lines.push({
+          kind: message.author === 'bot' ? 'text' : 'user',
+          text: message.body,
+          ...(message.author === 'bot' ? { label: this.#name } : {}),
+        });
+      if (result.value.length < 200) break;
+      after = result.value.at(-1)?.seq ?? after;
+    }
+    return lines;
+  }
+}

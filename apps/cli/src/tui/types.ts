@@ -16,6 +16,7 @@ export type StreamKind = 'text' | 'thought' | 'user' | 'tool';
 export interface StreamLine {
   readonly kind: StreamKind;
   readonly text: string;
+  readonly label?: string;
   readonly id?: string;
   readonly status?: 'pending' | 'in_progress' | 'completed' | 'failed';
 }

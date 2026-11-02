@@ -129,6 +129,7 @@ export async function completeRun(
   if (isTerminal(state.status)) return failedOutcome(budgetText(state));
   const trimmed = text.trim();
   const summary = trimmed === '' ? 'turn completed' : trimmed.slice(0, SUMMARY_LIMIT);
+  await input.beforeComplete?.(text, stopReason === 'max_tokens' ? 'max_tokens' : 'end_turn');
   await commit(input, 'Complete', { summary, attemptId });
   return { kind: 'completed', stopReason, text };
 }

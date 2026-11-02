@@ -6,6 +6,7 @@ import {
   type Bot,
   type ConversationMessage,
   type ConversationResult,
+  type DirectRoom,
 } from '@runnets/domain';
 import type { Clock } from './ports.js';
 import type {
@@ -57,6 +58,15 @@ export class ConversationService {
         ? ok(tx.bots())
         : conversationFailure('workspace_conflict'),
     );
+  }
+
+  /** Resolve a room only within the bound workspace. */
+  room(workspaceId: string, roomId: string): ConversationResult<DirectRoom> {
+    return this.#deps.store.atomic((tx) => {
+      if (tx.workspace()?.id !== workspaceId) return conversationFailure('workspace_conflict');
+      const room = tx.room(roomId);
+      return room === null ? conversationFailure('unknown_room') : ok(room);
+    });
   }
 
   /** Return an ordered, room-scoped page without loading another room's history. */
@@ -131,6 +141,7 @@ export class ConversationService {
         return ok({ kind: 'room', data });
       }
       case 'RecordUserMessage': {
+        if (tx.activeChatTurn(command.roomId) !== null) return conversationFailure('room_busy');
         if (!validConversationText(command.text, 16384))
           return conversationFailure('invalid_input');
         const room = tx.room(command.roomId);

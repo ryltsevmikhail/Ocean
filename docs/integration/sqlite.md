@@ -24,7 +24,7 @@ transaction. Duplicate commands return the original receipt before checking the
 current aggregate version. Reusing an id with another task, actor, expected
 version, type or payload returns an error. In-memory logs use the same semantics.
 
-Schema 2 migrates version 1 transactionally, adds the M1 conversation tables, and preserves existing task records. Migration refuses a live or unverifiable runtime owner. See [direct history](conversations.md). The legacy compatibility extensions still include a nullable `request_binding` receipt column,
+Schema 3 migrates versions 1 and 2 transactionally, retains M1 conversation tables, adds durable direct-chat turns and bot replies, and preserves existing task records. Migration refuses a live or unverifiable runtime owner. See [direct history](conversations.md). The legacy compatibility extensions still include a nullable `request_binding` receipt column,
 `tool_invocations_v2`, ownership metadata and durable identity counters.
 Existing rows remain intact. Old receipts without request bindings cannot prove
 which request committed: retries fail closed rather than returning unverifiable
@@ -54,7 +54,7 @@ states and unresolved effect identities when no other host owns the database.
 TUI exposes interrupted tasks through F2, ACP sends a warning in a fresh session,
 and the task CLI prints a recovery notice.
 
-Conversation history, sessions, approvals and read snapshots are process-local.
+Legacy task/ACP conversation history, sessions, approvals and read snapshots are process-local. Persistent Ocean rooms use [the M2 path](direct-chat.md).
 They are not reconstructed from lifecycle events. Recovered tasks cannot accept
 continuation with invented empty history. `/new` starts a separate conversation;
 it does not clear unresolved effects. There is no automatic or interactive

@@ -1,4 +1,5 @@
 import type {
+  ChatTurn,
   Bot,
   BotProfileInput,
   ConversationMessage,
@@ -23,13 +24,18 @@ export type ConversationReply =
   | { readonly kind: 'workspace'; readonly data: Workspace }
   | { readonly kind: 'bot'; readonly data: Bot }
   | { readonly kind: 'room'; readonly data: DirectRoom }
-  | { readonly kind: 'message'; readonly data: ConversationMessage };
+  | { readonly kind: 'message'; readonly data: ConversationMessage }
+  | { readonly kind: 'turn'; readonly data: ChatTurn };
 export interface ConversationReceipt {
   readonly binding: string;
   readonly reply: ConversationReply;
 }
 /** Synchronous transaction surface; implementations must roll back writes on exceptions. */
 export interface ConversationTransaction {
+  chatTurn(id: string): ChatTurn | null;
+  chatTurns(): readonly ChatTurn[];
+  activeChatTurn(roomId: string): ChatTurn | null;
+  putChatTurn(turn: ChatTurn): void;
   workspace(): Workspace | null;
   putWorkspace(workspace: Workspace): void;
   bot(id: string): Bot | null;
