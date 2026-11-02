@@ -72,3 +72,12 @@ existing task. Dependency mountpoint directories are created only beneath
 canonical existing worktree parents. A host regression verifies registration
 resolution, destination preparation and policy mismatch refusal. Approval
 previews use stderr so the send JSON response stream stays parseable.
+
+Full native configured-runtime acceptance now passes for both direct and group
+rooms with a deterministic provider. Each fixture creates a Git project and
+task worktree, reads a file, obtains separate write/test approvals, changes only
+the worktree, runs an exact Node test preset, and verifies exitCode 0 plus
+sourceUnchanged evidence. The original checkout retains its initial content
+and the shared journal has no unresolved effect. Runtime can place task assets
+in an explicitly configured directory, used by tests to keep all fixture assets
+under their temporary root. No provider API calls are used by this acceptance.

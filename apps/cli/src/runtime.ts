@@ -54,6 +54,7 @@ export interface Runtime {
   close(): void;
 }
 export interface RuntimeOptions {
+  readonly codingWorktreeDirectory?: string;
   readonly codingTools?: Pick<CodingTurnFactoryDeps, 'sandbox' | 'owner'>;
   readonly restoredAccess?: boolean;
   readonly clock?: Clock;
@@ -121,7 +122,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       }),
       codingChanges: new CodingChangesetService({
         ...codingDeps,
-        worktrees: new GitCodingWorktrees(),
+        worktrees: new GitCodingWorktrees(options.codingWorktreeDirectory),
         snapshots: new GitCodingSnapshots(),
       }),
       conversations: new ConversationService(deps),
@@ -182,7 +183,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       codingApprovals,
       codingChanges: new CodingChangesetService({
         ...codingDeps,
-        worktrees: new GitCodingWorktrees(),
+        worktrees: new GitCodingWorktrees(options.codingWorktreeDirectory),
         snapshots: new GitCodingSnapshots(),
       }),
       conversations: new ConversationService(deps),
