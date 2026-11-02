@@ -1,6 +1,6 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import {
   sandboxArgv,
@@ -69,7 +69,7 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
       '--property=NoNewPrivileges=yes',
       '--property=ProtectControlGroups=yes',
       '/usr/bin/bwrap',
-      ...sandboxArgv(request.root, script, request.mounts),
+      ...sandboxArgv(request.root, script, request.mounts, await realpath(process.execPath)),
     ],
     { env, stdio: ['pipe', 'pipe', 'pipe'], shell: false },
   );

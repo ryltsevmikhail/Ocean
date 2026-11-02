@@ -31,7 +31,7 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         s.on('error', () => { console.log('isolated'); });
         setTimeout(() => { s.destroy(); console.log('no-network'); }, 100);
       `;
-        const result = await runSandbox({ root, program: '/usr/bin/node', args: ['-e', code] });
+        const result = await runSandbox({ root, program: '/toolchain/node', args: ['-e', code] });
         expect(result.cleanupConfirmed).toBe(true);
         expect(result.exitCode, result.output).toBe(0);
         expect(result.output).toContain('isolated');
@@ -46,11 +46,11 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
       try {
         const result = await runSandbox({
           root,
-          program: '/usr/bin/node',
+          program: '/toolchain/node',
           args: [
             '-e',
             `
-        require('node:child_process').spawn('/usr/bin/node', ['-e',
+        require('node:child_process').spawn('/toolchain/node', ['-e',
           "setInterval(()=>require('node:fs').appendFileSync('/workspace/ticks','x'),20)"],
           {detached:true,stdio:'ignore'}).unref();
         setTimeout(()=>process.exit(0),100);
@@ -70,7 +70,7 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
       try {
         const loud = await runSandbox({
           root,
-          program: '/usr/bin/node',
+          program: '/toolchain/node',
           args: ['-e', "process.stdout.write('x'.repeat(100000))"],
         });
         expect(loud.output.length).toBeLessThanOrEqual(sandboxLimits.outputBytes);
@@ -78,7 +78,7 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         expect(loud.cleanupConfirmed).toBe(true);
         const timed = await runSandbox({
           root,
-          program: '/usr/bin/node',
+          program: '/toolchain/node',
           args: ['-e', 'setInterval(()=>{},100)'],
           timeoutMs: 200,
         });
@@ -88,7 +88,7 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         setTimeout(() => controller.abort(), 200);
         const cancelled = await runSandbox({
           root,
-          program: '/usr/bin/node',
+          program: '/toolchain/node',
           args: ['-e', 'setInterval(()=>{},100)'],
           signal: controller.signal,
         });

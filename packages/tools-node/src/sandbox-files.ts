@@ -71,7 +71,7 @@ export async function sandboxFile(
   const path = checkedPath(input.path);
   const evidence = await runSandbox({
     ...options,
-    program: '/usr/bin/node',
+    program: '/toolchain/node',
     args: ['-e', worker, JSON.stringify({ ...input, path })],
     outputBytes: 1048576,
   });

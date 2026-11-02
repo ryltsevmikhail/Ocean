@@ -4,6 +4,7 @@ import { ToolError } from '@runnets/application';
 import { validateMounts, type SandboxMount } from './sandbox-mounts.js';
 import { blockedName } from './backend.js';
 
+export const SANDBOX_NODE = '/toolchain/node';
 export const sandboxLimits = Object.freeze({
   timeoutMs: 60000,
   outputBytes: 32768,
@@ -76,6 +77,7 @@ export function sandboxArgv(
   root: string,
   script: string,
   mounts: readonly SandboxMount[] = [],
+  nodeBinary: string = process.execPath,
 ): string[] {
   return [
     '--unshare-all',
@@ -112,6 +114,9 @@ export function sandboxArgv(
     '--ro-bind',
     '/dev/null',
     '/workspace/.git',
+    '--ro-bind',
+    nodeBinary,
+    SANDBOX_NODE,
     ...mounts.flatMap((m) => ['--ro-bind', m.source, m.target]),
     '--chdir',
     '/workspace',
@@ -120,11 +125,11 @@ export function sandboxArgv(
     '/home/worker',
     '--setenv',
     'PATH',
-    '/workspace/node_modules/.bin:/toolchain/pnpm/bin:/usr/bin:/bin',
+    '/workspace/node_modules/.bin:/toolchain/pnpm/bin:/toolchain:/usr/bin:/bin',
     '--setenv',
     'LANG',
     'C.UTF-8',
-    '/usr/bin/node',
+    SANDBOX_NODE,
     '--input-type=commonjs',
     '-e',
     script,

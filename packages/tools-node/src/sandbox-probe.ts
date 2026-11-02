@@ -33,7 +33,11 @@ export async function probeSandbox(options: SandboxOptions): Promise<SandboxQual
   let qualified = false;
   try {
     if (platform !== 'linux/x64') throw new Error('unsupported platform');
-    const result = await runSandbox({ ...options, program: '/usr/bin/node', args: ['-e', canary] });
+    const result = await runSandbox({
+      ...options,
+      program: '/toolchain/node',
+      args: ['-e', canary],
+    });
     qualified =
       result.exitCode === 0 &&
       result.reason === 'exit' &&
