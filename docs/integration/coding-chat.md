@@ -14,3 +14,11 @@ provider dispatch. The factory must recheck current task authority, project
 lease, restored state and pending effects. Production factory and command
 parsing remain pending. A durable chat regression verifies explicit factory
 requirement, task persistence and refusal to reuse a receipt for another task.
+
+CodingTurnTools now provides the shared turn-level tool port. It exposes file
+tools and run_test(presetId), expands exact registered argv only in application
+code, routes mutations through durable approvals, rejects foreign run contexts
+and deduplicates invocation identities. Raw run_command and extra test arguments
+are refused before preparation. Uncertain results hold the turn instance.
+Regression tests verify preset-only schema/translation and duplicate refusal.
+Production host factory wiring remains pending.
