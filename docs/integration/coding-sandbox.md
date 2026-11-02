@@ -209,3 +209,13 @@ zero. A native test modifies the host file after the sandbox announces
 readiness and confirms that the sandbox still reads the original bytes.
 Directory descendants and the copy-time interval remain open qualification
 items.
+
+Executable hashing now writes the same chunks to a private temporary copy
+inside the supervised bootstrap. After matching the expected fingerprint, the
+bootstrap keeps only a read-only descriptor to the copy and removes its path
+before spawning bubblewrap. The copied bytes, rather than the mutable original
+descriptor, feed --ro-bind-data. Native fault injection changes the original
+immediately before bubblewrap spawn as well as after readiness and verifies
+that the sandbox reads the qualified bytes. Abrupt interruption while staging
+may leave an executable-only scratch directory; crash cleanup remains part of
+the recovery gate.

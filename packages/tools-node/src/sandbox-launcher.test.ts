@@ -50,7 +50,16 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         '-c',
         'echo ready; sleep 0.2; cat /fixture',
       ]);
-      const child = spawn(process.execPath, ['-e', script]);
+      const exchangeBeforeMount = `
+        {
+          const cp=require('node:child_process'), spawn=cp.spawn;
+          cp.spawn=(...args)=>{
+            require('node:fs').writeFileSync(${JSON.stringify(source)},'changed-before-mount');
+            return spawn(...args);
+          };
+        }
+      `;
+      const child = spawn(process.execPath, ['-e', exchangeBeforeMount + script]);
       let output = '',
         errors = '';
       const changed = new Promise<void>((resolve) => {
