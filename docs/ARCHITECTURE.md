@@ -1,6 +1,6 @@
 # Architecture
 
-RunneTS is an event-sourced TypeScript runtime with CLI, ACP and terminal hosts.
+Ocean is an event-sourced TypeScript runtime with CLI, ACP and terminal hosts.
 Rust Runne is reference material, not a crate layout to reproduce. The desktop
 client is a separate project; this repository has no desktop or web UI dependencies.
 

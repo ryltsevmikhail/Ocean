@@ -14,7 +14,7 @@ qualified. No client source is vendored into this repository.
 AI agents (fork of OpenMausBot)`, with `repository → milind-soni/OpenMausBot`
   and `homepage → Ryltsevmg/runne-os`.
 - The desktop side is owned by other projects (`Ryltsevmg/runne-os` for the
-  fork lineage and the OS distribution). RunneTS does **not** contain UI,
+  fork lineage and the OS distribution). Ocean does **not** contain UI,
   windowing, packaging or OS integration, and must not grow them.
 
 ## How a desktop client attaches an external engine
@@ -30,7 +30,7 @@ entry. Two supported shapes:
      "instances": {
        "runnets": {
          "driver": "customAcp",
-         "displayName": "RunneTS",
+         "displayName": "Ocean",
          "config": { "cli": "runne acp" }
        }
      }
@@ -40,16 +40,16 @@ entry. Two supported shapes:
 2. **Any OpenAI-compatible endpoint** (`driver: "openai-compat"` with
    `config.url` / `config.apiKeyEnv` / `config.model`). Not implemented here.
 
-RunneTS implements shape 1: `runne acp` serves the runtime as an ACP agent.
+Ocean implements shape 1: `runne acp` serves the runtime as an ACP agent.
 The server running RunneBot must resolve `runne` and inherit
 `DEEPSEEK_API_KEY` for model calls. For an uninstalled checkout, use an
 absolute Node executable and built entry point in `config.cli`, for example:
-`/absolute/path/node /absolute/path/RunneTS/apps/cli/dist/main.js acp`.
+`/absolute/path/node /absolute/path/Ocean/apps/cli/dist/main.js acp`.
 Quote paths containing spaces. Run `pnpm build` before attaching.
 
 The client probes the command with `--version`; the CLI recognizes this even
 after `acp`. The custom driver uses the agent's default model and sends
-`session/cancel` as a notification. RunneTS accepts both notification and
+`session/cancel` as a notification. Ocean accepts both notification and
 request cancellation. The desktop token counter remains empty because
 `PromptResult` does not expose usage; token usage is committed to TaskRun
 budgets internally. `RUNNE_DB` optionally preserves those committed streams,
@@ -80,7 +80,7 @@ client advertises the matching `clientCapabilities.fs` flags).
 Wire types for this surface live in [`@runnets/contracts`](../../packages/contracts/src/acp.ts).
 A protocol or schema change there is a breaking change for out-of-repo clients.
 
-## What RunneTS implements today
+## What Ocean implements today
 
 | Capability                                                                                          | Status                                           |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------ |

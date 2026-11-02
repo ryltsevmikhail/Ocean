@@ -1,6 +1,6 @@
 # Coding agent
 
-RunneTS executes coding tasks through a bounded model/tool loop. The same turn
+Ocean executes coding tasks through a bounded model/tool loop. The same turn
 engine serves the CLI, TUI and ACP host. A final model response completes the
 TaskRun; requesting an instrument alone does not count as success.
 

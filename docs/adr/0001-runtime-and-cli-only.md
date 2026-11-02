@@ -10,7 +10,7 @@
 ## Context
 
 The archived Runne design combined a Rust execution core, Rust clients and a
-Tauri desktop host. That combination is not being rebuilt. RunneTS is its own
+Tauri desktop host. That combination is not being rebuilt. Ocean is its own
 runtime: an event-sourced TypeScript execution core for AI coding-agent
 workflows, shipped with a CLI host. The archived documentation is reference
 material and provenance — not a porting target, and not a structure to mirror.
@@ -54,7 +54,7 @@ Drivers for that boundary:
    and versioned schemas. An out-of-repository client must be buildable against
    that contract without reaching into `src/` modules or depending on
    implementation classes.
-5. **The archive is reference and provenance.** RunneTS is its own runtime. The
+5. **The archive is reference and provenance.** Ocean is its own runtime. The
    MIT-licensed Runne archive informs intended behavior and is attributed in
    [NOTICE](../../NOTICE); it is not ported and its Rust layout, crate
    structure and requirement IDs are not targets.
