@@ -5,7 +5,8 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
-    "bundle": "rolldown src/ui/app.ts --format iife --file dist/web/app.js && rolldown src/host/worker.ts --platform node --format esm --file dist/worker.mjs"
+    "bundle": "vue-tsc --noEmit -p tsconfig.json && vite build && rolldown src/host/preload.ts --platform node --external electron --format cjs --file dist/preload.cjs",
+    "start": "pnpm -w build && pnpm bundle && OCEAN_DESKTOP_NODE=\"$(node -p process.execPath)\" electron ."
   },
   "dependencies": {
     "vue": "3.5.44",
@@ -19,5 +20,6 @@
     "rolldown": "1.2.16",
     "vite": "8.3.5",
     "vue-tsc": "3.3.14"
-  }
+  },
+  "main": "dist/types/host/main.js"
 }

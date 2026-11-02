@@ -39,7 +39,13 @@ export default tseslint.config(
   {
     // Tests and root config files are intentionally outside the build projects,
     // so they are linted without type information instead of failing to parse.
-    files: ['**/*.test.ts', '*.config.ts', 'eslint.config.mjs'],
+    files: [
+      '**/*.test.ts',
+      '*.config.ts',
+      'apps/desktop/vite.config.ts',
+      'apps/desktop/qa/*.mjs',
+      'eslint.config.mjs',
+    ],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       parserOptions: { projectService: false, project: false },
