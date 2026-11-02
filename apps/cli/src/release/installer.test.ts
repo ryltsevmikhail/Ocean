@@ -3,6 +3,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { packageRelease } from './package.js';
 import {
+  chmodSync,
+  statSync,
   fsyncSync,
   mkdirSync,
   mkdtempSync,
@@ -156,4 +158,34 @@ it('failed durable staging preserves the previous active installation', () => {
   });
   expect(() => installArchive(b.path, b.hash, prefix)).toThrow('disk_failure');
   expect(readFileSync(join(prefix, 'lib/ocean/current/manifest.json'), 'utf8')).toContain('0.1.0');
+});
+
+it('installs exact public program modes under private operator umask', () => {
+  const root = temporary(),
+    prefix = join(root, 'local'),
+    a = artifact(root),
+    b = artifact(root, '0.2.0');
+  const previous = process.umask(0o077);
+  try {
+    installArchive(a.path, a.hash, prefix);
+    installArchive(a.path, a.hash, prefix);
+    installArchive(b.path, b.hash, prefix);
+    installArchive(a.path, a.hash, prefix);
+    expect(statSync(join(prefix, 'lib/ocean/current/bin/ocean')).mode & 0o777).toBe(0o755);
+  } finally {
+    process.umask(previous);
+  }
+});
+
+it('accepts unchanged private modes from earlier installers, but refuses broader permissions', () => {
+  const root = temporary(),
+    prefix = join(root, 'local'),
+    a = artifact(root);
+  installArchive(a.path, a.hash, prefix);
+  const license = join(prefix, 'lib/ocean/current/LICENSE');
+  chmodSync(license, 0o600);
+  chmodSync(join(prefix, 'lib/ocean/current/bin/ocean'), 0o700);
+  installArchive(a.path, a.hash, prefix);
+  chmodSync(license, 0o666);
+  expect(() => installArchive(a.path, a.hash, prefix)).toThrow('version_conflict');
 });

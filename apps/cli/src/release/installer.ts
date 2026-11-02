@@ -2,6 +2,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import {
+  chmodSync,
   closeSync,
   fsyncSync,
   openSync,
@@ -201,7 +202,9 @@ export function installArchive(archive: string, checksum: string, prefix: string
     if (actual.length !== files.size) throw new Error('version_conflict');
     for (const [name, e] of files) {
       const path = join(destination, name);
-      if (!readFileSync(path).equals(e.body) || (lstatSync(path).mode & 0o777) !== e.mode)
+      const mode = lstatSync(path).mode & 0o777;
+      // Earlier installers applied the caller's private umask to public program files.
+      if (!readFileSync(path).equals(e.body) || ![e.mode, e.mode & 0o700].includes(mode))
         throw new Error('version_conflict');
     }
   } else {
@@ -212,6 +215,7 @@ export function installArchive(archive: string, checksum: string, prefix: string
         const path = join(stage, name);
         mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
         writeFileSync(path, e.body, { flag: 'wx', mode: e.mode });
+        chmodSync(path, e.mode);
       }
       syncTree(stage);
       renameSync(stage, destination);
