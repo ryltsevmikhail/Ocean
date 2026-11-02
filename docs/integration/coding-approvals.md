@@ -28,3 +28,10 @@ through the same transaction, then persist consumed status. The store port
 requires claim and status updates to roll back together. Regression tests
 verify one claim for allow-once, no claim for deny/cancel or a foreign room,
 and refusal of repeated consumption. Concrete adapters remain pending.
+
+The memory adapter now commits approval records and dispatch claims together
+using copy-on-write transactions. Storage enforces immutable preview/binding,
+pending→allowed/denied→consumed transitions and a unique invocation claim.
+Regression tests cover rollback after claim plus consumed update, repeated
+claims, immutable preview refusal and consumption without a claim.
+SQLite migration and durable adapter remain next.

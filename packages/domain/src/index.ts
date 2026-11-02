@@ -30,3 +30,4 @@ export * from './coding-policy.js';
 export * from './changeset.js';
 
 export * from './coding-approval.js';
+export * from './coding-approval-state.js';
