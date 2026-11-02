@@ -1,5 +1,6 @@
 import {
   validConversationText,
+  conversationFailure,
   conversationId,
   workspaceId,
   taskRunId,
@@ -15,6 +16,7 @@ import type { TaskRunService } from './service.js';
 import type { ProviderPort } from './provider.js';
 import type { TurnUpdate } from './turn-update.js';
 import { executeStep } from './commands.js';
+import type { TurnInput } from './types.js';
 import { runTurn } from './turn.js';
 
 export interface RecordedRoomMessage {
@@ -25,6 +27,7 @@ export interface RecordedRoomMessage {
 }
 export interface DirectChatDeps extends ConversationServiceDeps {
   readonly tasks: TaskRunService;
+  readonly codingTools?: { forTurn(turn: ChatTurn): Promise<NonNullable<TurnInput['tools']>> };
 }
 export interface SendDirectInput extends DirectChatRequest {
   readonly provider: ProviderPort | null;
@@ -40,6 +43,8 @@ export class DirectChatService {
   }
   /** A request receipt can observe a turn, but can never authorize another dispatch. */
   async send(input: SendDirectInput): Promise<ConversationResult<ChatTurn | RecordedRoomMessage>> {
+    if (input.taskId !== undefined && !this.#deps.codingTools)
+      return conversationFailure('invalid_input');
     const admitted = admitChat(this.#deps, input, input.provider);
     if (!admitted.ok) return admitted;
     if ('record' in admitted.value)
@@ -92,12 +97,14 @@ export class DirectChatService {
         updateChat(store, turn, next);
         return ok(next);
       }
+      const tools =
+        turn.codingTaskId === undefined ? undefined : await this.#deps.codingTools!.forTurn(turn);
       const dispatched = { ...turn, status: 'dispatching' as const };
       updateChat(store, turn, dispatched);
       turn = dispatched;
       const outcome = await runTurn({
         // Room continuations never inherit tool authority from a legacy CLI or ACP session.
-        tools: undefined,
+        tools,
         service: tasks,
         provider: input.provider,
         taskRunId: id,

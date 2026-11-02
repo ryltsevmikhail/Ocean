@@ -217,3 +217,34 @@ it('refuses an oversized restored context before saving a new prompt or invoking
     value: Array.from({ length: 4 }, () => ({ author: 'user' })),
   });
 });
+
+it('requires an injected task factory and binds task identity into the durable chat receipt', async () => {
+  const c = setup(),
+    requests: ModelRequest[] = [];
+  const send = { ...input, roomId: c.roomId, provider: provider(requests), taskId: 'task' };
+  expect(await c.chat.send(send)).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
+  expect(requests).toHaveLength(0);
+  const seen: string[] = [];
+  const chat = new DirectChatService({
+    store: c.store.conversations,
+    tasks: c.tasks,
+    clock,
+    nextId,
+    codingTools: {
+      forTurn: async (turn) => {
+        seen.push(turn.codingTaskId!);
+        return { definitions: [], execute: async () => ({ isError: true, output: 'unused' }) };
+      },
+    },
+  });
+  expect(await chat.send(send)).toMatchObject({
+    ok: true,
+    value: { status: 'completed', codingTaskId: 'task' },
+  });
+  expect(seen).toEqual(['task']);
+  expect(await chat.send({ ...send, taskId: 'different' })).toMatchObject({
+    ok: false,
+    error: { code: 'request_conflict' },
+  });
+  expect(requests).toHaveLength(1);
+});

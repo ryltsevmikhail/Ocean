@@ -13,6 +13,7 @@ import type { ChatMessage, ProviderPort } from './provider.js';
 import { roomContext } from './room-context.js';
 
 export interface DirectChatRequest {
+  readonly taskId?: string;
   readonly workspaceId: string;
   readonly requestId: string;
   readonly roomId: string;
@@ -33,6 +34,7 @@ export function admitChat(
     ![request.workspaceId, request.requestId, request.roomId].every((id) =>
       validConversationText(id, 128),
     ) ||
+    (request.taskId !== undefined && !validConversationText(request.taskId, 128)) ||
     !validConversationText(request.text, 16384)
   )
     return conversationFailure('invalid_input');
@@ -43,6 +45,7 @@ export function admitChat(
     request.roomId,
     request.text,
     ...(request.to === undefined ? [] : [request.to]),
+    ...(request.taskId === undefined ? [] : [{ codingTaskId: request.taskId }]),
   ]);
   return deps.store.atomic((tx) => {
     const receipt = tx.receipt(request.requestId);
@@ -70,6 +73,8 @@ export function admitChat(
     if (address.value !== null && selected === null) return conversationFailure('unknown_bot');
     if (selected !== null && !memberIds.includes(selected.id))
       return conversationFailure('not_member');
+    if (selected === null && request.taskId !== undefined)
+      return conversationFailure('invalid_input');
     if (selected === null) {
       const record: ConversationMessage = {
         id: deps.nextId(),
@@ -102,6 +107,7 @@ export function admitChat(
     const messageId = deps.nextId();
     const seq = tx.nextSequence(room.id);
     const turn: ChatTurn = {
+      ...(request.taskId === undefined ? {} : { codingTaskId: request.taskId }),
       id,
       workspaceId: request.workspaceId,
       roomId: room.id,

@@ -16,7 +16,7 @@ export interface TurnInput {
     text: string,
     stopReason: 'end_turn' | 'max_tokens',
   ) => void | Promise<void>;
-  readonly tools?: ToolService | undefined;
+  readonly tools?: Pick<ToolService, 'definitions' | 'execute'> | undefined;
   readonly maxModelRequests?: number;
   readonly onHistory?: (messages: readonly ChatMessage[]) => void;
   readonly service: TaskRunService;
