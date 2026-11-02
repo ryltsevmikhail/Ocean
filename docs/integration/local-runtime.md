@@ -186,7 +186,10 @@ against a recovered or settled turn return `run_not_active`. A live turn whose
 aggregate has yet to be created returns `run_not_started`. A stale version of
 a live run returns `version_conflict`. Exact retries replay the durable
 receipt even after the run has advanced or settled. Reusing the command ID
-with a different binding returns `request_conflict`. The runtime commits the
+with a different binding returns `request_conflict`. Cancel reads the bound
+turn phase and event head separately from the observation snapshot. It remains
+available when pending decision references exceed the observation page limit.
+The runtime commits the
 TaskRun cancellation command and its receipt before signalling the controller.
 Terminal provider evidence and executor settlement determine the subsequent
 run state. A lost stream can leave the run cancelling and the turn uncertain,

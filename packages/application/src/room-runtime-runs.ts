@@ -1,7 +1,6 @@
 import {
   taskRunId,
   isValidId,
-  type AnyCommand,
   type Bot,
   type ChatTurnStatus,
   type ConversationMessage,
@@ -42,6 +41,7 @@ export interface RoomRunReadPort {
   members(scope: ChatRoomScope, after: string, limit: number): readonly MemberSummary[];
   history(scope: ChatRoomScope, after: number, limit: number): Iterable<ConversationMessage>;
   runs(scope: ChatRoomScope, after: string, limit: number): Iterable<RoomRunState>;
+  cancelTarget(query: RunQuery): Pick<RoomRunState, 'turnStatus' | 'version'> | null;
   run(query: RunQuery): RoomRunState | null;
   hasPositions(scope: ChatRoomScope | RunQuery, after: number, through: number): boolean;
   roomSequence(scope: ChatRoomScope): number;
@@ -63,21 +63,20 @@ export class RoomRuntimeRuns {
   }
   async cancel(input: RoomCancelRequest, controller: AbortController | undefined) {
     const { workspaceId, roomId, runId, requestId, expectedVersion } = input;
-    const state = this.reads.run(input);
-    if (!isValidId(runId, 'tr')) throw Error('unknown_run');
+    const state = this.reads.cancelTarget({ workspaceId, roomId, runId });
     const commandId = 'room-cancel-' + requestId;
     // Include the room and workspace in the durable command identity binding, not in its key.
-    const command: AnyCommand = {
+    const command = {
       type: 'RequestCancel',
       commandId,
-      taskRunId: taskRunId(runId),
+      taskRunId: runId,
       expectedVersion,
       actor: { kind: 'user', id: 'owner' },
       payload: { cause: JSON.stringify(['room_cancel', workspaceId, roomId]) },
-    };
+    } as const;
     const previous = await this.#tasks.lookupCommand(command);
     if (!previous.ok) throw Error('request_conflict');
-    if (!state) throw Error('unknown_run');
+    if (!state || !isValidId(runId, 'tr')) throw Error('unknown_run');
     const receipt = (version: number) => ({
       workspaceId,
       roomId,
@@ -92,7 +91,7 @@ export class RoomRuntimeRuns {
       throw Error('run_not_active');
     if (state.version !== expectedVersion) throw Error('version_conflict');
     if (state.version === 0) throw Error('run_not_started');
-    const committed = await this.#tasks.execute(command);
+    const committed = await this.#tasks.execute({ ...command, taskRunId: taskRunId(runId) });
     if (!committed.ok)
       throw Error(
         committed.error.code === 'invalid_argument' ? 'request_conflict' : committed.error.code,

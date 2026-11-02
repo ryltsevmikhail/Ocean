@@ -12,6 +12,7 @@ import {
   type AppendMeta,
   type AppendOutcome,
   type CommandCommitPort,
+  type CommandLookup,
   type CommandReceipt,
 } from '@runnets/application';
 import type { DatabaseSync } from 'node:sqlite';
@@ -29,7 +30,7 @@ type Append = (
 /** Commit request-bound receipts and events in the same SQLite write transaction. */
 export function sqliteCommands(db: DatabaseSync, append: Append): CommandCommitPort {
   const dedup = new SqliteCommandDedup(db);
-  function lookup(command: AnyCommand): Result<CommandReceipt | null> {
+  function lookup(command: CommandLookup): Result<CommandReceipt | null> {
     const row = db
       .prepare('SELECT request_binding FROM command_receipts WHERE command_id = ?')
       .get(command.commandId);

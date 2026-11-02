@@ -9,6 +9,12 @@ import type { DatabaseSync } from 'node:sqlite';
 import { messageRow } from './conversation-rows.js';
 import { readInteger, readText, readNullableText } from './rows.js';
 
+const BOUND_TURN = `FROM ocean_chat_turns
+      WHERE workspace_id=? AND room_id=? AND task_run_id=?
+      AND json_extract(payload,'$.workspaceId')=workspace_id AND json_extract(payload,'$.roomId')=room_id
+      AND json_extract(payload,'$.taskRunId')=task_run_id AND json_extract(payload,'$.id')=id
+      AND json_extract(payload,'$.status')=status`;
+
 type Scope = Pick<RunQuery, 'workspaceId' | 'roomId'>;
 /** All lookups use the runtime owner's connection. Only explicit, room-visible columns leave this adapter. */
 export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now): RoomRunReadPort {
@@ -35,28 +41,32 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
       'n',
     );
   };
+  const headVersion = (runId: string) =>
+    readInteger(
+      db
+        .prepare('SELECT coalesce(max(sequence),0) AS n FROM events WHERE aggregate_id=?')
+        .get(runId)!,
+      'n',
+    );
+  function cancelTarget({ workspaceId, roomId, runId }: RunQuery) {
+    const row = db.prepare(`SELECT status ${BOUND_TURN}`).get(workspaceId, roomId, runId);
+    return row
+      ? { turnStatus: readText(row, 'status') as ChatTurnStatus, version: headVersion(runId) }
+      : null;
+  }
   function run({ workspaceId, roomId, runId }: RunQuery): RoomRunState | null {
     const t = db
       .prepare(
         `SELECT id,status,json_extract(payload,'$.inboundMessageId') AS message,
       json_extract(payload,'$.requestId') AS request,json_extract(payload,'$.bot.id') AS bot,
-      json_extract(payload,'$.codingTaskId') AS task FROM ocean_chat_turns
-      WHERE workspace_id=? AND room_id=? AND task_run_id=?
-      AND json_extract(payload,'$.workspaceId')=workspace_id AND json_extract(payload,'$.roomId')=room_id
-      AND json_extract(payload,'$.taskRunId')=task_run_id AND json_extract(payload,'$.id')=id
-      AND json_extract(payload,'$.status')=status`,
+      json_extract(payload,'$.codingTaskId') AS task ${BOUND_TURN}`,
       )
       .get(workspaceId, roomId, runId);
     if (!t) return null;
     const turnId = readText(t, 'id'),
       performerId = readText(t, 'bot'),
       turnStatus = readText(t, 'status') as ChatTurnStatus;
-    const version = readInteger(
-      db
-        .prepare('SELECT coalesce(max(sequence),0) AS n FROM events WHERE aggregate_id=?')
-        .get(runId)!,
-      'n',
-    );
+    const version = headVersion(runId);
     const event = db
       .prepare(
         "SELECT type FROM events WHERE aggregate_id=? AND type != 'attempt.usage_recorded' ORDER BY sequence DESC LIMIT 1",
@@ -127,6 +137,7 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
   }
   return {
     hasPositions,
+    cancelTarget,
     run,
     roomSequence,
     rooms(workspaceId, after, limit) {

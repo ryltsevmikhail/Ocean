@@ -12,6 +12,7 @@ import {
   type AppendMeta,
   type AppendOutcome,
   type CommandCommitPort,
+  type CommandLookup,
   type CommandReceipt,
 } from '@runnets/application';
 
@@ -25,7 +26,7 @@ type Append = (
 /** In-memory commits run synchronously so lookup, append and receipt cannot interleave. */
 export function memoryCommands(append: Append): CommandCommitPort {
   const receipts = new Map<string, { binding: string; receipt: CommandReceipt }>();
-  function lookup(command: AnyCommand): Result<CommandReceipt | null> {
+  function lookup(command: CommandLookup): Result<CommandReceipt | null> {
     const previous = receipts.get(command.commandId);
     if (previous === undefined) return ok(null);
     return previous.binding === commandBinding(command) ? ok(previous.receipt) : commandConflict();
