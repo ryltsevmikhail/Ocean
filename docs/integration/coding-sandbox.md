@@ -249,3 +249,9 @@ pids.peak 184, with untruncated output and confirmed cleanup. The earlier
 copied-dependency runs measured typecheck 3.30 s / 708128768 bytes / 56 tasks,
 lint 6.67 s / 1174491136 bytes / 60 tasks, build 3.39 s / 707084288 bytes /
 56 tasks. The original limits remain sufficient for these observations.
+
+Staging cleanup also runs on normal bootstrap process exit, including refusal
+before bubblewrap starts. Two regressions exchange or rewrite the executable
+after preparation, direct TMPDIR to the fixture, and verify that refusal
+leaves no executable staging directory. SIGKILL cleanup remains owned by
+the systemd runtime directory.

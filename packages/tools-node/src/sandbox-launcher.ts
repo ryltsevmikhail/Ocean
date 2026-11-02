@@ -25,6 +25,7 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
     const argv=${JSON.stringify(argv)}, identities=${JSON.stringify(identities)}, descriptors=[];
     const trees=${JSON.stringify(trees)}, fingerprintTree=(${treeFingerprintScript});
     const staged=[];
+    process.once('exit',()=>{for(const dir of staged)fs.rmSync(dir,{recursive:true,force:true});});
     try {
       for(let i=0;i<argv.length;i++) {
         if(argv[i]!=='--bind' && argv[i]!=='--ro-bind') continue;
@@ -57,7 +58,6 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
           fs.closeSync(fd);fd=readonly;descriptors[descriptors.length-1]=fd;
           } finally {
             fs.closeSync(copy);
-
           }
         }
         if(JSON.stringify(actual)!==JSON.stringify(identities[argv[i+1]]))
@@ -79,7 +79,7 @@ export async function sandboxLauncher(argv: readonly string[]): Promise<string> 
       const child=cp.spawn('/usr/bin/bwrap',argv,{
         env:process.env,stdio:['inherit','inherit','inherit',...descriptors],shell:false});
       child.on('error',()=>process.exit(127));
-      child.on('exit',(code)=>{for(const dir of staged)fs.rmSync(dir,{recursive:true,force:true});process.exit(code??128);});
+      child.on('exit',(code)=>process.exit(code??128));
     } finally {for(const fd of descriptors)fs.closeSync(fd);}
   `;
 }

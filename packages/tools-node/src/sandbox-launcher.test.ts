@@ -1,6 +1,6 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -16,9 +16,16 @@ it.each(['replacement', 'rewrite'])(
       const launcher = await sandboxLauncher(['--ro-bind', source, '/fixture']);
       if (change === 'replacement') await rename(source, source + '.old');
       await writeFile(source, 'replacement');
-      await expect(promisify(execFile)(process.execPath, ['-e', launcher])).rejects.toMatchObject({
+      await expect(
+        promisify(execFile)(process.execPath, ['-e', launcher], {
+          env: { ...process.env, TMPDIR: root },
+        }),
+      ).rejects.toMatchObject({
         stderr: expect.stringContaining('mount source changed before opening'),
       });
+      expect((await readdir(root)).filter((name) => name.startsWith('ocean-executable-'))).toEqual(
+        [],
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
