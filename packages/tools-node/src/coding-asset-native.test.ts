@@ -44,6 +44,16 @@ const testMountOf=fd=>/^mnt_id:\s+(\d+)$/m.exec(fs.readFileSync('/proc/self/fdin
 if(testMountOf(testRoot)===testMountOf(testChild)) throw Error('fixture child is not a separate mount');
 if(fs.fstatSync(testRoot).uid!==process.getuid()||fs.fstatSync(testChild).uid!==process.getuid()) throw Error('fixture ownership mismatch');
 fs.closeSync(testRoot);fs.closeSync(testChild);
+fs.writeFileSync('/workspace/project/b.key','synthetic credential canary');
+fs.linkSync('/workspace/project/b.key','/workspace/project/a');
+const {syncBuiltinESMExports}=await import('node:module');
+const originalRead=fs.default.readSync;let bodyReads=0;
+fs.default.readSync=(...args)=>{bodyReads++;return originalRead(...args);};syncBuiltinESMExports();
+try {
+  try {captureCodingAssetTree('/workspace/project',{},'coding-worktree');throw Error('protected capture unexpectedly succeeded');}
+  catch(error){if(error.message!=='protected_coding_asset')throw error;}
+  if(bodyReads!==0)throw Error('protected body was read');
+} finally {fs.default.readSync=originalRead;syncBuiltinESMExports();}
 try {captureCodingAssetTree('/workspace/project');throw Error('cross-mount capture unexpectedly succeeded');}
 catch(error) {if(error.message!=='unsupported_coding_asset')throw error;}
 process.stdout.write('cross-mount refused');

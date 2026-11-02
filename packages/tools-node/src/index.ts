@@ -14,8 +14,18 @@ export type { SandboxOptions, SandboxQualification } from './sandbox-probe.js';
 export { validateMounts } from './sandbox-mounts.js';
 export { GitCodingApplyProject } from './coding-apply-project.js';
 export { captureCodingAssetTree, CODING_ASSET_LIMITS } from './coding-asset-scan.js';
-export type { CodingAssetCapture, CodingAssetLimits } from './coding-asset-scan.js';
+export type {
+  CodingAssetCapture,
+  CodingAssetLimits,
+  CodingAssetPolicy,
+} from './coding-asset-scan.js';
 export { archiveCodingAssetTree, verifyCodingAssetArchive } from './coding-asset-archive.js';
 export { validateCodingAssetLinks, type CodingAssetLinkResolution } from './coding-asset-links.js';
 export { restoreCodingAssetTree } from './coding-asset-restore.js';
 export { captureCodingGitObjects, type CodingGitObjectCapture } from './coding-git-backup.js';
+export {
+  captureCodingWorktreeAssets,
+  type CodingWorktreeAssetCatalog,
+  type CodingWorktreeAssetInput,
+  type CodingWorktreeAssetRecord,
+} from './coding-backup-worktrees.js';

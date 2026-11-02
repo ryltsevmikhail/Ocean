@@ -206,6 +206,64 @@ On Linux x86_64 / Git 2.56.0 / Node 26.13.0, root check passes 885 tests
 (41 opt-in skipped), build and format pass. The source scanner mount primitive
 and interrupted quarantine built-code scenarios are qualified separately.
 
+## Managed worktree subgraph
+
+captureCodingWorktreeAssets consumes the frozen database inventory under the
+caller's maintenance ownership. Every root and branch must match the original
+hash plan over profile owner, project root and task ID beneath the explicit
+managed directory; task/worktree/lease bindings and inventory hash must agree.
+Roots are not inferred from arbitrary .git pointers or user home directories.
+
+A missing ready root fails missing_coding_worktree. A missing preparing/uncertain
+root remains an explicit absence, even if the managed directory has not yet been
+created. No root, branch or file is automatically recreated or removed. Existing
+roots must be private owned canonical directories. Each source supplies a portable
+tree capture plus required Git pack/index to a sequential trusted consumer. The
+returned catalog binds their hashes; the caller must still write and independently
+verify every referenced output before publishing a complete profile backup.
+
+After the last consumer, ALL earlier roots and Git index/packs are observed again,
+as are absences and managed-directory identity. Earlier source mutation, an index
+change without working-file changes, or an absent root appearing refuses rather
+than producing a stale multi-task catalog. Comparison hashes/limits are captured
+before passing consumer DTOs; consumer changes cannot alter the expected sources.
+Limits aggregate across tasks: 2 GiB tree/index/compressed-pack bytes and separately
+2 GiB tree/index/uncompressed-Git bytes, 100,000 filesystem entries and separately
+100,000 Git objects. Duplicated objects across tasks count again conservatively.
+Only one task's file manifest/pack is passed at a time, not all pack Buffers retained.
+
+The coding-worktree scan policy refuses known credential names/components before
+body reads, including environment files, private keys and credential config files.
+A bounded metadata-only pass checks the whole namespace before either content
+pass; both content passes compare each initial identity against that preflight.
+This prevents reading a protected file through an earlier-named internal hardlink
+before encountering its protected name. The alias regression failed before this
+change and now observes zero body reads.
+Only a regular root .git pointer is accepted; nested Git administration and linked
+.git pointers refuse. Dependency directories are preserved, not silently omitted;
+protected files within them also refuse. Capture limits/policy remain attached to
+source evidence and are reused by archive rechecks, including lowered limits.
+Generic selected-root capture retains its explicit all-data policy for other trusted
+roles. These policies do not prove absence of secrets hidden under arbitrary names.
+
+Regression tests cover two task archives, untouched source checkout/user bytes,
+forged plans, lost ready roots, valid absences, source/index/absence races, aggregate
+uncompressed object limits and protected-body refusal. The built scanner's opt-in
+worker fixture also checks credential-policy refusal with zero file-body reads
+before the separate real child-mount refusal. It uses synthetic canaries only.
+Independent review found no blocking subgraph issue; its compressed-versus-logical
+limit clarification led to the separate aggregate uncompressed Git bound.
+At this checkpoint root check passes 899 tests (41 opt-in skipped), build and
+format pass. Two separate native tests pass: protected hardlink-alias refusal
+with zero content reads plus real child-mount refusal in the qualified worker,
+and the built-code quarantine SIGKILL scenario.
+
+This is the managed-worktree subgraph, not the complete profile graph. Partial
+Git administration for absent intents, retained apply originals/intents, registered
+project configuration, explicit dependency roots and external-link mapping still
+need graph selection/verification. No execution authority is restored, no source
+checkout paths are rebound and the user-facing format-1 backup refusal remains.
+
 ## Remaining format-2 work
 
 Build the complete bounded external graph from these references, including all

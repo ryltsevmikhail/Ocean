@@ -17,6 +17,7 @@ export interface CodingGitObjectCapture {
   readonly baseCommit: string;
   readonly objectFormat: 'sha1' | 'sha256';
   readonly objectIds: readonly string[];
+  readonly objectBytes: number;
   readonly index: Buffer;
   readonly indexSha256: string;
   readonly pack: Buffer;
@@ -221,6 +222,7 @@ export function captureCodingGitObjects(binding: WorktreeBinding): CodingGitObje
       baseCommit,
       objectFormat,
       objectIds: objectIds.sort(),
+      objectBytes: bytes,
       index,
       indexSha256: digest(index),
       pack,

@@ -75,7 +75,7 @@ export function archiveCodingAssetTree(
   )
     throw Error('invalid_coding_asset_destination');
   const manifest = validateCodingAssetManifest(expected.manifest),
-    fresh = captureCodingAssetTree(expected.root);
+    fresh = captureCodingAssetTree(expected.root, expected.limits, expected.policy);
   if (fresh.manifest.hash !== manifest.hash || fresh.sourceStateHash !== expected.sourceStateHash)
     throw Error('stale_coding_asset');
   const parent = fs.openSync(dirname(destination), assetDirectoryFlags);
@@ -157,7 +157,7 @@ export function archiveCodingAssetTree(
       checkAssetPath(output, destination);
     }
     fs.fsyncSync(blobs);
-    const after = captureCodingAssetTree(fresh.root);
+    const after = captureCodingAssetTree(fresh.root, fresh.limits, fresh.policy);
     if (after.sourceStateHash !== fresh.sourceStateHash || after.manifest.hash !== manifest.hash)
       throw Error('stale_coding_asset');
     verifyAssetBlobs(blobs, manifest);

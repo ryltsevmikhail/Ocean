@@ -15,7 +15,10 @@ export const CODING_ASSET_LIMITS: CodingAssetLimits = {
   entries: 100000,
   depth: 128,
 };
+export type CodingAssetPolicy = 'all' | 'coding-worktree';
 export interface CodingAssetCapture {
+  readonly policy: CodingAssetPolicy;
+  readonly limits: CodingAssetLimits;
   readonly root: string;
   readonly manifest: CodingAssetManifest;
   readonly sourceStateHash: string;
@@ -50,7 +53,13 @@ export function codingAssetMount(fd: number): string {
   if (!value) throw Error('unsupported_coding_asset');
   return value;
 }
-function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
+function scan(
+  root: string,
+  limits: CodingAssetLimits,
+  policy: CodingAssetPolicy,
+  expected?: ReadonlyMap<string, string>,
+  metadataOnly = false,
+): CodingAssetCapture {
   const uid = process.getuid?.();
   if (process.platform !== 'linux' || uid === undefined || fs.realpathSync(root) !== root)
     throw Error('unsupported_coding_asset');
@@ -94,6 +103,32 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
       ? fs.lstatSync(path, { bigint: true })
       : fs.fstatSync(parent, { bigint: true });
     check(before);
+    if (expected && expected.get(relative) !== codingAssetIdentity(before))
+      throw Error('stale_coding_asset');
+    if (policy === 'coding-worktree' && relative) {
+      const parts = relative.split('/');
+      if (
+        parts.some(
+          (part) =>
+            [
+              '.ssh',
+              '.aws',
+              '.config',
+              '.npmrc',
+              '.netrc',
+              '.gitconfig',
+              '.git-credentials',
+              '.gnupg',
+              '.kube',
+            ].includes(part) ||
+            /^\.env(?:\.|$)/i.test(part) ||
+            /\.(?:pem|key|p12|pfx)$/i.test(part) ||
+            /^id_(?:rsa|ed25519|ecdsa|dsa)/.test(part),
+        ) ||
+        (parts.includes('.git') && (relative !== '.git' || !before.isFile()))
+      )
+        throw Error('protected_coding_asset');
+    }
     const mode = Number(before.mode & 0o777n);
     if (before.isSymbolicLink()) {
       const target = text(fs.readlinkSync(path, { encoding: 'buffer' }));
@@ -170,7 +205,7 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
         return;
       }
       const digest = createHash('sha256');
-      let position = 0;
+      let position = metadataOnly ? Number(before.size) : 0;
       while (position < Number(before.size)) {
         const count = fs.readSync(
           file,
@@ -205,6 +240,8 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
     const body = { format: 1 as const, entries, bytes };
     return {
       root,
+      policy,
+      limits: { ...limits },
       manifest: { ...body, hash: hash(JSON.stringify(body)) },
       sourceStateHash: hash(JSON.stringify([root, states])),
       sourceEntries: states,
@@ -217,7 +254,9 @@ function scan(root: string, limits: CodingAssetLimits): CodingAssetCapture {
 export function captureCodingAssetTree(
   root: string,
   options: Partial<CodingAssetLimits> = {},
+  policy: CodingAssetPolicy = 'all',
 ): CodingAssetCapture {
+  if (policy !== 'all' && policy !== 'coding-worktree') throw Error('unsupported_coding_asset');
   const limits = { ...CODING_ASSET_LIMITS, ...options };
   for (const key of ['bytes', 'entries', 'depth'] as const)
     if (
@@ -226,8 +265,12 @@ export function captureCodingAssetTree(
       limits[key] > CODING_ASSET_LIMITS[key]
     )
       throw Error('coding_asset_limit');
-  const first = scan(root, limits),
-    second = scan(root, limits);
+  const expected =
+    policy === 'coding-worktree'
+      ? new Map(scan(root, limits, policy, undefined, true).sourceEntries)
+      : undefined;
+  const first = scan(root, limits, policy, expected),
+    second = scan(root, limits, policy, expected);
   if (
     first.manifest.hash !== second.manifest.hash ||
     first.sourceStateHash !== second.sourceStateHash
