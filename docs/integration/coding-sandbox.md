@@ -165,3 +165,14 @@ Supervisor input validation also refuses nonfinite, fractional, zero and
 negative retained-output limits before starting a service. Five regression
 cases previously dispatched a worker rather than rejecting invalid limits.
 The verification-to-mount race remains open and prevents stage-3 completion.
+
+## Mount descriptor experiment
+
+On Omarchy, keeping host FileHandles open and binding
+/proc/<host-pid>/fd/<fd> from bubblewrap inside the user unit fails with
+Permission denied. A native experiment verified that the handles survive
+pathname replacement, but 15 isolation tests failed before admission because
+the supervised service cannot traverse those host proc descriptors. The
+experiment was removed. A solution must transfer descriptors into the
+supervised unit (or prepare immutable mount assets there); host proc paths
+cannot be assumed usable. No qualification gate is relaxed by this result.
