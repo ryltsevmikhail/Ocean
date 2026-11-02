@@ -42,7 +42,7 @@ function content(value: unknown): CodingFileContent | null {
 export function decodeCodingRecoveryIntent(
   value: unknown,
   id: string,
-  projects: ReadonlySet<string>,
+  projects: ReadonlySet<string> | null,
 ): CodingRecoveryIntent {
   const r = object(value);
   if (
@@ -52,7 +52,10 @@ export function decodeCodingRecoveryIntent(
     ) ||
     r['version'] !== 1 ||
     typeof r['root'] !== 'string' ||
-    !projects.has(r['root']) ||
+    (projects !== null && !projects.has(r['root'])) ||
+    !r['root'] ||
+    Buffer.byteLength(r['root']) > 4096 ||
+    r['root'].includes('\0') ||
     resolve(r['root']) !== r['root'] ||
     typeof r['path'] !== 'string' ||
     r['backup'] !== id + '.before' ||

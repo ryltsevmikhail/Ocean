@@ -13,7 +13,11 @@ export { probeSandbox, createSandboxBackend } from './sandbox-probe.js';
 export type { SandboxOptions, SandboxQualification } from './sandbox-probe.js';
 export { validateMounts } from './sandbox-mounts.js';
 export { GitCodingApplyProject } from './coding-apply-project.js';
-export { captureCodingAssetTree, CODING_ASSET_LIMITS } from './coding-asset-scan.js';
+export {
+  captureCodingAssetFiles,
+  captureCodingAssetTree,
+  CODING_ASSET_LIMITS,
+} from './coding-asset-scan.js';
 export type {
   CodingAssetCapture,
   CodingAssetLimits,
@@ -38,3 +42,9 @@ export {
   captureScopedCodingApplyRecovery,
   type ScopedCodingApplyRecoveryObservation,
 } from './coding-backup-scope.js';
+
+export {
+  captureCodingRecoveryAssets,
+  type CodingRecoveryAssetInput,
+  type CodingRecoveryAssetCatalog,
+} from './coding-recovery-graph.js';

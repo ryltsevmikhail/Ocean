@@ -1,5 +1,11 @@
 import type { CodingApplyReceipt } from './coding-apply.js';
-import type { CodingWorktree } from './changeset.js';
+import type { CodingFileContent, CodingWorktree } from './changeset.js';
+export type CodingBackupContent = Pick<CodingFileContent, 'mode' | 'sha256'>;
+export interface CodingBackupFile {
+  readonly path: string;
+  readonly before: CodingBackupContent | null;
+  readonly after: CodingBackupContent | null;
+}
 /** External-asset references bound to an immutable database snapshot, not execution authority. */
 export interface CodingBackupInventory {
   readonly format: 1;
@@ -20,6 +26,7 @@ export interface CodingBackupInventory {
     readonly baseCommit: string;
     readonly beforeTreeHash: string;
     readonly afterTreeHash: string;
+    readonly files: readonly CodingBackupFile[];
   }[];
   readonly applications: readonly {
     readonly id: string;

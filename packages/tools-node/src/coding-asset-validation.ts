@@ -1,3 +1,5 @@
+import { validAssetPath, planAssetSelection } from './coding-asset-selection.js';
+export { validAssetPath } from './coding-asset-selection.js';
 import { createHash } from 'node:crypto';
 import type { CodingAssetEntry, CodingAssetManifest } from '@runnets/domain';
 import { CODING_ASSET_LIMITS } from './coding-asset-scan.js';
@@ -16,23 +18,13 @@ function text(value: unknown): value is string {
     Buffer.from(value).toString('utf8') === value
   );
 }
-export function validAssetPath(value: unknown): value is string {
-  return (
-    text(value) &&
-    value !== '' &&
-    !value.startsWith('/') &&
-    value
-      .split('/')
-      .every(
-        (part) => part !== '' && part !== '.' && part !== '..' && Buffer.byteLength(part) <= 255,
-      )
-  );
-}
 /** Validates untrusted portable metadata before any archive path is used. Links remain inert. */
 export function validateCodingAssetManifest(value: unknown): CodingAssetManifest {
   const raw = object(value);
   if (
-    Object.keys(raw).some((key) => !['format', 'entries', 'bytes', 'hash'].includes(key)) ||
+    Object.keys(raw).some(
+      (key) => !['format', 'entries', 'bytes', 'hash', 'selectedFiles'].includes(key),
+    ) ||
     raw['format'] !== 1 ||
     !Array.isArray(raw['entries']) ||
     raw['entries'].length === 0 ||
@@ -116,7 +108,25 @@ export function validateCodingAssetManifest(value: unknown): CodingAssetManifest
     known.set(path, normalized.kind);
   }
   if (bytes !== raw['bytes']) return fail();
-  const body = { format: 1 as const, entries, bytes };
+  const selected =
+    'selectedFiles' in raw
+      ? planAssetSelection(raw['selectedFiles'] as string[], CODING_ASSET_LIMITS)
+      : null;
+  if (
+    selected &&
+    (JSON.stringify(selected.paths) !== JSON.stringify(raw['selectedFiles']) ||
+      known.size !== selected.files.size + selected.children.size ||
+      entries.some(
+        (e) => !(e.kind === 'directory' ? selected.children : selected.files).has(e.path),
+      ))
+  )
+    return fail();
+  const body = {
+    format: 1 as const,
+    entries,
+    bytes,
+    ...(selected && { selectedFiles: selected.paths }),
+  };
   const hash = createHash('sha256').update(JSON.stringify(body)).digest('hex');
   if (hash !== raw['hash']) return fail();
   return { ...body, hash };

@@ -5,6 +5,7 @@ import {
   validCodingBackupFiles,
   type CodingBackupInventory,
   type CodingApplyReceipt,
+  type CodingFileContent,
 } from '@runnets/domain';
 import { task as decodeTask } from './coding-store.js';
 import { changesetStorage } from './changeset-storage.js';
@@ -113,7 +114,20 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
     const byWorktree = new Map(worktrees.map((value) => [value.taskId, value]));
     if (tasks.some((value) => value.worktreeRoot !== null && !byWorktree.has(value.id)))
       throw Error('invalid_coding_inventory');
-    const artifactPaths = new Map<string, readonly string[]>();
+    const descriptor = (content: CodingFileContent | null) => {
+      if (content === null) return null;
+      if (
+        !content ||
+        !['100644', '100755'].includes(content.mode) ||
+        typeof content.text !== 'string' ||
+        content.text.includes('\0') ||
+        Buffer.byteLength(content.text) > 131072 ||
+        Buffer.from(content.text).toString('utf8') !== content.text ||
+        createHash('sha256').update(content.text).digest('hex') !== content.sha256
+      )
+        throw Error('invalid_coding_inventory');
+      return { mode: content.mode, sha256: content.sha256 };
+    };
     const changesets: CodingBackupInventory['changesets'][number][] = [];
     if (version >= 7)
       for (const hash of ids('ocean_changesets', 'hash', MAX_RECORDS)) {
@@ -129,7 +143,13 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
           value.files.length > 1000
         )
           throw Error('invalid_coding_inventory');
-        artifactPaths.set(hash, bounded(value.files.map((file) => file.path)));
+        const paths = new Set<string>();
+        const files = value.files.map(({ path, before, after }) => {
+          if (!text(path) || paths.has(path) || (!before && !after))
+            throw Error('invalid_coding_inventory');
+          paths.add(path);
+          return { path, before: descriptor(before), after: descriptor(after) };
+        });
         changesets.push(
           bounded({
             hash,
@@ -137,6 +157,7 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
             baseCommit: value.baseCommit,
             beforeTreeHash: value.beforeTreeHash,
             afterTreeHash: value.afterTreeHash,
+            files,
           }),
         );
       }
@@ -160,7 +181,7 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
         if (!validCodingBackupFiles(value.files)) throw Error('invalid_coding_inventory');
         if (
           JSON.stringify(value.files.map((file) => file.path)) !==
-          JSON.stringify(artifactPaths.get(value.changesetHash))
+          JSON.stringify(artifact.files.map((file) => file.path))
         )
           throw Error('invalid_coding_inventory');
         applications.push(

@@ -14,7 +14,13 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
     writeFileSync(join(root, '.git'), 'gitdir: /host/not-visible');
     writeFileSync(join(dependencies, 'project/node_modules/dependency.js'), 'synthetic dependency');
     try {
-      for (const module of ['coding-asset-scan.js', 'coding-asset-policy.js']) {
+      for (const module of [
+        'coding-asset-scan.js',
+        'coding-asset-policy.js',
+        'coding-asset-selection.js',
+        'coding-asset-source.js',
+        'coding-asset-state.js',
+      ]) {
         const built = process.env['OCEAN_RC_INSTALL']
           ? join(process.env['OCEAN_RC_INSTALL'], 'node_modules/@runnets/tools-node/dist', module)
           : new URL('../dist/' + module, import.meta.url);

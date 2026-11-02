@@ -12,6 +12,7 @@ export type CodingAssetEntry =
   | { readonly path: string; readonly kind: 'symlink'; readonly target: string };
 export interface CodingAssetManifest {
   readonly format: 1;
+  readonly selectedFiles?: readonly string[];
   readonly entries: readonly CodingAssetEntry[];
   readonly bytes: number;
   readonly hash: string;

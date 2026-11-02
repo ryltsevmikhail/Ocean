@@ -301,9 +301,9 @@ canaries separately prove recovery-policy credential refusal with zero body read
 
 This is a project-scoped legacy asset collector. Version-1 records do not identify
 a profile, task or application; project scope alone must not be presented as exact
-profile-operation attribution. The complete graph still needs explicit binding of
-these legacy records, plus frozen configuration/dependency closure, publication
-and quarantined profile restore. New applications use the separate scoped layout
+profile-operation attribution. The frozen recovery graph below adds candidate attribution. Full profile backup
+still requires configuration and dependency closure, publication and quarantined
+profile restore. New applications use the separate scoped layout
 described below; this collector does not yet select or verify that layout.
 User-facing backup continues to refuse external coding assets until those gates
 pass. No approvals or execution authority are restored by this API.
@@ -351,7 +351,7 @@ workflows qualify actual admitted application. See [coding recovery](coding-reco
 At the corrected 7.1 checkpoint, root check passes 913 tests (41 opt-in skipped), build and
 format pass; the separate seven-boundary SIGKILL plus direct/group native suite
 passes 9 tests on the target Linux laptop. Installed 1.0 artifacts are unchanged.
-Full scoped-asset graph capture and legacy attribution, configuration/dependency
+At the initial scoped-writer checkpoint, graph capture, legacy attribution, configuration/dependency
 closure, format-2 publication/restore and installed/interactive/RC qualification
 remain open. User-facing backup retains its external-assets refusal.
 
@@ -405,15 +405,84 @@ of the entire leaf, source swaps and content mutation, and zero body reads for
 forbidden names or oversized JSON. Direct and group native workflow fixtures
 capture their admitted completed apply from an ownership-held frozen inventory.
 The seven SIGKILL boundaries also exercise source classification after reopening.
-These observations describe retained evidence only. The complete cross-operation
-graph, unmarked legacy attribution, configuration/dependency closure, format-2
-publication and full restore still require their own gates.
+These observations describe retained evidence only. The next section extends this collector across frozen operations.
+Configuration/dependency closure, format-2 publication and full restore remain open.
+
+## Frozen recovery graph and selected files
+
+The Linux host adapter `captureCodingRecoveryAssets(inventory, managedDirectory,
+consume)` collects recovery evidence for every application in a validated frozen
+profile. Hold snapshot maintenance ownership until collection and consumption
+finish. Each changeset reference now carries ordered paths with before and after
+mode/SHA-256 pairs, including null for additions and deletions. The SQLite reader
+checks the immutable payload and hashes the file text before returning those
+descriptors. This read still works after removal of the original checkout.
+
+The graph verifies the inventory hash and binds each application to its task,
+owner, changeset, ready managed worktree, derived branch and canonical Git common
+directory. It reads the managed worktree's Git pointer and the matching
+administrative HEAD, gitdir and commondir. A missing or rebound required
+worktree refuses collection. Original checkout files are outside this read.
+The sequential consumer receives one source capture at a time with its kind
+and slot. The catalog binds the inventory hash, application references and
+selected legacy evidence to their portable manifest hashes.
+
+Every application's **presence** describes its expected v2 slot. Declared
+protocol 2 uses the strict scoped collector. An unmarked receipt keeps its null
+declaration even if the exact canonical header proves observed protocol 2.
+A noncanonical unmarked leaf refuses collection. A missing scope leaves observed
+protocol null. A declared interrupted header can likewise carry no observed
+canonical header. Pending paths have no legacy effect demand. Started and
+uncertain paths remain listed as unknown regardless of retained records.
+
+For eligible unmarked files the collector inspects only the private flat legacy
+directory in the bound common. It preflights the UUID namespace, inode types,
+ownership, mount and JSON size/count bounds before reading main and next JSON.
+It decodes and rehashes before/after text and matches the original project,
+relative path, both Git modes and both content hashes. Every matching UUID
+contributes its available files and the IDs of all candidate applications.
+Unmatched valid records contribute only to the private stability check.
+Their original and staged bytes are never read.
+
+Repeated identical files can leave several possible owners. For each exact
+descriptor group, each completed receipt file without exact v2 completion
+requires a distinct finalized legacy main record. The graph counts these UUIDs
+without assigning them. Decoded completion-next evidence still needs its retained
+original and does not cover a completed receipt file. Opaque partial next bytes
+are preserved beside a valid main. A missing required original, orphan or
+unsupported phase refuses collection. A conflicting retained original is
+reported and preserved in its actual mode and bytes. When both layouts contain
+eligible evidence both captures are retained. No observation settles a receipt.
+
+`captureCodingAssetFiles` takes explicit normalized relative endpoints, emits
+them as a sorted `selectedFiles` list in the manifest and includes the real
+ancestor directories. Rechecks retain this selection, the path policy and lowered
+limits. Generic selected files require all hardlink names to be selected. This
+prevents a harmless-looking name from exposing an unselected credential inode.
+Classified legacy .before/.after files can retain a link outside recovery during
+an interrupted host apply. Only the selected inode bytes and internal aliases are
+materialized. No external alias is followed or recreated. The existing v2 policy
+refuses multiply-linked recovery files, including the live staged hardlink
+interval. That v2 crash boundary remains unqualified.
+
+Each graph pass limits selected outputs to 2 GiB and 100,000 entries, catalog
+and reference metadata to 16 MiB and classified JSON to 256 MiB and 10,000 main
+records. Repeated references are charged conservatively. After the final
+consumer a fresh pass verifies every binding, scope, observed absence, selected
+manifest, physical identity and classification digest, including the JSON of
+unmatched UUIDs. A changed source refuses the graph. No source is repaired.
+
+These fixtures qualify read-only host I/O on synthetic repositories, including
+unchanged-timestamp shared-mapping writes. Direct/group native workflows also
+exercise graph collection inside the frozen callback. The API grants no sandbox
+execution authority. Public format 1 still refuses profiles with external
+coding assets.
 
 ## Remaining format-2 work
 
 Build the complete bounded external graph from these references, including all
 managed worktree bytes, required Git administration/object closure, staged data,
-retained apply originals/intents and profile coding configuration. Distinguish
+the recovery subgraph described above and profile coding configuration. Distinguish
 planned-but-absent assets from lost ready assets. Resolve dependency/symlink
 relationships explicitly; never traverse arbitrary home/root paths as a shortcut.
 Preserve required data or refuse unsupported layouts without a false full-backup

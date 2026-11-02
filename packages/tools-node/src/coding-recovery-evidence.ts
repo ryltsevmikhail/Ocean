@@ -2,9 +2,17 @@ import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { CodingAssetEntry } from '@runnets/domain';
-import { codingAssetIdentity, type CodingAssetCapture } from './coding-asset-scan.js';
+import {
+  codingAssetIdentity,
+  codingAssetMount,
+  type CodingAssetCapture,
+} from './coding-asset-scan.js';
 import { assetFdPath, checkAssetPath } from './coding-asset-io.js';
-import { decodeCodingRecoveryIntent, invalidRecovery } from './coding-recovery-record.js';
+import {
+  decodeCodingRecoveryIntent,
+  invalidRecovery,
+  type CodingRecoveryIntent,
+} from './coding-recovery-record.js';
 
 export interface CodingRecoveryRecordEvidence {
   readonly id: string;
@@ -36,6 +44,7 @@ export function readRecoveryJsonBytes(
   try {
     const check = () => {
       if (
+        codingAssetMount(file) !== codingAssetMount(parent) ||
         codingAssetIdentity(fs.fstatSync(file, { bigint: true })) !== identity ||
         codingAssetIdentity(fs.lstatSync(path, { bigint: true })) !== identity
       )
@@ -63,6 +72,7 @@ export function readCodingRecoveryRecords(
   parent: number,
   projects: ReadonlySet<string>,
   prefix: '' | 'files/',
+  checkIntent?: (intent: CodingRecoveryIntent) => void,
 ): CodingRecoveryRecordEvidence[] {
   const states = new Map(capture.sourceEntries);
   const entries = new Map(
@@ -94,6 +104,7 @@ export function readCodingRecoveryRecords(
     }
     const intent = decodeCodingRecoveryIntent(value, id, projects),
       before = entries.get(intent.backup);
+    checkIntent?.(intent);
     if (intent.status === 'completed' && intent.before && !before) return invalidRecovery();
     if (
       prefix &&

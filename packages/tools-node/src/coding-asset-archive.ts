@@ -3,8 +3,9 @@ import { createHash } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { CodingAssetManifest } from '@runnets/domain';
 import {
-  captureCodingAssetTree,
+  captureAssetTreeAt,
   codingAssetIdentity,
+  codingAssetMount,
   type CodingAssetCapture,
 } from './coding-asset-scan.js';
 import { validateCodingAssetManifest } from './coding-asset-validation.js';
@@ -31,7 +32,8 @@ function sourceFile(
   path: string,
   states: ReadonlyMap<string, string>,
 ): number {
-  const parts = path.split('/');
+  const parts = path.split('/'),
+    mount = codingAssetMount(root);
   let parent = root,
     relative = '';
   try {
@@ -40,7 +42,10 @@ function sourceFile(
       const next = fs.openSync(join(assetFdPath(parent), part), assetDirectoryFlags);
       if (parent !== root) fs.closeSync(parent);
       parent = next;
-      if (codingAssetIdentity(fs.fstatSync(parent, { bigint: true })) !== states.get(relative))
+      if (
+        codingAssetMount(parent) !== mount ||
+        codingAssetIdentity(fs.fstatSync(parent, { bigint: true })) !== states.get(relative)
+      )
         throw Error('stale_coding_asset');
       checkAssetPath(parent, join(capture.root, relative));
     }
@@ -49,7 +54,10 @@ function sourceFile(
       fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
     );
     try {
-      if (codingAssetIdentity(fs.fstatSync(file, { bigint: true })) !== states.get(path))
+      if (
+        codingAssetMount(file) !== mount ||
+        codingAssetIdentity(fs.fstatSync(file, { bigint: true })) !== states.get(path)
+      )
         throw Error('stale_coding_asset');
       checkAssetPath(file, join(capture.root, path));
       return file;
@@ -60,6 +68,21 @@ function sourceFile(
   } finally {
     if (parent !== root) fs.closeSync(parent);
   }
+}
+function recapture(
+  expected: CodingAssetCapture,
+  manifest: CodingAssetManifest,
+): CodingAssetCapture {
+  return captureAssetTreeAt(
+    expected.root,
+    expected.limits,
+    expected.policy,
+    undefined,
+    (metadata) => {
+      if (metadata.sourceStateHash !== expected.sourceStateHash) throw Error('stale_coding_asset');
+    },
+    manifest.selectedFiles,
+  );
 }
 /** New private output only. On failure its incomplete data is retained, never recursively cleaned. */
 export function archiveCodingAssetTree(
@@ -75,7 +98,7 @@ export function archiveCodingAssetTree(
   )
     throw Error('invalid_coding_asset_destination');
   const manifest = validateCodingAssetManifest(expected.manifest),
-    fresh = captureCodingAssetTree(expected.root, expected.limits, expected.policy);
+    fresh = recapture(expected, manifest);
   if (fresh.manifest.hash !== manifest.hash || fresh.sourceStateHash !== expected.sourceStateHash)
     throw Error('stale_coding_asset');
   const parent = fs.openSync(dirname(destination), assetDirectoryFlags);
@@ -114,7 +137,10 @@ export function archiveCodingAssetTree(
     fs.mkdirSync(join(assetFdPath(output), 'blobs'), { mode: 0o700 });
     blobs = fs.openSync(join(assetFdPath(output), 'blobs'), assetDirectoryFlags);
     source = fs.openSync(fresh.root, assetDirectoryFlags);
-    if (codingAssetIdentity(fs.fstatSync(source, { bigint: true })) !== fresh.sourceEntries[0]?.[1])
+    if (
+      codingAssetMount(source) !== fresh.sourceMount ||
+      codingAssetIdentity(fs.fstatSync(source, { bigint: true })) !== fresh.sourceEntries[0]?.[1]
+    )
       throw Error('stale_coding_asset');
     const buffer = Buffer.alloc(1048576),
       copied = new Set<string>(),
@@ -157,7 +183,7 @@ export function archiveCodingAssetTree(
       checkAssetPath(output, destination);
     }
     fs.fsyncSync(blobs);
-    const after = captureCodingAssetTree(fresh.root, fresh.limits, fresh.policy);
+    const after = recapture(fresh, manifest);
     if (after.sourceStateHash !== fresh.sourceStateHash || after.manifest.hash !== manifest.hash)
       throw Error('stale_coding_asset');
     verifyAssetBlobs(blobs, manifest);

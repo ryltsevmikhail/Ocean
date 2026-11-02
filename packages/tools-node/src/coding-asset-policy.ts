@@ -1,6 +1,6 @@
 import type { BigIntStats } from 'node:fs';
 export type CodingAssetPolicy =
-  'all' | 'coding-worktree' | 'coding-recovery' | 'coding-recovery-v2';
+  'all' | 'coding-worktree' | 'coding-recovery' | 'coding-recovery-v2' | 'classified-legacy';
 export function checkAssetPolicy(
   policy: CodingAssetPolicy,
   relative: string,
@@ -31,6 +31,12 @@ export function checkAssetPolicy(
       throw Error('protected_coding_asset');
   }
 
+  if (
+    policy === 'classified-legacy' &&
+    relative === '' &&
+    (!before.isDirectory() || (before.mode & 0o7077n) !== 0n)
+  )
+    throw Error('protected_coding_asset');
   const scoped = policy === 'coding-recovery-v2';
   if (scoped && (relative === '' || relative === 'files')) {
     if (!before.isDirectory() || (before.mode & 0o077n) !== 0n)
@@ -47,7 +53,8 @@ export function checkAssetPolicy(
       throw Error('protected_coding_asset');
     return;
   }
-  if (!relative || (policy !== 'coding-recovery' && !scoped)) return;
+  if (!relative || (policy !== 'coding-recovery' && policy !== 'classified-legacy' && !scoped))
+    return;
   if (scoped && !relative.startsWith('files/')) throw Error('protected_coding_asset');
   const name = scoped ? relative.slice('files/'.length) : relative;
   if (

@@ -14,10 +14,11 @@ export interface RecoverySource {
   readonly files?: ScopeDirectory;
 }
 /** Pins only the named children of the caller's canonical common directory. Never creates a source. */
-export function observeRecoverySource<T>(
+export function observeRecoveryDirectories<T>(
   common: string,
-  slot: string,
-  observe: (source: RecoverySource) => T,
+  names: readonly string[],
+  observe: (directories: ScopeDirectory[], witness: string) => T,
+  expected?: { commonState: string; mount: string },
 ): T {
   if (process.platform !== 'linux' || fs.realpathSync(common) !== common) return invalidRecovery();
   const opened: ScopeDirectory[] = [];
@@ -50,10 +51,19 @@ export function observeRecoverySource<T>(
     return pin(join(parent.path, name), at, parent);
   };
   try {
-    const commonDir = pin(common, common),
-      parent = child(commonDir, 'ocean-apply-recovery-v2');
-    const leaf = parent && child(parent, slot),
-      files = leaf && child(leaf, 'files');
+    const commonDir = pin(common, common);
+    if (
+      expected &&
+      (commonDir.state !== expected.commonState ||
+        codingAssetMount(commonDir.fd) !== expected.mount)
+    )
+      throw Error('stale_coding_asset');
+    let current = commonDir;
+    for (const name of names) {
+      const next = child(current, name);
+      if (!next) break;
+      current = next;
+    }
     const check = () => {
       for (const { fd, path, state } of opened) {
         checkAssetPath(fd, path);
@@ -67,10 +77,31 @@ export function observeRecoverySource<T>(
         throw Error('stale_coding_asset');
     };
     check();
-    const result = observe({ ...(leaf && { leaf }), ...(files && { files }) });
+    const result = observe(
+      opened,
+      JSON.stringify(opened.map((dir) => [dir.path, dir.state, codingAssetMount(dir.fd)])),
+    );
     check();
     return result;
   } finally {
     for (const { fd } of opened.reverse()) fs.closeSync(fd);
   }
+}
+
+export function observeRecoverySource<T>(
+  common: string,
+  slot: string,
+  observe: (source: RecoverySource, witness: string) => T,
+  expected?: { commonState: string; mount: string },
+): T {
+  return observeRecoveryDirectories(
+    common,
+    ['ocean-apply-recovery-v2', slot, 'files'],
+    (dirs, witness) => {
+      const leaf = dirs[2],
+        files = dirs[3];
+      return observe({ ...(leaf && { leaf }), ...(files && { files }) }, witness);
+    },
+    expected,
+  );
 }

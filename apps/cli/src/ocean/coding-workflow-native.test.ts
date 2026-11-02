@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { ModelCodingReviewer, type ProviderPort } from '@runnets/application';
 import { snapshotCodingDatabase } from '@runnets/store-sqlite';
-import { captureScopedCodingApplyRecovery } from '@runnets/tools-node';
+import { captureCodingRecoveryAssets } from '@runnets/tools-node';
 import { codingTestPassed, taskRunId } from '@runnets/domain';
 import {
   codingWorkflowFixture,
@@ -175,27 +175,21 @@ it
       const snapshot = await snapshotCodingDatabase(
         join(f.directory, 'runtime.sqlite'),
         join(f.directory, 'frozen.sqlite'),
-        async (inventory) => {
-          const task = inventory.tasks[0]!,
-            application = inventory.applications[0]!;
-          return captureScopedCodingApplyRecovery(
-            inventory.worktrees[0]!.gitCommonDir,
-            task.projectRoot,
-            {
-              ownerId: task.ownerId,
-              taskId: task.id,
-              applicationId: application.id,
-              changesetHash: application.changesetHash,
-            },
-            application,
-          );
-        },
+        async (inventory) =>
+          captureCodingRecoveryAssets(inventory, join(f.directory, 'worktrees'), async () => {}),
       );
       expect(snapshot.assets).toMatchObject({
-        presence: 'scoped',
-        recoveryProtocol: 2,
-        status: 'completed',
-        records: [{ path: 'math.cjs', status: 'completed', original: 'matching' }],
+        applications: [
+          {
+            id: 'apply',
+            presence: 'scoped',
+            declaredProtocol: 2,
+            observedProtocol: 2,
+            status: 'completed',
+            records: [{ path: 'math.cjs', status: 'completed', original: 'matching' }],
+          },
+        ],
+        legacy: [],
       });
     } finally {
       f.close();

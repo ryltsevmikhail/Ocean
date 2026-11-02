@@ -146,7 +146,8 @@ export function restoreCodingAssetTree(archive: string, destination: string): Co
     }
     checkAssetPath(output, destination);
     if (
-      captureCodingAssetTree(join(destination, 'tree')).manifest.hash !== manifest.hash ||
+      JSON.stringify(captureCodingAssetTree(join(destination, 'tree')).manifest.entries) !==
+        JSON.stringify(manifest.entries) ||
       verifyCodingAssetArchive(archive).hash !== manifest.hash
     )
       throw Error('stale_coding_asset');
