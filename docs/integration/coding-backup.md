@@ -2,7 +2,8 @@
 
 Status: stage 7 in progress. Validated database inventory and an ownership-held
 capture port are implemented. Selected-root manifests and content-addressed archive copy are implemented.
-Complete external-asset graph selection, format-2 publication and full restore
+Selected-root quarantine materialization is also implemented.
+Complete external-asset graph selection, format-2 publication and full profile restore
 are not implemented yet. User-facing
 backup still refuses external coding assets with coding_assets_unavailable.
 This boundary must remain until all asset completeness/restore gates pass.
@@ -127,7 +128,39 @@ On the target Linux notebook, root check passes 858 tests (40 opt-in skipped),
 build and format pass; the separate native child-mount test passes again after
 the scanner change. Independent review found no blocking archive issue.
 This does not yet provide root selection, credential policy, Git object closure,
-restore materialization or a user-facing format-2 backup.
+full profile restore or a user-facing format-2 backup.
+
+## Selected-root quarantine materialization
+
+validateCodingAssetLinks proves closure within one portable manifest without
+opening host targets. Resolution follows intermediate symlinks before processing
+later dot/dotdot components, refuses absolute/escaping/missing targets, file
+traversal and cycles, and preserves literal Linux backslashes. Limits are 40 link
+expansions per resolution, 8,192 queued components and 1,000,000 total component
+steps; an oversized valid graph refuses instead of consuming unbounded work.
+External dependency relationships need the future graph layer's explicit mapping.
+
+restoreCodingAssetTree first verifies the entire archive and internal link closure,
+then creates a new private quarantine container with a durable .incomplete marker.
+It copies verified blobs to newly created files through pinned directories, creates
+internal links after regular data, restores modes and syncs files/directories.
+The restored tree is beneath the private container even if original modes are
+public. A full portable rescan and repeat archive verification must match before
+removing the incomplete marker. Existing output refuses; failures retain partial
+output without recursive cleanup. No source checkout/database is changed, no Git
+command/hook runs, and no coding authority is activated or rebound.
+
+Tests cover exact binary/mode/hardlink/symlink round trip, source independence,
+missing/external/cyclic links, component semantics, traversal bounds, corruption
+before output creation, archive mutation and destination replacement during copy.
+A separate opt-in built-code process test SIGKILLs after the first 1 MiB write:
+partial output retains .incomplete, retrying that destination refuses, source and
+archive remain unchanged, and an explicitly new destination restores correctly.
+This passes on the target notebook without a provider or real profile. It proves
+one selected-root interruption boundary, not complete profile crash recovery.
+Independent review found no blocking issue in internal closure/materialization.
+At this checkpoint, root check passes 872 tests (41 opt-in skipped), build and
+format pass. The real SIGKILL scenario is qualified separately from that suite.
 
 ## Remaining format-2 work
 

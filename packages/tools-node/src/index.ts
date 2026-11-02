@@ -16,3 +16,5 @@ export { GitCodingApplyProject } from './coding-apply-project.js';
 export { captureCodingAssetTree, CODING_ASSET_LIMITS } from './coding-asset-scan.js';
 export type { CodingAssetCapture, CodingAssetLimits } from './coding-asset-scan.js';
 export { archiveCodingAssetTree, verifyCodingAssetArchive } from './coding-asset-archive.js';
+export { validateCodingAssetLinks, type CodingAssetLinkResolution } from './coding-asset-links.js';
+export { restoreCodingAssetTree } from './coding-asset-restore.js';
