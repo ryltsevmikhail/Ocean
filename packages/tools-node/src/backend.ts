@@ -14,7 +14,12 @@ export interface WorkspaceBackend {
   };
   read(path: string): Promise<string | null>;
   list(path: string): Promise<readonly FileEntry[]>;
-  write(path: string, content: string, expected: string | null): Promise<void>;
+  write(
+    path: string,
+    content: string,
+    expected: string | null,
+    signal?: AbortSignal,
+  ): Promise<void>;
   command(
     program: string,
     args: readonly string[],

@@ -8,21 +8,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const input = JSON.parse(fs.readFileSync(0,'utf8'));
-function target(relative, missing=false) {
-  let current='/workspace';
-  const parts=relative==='.'?[]:relative.split('/');
-  parts.forEach((part,index)=>{
-    current=path.join(current,part);
-    try {
-      const stat=fs.lstatSync(current);
-      if(stat.isSymbolicLink() || (!stat.isDirectory() && index<parts.length-1)) throw Error('path_denied');
-    } catch(e) {if (!(missing && index===parts.length-1 && e.code==='ENOENT')) throw e;}
-  });
-  return current;
-}
-function read(relative) {
+function readFile(location) {
   let file;
-  try { file=fs.openSync(target(relative),fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK); }
+  try { file=fs.openSync(location,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK); }
   catch(e) {if(e.code==='ENOENT') return null; throw e;}
   try {
     const stat=fs.fstatSync(file);
@@ -36,29 +24,60 @@ function read(relative) {
     return text;
   } finally {fs.closeSync(file);}
 }
+function openDirectory(relative) {
+  const flags=fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW;
+  let directory=fs.openSync('/workspace',flags);
+  try {
+    for(const part of relative.split('/').filter(part=>part!=='.')) {
+      const next=fs.openSync('/proc/self/fd/'+directory+'/'+part,flags);
+      fs.closeSync(directory);
+      directory=next;
+    }
+    return directory;
+  } catch(error) {fs.closeSync(directory);throw error;}
+}
+function verifyDirectory(relative,directory) {
+  const current=openDirectory(relative);
+  try {
+    const actual=fs.fstatSync(current,{bigint:true});
+    const pinned=fs.fstatSync(directory,{bigint:true});
+    if(actual.dev!==pinned.dev || actual.ino!==pinned.ino) throw Error('stale_directory');
+  } finally {fs.closeSync(current);}
+}
 let installed=false;
 try {
   let result;
-  if(input.op==='read') result=read(input.path);
-  else if(input.op==='list') result=fs.readdirSync(target(input.path),{withFileTypes:true})
-    .filter(e=>!e.isSymbolicLink()).map(e=>({name:e.name,directory:e.isDirectory()}));
-  else {
-    if(read(input.path)!==input.expected) throw Error('stale_read');
-    const dest=target(input.path,true);
-    const temp=path.join(path.dirname(dest),'.ocean-'+crypto.randomUUID()+'.tmp');
-    const mode=input.expected===null?0o600:fs.lstatSync(dest).mode&0o777;
-    let fd;
-    try {
-      fd=fs.openSync(temp,'wx',0o600);
-      fs.writeFileSync(fd,input.content);fs.fchmodSync(fd,mode);fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;
-      if(read(input.path)!==input.expected) throw Error('stale_read');
-      if(input.expected===null) fs.linkSync(temp,dest);else fs.renameSync(temp,dest);
-      installed=true;
-      if(input.expected===null) fs.unlinkSync(temp);
-      const directory=fs.openSync(path.dirname(dest),'r');try{fs.fsyncSync(directory);}finally{fs.closeSync(directory);}
-      result=true;
-    } finally {if(fd!==undefined)fs.closeSync(fd);try{fs.unlinkSync(temp);}catch{}}
-  }
+  const parent=input.op==='list'?input.path:path.dirname(input.path);
+  let directory;
+  try {directory=openDirectory(parent);}
+  catch(error){if(input.op!=='read'||error.code!=='ENOENT')throw error;}
+  if(directory===undefined) result=null;
+  else try {
+    const pinned='/proc/self/fd/'+directory;
+    const dest=path.join(pinned,path.basename(input.path));
+    if(input.op==='read') result=readFile(dest);
+    else if(input.op==='list') result=fs.readdirSync(pinned,{withFileTypes:true})
+      .filter(e=>!e.isSymbolicLink()).map(e=>({name:e.name,directory:e.isDirectory()}));
+    else {
+      if(readFile(dest)!==input.expected) throw Error('stale_read');
+      const temp=path.join(pinned,'.ocean-'+crypto.randomUUID()+'.tmp');
+      const mode=input.expected===null?0o600:fs.lstatSync(dest).mode&0o777;
+      let fd, owned=false;
+      try {
+        fd=fs.openSync(temp,'wx',0o600);owned=true;
+        fs.writeFileSync(fd,input.content);fs.fchmodSync(fd,mode);fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;
+        verifyDirectory(parent,directory);
+        if(readFile(dest)!==input.expected) throw Error('stale_read');
+        if(input.expected===null) fs.linkSync(temp,dest);else fs.renameSync(temp,dest);
+        installed=true;
+        if(input.expected===null) fs.unlinkSync(temp);
+        owned=false;
+        fs.fsyncSync(directory);
+        result=true;
+      } finally {if(fd!==undefined)fs.closeSync(fd);if(owned)fs.unlinkSync(temp);}
+    }
+    verifyDirectory(parent,directory);
+  } finally {fs.closeSync(directory);}
   process.stdout.write(JSON.stringify({ok:true,result}));
 } catch(e) {process.stdout.write(JSON.stringify({ok:false,code:installed?'effect_uncertain':e.message}));}
 `;
@@ -70,10 +89,12 @@ export async function sandboxFile(
     content?: string;
     expected?: string | null;
   },
+  signal?: AbortSignal,
 ): Promise<unknown> {
   const path = checkedPath(input.path);
   const evidence = await runSandbox({
     ...options,
+    ...(signal ? { signal } : {}),
     program: '/toolchain/node',
     args: ['-e', worker],
     stdin: JSON.stringify({ ...input, path }),

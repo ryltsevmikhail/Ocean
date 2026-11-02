@@ -131,3 +131,16 @@ can create them during a read. Failures after installation are uncertain.
 Independent review still requires end-to-end file cancellation, parent
 directory race protection, content-bound toolchain/dependency identity and
 stronger native canaries before the qualification gate closes.
+
+A subsequent native regression exercised cancellation through WorkspaceTools,
+the prepared write, the sandbox backend and filesystem inventory. Cancellation
+before dispatch now leaves the target absent. File operations open parent
+components with O_DIRECTORY and O_NOFOLLOW, retain a directory descriptor, and
+stage, install and clean up relative to that descriptor. Directory identity is
+checked before installation and again before reporting success. A deterministic
+native test exchanges the parent immediately after staging, creates colliding
+names in its replacement, and verifies refusal and cleanup in the original
+directory. Mutation still requires exclusive task ownership; file-content
+comparison and rename do not form a kernel-level compare-and-swap against
+arbitrary concurrent writers. Isolation tests now create and verify readable
+synthetic host key, profile, backup and SSH files before testing worker denial.

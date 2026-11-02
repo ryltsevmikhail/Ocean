@@ -112,10 +112,10 @@ export async function createSandboxBackend(
         .filter((e) => !blockedName(e.name))
         .sort((a, b) => a.name.localeCompare(b.name));
     },
-    async write(path, content, expected) {
+    async write(path, content, expected, signal) {
       if (Buffer.byteLength(content) > 131072 || content.includes('\0'))
         throw new ToolError('unsupported_file', 'write exceeds text limits');
-      await sandboxFile(options, { op: 'write', path, content, expected });
+      await sandboxFile(options, { op: 'write', path, content, expected }, signal);
     },
     async command(program, args, cwd, signal) {
       const preset = presets.find(

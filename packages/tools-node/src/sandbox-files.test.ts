@@ -12,6 +12,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { WorkspaceTools } from './executor.js';
+import { createSandboxBackend } from './sandbox-probe.js';
 import { sandboxFile } from './sandbox-files.js';
 import { createNativeBackend } from './native.js';
 import { validateMounts } from './sandbox-mounts.js';
@@ -85,6 +87,26 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         await rm(root, { recursive: true, force: true });
       }
     }, 20000);
+    it('cancels a prepared write during inventory without modifying the task', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'ocean-cancel-write-'));
+      try {
+        await writeFile(join(root, '.git'), 'synthetic-git-pointer');
+        const backend = await createSandboxBackend({ root }, [], async () => 'fixture');
+        const tools = new WorkspaceTools(backend, { requireContainment: true });
+        const edit = await tools.prepare({
+          id: 'cancel',
+          name: 'write_file',
+          arguments: JSON.stringify({ path: 'marker', content: 'unexpected' }),
+        });
+        const controller = new AbortController();
+        const pending = edit.execute(controller.signal);
+        controller.abort();
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await expect(stat(join(root, 'marker'))).rejects.toMatchObject({ code: 'ENOENT' });
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
     it('transfers maximum-size write previews through private IPC', async () => {
       const root = await mkdtemp(join(tmpdir(), 'ocean-files-'));
       try {

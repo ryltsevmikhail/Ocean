@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { runSandbox, sandboxLimits } from './sandbox-supervision.js';
 
@@ -9,16 +9,28 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
   () => {
     it('hides host canaries, environment, user bus, network and Git administration', async () => {
       const root = await mkdtemp(join(tmpdir(), 'ocean-sandbox-'));
-      const secret = join(tmpdir(), 'ocean-canary-' + crypto.randomUUID());
-      await writeFile(secret, 'synthetic-canary');
+      const hostHome = await mkdtemp(join(tmpdir(), 'ocean-host-home-'));
+      const canaries = [
+        '.config/ocean/deepseek.key',
+        '.local/share/ocean/profile.sqlite',
+        '.local/share/ocean/backups/fixture',
+        '.ssh/id_ed25519',
+      ].map((path) => join(hostHome, path));
+
       await writeFile(join(root, '.git'), 'gitdir: /host/never-visible');
       try {
+        for (const path of canaries) {
+          await mkdir(dirname(path), { recursive: true });
+          await writeFile(path, 'synthetic-canary');
+          expect(await readFile(path, 'utf8')).toBe('synthetic-canary');
+        }
         const code = `
         const fs = require('node:fs');
         const assert = require('node:assert/strict');
         assert.equal(process.env.DEEPSEEK_API_KEY, undefined);
         assert.equal(process.env.DBUS_SESSION_BUS_ADDRESS, undefined);
-        assert.equal(fs.existsSync(${JSON.stringify(secret)}), false);
+        for (const path of ${JSON.stringify(canaries)})
+          assert.throws(() => fs.readFileSync(path), {code:'ENOENT'});
         assert.equal(fs.existsSync('/home/ryltsevmg/.config/ocean'), false);
         assert.equal(fs.existsSync('/run/user/1000/bus'), false);
         assert.equal(fs.existsSync('/sys/fs/cgroup'), false);
@@ -38,7 +50,7 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         expect(result.cgroup).toContain('ocean-worker-');
       } finally {
         await rm(root, { recursive: true, force: true });
-        await rm(secret);
+        await rm(hostHome, { recursive: true, force: true });
       }
     }, 20000);
     it('isolates writable scratch from read-only dependencies and toolchain', async () => {

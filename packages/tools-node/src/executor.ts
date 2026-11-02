@@ -131,7 +131,7 @@ export class WorkspaceTools implements ToolExecutorPort {
       preview: `--- ${path}\n${before ?? '(new file)'}\n+++ ${path}\n${after}`,
       execute: async (signal) => {
         signal.throwIfAborted();
-        await this.#backend.write(path, after, before);
+        await this.#backend.write(path, after, before, signal);
         this.#read.set(path, after);
         return { isError: false, output: `Updated ${path}` };
       },
