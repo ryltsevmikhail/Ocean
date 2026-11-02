@@ -1,6 +1,6 @@
 # Coding sandbox development checkpoint
 
-Status: stage 3 prototype, not qualified or enabled in conversations.
+Status: stage 3 adapter qualified on Omarchy x86_64. Conversation integration requires stages 4–5.
 
 Linux development and final qualification move to the owner's Omarchy x86_64
 notebook. BigPC remains the source of the earlier development checkpoint.
@@ -28,7 +28,7 @@ with argv --config.verify-deps-before-run=false followed by the preset.
 The test preset additionally uses --configLoader native. The working
 directory is /workspace and the environment is the fixed sandbox environment.
 Limits remain 60 seconds, 2 GiB, 256 tasks and 32 KiB retained output.
-Historical measurements and superseded concerns follow below.
+Historical measurements and superseded concerns follow below. The current verification record and ownership boundary supersede earlier open stage-3 gate statements.
 Production chat admission still requires stages 4–7.
 
 ## Implemented prototype
