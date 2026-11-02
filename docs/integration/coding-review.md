@@ -68,3 +68,13 @@ Tests verify intent precedes the external call and both success/failure refuse
 second dispatch. SQLite enforces the new irreversible state transitions.
 Scoped validation passes; parallel asset/config formatting still blocks the
 whole-workspace formatting gate.
+
+ModelCodingReviewer now runs the read-only review through a separate TaskRun
+using the normal metered runTurn path with no tool executor/definitions and
+one model request. Input contains only the immutable handoff/evidence. Its
+bounded JSON parser refuses unknown fields and malformed findings; exact
+artifact anchors remain validated before verdict storage.
+A deterministic-provider integration test checks a seeded defect, no tools,
+isolated input and terminal succeeded TaskRun. No external provider is called.
+Typecheck, scoped lint, tests and build pass; whole-workspace lint/format gates
+remain blocked by parallel design-assets/config changes.
