@@ -39,8 +39,8 @@ export class RuntimeDecisions {
   readonly reviews: RuntimeReviews;
   #draining = false;
   readonly #inFlight = new Set<Promise<RuntimeReply>>();
-  constructor(store: OwnerDecisionStore, reviews: ChatReviewService) {
-    this.owner = new RuntimeOwnerDecisions(store, Date.now);
+  constructor(store: OwnerDecisionStore, reviews: ChatReviewService, now: () => number = Date.now) {
+    this.owner = new RuntimeOwnerDecisions(store, now);
     this.reviews = new RuntimeReviews(reviews, this.owner);
   }
   coding(turn: ChatTurn, signal: AbortSignal): CodingApprovalOwnerPort {

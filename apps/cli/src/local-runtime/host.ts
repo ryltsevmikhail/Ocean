@@ -48,6 +48,8 @@ export interface LocalRuntimeHostOptions {
     'sandbox' | 'inspectSandbox'
   >;
   readonly provider?: ProviderPort | null;
+  /** Test-only deterministic clock; production omits it and uses Date.now (never wire input). */
+  readonly now?: () => number;
   /** Additional host supervision joins runtime-owned execution before SQLite close. */
   readonly drain?: () => Promise<'settled' | 'uncertain'>;
   readonly drainDeadlineMs?: number;
@@ -96,12 +98,13 @@ export async function startLocalRuntime(
     const proof = runtime.openEndpointProof?.();
     if (!proof) throw Error('durable_runtime_required');
     const endpoint = (layout = await recoverEndpoint(paths, proof, originalProfile));
-    decisions = new RuntimeDecisions(runtime.ownerDecisions, runtime.reviews);
+    decisions = new RuntimeDecisions(runtime.ownerDecisions, runtime.reviews, options.now);
     if (!runtime.openRebindStore) throw Error('durable_runtime_required');
     const restoration = new RuntimeRestoration(
       paths.profile,
       runtime.openRebindStore(),
       decisions.owner,
+      options.now,
     );
     const reads = runtime.openProfileReads?.();
     if (!reads) throw Error('durable_runtime_required');

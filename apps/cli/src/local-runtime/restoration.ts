@@ -25,7 +25,12 @@ export class RuntimeRestoration {
   readonly #service: ProfileRebindService;
   readonly #jobs = new Set<Promise<RuntimeReply>>();
   #closing = false;
-  constructor(profile: string, store: ProfileRebindStore, owner: RuntimeOwnerDecisions) {
+  constructor(
+    profile: string,
+    store: ProfileRebindStore,
+    owner: RuntimeOwnerDecisions,
+    now: () => number = Date.now,
+  ) {
     this.#store = store;
     this.#files = new RestoredProfileFiles(profile, readProfileRestoreSnapshot);
     this.#service = new ProfileRebindService({
@@ -33,7 +38,7 @@ export class RuntimeRestoration {
       files: this.#files,
       owner,
       leases: new SqliteProjectLeases(),
-      now: Date.now,
+      now,
       nextId: randomUUID,
       digest: (s) => createHash('sha256').update(s).digest('hex'),
     });
