@@ -3,6 +3,7 @@ import type { Bot, Room, Command, Run } from '../protocol.js';
 import { pages, useRoomFeed } from './room-feed.js';
 import { call, SendFailure, submitDraft } from './bridge.js';
 import { explain } from './dom.js';
+import { feedbackText } from './runtime-text.js';
 
 export function useDesktop() {
   const bots = ref<Bot[]>([]),
@@ -25,6 +26,11 @@ export function useDesktop() {
     draft = ref(''),
     feedback = ref(''),
     busy = ref(false);
+  const runtimeReady = ref(false),
+    loading = ref(true),
+    sending = ref(false),
+    feedbackError = ref(false);
+  const feedbackCode = ref('');
   const dialog = ref<'' | 'room' | 'bot'>(''),
     selected = ref<string[]>([]),
     title = ref('Ocean Team'),
@@ -38,7 +44,7 @@ export function useDesktop() {
   );
   const members = computed(() => bots.value.filter((b) => memberIds.value.includes(b.id)));
   const label = (id: string | undefined) =>
-    bots.value.find((b) => b.id === id)?.handle ?? id ?? '?';
+    bots.value.find((b) => b.id === id)?.handle ?? 'участник';
   const roomName = (r: Room) => (r.kind === 'group' ? r.title : '@' + label(r.botId));
   const roomPreview = (r: Room) =>
     previews.value[r.id] ??
@@ -49,10 +55,14 @@ export function useDesktop() {
     if (busy.value) return;
     busy.value = true;
     feedback.value = '';
+    feedbackError.value = false;
+    feedbackCode.value = '';
     try {
       await action();
     } catch (error) {
+      feedbackCode.value = error instanceof Error ? error.message : String(error);
       feedback.value = explain(error);
+      feedbackError.value = true;
     } finally {
       busy.value = false;
     }
@@ -76,7 +86,15 @@ export function useDesktop() {
       (b) => b.id,
     );
   async function refresh(preferred?: string) {
-    bots.value = await loadBots();
+    try {
+      bots.value = await loadBots();
+      runtimeReady.value = true;
+    } catch (error) {
+      runtimeReady.value = false;
+      throw error;
+    } finally {
+      loading.value = false;
+    }
     rooms.value = await pages(
       (after: string | undefined) => call({ op: 'rooms', after }),
       (r) => r.id,
@@ -172,17 +190,32 @@ export function useDesktop() {
   }
   async function stop(r: Run) {
     await guard(async () => {
-      const ack = await call({
+      await call({
         op: 'cancel',
         room: r.roomId,
         runId: r.runId,
         expectedVersion: r.version,
         requestId: uuid(),
       });
-      feedback.value = 'Отмена запрошена · ' + r.runId + ' [v' + ack.version + ']';
+      feedback.value = 'Остановка запрошена. Ожидаем подтверждения.';
     });
   }
+  const sections = computed(() =>
+    [
+      { title: 'Групповые комнаты', items: rooms.value.filter((r) => r.kind === 'group') },
+      { title: 'Личные комнаты', items: rooms.value.filter((r) => r.kind === 'direct') },
+    ].filter((s) => s.items.length),
+  );
+  const roomHandle = computed(() =>
+    room.value?.kind === 'direct' ? label(room.value.botId) : undefined,
+  );
   return {
+    roomHandle,
+    sections,
+    runtimeReady,
+    loading,
+    sending,
+    feedbackError,
     bots,
     roomPreview,
     rooms,
@@ -192,7 +225,12 @@ export function useDesktop() {
     members,
     recipient,
     draft,
-    feedback,
+    feedback: computed({
+      get: () => feedbackText(feedback.value, feedbackCode.value, !room.value),
+      set: (value: string) => {
+        feedback.value = value;
+      },
+    }),
     busy,
     active,
     receipt,
@@ -221,7 +259,14 @@ export function useDesktop() {
     refresh,
     team,
     create,
-    send,
+    send: async (attachments: string[]) => {
+      sending.value = true;
+      try {
+        await send(attachments);
+      } finally {
+        sending.value = false;
+      }
+    },
     stop,
   };
 }
