@@ -14,7 +14,7 @@ For an isolated window, append `--user-data-dir=/absolute/private/desktop` to th
 
 The sandboxed renderer sends validated room and attachment commands to Electron main. Only the file-backed main frame of that window can invoke them. Main authenticates through the public `@runnets/tools-node/local-runtime-client` export and closes each bounded request connection when it finishes. Electron 45.2.1's embedded Node 24.22.1 was exercised with this client export on Linux. The owner and workspace build continue to use Node 26. The renderer receives no connection descriptor, provider configuration or arbitrary path/exec interface.
 
-A send displays the durable message/run receipt as soon as the owner acknowledges it. A group note has no run. The window follows scoped room/run watermarks, pages committed history and runs using the authoritative turn ID (which need not match the run ID), and displays read failures separately from admission. An uncertain acknowledgement in a living window retains the original UUID, recipient, text and attachment IDs for the explicit retry button. Every automatic recovery success passes the original prepared content through binding-checked admission. The locally persisted prepared body permits an exact retry even when attachment bytes disappear. Missing or corrupt preparation evidence keeps the original UUID and draft unresolved; an identity-only owner receipt cannot establish content agreement. A local or owner binding conflict keeps that same pending command, including across later preparation failures. A first-attempt refusal such as `context_limit` leaves the draft and recipient editable. Reopening the room reads the owner's committed history and runs. Closing the window detaches. The cancel button identifies a run and version and requests cancellation against that binding. The run projection reports the actual outcome. Room tasks show performer and pending decision IDs. Inspect and vote on the complete operation in the room TUI or the public client example.
+A send displays the durable message/run receipt as soon as the owner acknowledges it. A group note has no run. The window follows scoped room/run watermarks, pages committed history and runs using the authoritative turn ID (which need not match the run ID), and displays read failures separately from admission. An uncertain acknowledgement in a living window retains the original UUID, recipient, text and attachment IDs for the explicit retry button. Every automatic recovery success passes the original prepared content through binding-checked admission. The runtime operation store durably retains the prepared body, allowing an exact retry even when attachment bytes disappear. Missing or corrupt preparation evidence keeps the original UUID and draft unresolved; an identity-only owner receipt cannot establish content agreement. A preparation or admission binding conflict keeps that same pending command, including across later preparation failures. A first-attempt refusal such as `context_limit` leaves the draft and recipient editable. Reopening the room reads the owner's committed history and runs. Closing the window detaches. The cancel button identifies a run and version and requests cancellation against that binding. The run projection reports the actual outcome. Room tasks show performer and pending decision IDs. Inspect and vote on the complete operation in the room TUI or the public client example.
 
 ### Runtime-owned attachments
 
@@ -27,11 +27,42 @@ exports use the exact bytes checked by the runtime/client digest path.
 The original default and alternate stores are explicit migration sources. The
 owner copies and verifies them into a new private profile store, then commits the
 binding; original directories stay untouched and cannot become authority again.
-Missing required data and unknown migration/preparation outcomes refuse. Relocating
+Missing required data and unknown migration/preparation outcomes refuse. Canonical file bytes live under `<profile>/desktop-<uuid>/tree`; SQLite retains the exact preparation operation and send receipt. Damaging an old userData JSON does not test that authority. Relocating
 the profile or changing an enrolled userData does not silently select another
 store. See [Desktop ownership and capture](desktop-assets.md) for exact namespaces,
 protocol and supported/refused legacy states. CLI format-1 backup refuses bound
-Desktop assets; full format 2 and full restore remain open.
+Desktop assets. Public full format 2 captures the canonical byte/preparation graph;
+restoration verifies it and leaves the profile in inert quarantine until explicit
+owner rebind.
+
+### Current installed-runtime GUI qualification (7.13)
+
+`apps/desktop/qa/current.mjs` requires `OCEAN_QA_CLI` to name the installed
+production CLI entry and optionally `OCEAN_QA_ROOT` to hold private retained
+fixtures. It uses the standard `pnpm --filter @ocean/desktop start` entrypoint,
+real Wayland windows, sandboxed Electron, a deterministic offline provider, and
+a separately started owner. Fixture launch environments have synthetic HOME, all XDG
+paths and TMPDIR; only the GUI receives the explicit display connection.
+`app.getPath('userData')`, native web preferences and observed child environments
+are recorded. Chromium overwrites the proc environment memory of some sandbox
+children; their raw rewritten observations are retained separately from checked
+ancestor environments. Runtime, TUI and SDK use the same profile and instance.
+
+The gate exercises lost postcommit acknowledgement, corrupt and unknown runtime
+preparation evidence, conflicting retry bindings, close while generation is held,
+one answer/one dispatch after reopening, canonical attachment preview/export,
+window plus runtime restart, and public full backup/source-deleted quarantine
+restore. Evidence stays in the private fixture root. File input, drop and paste
+are controlled synthetic DOM inputs; save dialogs are intercepted only in the
+fixture host. Physical pickers, physical clipboard and live provider behavior remain separate
+qualification scopes. `standalone.mjs` separately stages compiled Desktop and
+its public runtime dependencies into an existing Electron Packager Linux x64
+artifact, launches that executable directly, and checks held-generation detach,
+same-run completion and reopening against the installed owner. Packaged Electron
+ignores most NODE_OPTIONS; its actual native userData and sandbox preferences
+are inspected through an explicitly enabled private loopback main inspector.
+Neither packaging nor qualification changes global installation or OS integration. Electron stderr
+and renderer/native event logs are retained, including platform warnings.
 
 ### Historical Linux GUI qualification (before 7.7)
 
