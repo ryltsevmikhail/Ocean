@@ -187,9 +187,16 @@ async function spawnWorker(directory: string, room: string, phase: string) {
   const exit = new Promise<[number | null, string | null]>((resolve) =>
     child.once('close', (code, signal) => resolve([code, signal])),
   );
-  await vi.waitFor(() => expect(out, 'worker not ready').toContain('ready\n'), {
-    timeout: 20000,
-  });
+  try {
+    await vi.waitFor(() => expect(out, 'worker not ready').toContain('ready\n'), {
+      timeout: 20000,
+    });
+  } catch (error) {
+    // A wait failure must not leave the worker below a fixture directory we remove.
+    child.kill('SIGKILL');
+    await exit;
+    throw error;
+  }
   return { child, out: () => out, exit };
 }
 it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')(
