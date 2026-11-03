@@ -24,6 +24,7 @@ export function prepareProfileBackupSources(
   profile: string,
   managed: string,
   destination: string,
+  inert?: { readonly roots: readonly string[]; readonly gitCommonDirs: readonly string[] },
 ): void {
   const configuration = holdCodingConfiguration(profile),
     selected = new Set<string>();
@@ -138,12 +139,16 @@ export function prepareProfileBackupSources(
       close: () => fs.closeSync(fd),
     });
   };
-  for (const task of coding.tasks)
-    if (destination === task.projectRoot || destination.startsWith(task.projectRoot + '/'))
+  for (const project of [...coding.tasks.map((task) => task.projectRoot), ...(inert?.roots ?? [])])
+    if (destination === project || destination.startsWith(project + '/'))
+      throw Error('invalid_profile_backup_destination');
+  for (const gitCommonDir of [
+    ...coding.worktrees.map((tree) => tree.gitCommonDir),
+    ...(inert?.gitCommonDirs ?? []),
+  ])
+    if (destination === gitCommonDir || destination.startsWith(gitCommonDir + '/'))
       throw Error('invalid_profile_backup_destination');
   for (const tree of coding.worktrees) {
-    if (destination === tree.gitCommonDir || destination.startsWith(tree.gitCommonDir + '/'))
-      throw Error('invalid_profile_backup_destination');
     if (tree.state === 'ready') root(tree.root, 'coding-worktree');
     else optionalRoot(tree.root, 'coding-worktree');
   }

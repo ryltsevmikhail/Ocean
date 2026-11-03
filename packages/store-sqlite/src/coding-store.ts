@@ -27,66 +27,64 @@ export class SqliteCodingStore implements CodingStore {
   }
   atomic<T>(work: (tx: CodingTransaction) => T): T {
     const db = this.#db;
-    return withImmediateTransaction(db, () =>
-      work({
-        ...changesetStorage(db),
-        task: (id) => task(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
-        putTask: (t) => {
-          const old = task(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(t.id));
-          if (
-            old &&
-            (JSON.stringify({ ...old, status: t.status, worktreeRoot: t.worktreeRoot }) !==
-              JSON.stringify(t) ||
-              (old.status === 'cancelled' && t.status !== 'cancelled') ||
-              (old.worktreeRoot !== null && old.worktreeRoot !== t.worktreeRoot))
-          )
-            throw Error('Immutable coding binding');
-          if (old && old.worktreeRoot === null && t.worktreeRoot !== null) {
-            const bound = db
-              .prepare('SELECT root,state FROM ocean_worktrees WHERE task_id=?')
-              .get(t.id);
-            if (
-              old.status !== 'reserved' ||
-              bound?.state !== 'preparing' ||
-              bound.root !== t.worktreeRoot
-            )
-              throw Error('Missing worktree intent');
-          }
-          db.prepare(
-            `INSERT INTO ocean_coding_tasks VALUES(?,?,?,?,?,?,?,?,?,?)
-     ON CONFLICT(id) DO UPDATE SET status=excluded.status,payload=excluded.payload`,
-          ).run(
-            t.id,
-            t.workspaceId,
-            t.projectRoot,
-            t.ownerRoomId,
-            t.devBotId,
-            t.reviewRoomId,
-            t.reviewBotId,
-            t.status,
-            t.policyVersion,
-            JSON.stringify(t),
-          );
-        },
-        receipt: (id) => {
-          const row = db.prepare('SELECT * FROM ocean_coding_receipts WHERE request_id=?').get(id);
-          return row ? { binding: String(row['binding']), taskId: String(row['task_id']) } : null;
-        },
-        putReceipt: (id, r) => {
-          db.prepare('INSERT INTO ocean_coding_receipts VALUES(?,?,?)').run(
-            id,
-            r.binding,
-            r.taskId,
-          );
-        },
-        workspaceRoot: (id) => {
-          const row = db.prepare('SELECT root FROM ocean_workspace WHERE id=?').get(id);
-          return row ? String(row['root']) : null;
-        },
-        participates: (ws, room, bot) => participates(db, ws, room, bot),
-      }),
-    );
+    return withImmediateTransaction(db, () => work(codingTransaction(db)));
   }
+}
+
+export function codingTransaction(db: DatabaseSync): CodingTransaction {
+  return {
+    ...changesetStorage(db),
+    task: (id) => task(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
+    putTask: (t) => {
+      const old = task(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(t.id));
+      if (
+        old &&
+        (JSON.stringify({ ...old, status: t.status, worktreeRoot: t.worktreeRoot }) !==
+          JSON.stringify(t) ||
+          (old.status === 'cancelled' && t.status !== 'cancelled') ||
+          (old.worktreeRoot !== null && old.worktreeRoot !== t.worktreeRoot))
+      )
+        throw Error('Immutable coding binding');
+      if (old && old.worktreeRoot === null && t.worktreeRoot !== null) {
+        const bound = db
+          .prepare('SELECT root,state FROM ocean_worktrees WHERE task_id=?')
+          .get(t.id);
+        if (
+          old.status !== 'reserved' ||
+          bound?.state !== 'preparing' ||
+          bound.root !== t.worktreeRoot
+        )
+          throw Error('Missing worktree intent');
+      }
+      db.prepare(
+        `INSERT INTO ocean_coding_tasks VALUES(?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(id) DO UPDATE SET status=excluded.status,payload=excluded.payload`,
+      ).run(
+        t.id,
+        t.workspaceId,
+        t.projectRoot,
+        t.ownerRoomId,
+        t.devBotId,
+        t.reviewRoomId,
+        t.reviewBotId,
+        t.status,
+        t.policyVersion,
+        JSON.stringify(t),
+      );
+    },
+    receipt: (id) => {
+      const row = db.prepare('SELECT * FROM ocean_coding_receipts WHERE request_id=?').get(id);
+      return row ? { binding: String(row['binding']), taskId: String(row['task_id']) } : null;
+    },
+    putReceipt: (id, r) => {
+      db.prepare('INSERT INTO ocean_coding_receipts VALUES(?,?,?)').run(id, r.binding, r.taskId);
+    },
+    workspaceRoot: (id) => {
+      const row = db.prepare('SELECT root FROM ocean_workspace WHERE id=?').get(id);
+      return row ? String(row['root']) : null;
+    },
+    participates: (ws, room, bot) => participates(db, ws, room, bot),
+  };
 }
 
 export function participates(db: DatabaseSync, ws: string, room: string, bot: string): boolean {

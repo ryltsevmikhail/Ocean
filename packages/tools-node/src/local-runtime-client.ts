@@ -1,4 +1,5 @@
 import { localDesktopClient, type LocalDesktopClient } from './local-desktop-client.js';
+import { localRestoreClient, type LocalRestoreClient } from './local-restore-client.js';
 import { localProfileClient, type LocalProfileClient } from './local-profile-client.js';
 import { localPanelClient, type LocalPanelClient } from './local-panel-client.js';
 import { randomUUID } from 'node:crypto';
@@ -27,6 +28,7 @@ import { localRoomClient, validatedParams, type LocalRoomClient } from './local-
 import { localDecisionClient, type LocalDecisionClient } from './local-decision-client.js';
 export interface LocalRuntimeClient
   extends
+    LocalRestoreClient,
     LocalDesktopClient,
     LocalProfileClient,
     LocalRoomClient,
@@ -138,6 +140,7 @@ async function connectDescriptor(
       throw Error('identity_mismatch');
     return {
       identity,
+      ...localRestoreClient(peer.request.bind(peer)),
       ...localDesktopClient((method, params) => peer.request(method, params)),
       ...localProfileClient(peer.request.bind(peer)),
       ...localPanelClient(peer.request.bind(peer)),

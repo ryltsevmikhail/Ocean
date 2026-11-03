@@ -16,7 +16,7 @@ export interface OwnerDecisionRef extends OwnerDecisionScope {
 export type DecisionOutcome =
   'allowed' | 'denied' | 'cancelled' | 'expired' | 'invalidated' | 'interrupted';
 export interface OwnerDecision extends OwnerDecisionRef {
-  readonly kind: 'write' | 'test' | 'continue-text-only';
+  readonly kind: 'write' | 'test' | 'continue-text-only' | 'restore-rebind';
   readonly version: number;
   readonly status: 'pending' | DecisionOutcome;
   readonly bindingDigest: string;

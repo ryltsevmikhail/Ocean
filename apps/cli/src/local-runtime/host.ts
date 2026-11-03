@@ -1,11 +1,20 @@
 import { runtimeDesktopAssets, desktopSubmitRefusal } from './desktop-assets.js';
+import { RuntimeRestoration } from './restoration.js';
+import {
+  restoredRuntimeAdmission,
+  restoreMarkerPresent,
+  runtimeIncomplete,
+} from '../runtime-restoration.js';
+import { readRestorationAuthority } from '@runnets/store-sqlite';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { LOCAL_RESTORE_METHODS } from '@runnets/contracts';
 import { profileCommand } from './profile-commands.js';
 import { PROFILE_METHODS } from '@runnets/contracts';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { lstatSync, closeSync } from 'node:fs';
+import { closeSync } from 'node:fs';
 import { recoverEndpoint, publishEndpoint } from './endpoint.js';
 import { profileKey, type EndpointLayout } from './endpoint-files.js';
-import { join } from 'node:path';
 import type { ProviderPort, RuntimeRecovery } from '@runnets/application';
 import { LOCAL_RUNTIME_MAX_WAIT_MS, LOCAL_ROOM_METHODS } from '@runnets/contracts';
 import type {
@@ -32,6 +41,7 @@ export interface LocalRuntimeHost {
 }
 export interface LocalRuntimeHostOptions {
   readonly profile: string;
+  readonly restore?: boolean;
   /** Host-only composition. Providers and coding authority never arrive over the wire. */
   readonly codingTools?: Pick<
     NonNullable<RuntimeOptions['codingTools']>,
@@ -54,27 +64,45 @@ export async function startLocalRuntime(
   )
     throw Error('invalid_input');
   const paths = localRuntimePaths(options.profile);
-  assertNotRestored(paths.profile);
+  const checkRestoration = () => {
+    if (runtimeIncomplete(paths.profile)) throw Error('recovery_required');
+    if (options.restore || !restoreMarkerPresent(paths.profile)) return;
+    // Ordinary host startup requires a verified ready epoch; inert quarantines never start.
+    const database = join(paths.profile, 'runtime.sqlite');
+    if (!existsSync(database)) throw Error('restore_restricted');
+    const { origin, active } = readRestorationAuthority(database);
+    if (!origin || !active) throw Error('restore_restricted');
+    restoredRuntimeAdmission(paths.profile, origin, undefined, active);
+  };
+  checkRestoration();
   const originalProfile = profileKey(paths);
   let decisions: RuntimeDecisions;
   const runtime = openOceanProfile(paths.profile, false, {
     // This host alone validates and retires a surviving publication before serving.
     requireUnpublished: false,
-    codingTools: {
-      ...(options.codingTools ?? registeredCodingTools(paths.profile)),
-      owner: (turn, signal) => decisions.coding(turn, signal),
-    },
+    ...(!options.restore && {
+      codingTools: {
+        ...(options.codingTools ?? registeredCodingTools(paths.profile)),
+        owner: (turn, signal) => decisions.coding(turn, signal),
+      },
+    }),
   });
   let transport: Awaited<ReturnType<typeof listenLocalRuntime>> | undefined;
   let layout: EndpointLayout | undefined;
   let publication: ReturnType<typeof publishEndpoint> | undefined;
   try {
     const recovery = await runtime.ready;
-    assertNotRestored(paths.profile);
+    checkRestoration();
     const proof = runtime.openEndpointProof?.();
     if (!proof) throw Error('durable_runtime_required');
     const endpoint = (layout = await recoverEndpoint(paths, proof, originalProfile));
     decisions = new RuntimeDecisions(runtime.ownerDecisions, runtime.reviews);
+    if (!runtime.openRebindStore) throw Error('durable_runtime_required');
+    const restoration = new RuntimeRestoration(
+      paths.profile,
+      runtime.openRebindStore(),
+      decisions.owner,
+    );
     const reads = runtime.openProfileReads?.();
     if (!reads) throw Error('durable_runtime_required');
     const panels = new CodingPanelQueries(runtime, reads);
@@ -95,12 +123,18 @@ export async function startLocalRuntime(
         ...LOCAL_DECISION_METHODS,
         'coding.panel',
         ...PROFILE_METHODS,
+        ...LOCAL_RESTORE_METHODS,
+        ...(options.restore ? ['restore.maintenance'] : []),
       ],
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
       runtime.chat,
-      options.provider === undefined ? createProviderFromEnv(process.env) : options.provider,
+      options.restore
+        ? null
+        : options.provider === undefined
+          ? createProviderFromEnv(process.env)
+          : options.provider,
       runtime.openRoomRuns(),
       identity.instanceId,
     );
@@ -135,6 +169,7 @@ export async function startLocalRuntime(
                   options.drain ? options.drain() : 'settled',
                   decisions.drain(),
                   panels.drain(),
+                  restoration.drain(),
                 ]);
                 return jobs === 'settled' && extra === 'settled' ? 'settled' : 'uncertain';
               }, drainDeadlineMs)) !== 'settled'
@@ -181,6 +216,10 @@ export async function startLocalRuntime(
         identity,
         dispatch: (method, params, detached) => {
           if (databaseClosed) return { error: { code: 'runtime_draining' } };
+          if (LOCAL_RESTORE_METHODS.some((m) => m === method))
+            return restoration.dispatch(method, params);
+          if (options.restore && !maintenanceRead(method))
+            return { error: { code: 'restore_restricted' } };
           if (method === 'desktop.assets') return desktop(params, state !== 'ready');
           if (method === 'turns.submit') {
             const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
@@ -204,7 +243,7 @@ export async function startLocalRuntime(
       },
       endpoint,
     );
-    assertNotRestored(paths.profile);
+    checkRestoration();
     publication = publishEndpoint(endpoint, transport.socketFd, descriptor, proof);
     transport.activate();
     return host;
@@ -245,12 +284,25 @@ async function drainBeforeDeadline(
   }
 }
 
-function assertNotRestored(profile: string): void {
-  try {
-    lstatSync(join(profile, 'restore-guard.json'));
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return;
-    throw error;
-  }
-  throw Error('restore_restricted');
+function maintenanceRead(method: string): boolean {
+  return [
+    'rooms.list',
+    'rooms.members',
+    'history.list',
+    'runs.list',
+    'runs.events',
+    'runs.result',
+    'runs.get',
+    'receipts.get',
+    'observe',
+    'bots.list',
+    'coding.show',
+    'coding.diff',
+    'coding.pending',
+    'coding.panel',
+    'decisions.list',
+    'decisions.get',
+    'decisions.preview',
+    'decisions.resolve',
+  ].includes(method);
 }

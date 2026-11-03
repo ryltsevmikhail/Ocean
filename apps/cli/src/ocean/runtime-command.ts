@@ -8,7 +8,7 @@ export async function runRuntimeCommand(args: OceanArguments, output: Writable):
   const action = args.positional[0];
   if (
     args.positional.length !== 1 ||
-    !['start', 'status', 'stop'].includes(action ?? '') ||
+    !['start', 'restore', 'status', 'stop'].includes(action ?? '') ||
     args.textOnly ||
     [...args.flags.keys()].some((flag) => flag !== 'profile')
   )
@@ -16,8 +16,11 @@ export async function runRuntimeCommand(args: OceanArguments, output: Writable):
   const profile = profileDirectory(args.flags.get('profile'));
   const write = (data: unknown) =>
     output.write(JSON.stringify({ version: 1, ok: true, data }) + '\n');
-  if (action === 'start') {
-    const host = await startLocalRuntime({ profile });
+  if (action === 'start' || action === 'restore') {
+    const host = await startLocalRuntime({
+      profile,
+      ...(action === 'restore' && { restore: true }),
+    });
     const stop = () => {
       void host.stop().then((result) => {
         if (result.outcome === 'uncertain')

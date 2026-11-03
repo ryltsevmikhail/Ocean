@@ -6,6 +6,10 @@ import {
   type ProfileBackupLimits,
 } from './profile-backup-session.js';
 import { prepareProfileBackupSources } from './profile-backup-plan.js';
+import {
+  prepareProfileLineage,
+  type ProfileLineagePartition,
+} from './profile-lineage-preparation.js';
 export interface PreparedProfileBackup {
   /** Releases the original source witnesses, including on pre-copy failure. */
   close(): void;
@@ -14,6 +18,7 @@ interface PreparedState {
   source: ProfileBackupSource;
   session: ProfileBackupSession;
   destination: string;
+  partition: ProfileLineagePartition;
   consumed: boolean;
   closed: boolean;
 }
@@ -24,9 +29,20 @@ export function prepareProfileBackupAssets(
   destination: string,
   limits?: Partial<ProfileBackupLimits>,
 ): PreparedProfileBackup {
-  const source = structuredClone(input),
-    session = new ProfileBackupSession(limits);
-  const state: PreparedState = { source, session, destination, consumed: false, closed: false };
+  const { readSnapshot, ...cloneable } = input;
+  const source: ProfileBackupSource = {
+    ...structuredClone(cloneable),
+    ...(readSnapshot ? { readSnapshot } : {}),
+  };
+  const session = new ProfileBackupSession(limits);
+  const state: PreparedState = {
+    source,
+    session,
+    destination,
+    partition: { inventory: source.inventory, desktop: source.desktop, lineage: null },
+    consumed: false,
+    closed: false,
+  };
   try {
     profileBackupSession.run(session, () => {
       session.budget.charge('database', {
@@ -34,15 +50,27 @@ export function prepareProfileBackupAssets(
         logical: source.databaseBytes,
         entries: 1,
       });
+      if (source.restoration && source.readSnapshot)
+        state.partition = prepareProfileLineage(session, {
+          profile: source.profile,
+          inventory: source.inventory,
+          desktop: source.desktop,
+          restoration: source.restoration,
+          readSnapshot: source.readSnapshot,
+        });
       prepareProfileBackupSources(
         session,
-        source.inventory,
-        source.desktop,
+        state.partition.inventory,
+        state.partition.desktop,
         source.profile,
         source.managed,
         destination,
+        {
+          roots: source.inventory.tasks.map((task) => task.projectRoot),
+          gitCommonDirs: source.inventory.worktrees.map((tree) => tree.gitCommonDir),
+        },
       );
-      prepareProfileGit(session, source.inventory.worktrees, source.managed);
+      prepareProfileGit(session, state.partition.inventory.worktrees, source.managed);
     });
     const handle = {
       close: () => {
@@ -70,5 +98,10 @@ export function consumePreparedProfileBackup(
   if (!state || state.closed || state.consumed || state.destination !== destination)
     throw Error('invalid_profile_backup_preparation');
   state.consumed = true;
-  return { source: state.source, session: state.session, close: () => handle.close() };
+  return {
+    source: state.source,
+    session: state.session,
+    partition: state.partition,
+    close: () => handle.close(),
+  };
 }

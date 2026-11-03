@@ -2,12 +2,13 @@ import * as fs from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
-import type { ProfileBackupManifest } from '@runnets/domain';
+import type { ProfileBackupManifest, RestorationBackupState } from '@runnets/domain';
 import {
   snapshotCodingDatabase,
   inspectDatabase,
   readCodingBackupInventory,
   readDesktopBackupInventory,
+  readProfileRestoreSnapshot,
 } from '@runnets/store-sqlite';
 import {
   captureProfileBackupAssets,
@@ -19,16 +20,64 @@ import {
   profileBackupDatabaseIdentity,
   verifyProfileBackupEnvelope,
   verifyProfileBackupOutput,
+  verifyRestoredProfileBaseline,
+  verifySnapshotGraph,
+  preserveProfileRestoreOrigin,
+  preserveProfileRestoreLineage,
   type ProfileBackupCapture,
 } from '@runnets/tools-node';
 import { assertProfileFiles, absolutePath, atomicPrivateJson, syncFile } from './private-files.js';
 import { CLI_VERSION } from '../version.js';
+import { installRestoreOrigin } from './restore-origin.js';
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-function validateDatabase(path: string, manifest: Extract<ProfileBackupManifest, { format: 2 }>) {
-  const inspection = inspectDatabase(path);
+/** The live ready epoch owns its materialized managed directory; no caller argument can name it. */
+function liveManagedDirectory(
+  profile: string,
+  restoration: RestorationBackupState,
+  fallback: string,
+): string {
+  if (!restoration.activeRequestId) return fallback;
+  const active = restoration.records.find((r) => r.requestId === restoration.activeRequestId);
+  if (
+    !active ||
+    active.state !== 'ready' ||
+    !active.result ||
+    active.preview.plan.managedDirectory !==
+      join(profile, 'rebind-' + active.preview.epochId, 'materialized/tree')
+  )
+    throw Error('invalid_execution_epoch');
+  return active.preview.plan.managedDirectory;
+}
+/** Full summary and, when present, the exact live partition plus bounded parent proof are checked. */
+function validateDatabase(
+  directory: string,
+  manifest: Extract<ProfileBackupManifest, { format: 2 }>,
+  incomplete: boolean,
+  assets = 'archive',
+): void {
+  if (assets !== 'archive' && assets !== 'evidence') throw Error('invalid_backup');
+  const path = join(directory, 'runtime.sqlite'),
+    inspection = inspectDatabase(path);
   if (
     inspection.status !== 'ok' ||
-    JSON.stringify(inspection.summary) !== JSON.stringify(manifest.summary) ||
+    JSON.stringify(inspection.summary) !== JSON.stringify(manifest.summary)
+  )
+    throw Error('invalid_backup');
+  if (manifest.lineage) {
+    verifySnapshotGraph(
+      {
+        database: path,
+        assets: join(directory, 'assets', assets === 'archive' ? '' : 'evidence'),
+        lineage: join(directory, assets === 'archive' ? 'lineage' : 'restore-lineage'),
+      },
+      manifest,
+      readProfileRestoreSnapshot,
+      [],
+      incomplete,
+    );
+    return;
+  }
+  if (
     readCodingBackupInventory(path).hash !== manifest.assets.codingInventory ||
     hash(readDesktopBackupInventory(path)) !== manifest.assets.desktopInventory
   )
@@ -48,13 +97,23 @@ export async function backupProfileV2(
   let output: ProfileBackupOutput | undefined,
     prepared: PreparedProfileBackup | undefined,
     capture: ProfileBackupCapture | undefined,
+    restoration: RestorationBackupState | undefined,
     result: Extract<ProfileBackupManifest, { format: 2 }> | undefined;
   try {
     await snapshotCodingDatabase(
       join(profile, 'runtime.sqlite'),
-      (inventory, desktop, databaseBytes) => {
+      (inventory, desktop, databaseBytes, state) => {
+        restoration = state;
         prepared = prepareProfileBackupAssets(
-          { inventory, desktop, profile, managed, databaseBytes },
+          {
+            inventory,
+            desktop,
+            profile,
+            managed: liveManagedDirectory(profile, state, managed),
+            databaseBytes,
+            restoration: state,
+            readSnapshot: readProfileRestoreSnapshot,
+          },
           join(to, 'assets'),
         );
         output = new ProfileBackupOutput(to);
@@ -65,6 +124,7 @@ export async function backupProfileV2(
         return capture;
       },
       ({ summary, assets }, verifyFrozen, verifyFrozenTerminal) => {
+        if (!restoration) throw Error('invalid_backup');
         syncFile(path);
         result = {
           format: 2,
@@ -74,9 +134,10 @@ export async function backupProfileV2(
           ...profileBackupDatabaseIdentity(path),
           summary,
           assets: assets.identity,
+          ...(assets.lineage ? { lineage: assets.lineage } : {}),
         };
         output!.write('snapshot.json', result);
-        verifyProfileBackupOutput(output!, (manifest) => validateDatabase(path, manifest));
+        verifyProfileBackupOutput(output!, (manifest) => validateDatabase(to, manifest, true));
         assets.verify();
         return Promise.resolve(() => {
           assets.publish(verifyFrozen, verifyFrozenTerminal);
@@ -110,13 +171,16 @@ export function restoreProfileV2(
   let output: ProfileBackupOutput | undefined;
   try {
     const result = verifyProfileBackupEnvelope(from, (manifest) => {
-      validateDatabase(join(from, 'runtime.sqlite'), manifest);
+      validateDatabase(from, manifest, false);
       output = new ProfileBackupOutput(to);
       output.write('restore-guard.json', { state: 'restoring' });
+      preserveProfileRestoreOrigin(from, join(to, 'restore-origin'), manifest);
+      if (manifest.lineage)
+        preserveProfileRestoreLineage(from, join(to, 'restore-lineage'), manifest);
       copyProfileBackupDatabase(join(from, 'runtime.sqlite'), output, manifest);
       syncFile(join(to, 'runtime.sqlite'));
-      validateDatabase(join(to, 'runtime.sqlite'), manifest);
       restoreProfileBackupAssets(join(from, 'assets'), join(to, 'assets'), manifest.assets);
+      installRestoreOrigin(to, manifest);
       atomicPrivateJson(join(to, 'restore-guard.json'), {
         state: 'ready',
         format: 2,
@@ -125,6 +189,7 @@ export function restoreProfileV2(
         sha256: manifest.sha256,
         mode: 'text_only_by_confirmation',
       });
+      verifyRestoredProfileBaseline(to, manifest, readProfileRestoreSnapshot);
     });
     output!.publish();
     return result;

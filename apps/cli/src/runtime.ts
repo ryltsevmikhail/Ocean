@@ -1,4 +1,5 @@
-import type { DesktopAssetStore } from '@runnets/application';
+import type { DesktopAssetStore, ProfileRebindStore } from '@runnets/application';
+import { runtimeServiceOver as serviceOver } from './runtime-service.js';
 import { codingTurnFactory, type CodingTurnFactoryDeps } from './coding-turn-factory.js';
 import {
   GitCodingProject,
@@ -8,11 +9,12 @@ import {
   GitCodingSnapshots,
 } from '@runnets/tools-node';
 /** Host composition: ephemeral state or a single-owner durable runtime with reconciliation. */
-import { existsSync, realpathSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { runtimeIncomplete, restoredRuntimeAdmission } from './runtime-restoration.js';
 import { randomUUID, createHash } from 'node:crypto';
+import type { TaskRunService } from '@runnets/application';
 import {
-  TaskRunService,
   RoomRuntimeRuns,
   CodingTaskService,
   CodingReviewService,
@@ -30,8 +32,6 @@ import {
   type OwnerDecisionStore,
   type Clock,
   type CodingTestEvidenceStore,
-  type CommandDedupPort,
-  type EventLogPort,
   type RuntimeRecovery,
   type ToolJournalPort,
 } from '@runnets/application';
@@ -45,11 +45,12 @@ import {
   InMemoryConversationStore,
   InMemoryToolJournal,
   InMemoryEventLog,
-  SequentialIdGenerator,
   systemClock,
 } from '@runnets/store';
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
+  readonly restored?: boolean;
+  openRebindStore?(): ProfileRebindStore;
   readonly desktopAssets?: DesktopAssetStore;
   openProfileReads?(): ProfileReads;
   openEndpointProof?(): EndpointProof;
@@ -81,24 +82,6 @@ export interface RuntimeOptions {
   readonly clock?: Clock;
   readonly dbPath?: string | undefined;
   readonly mode?: 'ephemeral' | 'durable' | undefined;
-}
-function serviceOver(
-  log: EventLogPort,
-  dedup: CommandDedupPort,
-  durable: boolean,
-  clock: Clock = systemClock,
-): TaskRunService {
-  return new TaskRunService({
-    log,
-    dedup,
-    clock,
-    ids: durable
-      ? {
-          eventId: () => `ev_${randomUUID().replaceAll('-', '')}`,
-          commandId: () => `cm_${randomUUID().replaceAll('-', '')}`,
-        }
-      : new SequentialIdGenerator(),
-  });
 }
 /** Durable means a persistent database, durable tool claims, and exclusive recovery ownership. */
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
@@ -155,12 +138,23 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       close: () => {},
     };
   }
-  if (existsSync(join(dirname(dbPath), '.incomplete'))) throw new Error('recovery_required');
-  if (existsSync(join(dirname(dbPath), 'restore-guard.json')) && !options.restoredAccess)
-    throw new Error('restore_restricted');
+  if (runtimeIncomplete(dirname(dbPath))) throw new Error('recovery_required');
   const release = ownSqliteRuntime(dbPath, options.requireUnpublished);
   try {
     const store = openSqliteStore({ path: dbPath });
+    const active = store.rebind.active();
+    let restored: boolean;
+    try {
+      restored = restoredRuntimeAdmission(
+        dirname(dbPath),
+        store.restoration.origin(),
+        options.restoredAccess,
+        active,
+      );
+    } catch (error) {
+      store.close();
+      throw error;
+    }
     const service = serviceOver(store.log, store.dedup, true, options.clock);
     const deps = {
       store: store.conversations,
@@ -172,9 +166,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       leases: new SqliteProjectLeases(),
       projects: new GitCodingProject(),
       journal: store.tools,
-      ownerId: createHash('sha256').update(realpathSync(dbPath)).digest('hex'),
+      ownerId:
+        active?.preview.ownerId ?? createHash('sha256').update(realpathSync(dbPath)).digest('hex'),
       clock: deps.clock,
-      restored: existsSync(join(dirname(dbPath), 'restore-guard.json')),
+      restored,
     };
     const coding = new CodingTaskService(codingDeps);
     const codingApprovals = new CodingApprovalService({
@@ -210,6 +205,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       return reconcileInterrupted(service, store.tools);
     });
     return {
+      restored,
+      openRebindStore: () => store.rebind,
       service,
       ownerDecisions: store.ownerDecisions,
       desktopAssets: store.desktopAssets,
@@ -266,7 +263,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
 
       codingChanges: new CodingChangesetService({
         ...codingDeps,
-        worktrees: new GitCodingWorktrees(options.codingWorktreeDirectory),
+        worktrees: new GitCodingWorktrees(
+          active?.preview.plan.managedDirectory ?? options.codingWorktreeDirectory,
+        ),
         snapshots: new GitCodingSnapshots(),
       }),
       conversations: new ConversationService(deps),

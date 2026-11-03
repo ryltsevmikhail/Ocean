@@ -1,5 +1,5 @@
 import * as fs from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type {
   ProfileBackupSource,
   ProfileBackupAssets,
@@ -20,6 +20,8 @@ import { archiveProfileGit } from './profile-backup-git.js';
 import { captureDesktopAssets, archiveDesktopAssets } from './desktop-assets.js';
 import type { CodingDependencyTree } from './coding-dependency-types.js';
 import { verifyProfileAssetArchive } from './profile-backup-verify.js';
+import { captureProfileLineage } from './profile-lineage-capture.js';
+import type { ProfileBackupLineage } from '@runnets/domain';
 export {
   type ProfileBackupSource,
   type ProfileBackupAssets,
@@ -27,6 +29,7 @@ export {
 } from './profile-backup-types.js';
 export { type ProfileBackupLimits } from './profile-backup-session.js';
 export interface ProfileBackupCapture extends ProfileBackupAssets {
+  readonly lineage?: ProfileBackupLineage;
   verify(): void;
   publish(finalCheck?: () => void, terminalProof?: () => void): void;
   close(): void;
@@ -49,7 +52,11 @@ export async function captureProfileBackupAssets(
   consume?: (assets: ProfileBackupAssets) => Promise<void>,
   limits?: Partial<ProfileBackupLimits>,
 ): Promise<ProfileBackupCapture> {
-  const { source, session, close } = consumePreparedProfileBackup(input, destination, limits);
+  const { source, session, partition, close } = consumePreparedProfileBackup(
+    input,
+    destination,
+    limits,
+  );
   let output: ProfileBackupOutput | undefined;
   try {
     return await profileBackupSession.run(session, async () => {
@@ -59,7 +66,7 @@ export async function captureProfileBackupAssets(
       const trees: CodingDependencyTree[] = [],
         git: ProfileBackupAssetCatalog['git'][number][] = [];
       const worktrees = await captureCodingWorktreeAssets(
-        source.inventory,
+        partition.inventory,
         source.managed,
         ({ slot, worktree, capture, git: objects }) => {
           trees.push({ taskId: worktree.taskId, capture });
@@ -85,7 +92,7 @@ export async function captureProfileBackupAssets(
         },
       );
       const recovery = await captureCodingRecoveryAssets(
-        source.inventory,
+        partition.inventory,
         source.managed,
         ({ kind, slot, capture }) => {
           archiveCodingAssetTree(capture, join(destination, 'recovery', kind + '-' + slot));
@@ -93,18 +100,26 @@ export async function captureProfileBackupAssets(
         },
       );
       const dependencies = await archiveCodingDependencyAssets(
-        source.inventory,
+        partition.inventory,
         source.profile,
         trees,
         join(destination, 'dependencies'),
       );
-      const desktop = source.desktop.binding
-        ? archiveDesktopAssets(captureDesktopAssets(source.desktop), join(destination, 'desktop'))
+      const desktop = partition.desktop.binding
+        ? archiveDesktopAssets(
+            captureDesktopAssets(partition.desktop),
+            join(destination, 'desktop'),
+          )
         : null;
+      if (partition.lineage && basename(destination) !== 'assets')
+        throw Error('invalid_profile_backup_preparation');
+      const lineage = partition.lineage
+        ? captureProfileLineage(partition.lineage, dirname(destination))
+        : undefined;
       const body = {
         format: 2 as const,
-        inventory: source.inventory,
-        desktopInventory: source.desktop,
+        inventory: partition.inventory,
+        desktopInventory: partition.desktop,
         worktrees,
         recovery,
         dependencies,
@@ -131,6 +146,7 @@ export async function captureProfileBackupAssets(
         });
       return {
         ...assets,
+        ...(lineage ? { lineage } : {}),
         verify,
         publish: (finalCheck?: () => void, terminalProof?: () => void) => {
           verify();

@@ -44,6 +44,10 @@ export async function runOceanCommand(
       const { runRuntimeCommand } = await import('./runtime-command.js');
       return await runRuntimeCommand(args, output);
     }
+    if (command === 'rebind') {
+      const { runRebindCommand } = await import('./rebind-command.js');
+      return await runRebindCommand(args, options.input ?? process.stdin, output, error);
+    }
     if (args.bots.length > 1 && !(command === 'room' && positional[0] === 'group'))
       throw new Error('Repeated --bot is only valid for group creation');
     if (process.env['RUNNE_DB'] !== undefined || process.env['RUNNE_MODE'] !== undefined)

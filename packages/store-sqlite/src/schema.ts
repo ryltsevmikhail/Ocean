@@ -31,7 +31,9 @@ import { readText } from './rows.js';
 
 import { migrateOwnerDecisions } from './owner-decisions.js';
 import { ownerBusy } from './maintenance-owner.js';
-export const SCHEMA_VERSION = 12;
+import { migrateRestoration } from './restore-origin.js';
+import { userTables } from './schema-inspection.js';
+export const SCHEMA_VERSION = 13;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -233,6 +235,18 @@ function initializeSchemaTransaction(db: DatabaseSync, requireOwnerAbsent: boole
       !existing.has('ocean_desktop_adopted')
     )
       throw Error('database schema is missing Desktop tables');
+    if (previousVersion < 13) migrateRestoration(db);
+    else if (
+      ![
+        'ocean_restore_origin',
+        'ocean_profile_rebinds',
+        'ocean_execution_epoch',
+        'ocean_rebind_observations',
+        'ocean_restore_origins',
+        'ocean_retired_epochs',
+      ].every((name) => existing.has(name))
+    )
+      throw Error('database schema is missing restoration tables');
     if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
       throw new Error('Schema foreign key check failed');
     db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(SCHEMA_VERSION));
@@ -283,15 +297,4 @@ function assertSchemaVersion(db: DatabaseSync): number {
     );
   }
   return version;
-}
-
-function userTables(db: DatabaseSync): ReadonlySet<string> {
-  const rows = db
-    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
-    .all();
-  const names = new Set<string>();
-  for (const row of rows) {
-    names.add(readText(row, 'name'));
-  }
-  return names;
 }

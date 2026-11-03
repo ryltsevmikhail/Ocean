@@ -14,10 +14,22 @@ export interface DirectTuiOptions {
 }
 /** A room terminal owns only its authenticated connection. */
 export async function runDirectTui(options: DirectTuiOptions): Promise<number> {
-  if (isRestored(options.profile)) throw Error('restore_restricted');
+  const restored = isRestored(options.profile);
   const profile = profileDirectory(options.profile);
   const connect = (signal?: AbortSignal) => connectLocalRuntime({ profile, signal });
-  const connection = new RoomConnection(await connect(), connect);
+  let client: Awaited<ReturnType<typeof connect>>;
+  try {
+    client = await connect();
+  } catch (error) {
+    // A restored profile without a maintenance host remains refused with its historical code.
+    if (restored) throw Error('restore_restricted');
+    throw error;
+  }
+  if (restored && !client.identity.capabilities.includes('restore.maintenance')) {
+    client.close();
+    throw Error('restore_restricted');
+  }
+  const connection = new RoomConnection(client, connect);
   const book = new RemoteChatRunBook(connection, options.roomId, options.taskId);
   const input = options.input ?? process.stdin;
   const app = new TuiApp({

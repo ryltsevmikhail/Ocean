@@ -78,11 +78,11 @@ it('adds approval tables transactionally to schema 7', () => {
   databases.push(db);
   initializeSchema(db);
   db.exec(
-    "DROP TABLE ocean_desktop_operations; DROP TABLE ocean_desktop_uploads; DROP TABLE ocean_desktop_adopted; DROP TABLE ocean_owner_decisions; DROP TABLE ocean_coding_applications; DROP TABLE ocean_coding_review_verdicts; DROP TABLE ocean_coding_review_requests; DROP TABLE ocean_coding_test_evidence; DROP TABLE ocean_coding_approval_claims; DROP TABLE ocean_coding_approvals; UPDATE meta SET value='7' WHERE key='schema_version'",
+    "DROP TABLE ocean_desktop_operations; DROP TABLE ocean_desktop_uploads; DROP TABLE ocean_desktop_adopted; DROP TABLE ocean_owner_decisions; DROP TABLE ocean_coding_applications; DROP TABLE ocean_coding_review_verdicts; DROP TABLE ocean_coding_review_requests; DROP TABLE ocean_coding_test_evidence; DROP TABLE ocean_coding_approval_claims; DROP TABLE ocean_coding_approvals; DROP TABLE ocean_profile_rebinds; DROP TABLE ocean_rebind_observations; DROP TABLE ocean_execution_epoch; DROP TABLE ocean_restore_origins; DROP TABLE ocean_restore_origin; DROP TABLE ocean_retired_epochs; UPDATE meta SET value='7' WHERE key='schema_version'",
   );
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '12',
+    '13',
   );
   expect(db.prepare('SELECT count(*) AS n FROM ocean_coding_approvals').get()?.['n']).toBe(0);
 });

@@ -12,7 +12,7 @@ import { restoreCodingDependencyTask } from './coding-dependency-archive.js';
 import { restoreCodingAssetTree } from './coding-asset-restore.js';
 import { restoreDesktopAssets } from './desktop-assets.js';
 /** Exact inert archive evidence copy, checked against the first private metadata and byte observation. */
-function copyEvidence(source: CodingAssetCapture, destination: string): ProfileBackupOutput {
+export function copyEvidence(source: CodingAssetCapture, destination: string): ProfileBackupOutput {
   const output = new ProfileBackupOutput(destination),
     states = new Map(source.sourceEntries),
     buffer = Buffer.alloc(1048576);

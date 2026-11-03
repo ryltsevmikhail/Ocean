@@ -15,7 +15,7 @@ export interface LocalDecisionRef extends LocalRunQuery {
   readonly decisionId: string;
 }
 export interface LocalDecision extends LocalDecisionRef {
-  readonly kind: 'write' | 'test' | 'continue-text-only';
+  readonly kind: 'write' | 'test' | 'continue-text-only' | 'restore-rebind';
   readonly status:
     'pending' | 'allowed' | 'denied' | 'cancelled' | 'expired' | 'invalidated' | 'interrupted';
   readonly version: number;
@@ -105,7 +105,7 @@ export function isLocalDecision(v: unknown): v is LocalDecision {
       'previewLength',
       'bindingDigest',
     ]) &&
-    ['write', 'test', 'continue-text-only'].some((k) => k === v['kind']) &&
+    ['write', 'test', 'continue-text-only', 'restore-rebind'].some((k) => k === v['kind']) &&
     bindingDigest(v['bindingDigest']) &&
     localPosition(v['previewLength']) &&
     localPosition(v['createdAt']) &&

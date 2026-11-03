@@ -477,3 +477,37 @@ exclude one another through the existing authoritative SQLite ownership guard.
 New GUI/installed qualification, unified full-format-2 publication/restore and
 owner rebind remain open. See [Desktop asset capture](desktop-assets.md) for
 namespace, schema, bounded frozen evidence, immutable archive and refusal details.
+
+## Restored maintenance host and owner rebind (7.9 development source)
+
+A restored profile normally refuses ordinary runtime startup with
+`restore_restricted`, including when its filesystem guard is missing, malformed
+or dangling: durable origin/admission evidence is checked independently of that
+marker. `ocean runtime restore --profile PATH` deliberately starts a restricted
+maintenance host over the same authenticated endpoint and owner machinery. It
+serves history, common owner decisions and `restore.inspect`, `restore.preview`,
+`restore.result` with explicit `restore.maintenance`/`restore.preview`
+capabilities; provider dispatch, Desktop mutation, coding execution and ordinary
+turn admission remain refused. A restored TUI may connect only when the
+authenticated identity advertises that maintenance capability. ACP and
+format-1 text compatibility are unchanged.
+
+The rebind SDK methods are `inspectRestore`, `previewRestore` and
+`restoreResult` with typed `LocalRestoreInspect`/`LocalRestoreSelection` inputs.
+Extra or unknown fields are rejected before a frame is sent, and no client
+`allow`/approved Boolean exists: confirmation is only `decisions.resolve` with
+the exact card reference, binding digest and expected version. The CLI commands
+`ocean rebind inspect|preview|confirm|result --config FILE` carry that same typed
+JSON object and an interactive TTY confirmation; non-TTY confirmation refuses
+with `approval_required`. The common decision store stays authoritative for
+one-use consumption, expiry and stale-input invalidation.
+
+After ready publication the maintenance host is stopped explicitly and ordinary
+`runtime start` admits concurrent clients under the new epoch owner; stale
+restored decisions, runs and receipts remain inert. If a crash leaves the
+operation unknown, reopening records `held` and never retries materialization,
+lease acquisition or publication. A held/consumed rebind blocks a second preview
+for the same durable origin head; restoring a later archive into a new generation
+clears executable epoch authority and keeps archived intents readable. See the
+[profile backup contract](profile-backup.md#format-2-lineage-and-owner-rebind-79-development-source)
+for the exact state machine, lineage envelope and current 7.9 limitations.

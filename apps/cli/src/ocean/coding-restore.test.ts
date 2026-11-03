@@ -92,7 +92,7 @@ it('backup keeps schema7 task/rights; restored runtime refuses all coding author
   );
   const snapshot = join(root, 'backup'),
     restored = join(root, 'restored');
-  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(12);
+  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(13);
   restoreProfile(snapshot, restored);
   const copy = openSqliteStore({ path: join(restored, 'runtime.sqlite') });
   expect(copy.coding.atomic((tx) => tx.task('task'))).toEqual(created.ok ? created.value : null);
@@ -134,7 +134,7 @@ it('still backs up and restores a released schema5 snapshot without migrating th
     restored = join(root, 'restored');
   expect((await backupProfile(profile, backup)).summary.schema).toBe(5);
   restoreProfile(backup, restored);
-  for (const file of [path, join(restored, 'runtime.sqlite')]) {
+  for (const file of [path, join(restored, 'restore-origin', 'runtime.sqlite')]) {
     const check = new DatabaseSync(file, { readOnly: true });
     expect(check.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe(
       '5',

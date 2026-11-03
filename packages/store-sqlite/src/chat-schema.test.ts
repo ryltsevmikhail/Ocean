@@ -46,7 +46,7 @@ it('preserves actual M1 message rows, profiles, memberships and receipts in sche
   const history = s.history('w', '2');
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '12',
+    '13',
   );
   expect(snapshot()).toEqual(before);
   expect(db.prepare('SELECT title FROM ocean_rooms').get()?.['title']).toBeNull();

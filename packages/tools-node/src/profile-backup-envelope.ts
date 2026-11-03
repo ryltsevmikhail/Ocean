@@ -8,6 +8,7 @@ import { privateAssetDirectory, assetNames } from './coding-asset-io.js';
 import { readDesktopArchiveFile } from './desktop-archive-verify.js';
 import { verifyProfileAssetArchive, withProfileArchive } from './profile-backup-verify.js';
 import { codingAssetIdentity } from './coding-asset-state.js';
+import { lineageChain, verifyLineageArchives } from './profile-lineage-verify.js';
 export function profileBackupDatabaseIdentity(path: string) {
   const fd = fs.openSync(
     path,
@@ -58,21 +59,32 @@ function verifyEnvelope(
     const root = privateAssetDirectory(directory);
     let manifest: unknown;
     try {
-      if (
-        assetNames(root, 5).join() !==
-        (incomplete
-          ? '.incomplete,assets,runtime.sqlite,snapshot.json'
-          : 'assets,runtime.sqlite,snapshot.json')
-      )
-        throw Error('invalid_profile_backup');
       manifest = JSON.parse(
         readDesktopArchiveFile(root, 'snapshot.json', 33554432).toString('utf8'),
       ) as unknown;
+      if (
+        !validProfileBackupManifest(manifest) ||
+        manifest.format !== 2 ||
+        assetNames(root, 6).join() !==
+          [
+            ...(incomplete ? ['.incomplete'] : []),
+            'assets',
+            ...(manifest.lineage ? ['lineage'] : []),
+            'runtime.sqlite',
+            'snapshot.json',
+          ]
+            .sort()
+            .join()
+      )
+        throw Error('invalid_profile_backup');
     } finally {
       fs.closeSync(root);
     }
     if (!validProfileBackupManifest(manifest) || manifest.format !== 2)
       throw Error('invalid_profile_backup');
+    const id = createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),
+      chain = lineageChain.getStore() ?? [];
+    if (chain.length >= 8 || chain.includes(id)) throw Error('profile_lineage_limit');
     const database = profileBackupDatabaseIdentity(join(directory, 'runtime.sqlite'));
     if (database.bytes !== manifest.bytes || database.sha256 !== manifest.sha256)
       throw Error('invalid_profile_backup');
@@ -81,6 +93,10 @@ function verifyEnvelope(
       manifest.assets,
       incomplete && fs.existsSync(join(directory, 'assets', '.incomplete')),
     );
+    if (manifest.lineage)
+      lineageChain.run([...chain, id], () =>
+        verifyLineageArchives(join(directory, 'lineage'), manifest.lineage!),
+      );
     consume?.(manifest);
     return manifest;
   });

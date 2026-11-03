@@ -162,3 +162,117 @@ interactive CLI/TUI/ACP/group/history/restore, separately authorized fresh live
 provider qualification, final whole-branch review and verified publication.
 No installed 1.0 profile, real Desktop/userData, provider credentials or BigPC data
 is needed for this workpackage.
+
+## Format-2 lineage and owner rebind (7.9 development source)
+
+Workpackage 7.9 adds optional versioned lineage to public format 2 and an
+explicit owner-authorized rebind from an inert quarantine into a fresh execution
+epoch. It composes reviewed 7.8 at `74b1dfa`; independent review of 7.9 and the
+release gates remain open. This section records implemented source behavior, not
+release qualification.
+
+The public root stays format 2. An activated profile's backup adds
+`manifest.lineage` (format 1) with `parentSnapshotId` (the exact parent manifest
+hash), full current `codingInventory`/`desktopInventory` hashes, a
+`recordsHash` over the bounded durable restoration state, ordered
+`tasks:[{taskId,source:'live'|'parent'}]`, `desktopSource`, and ordered
+`intents:[{requestId,recordHash,state,outputs}]`. Output kinds are exactly
+`materialization`, `git-administration`, `git-reference`, `desktop`,
+`registration`; presence is `absent` or `captured` with an exact asset-archive
+hash. The extended envelope is `runtime.sqlite`, `snapshot.json`, `assets`,
+`lineage`; `lineage/parent` is a COMPLETE independently verifiable format-2
+parent envelope and `lineage/intents/<requestId-hash>/<kind>` holds each
+captured pre-ready output.
+
+Every frozen SQLite task and asset is assigned exactly once from durable current
+origin/epoch state, never from a caller/model selector: tasks predating the
+current origin must match the parent frozen inventory (recursively), while only
+tasks owned by the current ready epoch's owner may be live. `assets` therefore
+contains only the live partition; the frozen database still retains all task,
+changeset, application, journal, decision, review, run and restoration history.
+Desktop is live only after current epoch publication's exact new binding;
+otherwise file-bearing Desktop records must match the parent evidence and the
+live Desktop partition is empty with current rooms only. At most eight complete
+envelopes may chain, with 1,000 task selectors and 1,000 intent records per
+envelope and five output selectors per intent. Cycles, duplicate selectors,
+unknown lineage versions/fields and incomplete parent/intent archives refuse.
+The shared 2 GiB stored/logical, 32 MiB metadata and 100,000 entry ceilings span
+the entire chain and current live graph; every independent copy occurrence is
+charged again and there is no cross-envelope content deduplication. Verification
+scans also consume budget, so refusal below the nominal payload ceiling remains
+expected. This initial contract performs no deduplication.
+
+Pre-ready intent coverage is mandatory. Consumed, preparing, held and ready
+rebind records contribute planned output selectors derived from their exact
+persisted plan; the deterministic Git temporary root and new administration
+basename are part of that plan before Git runs. A ready record requires every
+applicable output captured. Earlier consumed states preserve proven planned
+absence versus safely captured partial bytes without promotion; an output that
+appears for an unconsumed record, a dangling relative-link graph, a substituted
+Git administration/backlink, a torn registration, an unparsable reference or a
+missing ready output refuses backup instead of being omitted. The selected
+project working tree itself is never copied, reset, cleaned or changed.
+
+Schema 13 retains immutable origin history and retired epoch headers beside the
+current origin head. Installing a new public restore appends the previous head
+to history, changes only the current head, clears the executable epoch pointer
+and records retirement. It never rewrites an archived ready/held rebind record or
+approval, and the frozen parent database keeps the original pointer. Busy and
+recovery predicates apply only to the current head, so archived intents remain
+inert and readable. `restore-origin` remains the exact frozen database plus
+manifest; new `restore-lineage` preserves the complete envelope lineage tree.
+Runtime admission and rebind verification re-check the profile-owned frozen
+bytes instead of any original absolute provenance path.
+
+## Owner rebind operations (7.9 development source)
+
+The commands are explicit, local and shared with the TUI/Desktop SDK; no model
+or wire Boolean grants authority. Stop ordinary runtime use first, then:
+
+```sh
+ocean runtime restore --profile /absolute/restored-profile --json
+ocean rebind inspect --profile /absolute/restored-profile --config inspect.json --json
+ocean rebind preview --profile /absolute/restored-profile --config selection.json --json
+ocean rebind confirm --profile /absolute/restored-profile --config selection.json
+ocean rebind result --profile /absolute/restored-profile --config selection.json --json
+```
+
+`runtime restore` starts a restricted maintenance host over the existing
+endpoint: history, common owner decisions and `restore.inspect`,
+`restore.preview`, `restore.result` are served, while provider dispatch, Desktop
+mutation and coding execution remain refused. Inspect derives profile, snapshot,
+source owner, base and tree from verified local state plus the owner-selected
+clean project and a fresh explicit policy; preview binds that exact selection,
+tree and materialization plan to one five-minute common `restore-rebind` owner
+decision. Confirmation is only `decisions.resolve` with exact reference, digest
+and version, and one use. Denial, expiry, invalidation, or changed inputs create
+no epoch, lease, registration or executable task.
+
+After an allowed decision the operation durably consumes the card once, records
+the new random epoch and explicit project/worktree lease intent, acquires new
+epoch-scoped registry leases, materializes a complete ready-worktree snapshot
+under `profile/rebind-<epoch>/materialized/tree` with fresh Git administration
+against the selected base, then publishes the successor task, worktree, workspace
+binding and optional new-profile Desktop storage in one SQLite transaction. If a
+crash leaves any step unknown, reopening turns the record into `held`; nothing is
+retried, promoted or cancelled, and removing `restore-guard.json` cannot admit
+the profile. After `ready`, stop the maintenance host and start ordinary
+`ocean runtime start --profile ...`; admission verifies the durable origin and
+exact ready epoch, older task identities cannot authorize, and old receipts,
+approvals, claims and request retries remain inert. Both original project history
+and archived changesets stay readable; only newly authorized work can execute.
+
+Honest limits of this development source: a new selected project root is
+required, and the exact original project root/global lease is never reclaimed or
+released by rebind. A restored context without the 7.9 frozen-origin evidence
+(`restore-origin`, `assets/evidence`, optional `restore-lineage`) remains
+read/text-only and refuses rebind; restore again from an archive produced by this
+code to gain the evidence. The live ready record's fresh Git administration and
+loose branch reference live under the selected project's `.git`, so a backup
+after the project is deleted refuses rather than omitting them. Desktop rebind
+materialization and live-binding capture are implemented but are not exercised by
+the recorded 7.9 synthetic qualification. A subsequent rebind can select a task
+through the bounded parent chain, but the recorded qualification only exercises
+one rebind generation plus inert restore of the activated profile. Pre-ready
+intent capture is exercised with actual SIGKILL-held partial output and with
+direct selector/refusal tests, not with every partial Git/registration shape.

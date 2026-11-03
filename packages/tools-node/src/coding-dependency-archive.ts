@@ -160,6 +160,19 @@ function verifyArchive(directory: string, incomplete = false) {
 export function verifyCodingDependencyArchive(directory: string): CodingDependencyCatalog {
   return verifyArchive(directory).catalog;
 }
+export function codingDependencyTaskManifest(
+  directory: string,
+  taskId: string,
+): CodingAssetManifest {
+  const { catalog, manifests } = verifyArchive(directory);
+  const task = catalog.tasks.find((value) => value.taskId === taskId);
+  if (!task) return dependencyFail();
+  return dependencyVirtualTree(
+    task.mappings,
+    manifests,
+    task.treeHash ? manifests.get('tree-' + task.treeHash) : undefined,
+  );
+}
 /** One independently verified virtual task under private quarantine, with unchanged relative links. */
 export function restoreCodingDependencyTask(
   archive: string,

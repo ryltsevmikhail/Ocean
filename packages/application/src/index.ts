@@ -41,3 +41,7 @@ export * from './coding-apply-resolution.js';
 export * from './room-runtime-runs.js';
 export * from './owner-decisions.js';
 export * from './desktop-assets.js';
+export * from './restore-origin.js';
+export * from './profile-rebind-ports.js';
+export * from './profile-rebind.js';
+export { validateRebindResult } from './profile-rebind-result.js';

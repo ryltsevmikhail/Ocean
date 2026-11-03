@@ -29,7 +29,11 @@ export interface ProfileBackupAssetIdentity {
 }
 export type ProfileBackupManifest =
   | (ProfileBackupBase & { readonly format: 1 })
-  | (ProfileBackupBase & { readonly format: 2; readonly assets: ProfileBackupAssetIdentity });
+  | (ProfileBackupBase & {
+      readonly format: 2;
+      readonly assets: ProfileBackupAssetIdentity;
+      readonly lineage?: ProfileBackupLineage;
+    });
 const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 const sha = (value: unknown): value is string =>
@@ -56,7 +60,7 @@ export function validProfileBackupManifest(value: unknown): value is ProfileBack
   const summary = value['summary'];
   if (
     !Number.isSafeInteger(summary['schema']) ||
-    ![5, 6, 7, 8, 9, 10, 11, 12].includes(Number(summary['schema'])) ||
+    ![5, 6, 7, 8, 9, 10, 11, 12, 13].includes(Number(summary['schema'])) ||
     !['rooms', 'messages', 'pendingEffects', 'unfinishedRuns', 'heldRooms'].every((k) =>
       count(summary[k]),
     ) ||
@@ -83,7 +87,11 @@ export function validProfileBackupManifest(value: unknown): value is ProfileBack
     summary['positions'].some(
       (p: unknown) => !object(p) || Object.keys(p).sort().join() !== 'roomId,sequence',
     ) ||
-    Object.keys(value).sort().join() !== 'assets,bytes,cli,createdAt,format,node,sha256,summary' ||
+    Object.keys(value).sort().join() !==
+      (value['lineage'] === undefined
+        ? 'assets,bytes,cli,createdAt,format,node,sha256,summary'
+        : 'assets,bytes,cli,createdAt,format,lineage,node,sha256,summary') ||
+    (value['lineage'] !== undefined && !validProfileBackupLineage(value['lineage'])) ||
     Object.keys(summary).some(
       (k) =>
         ![
@@ -116,3 +124,4 @@ export function validProfileBackupManifest(value: unknown): value is ProfileBack
     (assets['desktop'] === null || sha(assets['desktop']))
   );
 }
+import { validProfileBackupLineage, type ProfileBackupLineage } from './profile-lineage.js';

@@ -1,22 +1,25 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import type { Readable, Writable } from 'node:stream';
 import { profileDirectory } from './profile.js';
-import { assertPrivate } from './private-files.js';
+import { readRestorationAuthority } from '@runnets/store-sqlite';
+import {
+  inspectRuntimeRestoreGuard,
+  restoredRuntimeAdmission,
+  runtimeIncomplete,
+} from '../runtime-restoration.js';
 import type { OceanArguments } from './arguments.js';
 export function isRestored(profile?: string): boolean {
-  const marker = join(profileDirectory(profile), 'restore-guard.json');
-  if (existsSync(join(profileDirectory(profile), '.incomplete'))) throw Error('recovery_required');
-  if (!existsSync(marker)) return false;
-  assertPrivate(marker, false);
-  try {
-    const markerData = JSON.parse(readFileSync(marker, 'utf8')) as { state?: unknown };
-    if (markerData.state !== 'ready') throw new Error();
-  } catch {
-    throw new Error('recovery_required');
-  }
-  return true;
+  const directory = profileDirectory(profile);
+  if (runtimeIncomplete(directory)) throw Error('recovery_required');
+  const inspection = inspectRuntimeRestoreGuard(directory);
+  if (inspection.kind === 'none') return false;
+  if (inspection.kind === 'invalid') throw Error('recovery_required');
+  const path = join(directory, 'runtime.sqlite');
+  if (!existsSync(path)) return true;
+  const { origin, active } = readRestorationAuthority(path);
+  return restoredRuntimeAdmission(directory, origin, true, active);
 }
 /** Restore never proves that effects after the snapshot did not happen. */
 export async function checkRestoredAccess(
@@ -26,6 +29,7 @@ export async function checkRestoredAccess(
   approve?: () => Promise<boolean>,
 ): Promise<void> {
   if (!isRestored(args.flags.get('profile'))) return;
+  if (args.command === 'tui') return; // TUI can only connect; the maintenance host restricts every dispatch.
   const read =
     args.command === 'history' ||
     (['bot', 'room'].includes(args.command) &&

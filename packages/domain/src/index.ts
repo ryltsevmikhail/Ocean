@@ -41,9 +41,12 @@ export * from './coding-backup.js';
 export * from './coding-asset-manifest.js';
 export { validCodingBackupPolicy, validCodingBackupPresets } from './coding-backup-policy.js';
 export * from './desktop-assets.js';
+export * from './restore-origin.js';
+export * from './profile-rebind.js';
 export {
   validProfileBackupManifest,
   type ProfileBackupManifest,
   type ProfileBackupAssetIdentity,
   type ProfileBackupSummary,
 } from './profile-backup.js';
+export * from './profile-lineage.js';

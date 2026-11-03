@@ -103,3 +103,36 @@ export {
 } from './profile-backup-prepare.js';
 
 export { copyProfileBackupDatabase } from './profile-backup-copy.js';
+export {
+  preserveProfileRestoreOrigin,
+  preserveProfileRestoreLineage,
+} from './profile-restore-origin.js';
+export {
+  verifyRestoredProfileOrigin,
+  verifyRestoredProfileBaseline,
+} from './profile-restore-verify.js';
+export { RestoredProfileFiles } from './profile-rebind.js';
+export {
+  prepareProfileLineage,
+  inspectLineageIntent,
+  lineageIntentOutputs,
+  requireLineageOutput,
+  type LineageIntentPlan,
+  type LineageOutputMode,
+  type LineageOutputPlan,
+  type PreparedProfileLineage,
+  type ProfileLineageInputs,
+  type ProfileLineageParent,
+  type ProfileLineagePartition,
+} from './profile-lineage-preparation.js';
+export { captureProfileLineage } from './profile-lineage-capture.js';
+export {
+  profileTaskSource,
+  verifyProfileLineageGraph,
+  verifySnapshotGraph,
+  type ProfileSnapshotGraph,
+  type ProfileSnapshotReader,
+} from './profile-lineage-graph.js';
+export { deriveLineagePartition } from './profile-lineage-partition.js';
+export { verifyLineageArchives } from './profile-lineage-verify.js';
+export { readLineageFile, type LineageFileCapture } from './profile-lineage-file.js';

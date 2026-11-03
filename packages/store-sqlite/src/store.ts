@@ -1,4 +1,8 @@
 import { desktopAssetStore } from './desktop-assets.js';
+import { restoreOriginStore } from './restore-origin.js';
+import type { RestoreOriginStore } from '@runnets/application';
+import type { ProfileRebindStore } from '@runnets/application';
+import { profileRebindStore } from './profile-rebind.js';
 import type { DesktopAssetStore } from '@runnets/application';
 import { profileReads, type ProfileReads } from './profile-reads.js';
 import { openEndpointProof, type EndpointProof } from './endpoint-proof.js';
@@ -56,6 +60,8 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  readonly restoration: RestoreOriginStore;
+  readonly rebind: ProfileRebindStore;
   readonly desktopAssets: DesktopAssetStore;
   openProfileReads(ownerId: string): ProfileReads;
   openEndpointProof(): EndpointProof;
@@ -107,7 +113,10 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   const checkpoints = new SqliteCheckpointStore(db, log);
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
+  const tools = new SqliteToolJournal(db);
   return {
+    restoration: restoreOriginStore(db),
+    rebind: profileRebindStore(db, tools),
     desktopAssets: desktopAssetStore(db),
     openProfileReads: (ownerId) => profileReads(db, ownerId),
     openEndpointProof: () => openEndpointProof(db),
@@ -123,7 +132,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
     log,
     dedup,
     checkpoints,
-    tools: new SqliteToolJournal(db),
+    tools,
     recover(taskRunId: TaskRunId): Promise<RecoveryResult> {
       return recovery.recover(taskRunId);
     },

@@ -2,7 +2,9 @@ import type {
   CodingBackupInventory,
   DesktopAssetInventory,
   ProfileBackupAssetIdentity,
+  RestorationBackupState,
 } from '@runnets/domain';
+import type { ProfileSnapshotReader } from './profile-lineage-graph.js';
 import type { CodingWorktreeAssetCatalog } from './coding-backup-worktrees.js';
 import type { CodingRecoveryAssetCatalog } from './coding-recovery-graph.js';
 import type { CodingDependencyCatalog } from './coding-dependency-types.js';
@@ -32,4 +34,6 @@ export interface ProfileBackupSource {
   readonly profile: string;
   readonly managed: string;
   readonly databaseBytes: number;
+  readonly restoration?: RestorationBackupState;
+  readonly readSnapshot?: ProfileSnapshotReader;
 }

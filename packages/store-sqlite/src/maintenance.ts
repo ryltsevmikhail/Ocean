@@ -96,7 +96,7 @@ export function inspectDatabase(path: string): DatabaseInspection {
   try {
     db = new DatabaseSync(path, { readOnly: true });
     db.exec('BEGIN');
-    if (![5, 6, 10, 11, SCHEMA_VERSION].includes(schema(db)))
+    if (![5, 6, 10, 11, 12, SCHEMA_VERSION].includes(schema(db)))
       return { status: 'unsupported_schema' };
     if (ownerBusy(db)) return { status: 'owner_busy' };
     assertUnpublished(db);
@@ -128,6 +128,7 @@ export type CodingSnapshotDestination =
       inventory: CodingBackupInventory,
       desktop: DesktopAssetInventory,
       databaseBytes: number,
+      restoration: RestorationBackupState,
     ) => string);
 type SnapshotFinalizer<T> = (
   snapshot: CodingDatabaseSnapshot<T>,
@@ -158,7 +159,8 @@ async function snapshotOwned<T>(
   let release: (() => void) | undefined,
     frozen: ReturnType<typeof holdBackupObservation> | undefined;
   try {
-    if (![5, 6, 10, 11, SCHEMA_VERSION].includes(schema(db))) throw new Error('unsupported_schema');
+    if (![5, 6, 10, 11, 12, SCHEMA_VERSION].includes(schema(db)))
+      throw new Error('unsupported_schema');
     if (ownerBusy(db)) throw new Error('owner_busy');
     try {
       release = acquireOwnership(db, { id: randomUUID(), pid: process.pid }, alive, true);
@@ -176,7 +178,7 @@ async function snapshotOwned<T>(
       (JSON.parse(String(desktopBinding)) as { profileId?: string }).profileId !==
         createHash('sha256').update(dirname(path)).digest('hex')
     )
-      throw Error('desktop_binding_mismatch');
+      if (!restorationBackupState(db).origin) throw Error('desktop_binding_mismatch');
     if (original.externalDesktopAssets && !capture) throw Error('desktop_assets_unavailable');
     if (
       !desktopBinding &&
@@ -200,6 +202,7 @@ async function snapshotOwned<T>(
             structuredClone(initial!.desktop),
             Number(db.prepare('PRAGMA page_count').get()?.['page_count']) *
               Number(db.prepare('PRAGMA page_size').get()?.['page_size']),
+            restorationBackupState(db),
           );
     if (existsSync(destination)) throw Error('destination_exists');
     await backup(db, destination);
@@ -240,3 +243,5 @@ async function snapshotOwned<T>(
     }
   }
 }
+import { restorationBackupState } from './restoration-backup.js';
+import type { RestorationBackupState } from '@runnets/domain';

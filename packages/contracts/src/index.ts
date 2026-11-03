@@ -15,3 +15,4 @@ export * from './local-coding-panel.js';
 export * from './local-profile.js';
 export * from './local-coding-views.js';
 export * from './local-desktop-assets.js';
+export * from './local-restore.js';

@@ -52,6 +52,7 @@ export class CodingTaskService {
     if (previous) {
       if (previous.binding !== binding) return codingFailure('request_conflict');
       const task = this.#deps.store.atomic((tx) => tx.task(previous.taskId));
+      if (task && task.lease.ownerId !== this.#deps.ownerId) return codingFailure('coding_denied');
       return task ? ok(task) : codingFailure('recovery_required');
     }
     if (this.#pending()) return codingFailure('recovery_required');
