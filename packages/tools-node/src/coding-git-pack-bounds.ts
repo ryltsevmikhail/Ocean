@@ -3,11 +3,19 @@ import { inflateSync } from 'node:zlib';
 export const invalidGitPack = (): never => {
   throw Error('invalid_coding_git_pack');
 };
-/** Bound inflation and delta result sizes before native Git allocates or resolves objects. */
-export function preflightGitPack(pack: Buffer, format: 'sha1' | 'sha256', count: number): number {
+/** Separately bound total entry inflation and reconstructed delta result sizes before Git. */
+export function preflightGitPack(
+  pack: Buffer,
+  format: 'sha1' | 'sha256',
+  count: number,
+  inflatedLimit = 2147483648,
+): number {
   const oidBytes = format === 'sha1' ? 20 : 32,
     end = pack.length - oidBytes;
   if (
+    !Number.isSafeInteger(inflatedLimit) ||
+    inflatedLimit < 0 ||
+    inflatedLimit > 2147483648 ||
     pack.length > 268435456 ||
     end < 12 ||
     pack.subarray(0, 4).toString() !== 'PACK' ||
@@ -19,7 +27,8 @@ export function preflightGitPack(pack: Buffer, format: 'sha1' | 'sha256', count:
   )
     return invalidGitPack();
   let offset = 12,
-    logical = 0;
+    logical = 0,
+    inflated = 0;
   const entries = new Set<number>();
   const byte = () => {
     if (offset >= end) return invalidGitPack();
@@ -39,6 +48,10 @@ export function preflightGitPack(pack: Buffer, format: 'sha1' | 'sha256', count:
       if (shift > 53 || !Number.isSafeInteger(size) || size > 67108864) return invalidGitPack();
     }
     if (![1, 2, 3, 4, 6, 7].includes(type)) return invalidGitPack();
+    // Charge the declared entry bytes before inflation, including delta instructions.
+    // A lowered ceiling permits bounded callers/tests; it cannot relax the production limit.
+    inflated += size;
+    if (inflated > inflatedLimit) return invalidGitPack();
     if (type === 6) {
       let part = byte(),
         distance = part & 127,
@@ -57,7 +70,7 @@ export function preflightGitPack(pack: Buffer, format: 'sha1' | 'sha256', count:
     // Node's info result is not reflected in @types/node's inflateSync return type.
     const decoded = inflateSync(pack.subarray(offset, end), {
       info: true,
-      maxOutputLength: 67108865,
+      maxOutputLength: size + 1,
     }) as unknown as { buffer: Buffer; engine: { bytesWritten: number } };
     const consumed = decoded.engine.bytesWritten;
     if (

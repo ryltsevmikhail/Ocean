@@ -278,8 +278,11 @@ actual packed object IDs, types and sizes with the manifest and prove the full
 base/history plus available raw-index stage, sparse-tree and REUC closure.
 SHA-1/SHA-256 and packed/delta objects are supported. Valid compressed bytes under
 a false loose-object pathname refuse before capture succeeds; archive failures
-retain the incomplete marker. Pack inflation and delta result sizes are bounded
-before native import. This verification never reads source configuration or
+retain the incomplete marker. Pack entry inflation (including delta instructions)
+has a separate cumulative 2 GiB budget, charged before decompression; actual
+decoded lengths are checked.
+The independent 2 GiB reconstructed-object budget also remains in force before
+native import. This verification never reads source configuration or
 writes source objects, refs or indexes.
 Tree quarantine preserves partial binary bytes, modes and inert pointer text.
 This is not profile restore, source rebind or authority revival.
