@@ -1,4 +1,5 @@
 import {
+  LOCAL_RUNTIME_MAX_WAIT_MS,
   isLocalRestoreInspect,
   isLocalRestoreInspection,
   isLocalRestoreSelection,
@@ -17,12 +18,12 @@ export interface LocalRestoreClient {
   restoreResult(input: LocalRestoreSelection): Promise<LocalRestoreResult>;
 }
 export function localRestoreClient(
-  send: (method: string, input: unknown) => Promise<unknown>,
+  send: (method: string, input: unknown, timeoutMs?: number) => Promise<unknown>,
 ): LocalRestoreClient {
   return {
     async inspectRestore(input) {
       const q = validatedParams(input, isLocalRestoreInspect),
-        value = await send('restore.inspect', q);
+        value = await send('restore.inspect', q, LOCAL_RUNTIME_MAX_WAIT_MS);
       if (!isLocalRestoreInspection(value)) throw Error('invalid_frame');
       const {
         profileId: _p,
@@ -37,7 +38,7 @@ export function localRestoreClient(
     },
     async previewRestore(input) {
       const q = validatedParams(input, isLocalRestoreSelection),
-        value = await send('restore.preview', q);
+        value = await send('restore.preview', q, LOCAL_RUNTIME_MAX_WAIT_MS);
       if (
         !isLocalDecision(value) ||
         value.kind !== 'restore-rebind' ||
