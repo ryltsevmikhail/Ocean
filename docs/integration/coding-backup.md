@@ -6,6 +6,9 @@ Selected-root quarantine materialization and interrupted native worktree-create
 evidence capture are also implemented. The shared-runtime source delivery is
 accepted through correction `dc9e244` and acceptance `56bbef0`; capture still uses
 the actual ownership-held frozen SQLite API, without ownership bypass.
+Workpackage 7.5 is accepted at `a6b3958`, including independent Git object
+identity/closure and compressed/inflated/reconstructed pack bounds. Workpackage
+7.6 adds the frozen configuration/dependency subgraph described below.
 Complete external-asset graph selection, format-2 publication and full profile restore
 are not implemented yet. User-facing
 backup still refuses external coding assets with coding_assets_unavailable.
@@ -19,7 +22,8 @@ It rejects live ownership, broken foreign keys, invalid task/worktree bindings,
 missing artifact/application references, incorrect changeset payload hashes,
 invalid base/tree hashes and mismatched application file ordering/statuses.
 
-The deterministic content-addressed inventory includes minimal task references,
+The deterministic content-addressed inventory includes bounded, strictly validated
+task policyVersion/policy/testPresets evidence and minimal task references,
 worktree bindings, changeset tree/hash references and application identities.
 Each frozen application includes its ordered file paths and statuses and a
 recoveryProtocol of 2 or null. An absent historical marker becomes null only in
@@ -589,11 +593,77 @@ receipt keeps its unknown effect. The native suite covers nine SIGKILL boundarie
 one published-link frozen graph and quarantine round trip, both admitted direct
 and group workflows, and two native asset tests (14 tests total).
 
+## Frozen configuration and dependency subgraph (7.6)
+
+`captureCodingDependencyAssets` accepts the ownership-held frozen SQLite inventory,
+the exact private profile directory, originating task-tree capture handles and a
+sequential archive consumer. It never calls live project registration, workspace
+canonicalization or effecting tool preparation. Task registrations match the frozen
+`projectRoot`; the registration ID and Ocean workspace ID are separate identities.
+Every task must have one matching registration with exactly matching test presets.
+All registrations remain in the catalog: selected entries name required mounts;
+unselected entries are explicitly `metadata-only`, and their project bodies are
+not visited. The original source checkout may be absent.
+
+| Input/state                                                                                                    | Implemented result                                                                                            |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Private `coding-projects.json`, at most 1 MiB                                                                  | Exact bytes/base64 and SHA-256, strict schema, all entries retained                                           |
+| No registry and no frozen tasks                                                                                | Explicit absence; profile directory and absence rechecked                                                     |
+| Missing registration, changed task policy, duplicate/conflicting registration                                  | Refused                                                                                                       |
+| Standalone owned executable file mapped to `/toolchain/pnpm/bin/pnpm`                                          | Selected-file archive preserves bytes/mode; symlink or multiple links refused                                 |
+| Exact `dependencyProjectRoot/.../node_modules` mapped to `/workspace/.../node_modules`                         | Full selected dependency-root archive, owned ordinary nodes only                                              |
+| Internal hardlinks                                                                                             | Original group identity preserved; external/unselected aliases refused before bodies                          |
+| Relative dependency/package symlink                                                                            | Original link text retained; virtual resolution must reach explicit mapped roots or supplied frozen task tree |
+| Workspace package source missing from captured tree                                                            | Refused, with no original-checkout traversal or link rewriting                                                |
+| No task-tree input                                                                                             | `treeSelection: not-supplied`, `treeHash: null`; not evidence that a required ready worktree was backed up    |
+| Task tree supplied                                                                                             | Originating capture required, exact frozen task root bound, bytes and identities rechecked                    |
+| Unknown/overlapping mounts, root/home mappings, protected names, child mounts, special nodes or unsafe aliases | Refused before selected dependency bodies                                                                     |
+
+The profile/configuration no-follow descriptors witness owner, private mode,
+link count, mount, directory identity and exact bytes. Explicit dependency mapping
+roots and selected tree/file sources retain private witnesses. A whole-subgraph
+metadata preflight precedes dependency body reads. After the last consumer, every
+source, task tree, mapping root and registry/absence is checked again, including
+content hashes that detect same-size, unchanged-timestamp shared-memory writes.
+Consumer DTO mutation cannot redefine those expectations. No source is repaired,
+reset, cleaned, pruned or modified. Failed output remains incomplete evidence.
+
+One shared subgraph budget limits stored and logical bytes to 2 GiB and entries
+to 100,000; hardlink logical sizes count at every retained name. Registry, mappings,
+catalog and source-witness metadata count toward the budget; metadata is capped at
+32 MiB and the portable catalog at 16 MiB. Existing selected-root depth, path/name
+and file bounds remain. Captures are consumed sequentially; the collector retains
+bounded manifests/witnesses, not duplicated file bodies or Git packs. Git's accepted
+7.5 pack/object integrity and independent bounds are unchanged. A future unified
+graph must charge worktrees, Git, recovery, dependencies and Desktop assets together.
+
+`archiveCodingDependencyAssets` writes a new private subgraph archive with an
+incomplete marker, exact frozen inventory/catalog and the selected tree/file
+archives. `verifyCodingDependencyArchive` independently verifies all bytes and
+reconstructs policy/configuration/mapping/link bindings without opening any original
+absolute path. `restoreCodingDependencyTask` materializes one virtual task under a
+new private quarantine from those verified archives, with unchanged relative link
+text, ordinary modes and internal hardlinks. The original configuration remains
+inert archive data. It grants no execution, project rebind, approval reuse or effect
+settlement. These APIs are composable subgraph primitives, not public format 2 or
+full-profile restore.
+
+Synthetic tests cover ownership-held snapshot binding, removed original checkouts,
+removed archive sources, private/absent registry, missing assets, policy conflicts,
+unsafe names and aliases with zero dependency body reads, mapping mount replacement,
+consumer mutation, mmap writes, corrupt/missing archive inputs and quarantine links.
+A separately qualified Linux worker proves actual child-mount denial and loads a
+restored workspace package after source removal. That native fixture first failed
+before worker launch due to its mountpoint setup; the corrected worker run passes.
+No installed profile, key, provider or user coordination registry is used.
+
 ## Remaining format-2 work
 
-Integrate the selected managed-worktree and partial Git closure with the complete
-bounded external graph, including staged data,
-the recovery subgraph described above and profile coding configuration. Distinguish
+Integrate the selected managed-worktree, partial Git, recovery and frozen
+configuration/dependency subgraphs with the complete bounded external graph.
+Imported Desktop per-profile attachment/preparation assets remain a mandatory
+OPEN selection gate: determine their trusted profile/path binding without arbitrary
+HOME traversal. They are not captured by 7.6. Distinguish
 planned-but-absent assets from lost ready assets. Resolve dependency/symlink
 relationships explicitly; never traverse arbitrary home/root paths as a shortcut.
 Preserve required data or refuse unsupported layouts without a false full-backup

@@ -1,3 +1,4 @@
+import type { CodingPolicy } from './coding-policy.js';
 import type { CodingApplyReceipt } from './coding-apply.js';
 import type { CodingFileContent, CodingWorktree } from './changeset.js';
 export type CodingBackupContent = Pick<CodingFileContent, 'mode' | 'sha256'>;
@@ -13,6 +14,8 @@ export interface CodingBackupInventory {
   readonly tasks: readonly {
     readonly id: string;
     readonly workspaceId: string;
+    readonly policyVersion: 1;
+    readonly policy: CodingPolicy;
     readonly projectRoot: string;
     readonly baseCommit: string;
     readonly worktreeRoot: string | null;

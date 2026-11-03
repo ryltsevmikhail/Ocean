@@ -164,7 +164,12 @@ export function scanAssetSource(
     if (!before.isFile()) throw Error('unsupported_coding_asset');
     const key = before.dev + ':' + before.ino,
       previous = inodes.get(key);
-    if (selection && policy !== 'classified-legacy' && metadataOnly && before.nlink > 1n) {
+    if (
+      (selection || policy === 'coding-dependency') &&
+      policy !== 'classified-legacy' &&
+      metadataOnly &&
+      before.nlink > 1n
+    ) {
       const group = aliases.get(key) ?? { count: 0, links: before.nlink };
       group.count++;
       aliases.set(key, group);

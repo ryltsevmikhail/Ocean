@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   validCodingRecoveryProtocol,
   validCodingBackupFiles,
+  validCodingBackupPolicy,
   type CodingBackupInventory,
   type CodingApplyReceipt,
   type CodingFileContent,
@@ -65,6 +66,7 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
         if (
           !value ||
           !text(value.id) ||
+          !validCodingBackupPolicy(value.policyVersion, value.policy) ||
           !text(value.workspaceId) ||
           !text(value.projectRoot) ||
           !revision(value.baseCommit) ||
@@ -78,6 +80,8 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
           bounded({
             id,
             workspaceId: value.workspaceId,
+            policyVersion: value.policyVersion,
+            policy: value.policy,
             projectRoot: value.projectRoot,
             baseCommit: value.baseCommit,
             worktreeRoot: value.worktreeRoot ?? null,

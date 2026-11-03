@@ -60,6 +60,13 @@ function setup(count = 1) {
       worktreeRoot: root,
       ownerId: 'owner',
       status: 'reserved',
+      policyVersion: 1,
+      policy: {
+        version: 1,
+        devCapabilities: [],
+        reviewCapabilities: ['changeset_read'],
+        testPresets: [],
+      },
     });
     worktrees.push({
       taskId: id,

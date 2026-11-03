@@ -59,3 +59,14 @@ export {
 } from './coding-git-partial-archive.js';
 export type { CodingPartialGitCapture } from './coding-git-partial.js';
 export type { CodingGitAdministration } from './coding-git-administration.js';
+export {
+  captureCodingDependencyAssets,
+  type CodingDependencyCatalog,
+  type CodingDependencyInput,
+  type CodingDependencyTree,
+} from './coding-dependency-graph.js';
+export {
+  archiveCodingDependencyAssets,
+  verifyCodingDependencyArchive,
+  restoreCodingDependencyTask,
+} from './coding-dependency-archive.js';

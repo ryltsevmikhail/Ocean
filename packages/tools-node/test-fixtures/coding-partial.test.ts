@@ -87,6 +87,13 @@ export function partialFixture(shape = 'no-checkout', objectFormat = 'sha1', sep
           worktreeRoot: root,
           ownerId: 'owner',
           status: 'reserved' as const,
+          policyVersion: 1 as const,
+          policy: {
+            version: 1 as const,
+            devCapabilities: [],
+            reviewCapabilities: ['changeset_read'] as const,
+            testPresets: [],
+          },
         },
       ],
       worktrees: [worktree],

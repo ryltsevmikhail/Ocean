@@ -65,6 +65,7 @@ export function captureAssetTreeAt(
   if (
     ![
       'all',
+      'coding-dependency',
       'coding-worktree',
       'coding-recovery',
       'coding-recovery-v2',

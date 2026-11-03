@@ -23,7 +23,17 @@ it('binds all task/worktree/artifact references from a closed profile without re
     rmSync(f.project, { recursive: true });
     const inventory = readCodingBackupInventory(path);
     expect(inventory.tasks).toMatchObject([
-      { id: 'task', projectRoot: f.project, worktreeRoot: f.worktree },
+      {
+        id: 'task',
+        projectRoot: f.project,
+        worktreeRoot: f.worktree,
+        policyVersion: 1,
+        policy: {
+          version: 1,
+          reviewCapabilities: ['changeset_read'],
+          testPresets: expect.any(Array),
+        },
+      },
     ]);
     expect(inventory.worktrees).toMatchObject([
       { taskId: 'task', root: f.worktree, state: 'ready' },
@@ -161,6 +171,70 @@ it('rejects invalid file content identities even inside a self-consistent change
     } finally {
       db.close();
     }
+  } finally {
+    f.close();
+  }
+});
+
+it('binds private registration and policy to the ownership-held frozen snapshot after checkout removal', async () => {
+  const f = await codingWorkflowFixture('direct');
+  try {
+    const { captureCodingAssetTree, archiveCodingDependencyAssets, verifyCodingDependencyArchive } =
+      await import('@runnets/tools-node');
+    f.runtime.close();
+    const path = join(f.directory, 'runtime.sqlite'),
+      inventory = readCodingBackupInventory(path);
+    writeFileSync(
+      join(f.directory, 'coding-projects.json'),
+      JSON.stringify([
+        {
+          id: 'registered',
+          root: f.project,
+          testPresets: inventory.tasks[0]!.policy.testPresets,
+          mounts: [],
+        },
+      ]),
+      { mode: 0o600 },
+    );
+    rmSync(f.project, { recursive: true });
+    const result = await snapshotCodingDatabase(
+      path,
+      join(f.directory, 'dependency-frozen.sqlite'),
+      async (refs) => {
+        expect(inspectDatabase(path).status).toBe('owner_busy');
+        const catalog = await archiveCodingDependencyAssets(
+          refs,
+          f.directory,
+          [{ taskId: 'task', capture: captureCodingAssetTree(f.worktree, {}, 'coding-worktree') }],
+          join(f.directory, 'dependencies'),
+        );
+        expect(inspectDatabase(path).status).toBe('owner_busy');
+        return catalog;
+      },
+    );
+    expect(result.inventory.hash).toBe(inventory.hash);
+    expect(
+      verifyCodingDependencyArchive(join(f.directory, 'dependencies')).projects[0],
+    ).toMatchObject({ id: 'registered', selection: 'selected' });
+  } finally {
+    f.close();
+  }
+});
+
+it('refuses malformed policy evidence from SQLite before it can bind a project registration', async () => {
+  const f = await codingWorkflowFixture('direct');
+  try {
+    f.runtime.close();
+    const path = join(f.directory, 'runtime.sqlite'),
+      db = new DatabaseSync(path);
+    try {
+      db.prepare(
+        "UPDATE ocean_coding_tasks SET payload=json_set(payload,'$.policy.testPresets',json('[{}]'))",
+      ).run();
+    } finally {
+      db.close();
+    }
+    expect(() => readCodingBackupInventory(path)).toThrow('invalid_coding_inventory');
   } finally {
     f.close();
   }

@@ -227,13 +227,32 @@ owner boot/PID-namespace checks and maintenance-held inventory API. All host and
 child runtime fixtures use disposable HOME/coordination state. This qualifies
 host SIGKILL, not power loss, an installed upgrade or complete profile restore.
 
+## Frozen configuration/dependency evidence (7.6)
+
+The 7.5 worktree/Git checkpoint is accepted at `a6b3958`; its independent object
+identity, exact closure and pack inflation bounds remain unchanged. The next
+subgraph binds private project configuration and exact selected dependency/toolchain
+mounts to policy evidence from the ownership-held frozen SQLite inventory. Archive
+verification and per-task quarantine materialization work after synthetic source
+removal. Relative workspace-package links need the exact originating captured task
+tree; absent inputs remain explicitly `not-supplied`, never a full-backup success.
+
+No registry entry, restored file, old approval or resolution record grants execution
+or releases an uncertain effect. Source configuration/absolute paths are inert data;
+no checkout is recreated or rebound. Registry absence, file bytes, source/mapping
+identities and all earlier inputs are rechecked after the final consumer. Unsupported
+or missing closure refuses without source cleanup. See the [supported-state table](coding-backup.md#frozen-configuration-and-dependency-subgraph-76).
+
 ## Remaining release gates
 
 Extend reconciliation to other coding effects without redispatching unknown
 operations. Qualify interruptions after approval decision,
 write/test spawn/result and artifact capture, including process supervision.
-Snapshot format 2 must include all referenced worktrees, Git administration and
-recovery assets with verified manifests; old format-1 backup still refuses
+Snapshot format 2 must unify all referenced worktrees, Git administration, recovery,
+frozen configuration and dependencies under global cross-subgraph accounting.
+Imported Desktop per-profile attachment/preparation assets remain mandatory and
+OPEN until trusted path binding and exact selection are determined without arbitrary
+HOME traversal. Full quarantine profile restore and authority rebind remain OPEN; old format-1 backup still refuses
 external coding assets rather than producing an incomplete full backup.
 
 Qualify restored authority as inert, corrupted/missing assets as failures,

@@ -1,13 +1,18 @@
 import type { BigIntStats } from 'node:fs';
 export type CodingAssetPolicy =
-  'all' | 'coding-worktree' | 'coding-recovery' | 'coding-recovery-v2' | 'classified-legacy';
+  | 'coding-dependency'
+  | 'all'
+  | 'coding-worktree'
+  | 'coding-recovery'
+  | 'coding-recovery-v2'
+  | 'classified-legacy';
 export function checkAssetPolicy(
   policy: CodingAssetPolicy,
   relative: string,
   before: BigIntStats,
   publicationCandidate = false,
 ): void {
-  if (policy === 'coding-worktree' && relative) {
+  if ((policy === 'coding-worktree' || policy === 'coding-dependency') && relative) {
     const parts = relative.split('/');
     if (
       parts.some(
