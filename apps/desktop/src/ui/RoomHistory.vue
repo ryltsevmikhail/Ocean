@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { historyState } from './runtime-text.js';
 import { useHistoryView } from './history-view.js';
 import type { Message } from '../protocol.js';
 import Avatar from './Avatar.vue';
@@ -7,10 +8,12 @@ const props = defineProps<{
   history: Message[];
   roomId: string;
   busy: boolean;
+  readError: string;
   group: boolean;
   handle?: string | undefined;
   label: (id: string | undefined) => string;
 }>();
+defineEmits<{ refresh: [] }>();
 const { view, content, initial, scroll } = useHistoryView(
   () => props.roomId,
   () => props.history.map((m) => m.id),
@@ -33,7 +36,20 @@ function day(s: string) {
     @scroll="scroll"
   >
     <div :ref="(el) => (content = el as HTMLElement)" class="history-content">
-      <div v-if="!history.length && !busy" class="empty-chat" aria-live="off">
+      <div
+        v-if="historyState(readError, history.length, busy) === 'error'"
+        role="alert"
+        class="runtime-error"
+      >
+        <h2>Не удалось загрузить историю</h2>
+        <p>{{ readError }}</p>
+        <button :disabled="busy" @click="$emit('refresh')">Обновить</button>
+      </div>
+      <div
+        v-if="historyState(readError, history.length, busy) === 'empty'"
+        class="empty-chat"
+        aria-live="off"
+      >
         <Avatar :handle="handle" />
         <h2>Начало разговора</h2>
         <p>

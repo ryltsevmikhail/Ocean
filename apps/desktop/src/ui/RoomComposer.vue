@@ -10,6 +10,7 @@ const props = defineProps<{
   group: boolean;
   members: Bot[];
   busy: boolean;
+  sending: boolean;
   active: Run | undefined;
   uncertain: boolean;
   sent: number;
@@ -108,14 +109,18 @@ function paste(event: ClipboardEvent) {
             </select></label
           >
         </div>
+        <span v-if="sending" role="status">Отправляем…</span>
         <button
           v-if="active"
           :disabled="busy"
           type="button"
           @click="$emit('stop', active)"
-          :aria-label="'Запросить отмену ' + active.runId + ' [v' + active.version + ']'"
+          :aria-label="
+            'Остановить ответ @' +
+            (members.find((b) => b.id === active?.performerId)?.handle ?? 'участник')
+          "
         >
-          Запросить отмену {{ active.runId }} [v{{ active.version }}]</button
+          Остановить</button
         ><button
           class="send"
           :aria-label="uncertain ? 'Повторить исходный запрос' : 'Отправить'"
@@ -135,6 +140,6 @@ function paste(event: ClipboardEvent) {
       >Повторная отправка проверит тот же запрос с теми же вложениями и адресатом.</small
     >
     <small v-if="importing" role="status">Прикрепляем файлы…</small>
-    <p v-if="error" role="alert">{{ error }}</p>
+    <p v-if="error" role="alert" class="runtime-error">{{ error }}</p>
   </form>
 </template>
