@@ -61,14 +61,11 @@ export function archiveDesktopAssets(
     checkAssetPath(root, destination);
     write(root, 'catalog.json', JSON.stringify(capture.catalog));
     fs.fsyncSync(root);
-    verifyDesktopArchive(destination, true);
-    checkDesktopCapture(capture);
+    verifyDesktopArchive(destination, true, () => checkDesktopCapture(capture));
     fs.unlinkSync(join(assetFdPath(root), '.incomplete'));
     fs.fsyncSync(root);
     checkAssetPath(root, destination);
-    const catalog = verifyDesktopAssetArchive(destination);
-    checkDesktopCapture(capture);
-    return catalog;
+    return verifyDesktopArchive(destination, false, () => checkDesktopCapture(capture));
   } finally {
     fs.closeSync(root);
   }
@@ -77,17 +74,15 @@ export function verifyDesktopAssetArchive(directory: string): DesktopAssetCatalo
   return verifyDesktopArchive(directory);
 }
 export function restoreDesktopAssets(archive: string, destination: string): DesktopAssetCatalog {
-  const catalog = verifyDesktopAssetArchive(archive);
-  restoreCodingAssetTree(join(archive, 'assets'), destination);
-  if (verifyDesktopAssetArchive(archive).hash !== catalog.hash)
-    throw Error('invalid_desktop_archive');
-  const root = privateAssetDirectory(destination);
-  try {
-    write(root, 'desktop-evidence.json', JSON.stringify(catalog.inventory));
-    fs.fsyncSync(root);
-    checkAssetPath(root, destination);
-  } finally {
-    fs.closeSync(root);
-  }
-  return catalog;
+  return verifyDesktopArchive(archive, false, (catalog) => {
+    restoreCodingAssetTree(join(archive, 'assets'), destination);
+    const root = privateAssetDirectory(destination);
+    try {
+      write(root, 'desktop-evidence.json', JSON.stringify(catalog.inventory));
+      fs.fsyncSync(root);
+      checkAssetPath(root, destination);
+    } finally {
+      fs.closeSync(root);
+    }
+  });
 }

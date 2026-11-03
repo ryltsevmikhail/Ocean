@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,6 +20,7 @@ import {
 import { openOceanProfile } from '../ocean/profile.js';
 import { startLocalRuntime } from './host.js';
 import { rooms } from '../../test-fixtures/local-runtime-admission.test.js';
+import { LegacyPreparationHost } from '../../../desktop/test-fixtures/legacy-preparation-host.test.js';
 const cleanups: (() => unknown | Promise<unknown>)[] = [];
 afterEach(async () => {
   for (const c of cleanups.splice(0).reverse()) await c();
@@ -231,3 +232,59 @@ it('retains disconnected incomplete upload bytes as inert source-independent evi
   expect(Buffer.from(inert.uploads[0].data, 'base64').toString()).toBe('hel');
   expect(fs.readdirSync(join(output, 'tree'))).toEqual([]);
 });
+
+it.each([false, true])(
+  'adopts published unsent legacy preparations in layout %s without sending',
+  async (alternate) => {
+    const f = await fixture(alternate);
+    const source = desktopLegacyRoot(f.userData, f.profile, f.client.identity.profileId);
+    const legacy = new LegacyPreparationHost(dirname(source));
+    legacy.rooms.add(f.room);
+    const info = await legacy.store.import(f.room, 'unsent.md', 'aGVsbG8=');
+    const requestId = randomUUID(),
+      body = 'unsent caption',
+      to = 'dev';
+    const prepared = await legacy.prepare({
+      op: 'send',
+      room: f.room,
+      requestId,
+      text: body,
+      to,
+      attachments: [info.id],
+    });
+    const receipt = JSON.parse(fs.readFileSync(join(source, f.room, requestId + '.json'), 'utf8'));
+    expect(receipt.prepared).toBe(prepared.text);
+    await f.media.enroll(f.userData);
+    expect(await f.media.receipt(f.room, requestId)).toEqual(receipt);
+    expect(await f.media.prepare(f.room, requestId, body, to, [info.id])).toEqual(receipt);
+    for (const args of [
+      [body + ' changed', to, [info.id]],
+      [body, null, [info.id]],
+      [body, to, [randomUUID()]],
+    ] as const)
+      await expect(f.media.prepare(f.room, requestId, args[0], args[1], args[2])).rejects.toThrow(
+        'request_conflict',
+      );
+    expect(await f.media.receipt(f.room, requestId, 'not-a-message')).toBeNull();
+    await f.host.stop();
+    const inventory = readDesktopBackupInventory(join(f.profile, 'runtime.sqlite'));
+    expect(inventory.messages).toEqual([]);
+    const db = new DatabaseSync(join(f.profile, 'runtime.sqlite'), { readOnly: true });
+    try {
+      expect(db.prepare('SELECT count(*) AS n FROM ocean_messages').get()?.['n']).toBe(0);
+    } finally {
+      db.close();
+    }
+    expect(
+      inventory.operations.find((o) => o.id === 'prepare:' + f.room + ':' + requestId),
+    ).toEqual({
+      id: 'prepare:' + f.room + ':' + requestId,
+      state: 'completed',
+      result: JSON.stringify(receipt),
+      binding: JSON.stringify({ room: f.room, requestId, body, to, ids: [info.id] }),
+    });
+    expect(fs.readdirSync(join(inventory.binding!.root, f.room)).sort()).toEqual(
+      [info.id, requestId + '.json'].sort(),
+    );
+  },
+);

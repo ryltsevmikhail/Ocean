@@ -22,7 +22,10 @@ exact durable send-request records, records an enrollment intent, preflights and
 captures the exact legacy root, independently verifies its archive, and restores
 a new private `<profile>/desktop-<uuid>/tree`. Original private witnesses are
 rechecked after the last consumer. One SQLite transaction switches the binding
-and adopts exact preparation records. Original roots remain untouched and inert;
+and adopts every fully validated final preparation receipt, including unsent
+requests, with its exact room/request/body/recipient/IDs/result binding. Exact
+retries return that result; conflicting retries refuse without sending. Partial
+receipts do not become completed operations. Original roots remain untouched and inert;
 continued old-client writes cannot alter canonical bytes or create associations.
 
 Schema 12 adds operation, upload and adopted-message tables transactionally.
@@ -74,7 +77,11 @@ process-originating private handles; serialized clones cannot authorize source
 reads. The private archive contains `catalog.json` plus `assets/` content-addressed
 blobs/manifest. Independent verification reads only that archive and validates
 namespace, private modes, full required references, byte hashes and exact
-message/request/preparation relationships. Materialization creates `tree/` and
+message/request/preparation relationships. The same originating archive
+observation retains directory and file identities, private modes/UIDs, mount
+identities and bytes through materialization and evidence publication. Fresh
+current-path mount checks also reject overmounts that leave pinned descriptors
+unchanged. Materialization creates `tree/` and
 `desktop-evidence.json`; the latter retains inert original paths, operation states
 and incomplete upload bytes. It neither installs a usable profile nor grants
 approvals, enrolls paths, prepares messages or executes sends.
@@ -98,7 +105,10 @@ both source names. It does not claim all crash states are capturable.
 
 Source tests cover legacy default/alternate migration, continued old-root writes,
 zero coding tasks, relocated-profile refusal, bounded chunks, exact request
-binding, partial upload evidence and source-deleted archive materialization.
+binding (including unsent legacy retry adoption), partial upload evidence and
+source-deleted archive materialization. Late archive directory/file identity and
+mode mutations use real filesystem operations; late mount substitutions are
+unit-injected separately from the opt-in native mount qualification.
 Independent client-process tests exercise the production shared Desktop adapter,
 a paused upload versus snapshot, snapshot-held runtime startup refusal, reconnect
 and an actual owner SIGKILL in receipt link/unlink. Linux tests qualify real child

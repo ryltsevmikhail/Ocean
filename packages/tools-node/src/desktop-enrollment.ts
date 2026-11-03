@@ -1,13 +1,14 @@
 import * as fs from 'node:fs';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { DesktopAssetFiles } from '@runnets/application';
+import type { DesktopAssetFiles, DesktopAdoptedPreparation } from '@runnets/application';
 import {
   captureDesktopAssets,
   archiveDesktopAssets,
   restoreDesktopAssets,
   desktopRootIdentity,
   checkDesktopCapture,
+  capturedDesktopPreparations,
 } from './desktop-assets.js';
 import {
   importDesktopFile,
@@ -15,7 +16,6 @@ import {
   desktopRead,
   desktopHash,
   desktopSync,
-  readDesktopPreparation,
 } from './desktop-file-store.js';
 /** Exact trusted native-host selection, independently recomputed by the owner. */
 export function desktopLegacyRoot(userData: string, profile: string, profileId: string): string {
@@ -41,6 +41,7 @@ export function desktopAssetFiles(profile: string, profileId: string): DesktopAs
       const originalRoot = desktopLegacyRoot(userData, profile, profileId);
       const destination = join(profile, 'desktop-' + randomUUID());
       let binding;
+      let preparations: readonly DesktopAdoptedPreparation[] = [];
       if (fs.existsSync(originalRoot)) {
         const sourceBinding = {
           profileId,
@@ -53,6 +54,7 @@ export function desktopAssetFiles(profile: string, profileId: string): DesktopAs
         archiveDesktopAssets(capture, archive);
         restoreDesktopAssets(archive, destination);
         checkDesktopCapture(capture);
+        preparations = capturedDesktopPreparations(capture);
         binding = {
           profileId,
           root: join(destination, 'tree'),
@@ -74,11 +76,7 @@ export function desktopAssetFiles(profile: string, profileId: string): DesktopAs
       desktopSync(profile);
       return {
         binding,
-        preparations: inventory.messages.map((m) => ({
-          room: m.roomId,
-          requestId: m.requestId,
-          receipt: readDesktopPreparation(binding, m.roomId, m.requestId),
-        })),
+        preparations,
       };
     },
     import: importDesktopFile,

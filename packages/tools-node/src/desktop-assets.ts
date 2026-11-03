@@ -34,7 +34,14 @@ export interface DesktopAssetCatalog {
 export interface DesktopAssetCapture {
   readonly catalog: DesktopAssetCatalog;
 }
-const issued = new WeakMap<DesktopAssetCapture, { source: CodingAssetCapture; digest: string }>();
+const issued = new WeakMap<
+  DesktopAssetCapture,
+  {
+    source: CodingAssetCapture;
+    digest: string;
+    preparations: ReturnType<typeof checkDesktopEvidence>;
+  }
+>();
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object') {
     Object.freeze(value);
@@ -72,7 +79,9 @@ export function captureDesktopAssets(input: DesktopAssetInventory): DesktopAsset
           throw Error('desktop_assets_missing');
     },
   );
-  checkDesktopEvidence(inventory, source.manifest, (path) => readDesktopSource(source, path));
+  const preparations = freeze(
+    checkDesktopEvidence(inventory, source.manifest, (path) => readDesktopSource(source, path)),
+  );
   const fd = fs.openSync(
     source.root,
     fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW,
@@ -88,7 +97,7 @@ export function captureDesktopAssets(input: DesktopAssetInventory): DesktopAsset
     manifest: source.manifest,
   };
   const handle = freeze({ catalog: { ...body, hash: hash(body) } });
-  issued.set(handle, { source, digest: hash(handle) });
+  issued.set(handle, { source, digest: hash(handle), preparations });
   return handle;
 }
 export function checkDesktopCapture(capture: DesktopAssetCapture): void {
@@ -105,6 +114,11 @@ export function checkDesktopCapture(capture: DesktopAssetCapture): void {
   }
 }
 
+/** Internal adoption evidence from the original validated capture, never a fresh pathname read. */
+export function capturedDesktopPreparations(capture: DesktopAssetCapture) {
+  checkedDesktopCapture(capture);
+  return issued.get(capture)!.preparations;
+}
 export function checkedDesktopCapture(capture: DesktopAssetCapture): CodingAssetCapture {
   const origin = issued.get(capture);
   if (!origin || hash(capture) !== origin.digest) throw Error('invalid_desktop_capture');

@@ -15,7 +15,7 @@ export function checkDesktopEvidence(
   inventory: DesktopAssetInventory,
   manifest: CodingAssetManifest,
   read: (path: string) => Buffer,
-): void {
+) {
   const bad = (): never => {
     throw Error('desktop_asset_corrupted');
   };
@@ -143,12 +143,17 @@ export function checkDesktopEvidence(
     }
     return value;
   };
+  const preparations: { room: string; requestId: string; receipt: DesktopPreparation }[] = [];
   for (const entry of manifest.entries) {
     const [room, name, leaf] = entry.path.split('/');
     if (room && !inventory.rooms.includes(room)) bad();
     if (desktopUuid(name) && leaf === 'metadata.json') attachment(room!, name);
     if (name?.endsWith('.json') && desktopUuid(name.slice(0, -5)) && !leaf)
-      preparation(room!, name.slice(0, -5));
+      preparations.push({
+        room: room!,
+        requestId: name.slice(0, -5),
+        receipt: preparation(room!, name.slice(0, -5)),
+      });
   }
   for (const operation of inventory.operations) {
     if (operation.state !== 'completed') continue;
@@ -229,4 +234,5 @@ export function checkDesktopEvidence(
     )
       bad();
   }
+  return preparations;
 }

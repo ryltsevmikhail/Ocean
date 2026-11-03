@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 const attachmentId = z.uuid();
-const attachment = z.object({
+export const attachment = z.object({
   id: attachmentId,
   name: z.string().min(1).max(180),
   bytes: z
@@ -15,7 +15,7 @@ const attachment = z.object({
   kind: z.enum(['image', 'file']),
   mime: z.string().max(100),
 });
-type Attachment = z.infer<typeof attachment>;
+export type Attachment = z.infer<typeof attachment>;
 
 const roomId = /^[a-zA-Z0-9_][a-zA-Z0-9_-]{0,127}$/;
 function directory(root: string, room: string, id?: string) {
