@@ -37,16 +37,33 @@ const card = {
   previewLength: 20,
 } as const;
 afterEach(() => vi.useRealTimers());
-it.each(['inspect', 'preview', 'resolve'] as const)(
+it.each(['inspect', 'preview', 'resolve', 'result'] as const)(
   'waits for a slow restore %s without retrying the request',
   async (method) => {
     vi.useFakeTimers();
     const response =
-      method === 'inspect'
-        ? { selection, holds: [], observations: [], postSnapshotInterval: 'unknown-never-replayed' }
-        : method === 'preview'
-          ? card
-          : { ...card, version: 2, status: 'allowed' };
+      method === 'result'
+        ? {
+            workspaceId: input.workspaceId,
+            roomId: input.roomId,
+            requestId: input.requestId,
+            snapshotId: selection.snapshotId,
+            epochId: 'epoch',
+            successorTaskId: 'successor',
+            bindingDigest: card.bindingDigest,
+            state: 'preparing',
+            reason: null,
+          }
+        : method === 'inspect'
+          ? {
+              selection,
+              holds: [],
+              observations: [],
+              postSnapshotInterval: 'unknown-never-replayed',
+            }
+          : method === 'preview'
+            ? card
+            : { ...card, version: 2, status: 'allowed' };
     // Model the real Peer deadline: ordinary requests expire after five seconds.
     const send = vi.fn(
       (_method: string, _input: unknown, timeout = 5000) =>
@@ -60,19 +77,21 @@ it.each(['inspect', 'preview', 'resolve'] as const)(
     );
     const restore = localRestoreClient(send);
     const promise =
-      method === 'inspect'
-        ? restore.inspectRestore(input)
-        : method === 'preview'
-          ? restore.previewRestore(selection)
-          : localDecisionClient(send).resolveDecision({
-              workspaceId: card.workspaceId,
-              roomId: card.roomId,
-              runId: card.runId,
-              decisionId: card.decisionId,
-              bindingDigest: card.bindingDigest,
-              expectedVersion: 1,
-              choice: 'allow-once',
-            });
+      method === 'result'
+        ? restore.restoreResult(selection)
+        : method === 'inspect'
+          ? restore.inspectRestore(input)
+          : method === 'preview'
+            ? restore.previewRestore(selection)
+            : localDecisionClient(send).resolveDecision({
+                workspaceId: card.workspaceId,
+                roomId: card.roomId,
+                runId: card.runId,
+                decisionId: card.decisionId,
+                bindingDigest: card.bindingDigest,
+                expectedVersion: 1,
+                choice: 'allow-once',
+              });
     const settled = promise.then(
       (value) => ({ value }),
       (error) => ({ error: String(error) }),

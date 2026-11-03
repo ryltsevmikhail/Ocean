@@ -50,7 +50,7 @@ export function localRestoreClient(
     },
     async restoreResult(input) {
       const q = validatedParams(input, isLocalRestoreSelection),
-        value = await send('restore.result', q);
+        value = await send('restore.result', q, LOCAL_RUNTIME_MAX_WAIT_MS);
       if (
         !isLocalRestoreResult(value) ||
         value.workspaceId !== q.workspaceId ||
