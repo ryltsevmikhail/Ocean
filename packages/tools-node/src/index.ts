@@ -31,6 +31,7 @@ export {
   captureCodingWorktreeAssets,
   type CodingWorktreeAssetCatalog,
   type CodingWorktreeAssetInput,
+  type CodingPartialWorktreeAssetInput,
   type CodingWorktreeAssetRecord,
 } from './coding-backup-worktrees.js';
 export {
@@ -51,3 +52,10 @@ export {
 export * from './local-runtime-paths.js';
 export * from './local-runtime-framing.js';
 export * from './local-runtime-client.js';
+
+export {
+  archivePartialCodingGit,
+  verifyPartialCodingGitArchive,
+} from './coding-git-partial-archive.js';
+export type { CodingPartialGitCapture } from './coding-git-partial.js';
+export type { CodingGitAdministration } from './coding-git-administration.js';

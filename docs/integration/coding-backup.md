@@ -2,7 +2,10 @@
 
 Status: stage 7 in progress. Validated database inventory and an ownership-held
 capture port are implemented. Selected-root manifests and content-addressed archive copy are implemented.
-Selected-root quarantine materialization is also implemented.
+Selected-root quarantine materialization and interrupted native worktree-create
+evidence capture are also implemented. The shared-runtime source delivery is
+accepted through correction `dc9e244` and acceptance `56bbef0`; capture still uses
+the actual ownership-held frozen SQLite API, without ownership bypass.
 Complete external-asset graph selection, format-2 publication and full profile restore
 are not implemented yet. User-facing
 backup still refuses external coding assets with coding_assets_unavailable.
@@ -217,23 +220,77 @@ hash plan over profile owner, project root and task ID beneath the explicit
 managed directory; task/worktree/lease bindings and inventory hash must agree.
 Roots are not inferred from arbitrary .git pointers or user home directories.
 
-A missing ready root fails missing_coding_worktree. A missing preparing/uncertain
-root remains an explicit absence, even if the managed directory has not yet been
-created. No root, branch or file is automatically recreated or removed. Existing
-roots must be private owned canonical directories. Each source supplies a portable
-tree capture plus required Git pack/index to a sequential trusted consumer. The
-returned catalog binds their hashes; the caller must still write and independently
-verify every referenced output before publishing a complete profile backup.
+Ready roots retain the required private directory and present-index contract. A
+missing ready root fails `missing_coding_worktree`; a missing/corrupt ready index
+is never replaced with an empty index. Preparing and uncertain records use an
+explicit fourth `consumePartial` callback. An old absence-only consumer refuses
+with `partial_coding_consumer_required`. Every partial catalog row commits the
+actual nullable tree/index hash, required base pack hash and administration hash.
+A partial row never means ready or a complete profile backup.
 
-After the last consumer, ALL earlier roots and Git index/packs are observed again,
-as are absences and managed-directory identity. Earlier source mutation, an index
-change without working-file changes, or an absent root appearing refuses rather
-than producing a stale multi-task catalog. Comparison hashes/limits are captured
-before passing consumer DTOs; consumer changes cannot alter the expected sources.
-Limits aggregate across tasks: 2 GiB tree/index/compressed-pack bytes and separately
-2 GiB tree/index/uncompressed-Git bytes, 100,000 filesystem entries and separately
-100,000 Git objects. Duplicated objects across tasks count again conservatively.
-Only one task's file manifest/pack is passed at a time, not all pack Buffers retained.
+The Linux collector supports the native `worktree add --no-checkout` order:
+
+| Frozen preparation observation                     | Retained evidence                                                                       |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Plan persisted, root/admin/branch absent           | Explicit absences and base/history pack                                                 |
+| Exact task branch exists, root/admin absent        | Exact base ref, absences and base/history pack                                          |
+| Complete bound admin survives, root absent         | HEAD/commondir/gitdir bytes, any raw index, base/index object closure                   |
+| No-checkout root before/after chmod                | Actual tree (including inert .git), complete admin, explicit absent index and base pack |
+| Partly or fully materialized tree before read-tree | Actual binary bytes/modes, complete admin, absent index and base pack                   |
+| Read-tree finished but preparing/uncertain remains | Actual tree, exact raw index including stage/REUC roots, admin and object pack          |
+
+The pre-chmod root may be 0755 only beneath a pinned private managed ancestor,
+with the exact frozen slot and reciprocal Git attribution. This does not weaken
+the ready-root or generic archive origin contracts. A surviving external common
+Git directory can prove binding when the original checkout is absent; no original
+checkout body is read. Missing common/base objects refuse.
+
+A metadata-only pass proves every selected Git binding/storage layout and every
+protected tree namespace before any selected object/tree body is read. Each
+capture repeats this ordering, and the full metadata preflight runs again after
+the last consumer. A protected later root therefore prevents earlier object/body
+reads too.
+
+Attribution inspects only the exact task ref and bounded, strictly parsed packed-ref metadata,
+root .git, and the native slot or numeric-suffix admin candidates. Multiple
+candidates, incomplete/mismatched pointers, lockfiles, reftable storage and
+unknown per-worktree administrative files refuse before task-body traversal.
+The retained administrative bodies are exactly root .git when present and admin
+HEAD, commondir and gitdir when present; index is separate nullable binary data.
+Empty admin refs and the optional logs/HEAD namespace are checked with bounded
+metadata. Reflog bodies, arbitrary common/config/hooks, other worktree bodies and
+unrelated object closures are not copied. ORIG_HEAD from an ordinary Git checkout
+is outside the partial native-create shape and refuses; strict ready capture is
+unchanged. Pointers remain inert evidence, never restoration destinations.
+
+Objects use the same synthesized sterile Git repository for SHA-1/SHA-256 and
+loose/packed storage. No source/global executable Git config, hooks, filters,
+lazy fetch, network or inherited environment secrets are used. No absent index
+is fabricated. `archivePartialCodingGit` writes a new private inert evidence
+folder, retains an incomplete marker on failure, and checks a private originating
+handle before and after copying. `verifyPartialCodingGitArchive` accepts an
+expected manifest hash, checks bounded metadata and every retained digest, and
+refuses missing/corrupt evidence. Independent tests import the pack and optional
+raw index into a fresh private Git repository after source paths disappear.
+Tree quarantine preserves partial binary bytes, modes and inert pointer text.
+This is not profile restore, source rebind or authority revival.
+
+Pinned nofollow descriptors retain inode, mount, UID/mode, content hashes and
+absence witnesses through all consumers. Final verification rechecks every
+partial binding, base/index closure, earlier tree and all absences after the
+last consumer. Equal-size unchanged-time shared-mapping writes to HEAD, index,
+branch, required objects or tree bytes invalidate. Consumer DTO mutation cannot
+rewrite private witnesses or authorize a forged archive. Mount and namespace
+substitutions refuse. No root, branch, index or admin file is repaired, pruned,
+replayed, recreated or promoted.
+
+Limits aggregate across tasks: 2 GiB tree/index/compressed-pack/administration
+bytes and separately 2 GiB tree/index/uncompressed-Git/administration bytes,
+100,000 filesystem/administration entries and separately 100,000 Git objects.
+Existing per-file, index, object and metadata preflight bounds remain. Repeated
+objects count conservatively; the collector retains descriptors/digests rather
+than all consumed pack buffers. Graph-wide configuration/dependency budgets are
+still a separate open integration gate.
 
 The coding-worktree scan policy refuses known credential names/components before
 body reads, including environment files, private keys and credential config files.
@@ -254,17 +311,22 @@ forged plans, lost ready roots, valid absences, source/index/absence races, aggr
 uncompressed object limits and protected-body refusal. The built scanner's opt-in
 worker fixture also checks credential-policy refusal with zero file-body reads
 before the separate real child-mount refusal. It uses synthetic canaries only.
-Independent review found no blocking subgraph issue; its compressed-versus-logical
+Independent review of the original ready/absence-only collector found no blocking
+subgraph issue; its compressed-versus-logical
 limit clarification led to the separate aggregate uncompressed Git bound.
-At this checkpoint root check passes 899 tests (41 opt-in skipped), build and
-format pass. Two separate native tests pass: protected hardlink-alias refusal
+At that original checkpoint root check passed 899 tests (41 opt-in skipped),
+build and format passed. Two separate native tests pass: protected hardlink-alias refusal
 with zero content reads plus real child-mount refusal in the qualified worker,
 and the built-code quarantine SIGKILL scenario.
 
-This is the managed-worktree subgraph, not the complete profile graph. Partial
-Git administration for absent intents, retained apply originals/intents, registered
-project configuration, explicit dependency roots and external-link mapping still
-need graph selection/verification. No execution authority is restored, no source
+At the 7.5 implementation checkpoint the six real create-boundary SIGKILL tests
+are part of the required process matrix. The separate Linux native run passes
+20 cases: those six plus the inherited four-file 14-case suite. Independent
+scoped review remains with the controller.
+
+This is the managed-worktree subgraph, not the complete profile graph. Frozen
+project configuration, explicit dependency roots, external-link mapping and unified
+selection/verification of all retained subgraphs remain open. No execution authority is restored, no source
 checkout paths are rebound and the user-facing format-1 backup refusal remains.
 
 ## Selected legacy apply-recovery assets
@@ -517,8 +579,8 @@ and group workflows, and two native asset tests (14 tests total).
 
 ## Remaining format-2 work
 
-Build the complete bounded external graph from these references, including all
-managed worktree bytes, required Git administration/object closure, staged data,
+Integrate the selected managed-worktree and partial Git closure with the complete
+bounded external graph, including staged data,
 the recovery subgraph described above and profile coding configuration. Distinguish
 planned-but-absent assets from lost ready assets. Resolve dependency/symlink
 relationships explicitly; never traverse arbitrary home/root paths as a shortcut.

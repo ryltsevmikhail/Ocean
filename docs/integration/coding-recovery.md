@@ -201,6 +201,32 @@ a frozen profile under maintenance ownership. Its quarantined staged file has
 one link and its own inode. The four-file native suite passes 14 tests on Linux,
 including the two admitted direct/group workflows.
 
+## Interrupted worktree creation (7.5)
+
+Six real SIGKILL fixtures reach actual adapter boundaries: persisted plan before
+Git effects, successful no-checkout before chmod, after chmod, during raw-blob
+materialization, immediately before read-tree and immediately after read-tree.
+The runtime admits the synthetic task and commits its preparation intent before
+the worker reaches the real Git/filesystem boundary. Two ordinary reopenings
+preserve `preparing`, the task/worktree binding and one create dispatch. Repeated
+prepare refuses `recovery_required` without reapproval, recreation or pruning.
+Capture does not promote the state to ready or infer cancellation/completion.
+
+Each reopening captures through `snapshotCodingDatabase` while maintenance
+ownership reports busy. Partial evidence includes actual tree bytes/modes,
+explicit absent/present raw index, minimal bound administration and required
+base/history/stage/REUC object closure. Before-chmod 0755 roots require the private
+pinned managed ancestor. Absent roots still require base and branch/admin
+observations. Unsafe or incomplete internal Git shapes refuse without repair.
+See the [supported shapes and bounds](coding-backup.md#managed-worktree-subgraph).
+Private quarantine/import tests do not revive approvals or reconnect source paths.
+
+The first shared-runtime delivery is accepted at `56bbef0`, including the reviewed
+`dc9e244` correction and qualified source `67665e9`. These fixtures respect its
+owner boot/PID-namespace checks and maintenance-held inventory API. All host and
+child runtime fixtures use disposable HOME/coordination state. This qualifies
+host SIGKILL, not power loss, an installed upgrade or complete profile restore.
+
 ## Remaining release gates
 
 Extend reconciliation to other coding effects without redispatching unknown

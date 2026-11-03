@@ -1,9 +1,15 @@
+import {
+  preflightCodingWorktrees,
+  preflightCodingWorktreeTree,
+} from './coding-worktree-preflight.js';
 import * as fs from 'node:fs';
+import { holdPartialCodingGit, type CodingPartialGitCapture } from './coding-git-partial.js';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import type { CodingBackupInventory, CodingWorktree } from '@runnets/domain';
 import {
   captureCodingAssetTree,
+  captureAssetTreeAt,
   codingAssetIdentity,
   type CodingAssetCapture,
 } from './coding-asset-scan.js';
@@ -17,7 +23,13 @@ interface WorktreeReference {
 }
 export type CodingWorktreeAssetRecord = WorktreeReference &
   (
-    | { readonly presence: 'absent' }
+    | {
+        readonly presence: 'partial';
+        readonly treeHash: string | null;
+        readonly indexSha256: string | null;
+        readonly packSha256: string;
+        readonly administrationHash: string;
+      }
     | {
         readonly presence: 'captured';
         readonly treeHash: string;
@@ -37,6 +49,12 @@ export interface CodingWorktreeAssetInput {
   readonly capture: CodingAssetCapture;
   readonly git: CodingGitObjectCapture;
 }
+export interface CodingPartialWorktreeAssetInput {
+  readonly slot: string;
+  readonly worktree: CodingWorktree;
+  readonly capture: CodingAssetCapture | null;
+  readonly git: CodingPartialGitCapture;
+}
 function present(path: string): boolean {
   try {
     fs.lstatSync(path);
@@ -51,6 +69,7 @@ export async function captureCodingWorktreeAssets(
   frozen: CodingBackupInventory,
   managedDirectory: string,
   consume: (input: CodingWorktreeAssetInput) => Promise<void>,
+  consumePartial?: (input: CodingPartialWorktreeAssetInput) => Promise<void>,
 ): Promise<CodingWorktreeAssetCatalog> {
   const inventory = structuredClone(frozen),
     { hash: inventoryHash, ...inventoryBody } = inventory;
@@ -102,6 +121,7 @@ export async function captureCodingWorktreeAssets(
       limits: CodingAssetCapture['limits'];
     }
   >();
+  const partials = new Map<string, Omit<ReturnType<typeof holdPartialCodingGit>, 'capture'>>();
   let bytes = 0,
     logicalBytes = 0,
     entries = 0,
@@ -120,15 +140,77 @@ export async function captureCodingWorktreeAssets(
     }
     const managedState =
       managed === undefined ? '' : codingAssetIdentity(fs.fstatSync(managed, { bigint: true }));
+    if (!consumePartial && plans.some(({ worktree }) => worktree.state !== 'ready'))
+      throw Error('partial_coding_consumer_required');
+    preflightCodingWorktrees(
+      plans.map(({ worktree }) => worktree),
+      managedDirectory,
+    );
     for (const { worktree, slot } of plans) {
-      if (!present(worktree.root)) {
-        if (worktree.state === 'ready') throw Error('missing_coding_worktree');
-        records.push({ taskId: worktree.taskId, slot, state: worktree.state, presence: 'absent' });
+      if (worktree.state !== 'ready') {
+        if (!consumePartial) throw Error('partial_coding_consumer_required');
+        const held = holdPartialCodingGit(worktree, managedDirectory, (fd) =>
+          preflightCodingWorktreeTree(worktree, fd),
+        );
+        const { capture: git, ...guard } = held;
+        partials.set(slot, guard);
+        const capture =
+          git.administration.root === 'absent'
+            ? null
+            : captureAssetTreeAt(
+                worktree.root,
+                {
+                  bytes: Math.min(2147483648 - bytes, 2147483648 - logicalBytes),
+                  entries: 100000 - entries,
+                },
+                'coding-worktree',
+                held.rootFd!,
+                () => held.verifyBinding(),
+              );
+        held.verifyBinding();
+        const metadataBytes = Buffer.byteLength(JSON.stringify(git.administration));
+        bytes +=
+          (capture?.manifest.bytes ?? 0) +
+          (git.index?.length ?? 0) +
+          git.pack.length +
+          metadataBytes;
+        logicalBytes +=
+          (capture?.manifest.bytes ?? 0) +
+          (git.index?.length ?? 0) +
+          git.objectBytes +
+          metadataBytes;
+        entries += (capture?.manifest.entries.length ?? 0) + git.administration.files.length + 4;
+        objects += git.objectIds.length;
+        if (bytes > 2147483648 || logicalBytes > 2147483648 || entries > 100000 || objects > 100000)
+          throw Error('coding_asset_limit');
+        if (capture)
+          observed.set(slot, {
+            sourceStateHash: capture.sourceStateHash,
+            treeHash: capture.manifest.hash,
+            index: '',
+            pack: '',
+            limits: { ...capture.limits },
+          });
+        records.push({
+          taskId: worktree.taskId,
+          slot,
+          state: worktree.state,
+          presence: 'partial',
+          treeHash: capture?.manifest.hash ?? null,
+          indexSha256: git.indexSha256,
+          packSha256: git.packSha256,
+          administrationHash: git.administration.hash,
+        });
+        await consumePartial({ slot, worktree: structuredClone(worktree), capture, git });
         continue;
       }
+      if (!present(worktree.root)) throw Error('missing_coding_worktree');
       const stat = fs.lstatSync(worktree.root);
       if (!stat.isDirectory() || stat.uid !== process.getuid?.() || stat.mode & 0o077)
         throw Error('invalid_coding_asset_root');
+      const git = captureCodingGitObjects(worktree, (fd) =>
+        preflightCodingWorktreeTree(worktree, fd),
+      );
       const capture = captureCodingAssetTree(
         worktree.root,
         {
@@ -137,12 +219,11 @@ export async function captureCodingWorktreeAssets(
         },
         'coding-worktree',
       );
-      const git = captureCodingGitObjects(worktree);
       bytes += capture.manifest.bytes + git.index.length + git.pack.length;
       logicalBytes += capture.manifest.bytes + git.index.length + git.objectBytes;
       entries += capture.manifest.entries.length;
       objects += git.objectIds.length;
-      if (bytes > 2147483648 || logicalBytes > 2147483648 || objects > 100000)
+      if (bytes > 2147483648 || logicalBytes > 2147483648 || entries > 100000 || objects > 100000)
         throw Error('coding_asset_limit');
       observed.set(slot, {
         sourceStateHash: capture.sourceStateHash,
@@ -163,7 +244,13 @@ export async function captureCodingWorktreeAssets(
       await consume({ slot, worktree: structuredClone(worktree), capture, git });
     }
     // Recheck ALL earlier roots after the last consumer, not only the last copied one.
+    for (const held of partials.values()) held.verifyBinding();
+    preflightCodingWorktrees(
+      plans.map(({ worktree }) => worktree),
+      managedDirectory,
+    );
     for (const { worktree, slot } of plans) {
+      partials.get(slot)?.verify();
       const expected = observed.get(slot);
       if (!expected) {
         if (present(worktree.root)) throw Error('stale_coding_asset');
@@ -175,7 +262,13 @@ export async function captureCodingWorktreeAssets(
         current.manifest.hash !== expected.treeHash
       )
         throw Error('stale_coding_asset');
-      const git = captureCodingGitObjects(worktree);
+      if (partials.has(slot)) {
+        partials.get(slot)!.verify();
+        continue;
+      }
+      const git = captureCodingGitObjects(worktree, (fd) =>
+        preflightCodingWorktreeTree(worktree, fd),
+      );
       if (git.indexSha256 !== expected.index || git.packSha256 !== expected.pack)
         throw Error('stale_coding_asset');
     }
@@ -189,6 +282,7 @@ export async function captureCodingWorktreeAssets(
     const body = { format: 1 as const, inventoryHash, worktrees: records };
     return { ...body, hash: hash(body) };
   } finally {
+    for (const held of partials.values()) held.close();
     if (managed !== undefined) fs.closeSync(managed);
   }
 }

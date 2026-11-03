@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { runSandbox } from './sandbox-supervision.js';
 it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')(
-  'refuses a real bind-mounted child in a qualified private namespace',
+  'refuses a real bind-mounted child in tree and Git evidence readers in a private namespace',
   async () => {
     const outer = mkdtempSync(join(tmpdir(), 'ocean-asset-native-'));
     const root = join(outer, 'task'),
@@ -15,6 +15,9 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
     writeFileSync(join(dependencies, 'project/node_modules/dependency.js'), 'synthetic dependency');
     try {
       for (const module of [
+        'coding-git-observer.js',
+        'coding-git-storage.js',
+        'coding-asset-io.js',
         'coding-asset-scan.js',
         'coding-asset-policy.js',
         'coding-asset-selection.js',
@@ -42,12 +45,19 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
           String.raw`
 import * as fs from 'node:fs';
 import {captureCodingAssetTree} from '/workspace/coding-asset-scan.js';
+import {GitEvidenceObserver} from '/workspace/coding-git-observer.js';
 const testRoot=fs.openSync('/workspace/project',fs.constants.O_RDONLY|fs.constants.O_DIRECTORY);
 const testChild=fs.openSync('/workspace/project/node_modules',fs.constants.O_RDONLY|fs.constants.O_DIRECTORY);
 const testMountOf=fd=>/^mnt_id:\s+(\d+)$/m.exec(fs.readFileSync('/proc/self/fdinfo/'+fd,'utf8'))?.[1];
 if(testMountOf(testRoot)===testMountOf(testChild)) throw Error('fixture child is not a separate mount');
 if(fs.fstatSync(testRoot).uid!==process.getuid()||fs.fstatSync(testChild).uid!==process.getuid()) throw Error('fixture ownership mismatch');
 fs.closeSync(testRoot);fs.closeSync(testChild);
+const gitObserver=new GitEvidenceObserver();
+try {
+ const parent=gitObserver.directory('/workspace/project');
+ try {gitObserver.child(parent,'node_modules');throw Error('Git metadata cross-mount unexpectedly succeeded');}
+ catch(error){if(error.message!=='unsupported_coding_git_storage')throw error;}
+} finally {gitObserver.close();}
 fs.writeFileSync('/workspace/project/b.key','synthetic credential canary');
 fs.linkSync('/workspace/project/b.key','/workspace/project/a');
 const {syncBuiltinESMExports}=await import('node:module');

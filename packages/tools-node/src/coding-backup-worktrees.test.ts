@@ -48,7 +48,9 @@ function setup(count = 1) {
         .digest('hex');
     const root = join(managed, slot),
       branch = 'codex/ocean/' + slot;
-    git(project, 'worktree', 'add', '-qb', branch, root);
+    git(project, 'worktree', 'add', '--no-checkout', '-qb', branch, root);
+    fs.writeFileSync(join(root, 'file'), 'base');
+    git(root, 'read-tree', baseCommit);
     fs.chmodSync(root, 0o700);
     tasks.push({
       id,
@@ -150,11 +152,22 @@ it.runIf(process.platform === 'linux')(
     };
     fs.rmSync(s.managed, { recursive: true });
     let called = false;
-    const result = await captureCodingWorktreeAssets(inventory, s.managed, async () => {
-      called = true;
-    });
+    let partial = false;
+    const result = await captureCodingWorktreeAssets(
+      inventory,
+      s.managed,
+      async () => {
+        called = true;
+      },
+      async ({ git }) => {
+        partial = true;
+        expect(git.administration.root).toBe('absent');
+        expect(git.objectIds).toContain(inventory.worktrees[0]!.baseCommit);
+      },
+    );
+    expect(partial).toBe(true);
     expect(called).toBe(false);
-    expect(result.worktrees[0]?.presence).toBe('absent');
+    expect(result.worktrees[0]?.presence).toBe('partial');
     expect(result.worktrees[0]?.state).toBe('preparing');
     expect(fs.existsSync(s.managed)).toBe(false);
   },
@@ -198,11 +211,16 @@ it.runIf(process.platform === 'linux')(
     const missing = inventory.worktrees[0]!.root;
     fs.rmSync(missing, { recursive: true });
     await expect(
-      captureCodingWorktreeAssets(inventory, s.managed, async () => {
-        fs.mkdirSync(missing, { mode: 0o700 });
-        fs.writeFileSync(join(missing, 'user'), 'keep');
-      }),
-    ).rejects.toThrow('stale_coding_asset');
+      captureCodingWorktreeAssets(
+        inventory,
+        s.managed,
+        async () => {
+          fs.mkdirSync(missing, { mode: 0o700 });
+          fs.writeFileSync(join(missing, 'user'), 'keep');
+        },
+        async () => {},
+      ),
+    ).rejects.toThrow(/stale_coding/);
     expect(fs.readFileSync(join(missing, 'user'), 'utf8')).toBe('keep');
   },
 );
