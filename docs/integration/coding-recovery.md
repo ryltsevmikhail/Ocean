@@ -245,10 +245,14 @@ or missing closure refuses without source cleanup. See the [supported-state tabl
 
 ## Remaining release gates
 
-Extend reconciliation to other coding effects without redispatching unknown
-operations. Qualify interruptions after approval decision,
-write/test spawn/result and artifact capture, including process supervision.
-Snapshot format 2 must unify all referenced worktrees, Git administration, recovery,
+The host-level crash matrix in [crash matrix](crash-matrix.md) now classifies
+every execution/effect boundary as unit simulation, actual SIGKILL, cgroup
+native or installed-open, and closes the previously missing immutable changeset
+capture, test-result-persistence and native test-spawn/cleanup boundaries with
+real SIGKILL and two-reopen evidence. Remaining work is content reconciliation
+and owner resolution for sandbox write/test effects without redispatching
+unknown operations (test presets have no resolution command yet) and installed
+artifact qualification. Snapshot format 2 must unify all referenced worktrees, Git administration, recovery,
 frozen configuration and dependencies under global cross-subgraph accounting.
 Imported Desktop per-profile attachment/preparation assets remain mandatory and
 OPEN until trusted path binding and exact selection are determined without arbitrary
@@ -271,3 +275,25 @@ unlinked preparation temporaries and incomplete upload bytes are portable inert
 evidence. Quarantine does not grant approval, resend, enroll old paths or become
 a usable restored profile. See [Desktop capture](desktop-assets.md). Full-format-2
 restore/rebind and remaining crash intervals stay open.
+
+## Crash-qualification matrix (7.11)
+
+[Crash matrix](crash-matrix.md) is the binding evidence table for every
+execution/effect boundary: durable facts before the boundary, existing
+source/test evidence, qualification class, two-reopen behaviour and remaining
+limitation. It reuses accepted 7.1–7.10 fixtures rather than redoing them and
+adds the still-missing actual boundaries: immutable changeset capture
+(`coding-capture-crash.test.ts`), test result persistence before journal
+settlement (`coding-test-persist-crash.test.ts`) and registered test
+spawn/exit/cleanup under a killed runtime or supervised cgroup
+(`coding-test-spawn-crash.test.ts`). Runtime-level file replacement was already
+covered by the shared-runtime `effect` SIGKILL case and is cited, not duplicated.
+
+The cgroup case exposed one genuine defect: systemd reports `SIGTERM` as a clean
+service exit, so `systemd-run --wait` returned exit 0 for an externally stopped
+unit and the runtime could record a killed preset as passed. The minimal fix in
+`sandbox-supervision.ts` requires a per-run completion sentinel that only an
+independently exited child can produce; stopped or signal-terminated units now
+report `unavailable`/non-zero and are never counted as passed. Ordinary exit-0
+runs still pass. This is a host-process qualification, not power-loss, installed
+artifact or Desktop GUI qualification.

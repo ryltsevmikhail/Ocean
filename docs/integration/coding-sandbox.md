@@ -45,6 +45,12 @@ Production chat admission still requires stages 4–7.
   closure. No full home or host root mount is accepted.
 - Command evidence binds invocation, source hashes, exit status, retained output
   and cleanup. Only exact registered presets may use the backend.
+- Completion requires the supervised worker's per-run sentinel, reported only
+  when its child exited on its own. systemd classifies `SIGTERM` as a clean
+  service exit, so an externally stopped unit could otherwise return exit 0 with
+  confirmed cleanup. Signal-terminated or stopped units now report
+  `unavailable`/non-zero status and are never recorded as passed; ordinary
+  exit-0 presets still retain untruncated output.
 
 ## Verification at transfer
 
