@@ -5,9 +5,10 @@ declare global {
     ocean: { request(message: unknown): Promise<unknown> };
   }
 }
+type SendFailureStage = 'validation' | SendStage;
 export class SendFailure extends Error {
-  readonly stage: SendStage;
-  constructor(code: string, stage: SendStage) {
+  readonly stage: SendFailureStage;
+  constructor(code: string, stage: SendFailureStage) {
     super(code);
     this.stage = stage;
   }
@@ -18,7 +19,10 @@ async function post(message: unknown) {
 export async function call<K extends Command['op']>(
   command: Command & { op: K },
 ): Promise<z.infer<(typeof outputs)[K]>> {
-  if (!commands.safeParse(command).success) throw new Error('invalid_request');
+  if (!commands.safeParse(command).success) {
+    if (command.op === 'send') throw new SendFailure('invalid_request', 'validation');
+    throw new Error('invalid_request');
+  }
   const raw = await post(command);
   const reply = envelope.safeParse(raw);
   if (!reply.success) throw new Error('outcome_unknown');

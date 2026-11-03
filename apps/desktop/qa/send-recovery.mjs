@@ -121,6 +121,18 @@ export async function contextRefusal(page, f) {
   assert.equal(await page.getByLabel('Кому').inputValue(), 'dev');
   assert.equal(f.command('history', room).length, 4);
   assert.equal(dispatches(), before);
+  await draft.fill('--help');
+  await button('Отправить').click();
+  await page.locator('#feedback').filter({ hasText: 'Проверьте поля.' }).waitFor();
+  assert.equal(await draft.inputValue(), '--help');
+  assert.equal(
+    await draft.isEditable(),
+    true,
+    'renderer validation before IPC must leave the draft editable',
+  );
+  assert.equal(await page.getByLabel('Кому').inputValue(), 'dev');
+  assert.equal(f.command('history', room).length, 4);
+  assert.equal(dispatches(), before);
   await draft.fill('short valid turn');
   await button('Отправить').click();
   await page
@@ -133,6 +145,6 @@ export async function contextRefusal(page, f) {
   );
   assert.equal(dispatches(), before + 1);
   console.log(
-    'First context_limit kept draft editable; zero refused admissions or dispatches, one shortened turn and reply',
+    'Owner context_limit and renderer validation kept drafts editable; zero refused admissions or dispatches, one edited turn and reply',
   );
 }

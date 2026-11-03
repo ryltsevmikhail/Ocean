@@ -58,3 +58,24 @@ it('reports first-attempt preparation failures without a receipt lookup', async 
   });
   expect(request.mock.calls).toEqual([[command]]);
 });
+
+it.each([{ text: '--help' }, { text: '-V' }, { attachments: ['invalid-file-id'] }])(
+  'rejects an invalid send before IPC, including on an explicit retry (%j)',
+  async (invalid) => {
+    const request = channel();
+    for (const retry of [false, true]) {
+      await expect(submitDraft({ ...command, ...invalid }, retry)).rejects.toMatchObject({
+        message: 'invalid_request',
+        stage: 'validation',
+      });
+      expect(request).not.toHaveBeenCalled();
+    }
+  },
+);
+it('does not infer a local validation failure from an IPC rejection with the same message', async () => {
+  const request = channel();
+  const ambiguous = Error('invalid_request');
+  request.mockRejectedValueOnce(ambiguous);
+  await expect(submitDraft(command, false)).rejects.toBe(ambiguous);
+  expect(request.mock.calls).toEqual([[command]]);
+});
