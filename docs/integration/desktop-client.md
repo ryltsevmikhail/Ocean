@@ -2,32 +2,36 @@
 
 ## In-repository Ocean Desktop
 
-`apps/desktop` imports the complete committed desktop tree from source revision
-`1c8d8c3` (2026-11-02). See [its README](../../apps/desktop/README.md) for launch
-and attachment behavior. It is an Electron/Vue Linux client with room/bot
-management, direct/group history, named recipients, appearance controls and
-persistent scoped attachments (four files, 10 MiB each).
+The Linux Electron/Vue client in `apps/desktop` shares the local runtime with the standard room TUI. Initialize the private profile and workspace with the CLI first. Start the foreground owner in one terminal, then launch Desktop in a second terminal with the same canonical profile and runtime directory.
 
-The implemented host is `apps/desktop/src/host/main.ts`. Each operation starts
-an external Node 26 worker, which invokes this checkout's built CLI through
-`src/host/worker.ts`; it does not attach through ACP or a shared-runtime socket.
-Its private Electron userData `conversation` directory contains the CLI profile,
-workspace and attachment store. Window close sends SIGINT to the active worker;
-an interrupted send can remain `uncertain`, and does not prove cancellation.
+```sh
+pnpm ocean runtime start --profile /absolute/private/profile --json
+# Another terminal
+OCEAN_DESKTOP_PROFILE=/absolute/private/profile pnpm --filter @ocean/desktop start
+```
 
-Attachment bytes and request receipts are stored before CLI submission. Images
-can be previewed/zoomed, text can be previewed, and original files exported.
-Clipboard/drop imports and restarted history use the same room/message-scoped
-store. The current provider path is text-only: it includes bounded text excerpts
-and descriptions, with no image/PDF/archive understanding. CLI profile backup
-does not include attachment bytes; preserve the full `conversation` directory.
+For an isolated window, append `--user-data-dir=/absolute/private/desktop` to the start command. Without an override Desktop selects `<userData>/conversation/profile`, the profile path of the imported client. It connects only. An absent profile requires explicit CLI initialization, an absent owner requires explicit start, and authentication or endpoint errors are shown in the window. The provider configuration belongs to the foreground owner. The profile panel shows its authenticated profile hash, instance UUID, protocol and state.
 
-[Shared local runtime](../ocean/shared-runtime.md) is a future migration of this
-in-repository host. The current worker-per-request implementation has no shared
-endpoint seam and is not evidence of detach/reconnect or two-client runtime
-acceptance. Deterministic GUI smoke/transfer QA uses a temporary Electron profile
-and mocked HTTP provider; live-provider, installed-app and packaging qualification
-are separate gates. This import does not modify the installed application.
+The sandboxed renderer sends validated room and attachment commands to Electron main. Only the file-backed main frame of that window can invoke them. Main authenticates through the public `@runnets/tools-node/local-runtime-client` export and closes each bounded request connection when it finishes. Electron 45.2.1's embedded Node 24.22.1 was exercised with this client export on Linux. The owner and workspace build continue to use Node 26. The renderer receives no connection descriptor, provider configuration or arbitrary path/exec interface.
+
+A send displays the durable message/run receipt as soon as the owner acknowledges it. A group note has no run. The window follows scoped room/run watermarks, pages committed history and displays read failures separately from admission. An uncertain acknowledgement in a living window retains the original UUID, recipient, text and attachment IDs for the explicit retry button. Reopening the room reads the owner's committed history and runs. Closing the window detaches. The cancel button identifies a run and version and requests cancellation against that binding. The run projection reports the actual outcome. Room tasks show performer and pending decision IDs. Inspect and vote on the complete operation in the room TUI or the public client example.
+
+### Desktop-local attachments
+
+File selection, paste and drop admit up to four files of 10 MiB each. The native host stores original bytes by room and file UUID, checks size and SHA-256 and writes a private room/request receipt before submitting transformed text. A new receipt retains the exact prepared payload for an identical retry. History decorates user bodies when the embedded request UUID, room and body digest match a local receipt. An identical copied envelope in the same room also matches. Images support preview and zoom, text supports excerpt previews and original bytes export through a save dialog. The provider receives bounded text excerpts and descriptions of the attachments.
+
+The original default profile uses `<userData>/conversation/attachments`. An explicitly selected different profile uses `<userData>/conversation/profiles/<profileId>/attachments`, where `profileId` is the authenticated hash of the canonical profile path. Using a different userData directory or relocating the profile selects a different store. An independent client sees the committed text envelope. CLI profile backup excludes Desktop bytes and receipts. Retain the corresponding Desktop store separately. Asset-complete backup and restore remain open.
+
+### Linux qualification
+
+```sh
+pnpm build
+pnpm --filter @ocean/desktop bundle
+node apps/desktop/qa/smoke.mjs
+node apps/desktop/qa/entrypoint.mjs
+```
+
+The Wayland drivers create private temporary userData, workspace, runtime directory and profile. The explicitly started owner uses a deterministic in-process HTTP replacement and a fixture-only key. The entrypoint driver launches the actual `pnpm --filter @ocean/desktop start` command twice. Only the disposable window enables a loopback debugging port. The driver drops a committed attachment-send acknowledgement, disconnects reads, retries, observes the same receipt from a separate SDK process and starts the standard room TUI in a PTY. It closes the window while generation waits, releases the provider and verifies one answer and one dispatch across clients and a reopened GUI. Transfer QA uses synthetic file inputs, paste/drop events and an intercepted save dialog, and compares the exported image and binary bytes. Physical OS clipboard, interactive file pickers, installed app and live providers require separate qualification.
 
 ## External RunneBot / ACP client
 

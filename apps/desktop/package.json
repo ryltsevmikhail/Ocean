@@ -6,9 +6,10 @@
   "license": "Apache-2.0",
   "scripts": {
     "bundle": "vue-tsc --noEmit -p tsconfig.json && vite build && rolldown src/host/preload.ts --platform node --external electron --format cjs --file dist/preload.cjs",
-    "start": "pnpm -w build && pnpm bundle && OCEAN_DESKTOP_NODE=\"$(node -p process.execPath)\" electron ."
+    "start": "pnpm -w build && pnpm bundle && electron ."
   },
   "dependencies": {
+    "@runnets/tools-node": "workspace:*",
     "vue": "3.5.44",
     "zod": "4.6.7"
   },

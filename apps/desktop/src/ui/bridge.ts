@@ -20,7 +20,3 @@ export async function call<K extends Command['op']>(
   if (!data.success) throw new Error('outcome_unknown');
   return data.data as z.infer<(typeof outputs)[K]>;
 }
-export async function cancel(requestId: string) {
-  const reply = envelope.parse(await post({ op: 'cancel', requestId }));
-  if (!reply.ok) throw new Error(reply.error.code);
-}

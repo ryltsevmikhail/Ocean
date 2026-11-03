@@ -1,30 +1,19 @@
+import { fixture, windowEnv } from './owner.mjs';
 import { checkTransfers } from './transfers.mjs';
 import { Buffer } from 'node:buffer';
 import console from 'node:console';
-import process from 'node:process';
 import { _electron } from 'playwright-core';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import assert from 'node:assert/strict';
 import { setTimeout } from 'node:timers/promises';
 import electron from 'electron';
-const root = mkdtempSync(join(tmpdir(), 'ocean-window-'));
+const f = await fixture(),
+  { root } = f;
 const dir = resolve(import.meta.dirname, '..');
-const wrapper = join(root, 'test-node');
-writeFileSync(wrapper, '#!/bin/sh\nexec "$TEST_NODE" --import "$TEST_PROVIDER" "$@"\n', {
-  mode: 0o700,
-});
 let app, page;
-async function launch(test) {
-  const env = {
-    ...process.env,
-    OCEAN_DESKTOP_NODE: test ? wrapper : process.execPath,
-    TEST_NODE: process.execPath,
-    TEST_PROVIDER: join(dir, 'qa/provider.mjs'),
-    OCEAN_TEST_LOG: join(root, 'requests'),
-    DEEPSEEK_API_KEY: test ? 'test-only' : '',
-  };
+async function launch(profile = f.profile) {
+  const env = windowEnv({ ...f, profile });
   app = await _electron.launch({
     executablePath: electron,
     args: [dir, '--user-data-dir=' + join(root, 'desktop'), '--ozone-platform=wayland'],
@@ -48,7 +37,13 @@ async function status(word) {
 }
 const requests = () => readFileSync(join(root, 'requests'), 'utf8').trim().split('\n');
 try {
-  await launch(false);
+  const absent = join(root, 'absent');
+  await launch(absent);
+  await status('Профиль недоступен');
+  assert.equal(existsSync(absent), false);
+  assert.equal(existsSync(join(root, 'desktop', 'conversation', 'profile')), false);
+  await app.close();
+  await launch();
   await button('Создать Ocean Team').click();
   await title('Ocean Team');
   await button('Аватар @dev').click();
@@ -79,7 +74,7 @@ try {
   await button('Бирюзовый').click();
   await button('Закрыть настройки').click();
   await button('Локальный профиль').click();
-  await page.getByText('Ключ DeepSeek не найден в окружении.').waitFor();
+  await page.getByText(f.command('runtime', 'status').instanceId, { exact: true }).waitFor();
   await button('Профили ботов').click();
   await page.getByLabel('Идентификатор').fill('Bad Handle');
   assert.equal(await page.getByLabel('Идентификатор').getAttribute('aria-invalid'), 'true');
@@ -94,9 +89,6 @@ try {
   await button('Создать').click();
   await title('Editors');
   await button('Ocean Team').click();
-  await send('qualification', 'dev');
-  await status('Провайдер недоступен');
-  console.log('Real CLI: provider_unavailable');
   assert.equal(await page.evaluate(() => typeof globalThis.require), 'undefined');
   assert.equal(
     await page.evaluate(
@@ -105,7 +97,7 @@ try {
     false,
   );
   await app.close();
-  await launch(true);
+  await launch();
   await button('Ocean Team').click();
   await title('Ocean Team');
   await button('Настройки').click();
@@ -231,11 +223,11 @@ try {
   await send('slow-turn', 'dev');
   for (let i = 0; i < 100 && requests().length < 4; i++) await setTimeout(50);
   assert.equal(requests().length, 4);
-  await button('Запросить отмену').click();
+  await page.getByRole('button', { name: /Запросить отмену tr_.*\[v\d+\]/ }).click();
   await status('uncertain');
   assert.doesNotMatch(await page.locator('#feedback').innerText(), /cancelled/);
   await app.close();
-  await launch(true);
+  await launch();
   await button('Ocean Team').click();
   await page.locator('#history').getByText('Test provider · inspect', { exact: false }).waitFor();
   assert.doesNotMatch(await page.locator('#history').innerText(), /private-only/);
@@ -293,5 +285,5 @@ try {
   throw error;
 } finally {
   await app?.close().catch(() => {});
-  rmSync(root, { recursive: true, force: true });
+  await f.close();
 }

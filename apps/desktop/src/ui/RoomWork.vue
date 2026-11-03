@@ -34,18 +34,20 @@ const entries = [
     <h2>{{ page }}</h2>
     <template v-if="page === 'Задачи комнаты'"
       ><p v-if="!runs.length">В этой комнате ещё нет запусков.</p>
-      <details v-for="run in runs" :key="run.taskRunId" class="info-card">
+      <details v-for="run in runs" :key="run.runId" class="info-card">
         <summary>
-          <strong>{{ run.taskRunId }}</strong
+          <strong>{{ run.runId }}</strong
           ><span>{{ run.turnStatus ?? run.taskStatus }}</span>
         </summary>
         <dl class="runtime-facts">
           <dt>Состояние задачи</dt>
           <dd>{{ run.taskStatus }}</dd>
           <dt>Версия</dt>
-          <dd>{{ run.taskVersion }}</dd>
-          <dt>Неизвестные эффекты</dt>
-          <dd>{{ run.relatedPendingEffects }}</dd>
+          <dd>{{ run.version }}</dd>
+          <dt>Исполнитель</dt>
+          <dd>{{ run.performerId }}</dd>
+          <dt>Ожидают решения в TUI</dt>
+          <dd>{{ run.pendingDecisionIds.join(', ') || '—' }}</dd>
         </dl>
         <p v-if="run.turnStatus === 'uncertain'">
           Исход не подтверждён. Проверьте эффекты этого запуска в Ocean CLI перед продолжением.

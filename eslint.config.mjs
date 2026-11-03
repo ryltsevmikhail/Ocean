@@ -27,7 +27,7 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['*/src/*', '@runnets/*/*'],
+              group: ['*/src/*', '@runnets/*/*', '!@runnets/tools-node/local-runtime-client'],
               message:
                 'Import another package through its public entry point (@runnets/<name>), not its internals.',
             },
@@ -44,6 +44,7 @@ export default tseslint.config(
       '*.config.ts',
       'apps/desktop/vite.config.ts',
       'apps/desktop/qa/*.mjs',
+      'examples/local-runtime-client.mjs',
       'eslint.config.mjs',
     ],
     ...tseslint.configs.disableTypeChecked,

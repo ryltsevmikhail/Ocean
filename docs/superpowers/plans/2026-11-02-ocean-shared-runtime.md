@@ -114,23 +114,23 @@ Task 5 covers the standard TUI decision presentation.
 
 ## Task 6: CLI ownership routing, ACP and shutdown compatibility
 
-- [x] **6.1 lifecycle implementation.** Ordinary explicit start recovers an attested killed listener after authoritative SQLite recovery. Two independent clients see the original receipt and uncertain run through two crash and two clean restarts. The native coding test covers a killed listener after a sandbox write. Independent review follows the 6.1 report.
-- [ ] **6.2 CLI routing and ACP compatibility.** The parent task remains open until the following matrix and shutdown gates pass review.
+- [x] **6.1 lifecycle implementation.** Ordinary explicit start recovers an attested killed listener after authoritative SQLite recovery. Two independent clients see the original receipt and uncertain run through two crash and two clean restarts. The native coding test covers a killed listener after a sandbox write. Independent review passed through `ad87d9e`.
+- [x] **6.2 CLI routing and ACP compatibility.** The matrix and shutdown gates passed independent review through `c612775`.
 
 **Files:** ocean/command.ts, arguments, remote-command, operations/profile boundaries; acp compatibility tests; lifecycle recovery tests/docs.
 
-- [ ] RED integration matrix while runtime active: bot add/list, room direct/group/list/members, history, send (including --task), run list/show/review/acknowledge, coding show/diff/pending/inspect-apply route remotely. Exact review and text-only acknowledgement still require runtime-owned owner decisions. coding start/review/apply/reconcile-apply, init/project add/backup/restore and ownership-taking doctor refuse maintenance_required without opening DB. Static doctor checks may run without ownership. No auth/protocol failure falls back to local profile ownership; implement the complete matrix in the design.
-- [ ] Preserve documented offline one-shot commands when no runtime exists; standard room TUI requires explicit start. Expose requestId and receipt/runId consistently; CLI interruption policy documented separately from TUI detach.
-- [ ] Preserve ACP initialize/session/prompt/update/permission/cancel stdio contracts and safe owner_busy for competing same-profile ownership. Do not advertise shared-room ACP support or remove existing capability checks.
-- [ ] Test graceful stop and deadline with active run/decision/sandbox descendants: reject new admissions, retain uncertain cleanup, never close DB under active work or report false confirmed cancellation. Required gates; commit `feat: route profile commands through the active runtime`; review.
+- [x] RED integration matrix while runtime active: bot add/list, room direct/group/list/members, history, send (including --task), run list/show/review/acknowledge, coding show/diff/pending/inspect-apply route remotely. Exact review and text-only acknowledgement still require runtime-owned owner decisions. coding start/review/apply/reconcile-apply, init/project add/backup/restore and ownership-taking doctor refuse maintenance_required without opening DB. Static doctor checks may run without ownership. No auth/protocol failure falls back to local profile ownership; implement the complete matrix in the design.
+- [x] Preserve documented offline one-shot commands when no runtime exists; standard room TUI requires explicit start. Expose requestId and receipt/runId consistently; CLI interruption policy documented separately from TUI detach.
+- [x] Preserve ACP initialize/session/prompt/update/permission/cancel stdio contracts and safe owner_busy for competing same-profile ownership. Do not advertise shared-room ACP support or remove existing capability checks.
+- [x] Test graceful stop and deadline with active run/decision/sandbox descendants: reject new admissions, retain uncertain cleanup, never close DB under active work or report false confirmed cancellation. Required gates; commit `feat: route profile commands through the active runtime`; review.
 
 ## Task 7: Desktop contract and real entry-point qualification
 
 **Files:** apps/desktop/src/host/main.ts and worker/client boundary; examples/local-runtime-client.mjs; docs/integration/local-runtime.md and desktop-client.md; independent-client process tests. Preserve imported attachment behavior. No edits to external desktop checkout or installed application.
 
-- [ ] RED→GREEN independent client process uses only versioned public contract to authenticate, list rooms/history, submit/resume/get result, observe and decide; no Runtime/SQLite/application internals imported. Document a raw-wire hello/submit/read/observe/decision transcript.
-- [ ] Migrate the imported `apps/desktop` worker-per-request host (`1c8d8c3`) to the delivered authenticated client port. Qualify штатный `pnpm --filter @ocean/desktop start` against an isolated test profile and deterministic provider. Preserve source checkout/branch/installed app; never use real credentials or user's live profile. Keep scoped attachment import/receipts/history/preview/export; current providers remain text-only, and CLI backup still excludes attachment bytes.
-- [ ] Add explicit endpoint/profile configuration to the in-repository host; its current `main.ts`/`worker.ts` has no such seam. Verify window close detaches rather than killing execution. If GUI qualification cannot run, record exact incompatibility and GUI NOT VERIFIED with reason while independent protocol client is verified.
+- [x] RED→GREEN independent client process uses only versioned public contract to authenticate, list rooms/history, submit/resume/get result, observe and decide; no Runtime/SQLite/application internals imported. Document a raw-wire hello/submit/read/observe/decision transcript.
+- [x] Migrate the imported `apps/desktop` worker-per-request host (`1c8d8c3`) to the delivered authenticated client port. Qualify штатный `pnpm --filter @ocean/desktop start` against an isolated test profile and deterministic provider. Preserve source checkout/branch/installed app; never use real credentials or user's live profile. Keep scoped attachment import/receipts/history/preview/export; current providers remain text-only, and CLI backup still excludes attachment bytes.
+- [x] Add explicit endpoint/profile configuration to the in-repository host; its current `main.ts`/`worker.ts` has no such seam. Verify window close detaches rather than killing execution. If GUI qualification cannot run, record exact incompatibility and GUI NOT VERIFIED with reason while independent protocol client is verified.
 - [ ] Required gates; commit `docs: qualify desktop shared-runtime client contract`; review. GUI status is an explicit acceptance result, not silently omitted.
 
 ## Task 8: Four process acceptance cases and candidate evidence
@@ -146,10 +146,7 @@ Task 5 covers the standard TUI decision presentation.
 
 ## Execution state
 
-Tasks 1–5 passed independent review through `494c178`. Workpackage 6.1 implements and tests
-killed-listener restart. Workpackage 6.2 CLI routing and ACP compatibility, parent Task 6,
-Desktop migration and shared-runtime release acceptance remain open.
-The existing Desktop UI was imported from `1c8d8c3`.
+Tasks 1–6 passed independent review through `c612775`. The in-repository Desktop now uses the authenticated SDK and passed deterministic Linux GUI qualification. Task 7 awaits independent review. Task 8 retains the four process acceptance cases and release evidence.
 Ocean1.1 previous checkpoint: `5d032ae`, 1032 passed/41 skipped, build/format and
 14 native tests recorded; these are previous coding recovery evidence, not proof
 of shared-runtime acceptance. Workpackage7.5 was stopped before implementation:

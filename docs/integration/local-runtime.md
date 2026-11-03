@@ -3,7 +3,7 @@
 One foreground Linux process owns the canonical private profile, SQLite recovery
 and the provider for shared room turns. Authenticated clients can submit a turn
 and reconnect to its persisted room history, run events and result. Explicit
-versioned cancellation is available to authenticated clients. The standard room TUI connects to this runtime. Desktop migration remains planned. The runtime also serves
+versioned cancellation is available to authenticated clients. The standard room TUI connects to this runtime. The in-repository Electron Desktop connects through the same authenticated SDK. The runtime also serves
 exact coding approvals and text-only room review decisions.
 Profile commands connect to the published owner. The supported operations and maintenance refusals are listed below. See the
 [shared-runtime plan](../ocean/shared-runtime.md) for the migration sequence.
@@ -135,6 +135,20 @@ try {
 }
 ```
 
+The narrow public export `@runnets/tools-node/local-runtime-client` loads only SDK transports, validation and wire contracts. Electron main and the [standalone example](../../examples/local-runtime-client.mjs) use it. After `pnpm build`, each invocation below starts a fresh client process. Use a private test profile with an explicitly started owner and an existing direct room. Supply the operator's original request ID again to resume or explicitly retry an identical submission.
+
+```sh
+node examples/local-runtime-client.mjs "$profile" rooms
+printf '%s\n' 'hello' | node examples/local-runtime-client.mjs "$profile" submit "$room" my-request
+node examples/local-runtime-client.mjs "$profile" resume "$room" my-request
+node examples/local-runtime-client.mjs "$profile" observe "$room" "$run"
+node examples/local-runtime-client.mjs "$profile" result "$room" "$run"
+node examples/local-runtime-client.mjs "$profile" history "$room"
+node examples/local-runtime-client.mjs "$profile" decide "$room" "$run" "$decision"
+```
+
+Use the returned run ID and an existing pending operator decision for the last command. It prints the card and complete digest-verified operation with escaped controls, then reads an explicit vote. The runtime returns the persisted winner. The [Desktop integration guide](desktop-client.md) describes simultaneous GUI and TUI qualification.
+
 A desktop or independent process can implement the same newline-delimited UTF-8
 JSON framing using `@runnets/contracts` without importing application internals.
 Each request is `{id,method,params}`, with a nonempty string ID up to 128
@@ -145,6 +159,30 @@ params. Responses are `{id,result}` or `{id,error:{code}}`. Unknown methods refu
 there are no placeholder handlers for future methods. Wrong authentication,
 profile and instance return `authentication_failed`; incompatible protocol returns
 `protocol_mismatch`; requests before hello return `authentication_required`.
+
+**Raw v1 exchange.** These are newline-delimited request frames for an initialized direct room, followed by a separate pending decision in a task-bound room. Replace angle-bracket fields with the corresponding descriptor value or exact ID from the preceding response. Keep the capability private. The SDK reads and verifies the descriptor in memory.
+
+```jsonl
+{"id":"1","method":"hello","params":{"protocol":1,"profileId":"<profile hash>","instanceId":"<instance UUID>","capability":"<private capability>"}}
+{"id":"2","method":"turns.submit","params":{"workspaceId":"ws_ocean","roomId":"<room>","requestId":"my-request","text":"hello"}}
+{"id":"3","method":"receipts.get","params":{"workspaceId":"ws_ocean","roomId":"<room>","requestId":"my-request"}}
+{"id":"4","method":"observe","params":{"workspaceId":"ws_ocean","roomId":"<room>","runId":"<admitted run>"}}
+{"id":"5","method":"observe","params":{"workspaceId":"ws_ocean","roomId":"<room>","runId":"<admitted run>","cursor":"<cursor from 4>","waitMs":1000}}
+{"id":"6","method":"runs.result","params":{"workspaceId":"ws_ocean","roomId":"<room>","runId":"<admitted run>"}}
+{"id":"7","method":"history.list","params":{"workspaceId":"ws_ocean","roomId":"<room>","after":0,"limit":16}}
+{"id":"8","method":"decisions.get","params":{"workspaceId":"ws_ocean","roomId":"<task room>","runId":"<task run>","decisionId":"<pending ID>"}}
+{"id":"9","method":"decisions.preview","params":{"workspaceId":"ws_ocean","roomId":"<task room>","runId":"<task run>","decisionId":"<pending ID>","offset":0}}
+{"id":"10","method":"decisions.resolve","params":{"workspaceId":"ws_ocean","roomId":"<task room>","runId":"<task run>","decisionId":"<pending ID>","expectedVersion":1,"bindingDigest":"<displayed digest>","choice":"deny"}}
+```
+
+Wait for each matching response. Frame 1 returns the authenticated profile, instance, protocol and supported method list. The two receipt responses have the following shape.
+
+```jsonl
+{"id":"2","result":{"workspaceId":"ws_ocean","roomId":"<room>","requestId":"my-request","messageId":"<message>","turnId":"<turn>","runId":"<admitted run>"}}
+{"id":"3","result":{"workspaceId":"ws_ocean","roomId":"<room>","requestId":"my-request","messageId":"<message>","turnId":"<turn>","runId":"<admitted run>"}}
+```
+
+Frame 4 returns a scoped snapshot, signed cursor and room sequence. Frame 5 can return a change, resync or timeout. Frame 6 returns the scoped message (null before publication), and frame 7 returns sequence rows with UTF-8 bodies encoded as base64. Frames 8–9 carry the immutable operation's identity, version, expiry, digest and preview length. Repeat frame 9 at the next UTF-16 offset until the complete preview is available. Verify its SHA-256 and present it before the explicit operator vote. Frame 10 returns the persisted card and version, including a competing winner if another client already resolved it.
 
 Each frame is at most 2MiB excluding the newline. Invalid request envelopes,
 malformed/invalid UTF-8 and oversized frames terminate that connection; later

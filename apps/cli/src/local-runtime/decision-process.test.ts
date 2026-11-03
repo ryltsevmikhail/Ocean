@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { decisionPeer } from '../../test-fixtures/decision-peer.test.js';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -99,6 +100,33 @@ it.each(['race', 'allow', 'deny'] as const)(
       await expect(
         client.requestContinuation({ ...command, reason: 'another reason' }),
       ).rejects.toThrow('request_conflict');
+      if (mode === 'deny') {
+        const proc = spawn(
+          process.execPath,
+          [
+            'examples/local-runtime-client.mjs',
+            profile,
+            'decide',
+            roomId,
+            runId,
+            pending.decisionId,
+          ],
+          { env: { PATH: process.env['PATH'], XDG_RUNTIME_DIR: join(root, 'run') } },
+        );
+        let output = '',
+          err = '';
+        proc.stdout.on('data', (b: Buffer) => {
+          output += b.toString();
+          if (!proc.stdin.writableEnded && output.includes('Enter allow-once or deny'))
+            proc.stdin.end('deny\n');
+        });
+        proc.stderr.on('data', (b: Buffer) => (err += b.toString()));
+        expect(await new Promise((resolve) => proc.once('close', resolve)), err).toBe(0);
+        expect(output).toContain(pending.bindingDigest);
+        expect(JSON.parse(output.split('\n')[1]!)).toBe(await client.decisionPreview(ref));
+        expect(output).toContain('denied');
+        expect((await client.getDecision(ref)).status).toBe('denied');
+      }
       const [one, two] = await Promise.all([
         peer('decisionPreview', ref),
         peer('decisionPreview', ref),

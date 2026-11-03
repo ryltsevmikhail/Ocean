@@ -16,7 +16,7 @@ async function check() {
   error.value = '';
   report.value = undefined;
   try {
-    report.value = await call({ op: 'doctor' });
+    report.value = await call({ op: 'status' });
   } catch (e) {
     error.value = explain(e);
   } finally {
@@ -45,33 +45,19 @@ defineExpose({ open });
       <p>Комнаты, участники и переписка хранятся на этом устройстве.</p>
       <section class="info-card" role="status">
         <strong>{{
-          pending
-            ? 'Проверяем профиль…'
-            : error
-              ? 'Проверка недоступна'
-              : report?.restored
-                ? 'Профиль восстановлен'
-                : 'Проверка завершена'
+          pending ? 'Проверяем профиль…' : error ? 'Проверка недоступна' : 'Проверка завершена'
         }}</strong>
-        <p v-if="report">
-          Ключ DeepSeek
-          {{ report.providerKeyPresent ? 'найден в окружении' : 'не найден в окружении' }}.
-        </p>
-        <p v-if="report?.restorationState === 'incomplete'">
-          Восстановление из копии не завершено.
-        </p>
-        <p v-else-if="report?.restored">Для нового внешнего хода требуется подтверждение в CLI.</p>
         <p v-if="error">{{ error }}</p>
       </section>
       <dl v-if="report" class="runtime-facts">
-        <dt>Версия CLI</dt>
-        <dd>{{ report.cli }}</dd>
-        <dt>Node</dt>
-        <dd>{{ report.node }}</dd>
-        <dt>Права профиля</dt>
-        <dd>{{ report.permissions ? 'Приватные' : 'Требуют проверки' }}</dd>
-        <dt>База SQLite</dt>
-        <dd>{{ report.database.status }}</dd>
+        <dt>Протокол runtime</dt>
+        <dd>{{ report.protocol }}</dd>
+        <dt>Профиль</dt>
+        <dd>{{ report.profileId }}</dd>
+        <dt>Экземпляр runtime</dt>
+        <dd>{{ report.instanceId }}</dd>
+        <dt>Состояние</dt>
+        <dd>{{ report.state }}</dd>
       </dl>
       <div class="form-actions">
         <button :disabled="pending || busy" @click="check">Проверить состояние</button

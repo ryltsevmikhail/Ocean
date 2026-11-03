@@ -13,11 +13,23 @@ const value = (max: number) =>
 const requestId = z.uuid();
 const room = { room: id };
 export const commands = z.discriminatedUnion('op', [
-  z.strictObject({ op: z.literal('init') }),
-  z.strictObject({ op: z.literal('doctor') }),
-  z.strictObject({ op: z.literal('bots') }),
-  z.strictObject({ op: z.literal('rooms') }),
-  z.strictObject({ op: z.literal('runs'), ...room }),
+  z.strictObject({ op: z.literal('status') }),
+  z.strictObject({ op: z.literal('bots'), after: id.optional() }),
+  z.strictObject({ op: z.literal('rooms'), after: id.optional() }),
+  z.strictObject({ op: z.literal('runs'), ...room, after: id.optional() }),
+  z.strictObject({
+    op: z.literal('observe'),
+    ...room,
+    runId: id.optional(),
+    cursor: z.string().max(512).optional(),
+  }),
+  z.strictObject({
+    op: z.literal('cancel'),
+    ...room,
+    runId: id,
+    requestId,
+    expectedVersion: z.int().nonnegative(),
+  }),
   z.strictObject({ op: z.literal('history'), ...room, after: z.int().nonnegative() }),
   z.strictObject({
     op: z.literal('bot'),
@@ -51,14 +63,19 @@ export const pageSize = 16;
 export const bot = z.object({
   id,
   handle,
-  name: z.string(),
-  role: z.string(),
-  provider: z.string(),
-  model: z.string(),
+  name: z.string().max(256),
+  role: z.string().max(8192),
+  provider: z.string().max(128),
+  model: z.string().max(256),
 });
 export const roomDto = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('direct'), id, botId: id }),
-  z.object({ kind: z.literal('group'), id, title: z.string(), botIds: z.array(id) }),
+  z.object({
+    kind: z.literal('group'),
+    id,
+    title: z.string().max(256),
+    botIds: z.array(id).min(2).max(32),
+  }),
 ]);
 export const message = z.object({
   id,
@@ -67,18 +84,27 @@ export const message = z.object({
   author: z.enum(['user', 'bot']),
   authorBotId: id.optional(),
   targetBotId: id.nullable(),
-  body: z.string(),
-  createdAt: z.string(),
-  attachments: z.array(attachment).optional(),
+  body: z.string().max(1048576),
+  createdAt: z.iso.datetime({ offset: true }),
+  attachments: z.array(attachment).max(4).optional(),
 });
 export const run = z.object({
-  roomId: id.nullable(),
-  taskVersion: z.int().nonnegative(),
-  relatedPendingEffects: z.int().nonnegative(),
-  turnStatus: z.string().nullable(),
-  taskStatus: z.string(),
-  taskRunId: id,
-  mode: z.string().nullable(),
+  messageId: id,
+  roomId: id,
+  runId: id,
+  version: z.int().nonnegative(),
+  performerId: id,
+  turnStatus: z.enum([
+    'accepted',
+    'dispatching',
+    'prepared',
+    'completed',
+    'failed',
+    'uncertain',
+    'cancelled',
+  ]),
+  taskStatus: z.string().max(64),
+  pendingDecisionIds: z.array(z.string().max(128)).max(200),
 });
 export const envelope = z.discriminatedUnion('ok', [
   z.object({ version: z.literal(1), ok: z.literal(true), data: z.unknown() }),
@@ -89,36 +115,31 @@ export const envelope = z.discriminatedUnion('ok', [
   }),
 ]);
 export const outputs = {
-  init: z.object({ kind: z.literal('workspace') }),
-  doctor: z.object({
-    providerKeyPresent: z.boolean(),
-    restored: z.boolean(),
-    restorationState: z.enum(['incomplete', 'ready']).nullable(),
-    cli: z.string(),
-    node: z.string(),
-    permissions: z.boolean(),
-    database: z.object({
-      status: z.enum(['ok', 'invalid_database', 'unsupported_schema', 'owner_busy', 'unavailable']),
-    }),
+  status: z.object({
+    protocol: z.literal(1),
+    profileId: z.string().regex(/^[a-f0-9]{64}$/),
+    instanceId: z.uuid(),
+    state: z.enum(['ready', 'draining', 'stop_incomplete']),
   }),
-  rooms: z.array(roomDto),
-  bots: z.array(bot),
-  history: z.array(message),
-  runs: z.array(run),
+  rooms: z.array(roomDto).max(pageSize),
+  bots: z.array(bot).max(pageSize),
+  history: z.array(message).max(pageSize),
+  runs: z.array(run).max(pageSize),
+  observe: z.object({
+    kind: z.enum(['snapshot', 'changed', 'resync', 'timeout']),
+    cursor: z.string().max(512),
+  }),
+  cancel: z.object({ status: z.literal('requested'), version: z.int().positive() }),
   group: z.object({ kind: z.literal('room'), data: roomDto }),
   direct: z.object({ kind: z.literal('room'), data: roomDto }),
   bot: z.object({ kind: z.literal('bot'), data: bot }),
   send: z.object({
-    status: z.enum([
-      'recorded',
-      'completed',
-      'cancelled',
-      'uncertain',
-      'failed',
-      'prepared',
-      'dispatching',
-      'accepted',
-    ]),
+    workspaceId: z.literal('ws_ocean'),
+    roomId: id,
+    requestId,
+    messageId: id,
+    turnId: id.nullable(),
+    runId: id.nullable(),
   }),
 };
 export type Bot = z.infer<typeof bot>;
@@ -126,4 +147,4 @@ export type Room = z.infer<typeof roomDto>;
 export type Message = z.infer<typeof message>;
 export type Run = z.infer<typeof run>;
 
-export type ProfileReport = z.infer<typeof outputs.doctor>;
+export type ProfileReport = z.infer<typeof outputs.status>;

@@ -41,7 +41,7 @@ def until(pattern):
 
 
 try:
-    until(b"@dev / test")
+    until(b"@dev / " if action == "desktop" else b"@dev / test")
     if action in ("sigterm", "hangup"):
         os.write(master, b"from the terminal\r")
         run_id = until(rb"tr_[a-zA-Z0-9_-]+(?= )")
@@ -52,7 +52,11 @@ try:
             os.kill(cli.pid, signal.SIGTERM)
     else:
         run_id = until(rb"tr_[a-zA-Z0-9_-]+(?= )")
-        until(b"native fixture answer")
+        if action == "desktop":
+            print("observing " + run_id, flush=True)
+            until(b"Test provider .*detach-turn")
+        else:
+            until(b"native fixture answer")
         os.write(master, b"/quit\r")
     status = cli.wait(timeout=3)
     assert status == 0, (status, cli.stderr.read() if cli.stderr else screen[-500:])

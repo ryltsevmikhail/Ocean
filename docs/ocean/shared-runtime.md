@@ -2,7 +2,7 @@
 
 Status: authenticated lifecycle, durable turn admission and scoped receipt/run
 reads, runtime observation, versioned explicit cancellation, durable coding decisions
-and room-scoped text-only review continuation are implemented. The standard room TUI uses the runtime. Profile CLI routing is implemented. Desktop migration remains planned. See [implemented commands, methods and limits](../integration/local-runtime.md).
+and room-scoped text-only review continuation are implemented. The standard room TUI uses the runtime. Profile CLI routing is implemented. The in-repository Linux Desktop also uses the authenticated runtime. See [implemented commands, methods and limits](../integration/local-runtime.md).
 Owner request on 2026-11-02 supersedes
 continuing the remaining coding-backup work as the immediate priority. Ocean 1.1
 stages 1–6 and reviewed stage-7 work through `5d032ae` remain implemented; their
@@ -167,26 +167,9 @@ not a claim of confirmed cancellation. SIGKILL recovery remains conservative.
 
 ## Desktop boundary
 
-Ocean Desktop is now imported in this repository at `apps/desktop` from source
-revision `1c8d8c3`. Its actual entry point is
-`pnpm --filter @ocean/desktop start`; `src/host/main.ts` starts `worker.js` per
-request and sends SIGINT to the active worker on window close. The worker invokes
-this checkout's CLI. This imported behavior is implemented; the shared-runtime
-migration remains proposed. Preserve the separate source checkout and installed
-application.
+Ocean Desktop (`apps/desktop`, imported from `1c8d8c3`) connects through the public local runtime SDK from Electron main. The standard launch command is `OCEAN_DESKTOP_PROFILE=/absolute/private/profile pnpm --filter @ocean/desktop start`. The owner starts separately and owns every execution. Linux GUI qualification exercised a dropped acknowledgement, explicit retry, window close during generation, simultaneous room TUI, independent SDK observer and reopened history with one dispatch.
 
-Task 7 must qualify this in-repository entry point against the delivered endpoint
-using an isolated profile and a deterministic provider. Currently no external
-endpoint/profile configuration seam exists: replace worker-per-request ownership
-with the authenticated client port before claiming GUI shared-runtime acceptance.
-The attachment store is Desktop-local, room/message scoped; preserve its existing
-import/preview/export/receipt semantics during migration. Providers currently
-receive only bounded text excerpts and attachment descriptions. Asset-complete
-backup is still an open gate: CLI profile backup excludes attachment bytes.
-
-Always deliver an independent client-process example and E2E driver. GUI smoke of
-the imported client and shared-runtime GUI acceptance have distinct evidence and
-pass/fail status; a headless protocol test cannot prove GUI acceptance.
+The attachment store is Desktop-local. History decoration binds a room, embedded request UUID and exact body digest. The default imported profile retains its original store. Other canonical profiles have separate stores keyed by authenticated profile ID under the selected userData directory. Providers receive bounded text excerpts and descriptions. CLI profile backup excludes these bytes. See the [Desktop integration guide](../integration/desktop-client.md) for startup, paths and qualification limits.
 
 ## Acceptance
 

@@ -1,24 +1,30 @@
 import { ref, computed, onMounted } from 'vue';
-import type { Bot, Room, Message, Run } from '../protocol.js';
-import { pageSize } from '../protocol.js';
-import { call, cancel } from './bridge.js';
+import type { Bot, Room, Command, Run } from '../protocol.js';
+import { pages, useRoomFeed } from './room-feed.js';
+import { call } from './bridge.js';
 import { explain } from './dom.js';
 
 export function useDesktop() {
   const bots = ref<Bot[]>([]),
-    rooms = ref<Room[]>([]),
-    history = ref<Message[]>([]);
-  const sent = ref(0);
-  let lastSend: { signature: string; id: string } | undefined;
-  const runs = ref<Run[]>([]);
+    rooms = ref<Room[]>([]);
+  const sent = ref(0),
+    receipt = ref(''),
+    admittedRun = ref<string | null>(null),
+    uncertain = ref(false);
+  const unconfirmed = new Map<string, Extract<Command, { op: 'send' }>>();
   const previews = ref<Record<string, string>>({});
+  const { history, runs, readError, active, open } = useRoomFeed((id, latest) => {
+    previews.value[id] =
+      (latest.author === 'bot' ? label(latest.authorBotId) : 'Вы') +
+      ' · ' +
+      latest.body.slice(0, 120);
+  });
   const drafts = new Map<string, string>();
   const room = ref<Room>(),
     recipient = ref(''),
     draft = ref(''),
     feedback = ref(''),
-    busy = ref(false),
-    pending = ref('');
+    busy = ref(false);
   const dialog = ref<'' | 'room' | 'bot'>(''),
     selected = ref<string[]>([]),
     title = ref('Ocean Team'),
@@ -39,7 +45,7 @@ export function useDesktop() {
     (r.kind === 'group'
       ? r.botIds.map(label).join(' · ')
       : bots.value.find((b) => b.id === r.botId)?.name);
-  async function guard(action: () => Promise<void>) {
+  async function guard(action: () => Promise<void> | void) {
     if (busy.value) return;
     busy.value = true;
     feedback.value = '';
@@ -51,45 +57,33 @@ export function useDesktop() {
       busy.value = false;
     }
   }
-  async function read(r: Room | undefined) {
+  function read(r: Room | undefined) {
     if (r?.id !== room.value?.id) {
       if (room.value) drafts.set(room.value.id, draft.value);
       draft.value = r ? (drafts.get(r.id) ?? '') : '';
-      recipient.value = '';
+      const original = r && unconfirmed.get(r.id);
+      recipient.value = original?.to ?? '';
+      receipt.value = original ? 'Квитанция не подтверждена · ' + original.requestId : '';
+      admittedRun.value = null;
     }
     room.value = r;
-    history.value = [];
-    runs.value = [];
-    if (!r) return;
-    let after = 0;
-    for (;;) {
-      const page = await call({ op: 'history', room: r.id, after });
-      history.value.push(...page);
-      if (page.length < pageSize) break;
-      const last = page.at(-1);
-      if (!last || last.seq <= after) throw new Error('outcome_unknown');
-      after = last.seq;
-    }
-    const latest = history.value.at(-1);
-    if (latest)
-      previews.value[r.id] =
-        (latest.author === 'bot' ? label(latest.authorBotId) : 'Вы') +
-        ' · ' +
-        latest.body.slice(0, 120);
-    runs.value = await call({ op: 'runs', room: r.id });
+    uncertain.value = r ? unconfirmed.has(r.id) : false;
+    open(r?.id);
   }
+  const loadBots = () =>
+    pages(
+      (after: string | undefined) => call({ op: 'bots', after }),
+      (b) => b.id,
+    );
   async function refresh(preferred?: string) {
-    bots.value = await call({ op: 'bots' });
-    rooms.value = await call({ op: 'rooms' });
-    await read(rooms.value.find((r) => r.id === (preferred ?? room.value?.id)) ?? rooms.value[0]);
+    bots.value = await loadBots();
+    rooms.value = await pages(
+      (after: string | undefined) => call({ op: 'rooms', after }),
+      (r) => r.id,
+    );
+    read(rooms.value.find((r) => r.id === (preferred ?? room.value?.id)) ?? rooms.value[0]);
   }
-  onMounted(
-    () =>
-      void guard(async () => {
-        await call({ op: 'init' });
-        await refresh();
-      }),
-  );
+  onMounted(() => void guard(() => refresh()));
   const uuid = () => crypto.randomUUID();
   async function team() {
     for (const h of ['dev', 'review']) {
@@ -102,7 +96,7 @@ export function useDesktop() {
           role: h === 'dev' ? 'Разработчик' : 'Ревьюер',
           model: 'deepseek-flash',
         });
-        bots.value = await call({ op: 'bots' });
+        bots.value = await loadBots();
       }
     }
     const group = await call({
@@ -141,41 +135,63 @@ export function useDesktop() {
   async function send(attachments: string[] = []) {
     const r = room.value;
     if (!r) return;
-    const signature = JSON.stringify([r.id, draft.value, recipient.value, attachments]);
-    lastSend = lastSend?.signature === signature ? lastSend : { signature, id: uuid() };
-    pending.value = lastSend.id;
+    const command = unconfirmed.get(r.id) ?? {
+      op: 'send',
+      room: r.id,
+      text: draft.value,
+      attachments: [...attachments],
+      to: r.kind === 'group' ? recipient.value || null : null,
+      requestId: uuid(),
+    };
+    unconfirmed.set(r.id, command);
     try {
-      const result = await call({
-        op: 'send',
-        room: r.id,
-        text: draft.value,
-        attachments,
-        to: r.kind === 'group' ? recipient.value || null : null,
-        requestId: pending.value,
-      });
-      feedback.value =
-        result.status === 'uncertain'
-          ? 'Исход неизвестен (uncertain). Проверьте состояние хода в Ocean CLI.'
-          : 'Ответ runtime · ' + result.status;
+      const result = await call(command);
+      admittedRun.value = result.runId;
+      receipt.value = 'Принято · ' + result.messageId + ' · ' + (result.runId ?? 'recorded');
+      unconfirmed.delete(r.id);
+      uncertain.value = false;
       draft.value = '';
-      sent.value++;
-      lastSend = undefined;
       recipient.value = '';
+      sent.value++;
     } catch (error) {
-      feedback.value = explain(error);
-    } finally {
-      pending.value = '';
-      await read(r);
+      // Keep the exact draft and UUID on every ambiguous acknowledgement. Retry only by user action.
+      if (
+        error instanceof Error &&
+        [
+          'invalid_input',
+          'invalid_request',
+          'invalid_attachment',
+          'attachment_corrupted',
+          'attachment_unavailable',
+          'message_too_large',
+          'choose_recipient',
+          'room_busy',
+          'runtime_draining',
+          'provider_unavailable',
+          'recovery_required',
+          'not_member',
+        ].includes(error.message)
+      ) {
+        unconfirmed.delete(r.id);
+        uncertain.value = false;
+      } else {
+        uncertain.value = true;
+        receipt.value = 'Квитанция не подтверждена · ' + command.requestId;
+      }
+      throw error;
     }
   }
-  async function stop() {
-    const id = pending.value;
-    try {
-      await cancel(id);
-      if (pending.value === id) feedback.value = 'Отмена запрошена. Ожидание runtime…';
-    } catch (error) {
-      if (pending.value === id) feedback.value = explain(error);
-    }
+  async function stop(r: Run) {
+    await guard(async () => {
+      const ack = await call({
+        op: 'cancel',
+        room: r.roomId,
+        runId: r.runId,
+        expectedVersion: r.version,
+        requestId: uuid(),
+      });
+      feedback.value = 'Отмена запрошена · ' + r.runId + ' [v' + ack.version + ']';
+    });
   }
   return {
     bots,
@@ -189,7 +205,17 @@ export function useDesktop() {
     draft,
     feedback,
     busy,
-    pending,
+    active,
+    receipt,
+    readError,
+    uncertain,
+    shownRun: computed(() => {
+      if (admittedRun.value) return runs.value.find((r) => r.runId === admittedRun.value);
+      if (active.value) return active.value;
+      const byMessage = new Map(runs.value.map((r) => [r.messageId, r]));
+      const latest = history.value.findLast((m) => byMessage.has(m.id));
+      return latest && byMessage.get(latest.id);
+    }),
     sent,
     dialog,
     selected,

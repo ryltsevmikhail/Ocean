@@ -4,6 +4,7 @@ import Avatar from './Avatar.vue';
 import Appearance from './Appearance.vue';
 import RoomDetails from './RoomDetails.vue';
 import Glyph from './Glyph.vue';
+import RuntimeFeedback from './RuntimeFeedback.vue';
 import ProfilePanel from './ProfilePanel.vue';
 import RoomHistory from './RoomHistory.vue';
 import RoomComposer from './RoomComposer.vue';
@@ -20,7 +21,11 @@ const {
   draft,
   feedback,
   busy,
-  pending,
+  active,
+  receipt,
+  readError,
+  uncertain,
+  shownRun,
   sent,
   dialog,
   selected,
@@ -169,12 +174,6 @@ watch(
         <small>ЛОКАЛЬНЫЙ ПРОФИЛЬ</small>
         <h2>Начните с Ocean Team</h2>
         <p>Обсудите задачу с dev, затем передайте результат review в той же комнате.</p>
-        <dl class="runtime-facts">
-          <dt>Провайдер</dt>
-          <dd>DeepSeek</dd>
-          <dt>История</dt>
-          <dd>Локально · SQLite</dd>
-        </dl>
         <div class="form-actions">
           <button :disabled="busy" @click="profile?.open()">Проверить профиль</button
           ><button class="primary" :disabled="busy" @click="guard(team)">Создать Ocean Team</button>
@@ -197,16 +196,13 @@ watch(
         :busy="busy"
         :history="history"
       />
-      <div id="feedback" role="status">
-        {{ feedback }}
-        <button
-          v-if="feedback.startsWith('Провайдер недоступен')"
-          :disabled="busy"
-          @click="profile?.open()"
-        >
-          Проверить профиль
-        </button>
-      </div>
+      <RuntimeFeedback
+        :feedback="feedback"
+        :receipt="receipt"
+        :read-error="readError"
+        :run="shownRun"
+        :label="label"
+      />
       <RoomComposer
         :sent="sent"
         :room-id="room.id"
@@ -217,7 +213,8 @@ watch(
         :group="room.kind === 'group'"
         :members="members"
         :busy="busy"
-        :pending="pending"
+        :active="active"
+        :uncertain="uncertain"
         @send="(ids) => guard(() => send(ids))"
         @stop="stop"
       />

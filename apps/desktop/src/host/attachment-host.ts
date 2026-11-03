@@ -1,5 +1,5 @@
 import { dialog, nativeImage, type BrowserWindow } from 'electron';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { readFile, open, link, unlink } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -11,6 +11,15 @@ import {
 import { AttachmentStore } from './attachment-store.js';
 import { attachmentText } from './attachment-text.js';
 import type { Command, Message } from '../protocol.js';
+
+async function persistReceipt(path: string) {
+  const directory = await open(dirname(path), 'r');
+  try {
+    await directory.sync();
+  } finally {
+    await directory.close();
+  }
+}
 
 export class AttachmentHost {
   private readonly store: AttachmentStore;
@@ -74,6 +83,27 @@ export class AttachmentHost {
   async prepare(c: Extract<Command, { op: 'send' }>) {
     this.check(c.room);
     const ids = c.attachments ?? [];
+    const receipt = join(this.root, 'attachments', c.room, c.requestId + '.json');
+    try {
+      const old = JSON.parse(await readFile(receipt, 'utf8')) as Record<string, unknown>;
+      if (old['body'] !== c.text || JSON.stringify(old['ids']) !== JSON.stringify(ids))
+        throw Error('request_conflict');
+      if ('prepared' in old) {
+        const text = old['prepared'];
+        if (old['to'] !== c.to) throw Error('request_conflict');
+        if (
+          typeof text !== 'string' ||
+          text.length > 16384 ||
+          createHash('sha256').update(text).digest('hex') !== old['digest']
+        )
+          throw Error('attachment_corrupted');
+        // A concurrent reader can observe the link before the writer syncs its parent.
+        await persistReceipt(receipt);
+        return { ...c, text, attachments: undefined };
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
     if (!ids.length) {
       if (!c.text.trim()) throw new Error('invalid_request');
       return c;
@@ -97,9 +127,8 @@ export class AttachmentHost {
       '\n\n[Вложения сохранены в Desktop. Модели переданы только текстовые выдержки выше и описания файлов. Содержимое изображений и бинарных файлов модели недоступно.]';
     const text = encodeAttachments(context, c.requestId, files);
     if (text.length > 16384) throw new Error('message_too_large');
-    const receipt = join(this.root, 'attachments', c.room, c.requestId + '.json');
     const digest = createHash('sha256').update(text).digest('hex');
-    const record = { digest, ids, body: c.text };
+    const record = { digest, ids, body: c.text, to: c.to, prepared: text };
     const temp = receipt + '.' + randomUUID() + '.tmp';
     const file = await open(temp, 'wx', 0o600);
     try {
@@ -113,16 +142,22 @@ export class AttachmentHost {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       const old: unknown = JSON.parse(await readFile(receipt, 'utf8'));
-      if (JSON.stringify(old) !== JSON.stringify(record)) throw new Error('request_conflict');
+      if (
+        !old ||
+        typeof old !== 'object' ||
+        !('digest' in old) ||
+        old.digest !== digest ||
+        !('body' in old) ||
+        old.body !== c.text ||
+        !('ids' in old) ||
+        JSON.stringify(old.ids) !== JSON.stringify(ids) ||
+        ('to' in old && old.to !== c.to)
+      )
+        throw new Error('request_conflict');
     } finally {
       await unlink(temp);
     }
-    const directory = await open(join(this.root, 'attachments', c.room), 'r');
-    try {
-      await directory.sync();
-    } finally {
-      await directory.close();
-    }
+    await persistReceipt(receipt);
     return { ...c, text, attachments: undefined };
   }
   async history(messages: Message[]) {
