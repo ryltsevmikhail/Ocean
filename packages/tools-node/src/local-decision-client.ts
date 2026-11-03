@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  LOCAL_RUNTIME_MAX_WAIT_MS,
   isDecisionReply,
   isDecisionRef,
   isLocalRunQuery,
@@ -58,7 +59,7 @@ function chunk(row: Record<string, unknown>, offset: number, length: number) {
   return text;
 }
 export function localDecisionClient(
-  send: (method: string, q: unknown) => Promise<unknown>,
+  send: (method: string, q: unknown, timeoutMs?: number) => Promise<unknown>,
 ): LocalDecisionClient {
   return {
     async listDecisions(input) {
@@ -93,7 +94,7 @@ export function localDecisionClient(
     },
     async resolveDecision(input) {
       const q = validatedParams(input, isDecisionReply);
-      const reply = card(await send('decisions.resolve', q), q);
+      const reply = card(await send('decisions.resolve', q, LOCAL_RUNTIME_MAX_WAIT_MS), q);
       if (reply.bindingDigest !== q.bindingDigest || reply.status === 'pending') return invalid();
       return reply;
     },
