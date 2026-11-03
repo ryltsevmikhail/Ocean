@@ -178,6 +178,36 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         await rm(root, { recursive: true, force: true });
       }
     }, 20000);
+    it('does not charge completion bookkeeping against retained output', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'ocean-sandbox-'));
+      try {
+        await writeFile(join(root, '.git'), 'synthetic-git-pointer');
+        const cap = sandboxLimits.outputBytes;
+        const exact = await runSandbox({
+          root,
+          program: '/toolchain/node',
+          args: ['-e', `process.stdout.write('x'.repeat(${cap}))`],
+        });
+        // A legitimate exit-0 run at exactly the retained cap must stay untruncated;
+        // completion is reported through the supervisor's status, not stdout bytes.
+        expect(exact.exitCode, exact.output).toBe(0);
+        expect(exact.reason).toBe('exit');
+        expect(exact.truncated).toBe(false);
+        expect(exact.output.length).toBe(cap);
+        expect(exact.output).not.toContain('OCEAN_COMPLETE');
+        expect(exact.cleanupConfirmed).toBe(true);
+        const oversized = await runSandbox({
+          root,
+          program: '/toolchain/node',
+          args: ['-e', `process.stdout.write('x'.repeat(${cap + 1}))`],
+        });
+        expect(oversized.exitCode, oversized.output).toBe(0);
+        expect(oversized.truncated).toBe(true);
+        expect(oversized.output.length).toBeLessThanOrEqual(cap);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
     it('bounds output, timeout and cancellation and confirms cleanup', async () => {
       const root = await mkdtemp(join(tmpdir(), 'ocean-sandbox-'));
       try {

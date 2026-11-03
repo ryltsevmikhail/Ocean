@@ -27,6 +27,11 @@ export async function sandboxLauncher(
     i += 2;
   }
   return `
+    // Reserved exit status for a supervisor the host stopped with SIGTERM. systemd
+    // reports that stop as a clean service exit, so completion must not be inferred
+    // from a zero status alone. Project code runs in a child PID namespace and
+    // cannot signal or fake this status.
+    process.on('SIGTERM',()=>process.exit(75));
     const fs=require('node:fs'), cp=require('node:child_process'),crypto=require('node:crypto'),os=require('node:os'),path=require('node:path');
     const argv=${JSON.stringify(argv)}, identities=${JSON.stringify(identities)}, descriptors=[];
     const trees=${JSON.stringify(trees)}, fingerprintTree=(${treeFingerprintScript});

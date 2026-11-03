@@ -3,20 +3,19 @@ import { writeSync } from 'node:fs';
 import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import type { ProviderPort } from '@runnets/application';
-const [profile, room, presetId, phase] = process.argv.slice(2) as [string, string, string, string];
-if (phase === 'cgroup') {
-  // Test-only observation: name the exact transient systemd unit the sandbox supervisor starts.
-  const spawn = cp.spawn as (...args: unknown[]) => unknown;
-  (cp as unknown as { spawn: (...args: unknown[]) => unknown }).spawn = (...args) => {
-    const argv = args[1];
-    if (args[0] === '/usr/bin/systemd-run' && Array.isArray(argv)) {
-      const unit = argv.find((value) => String(value).startsWith('--unit='));
-      if (unit) writeSync(1, 'unit ' + String(unit).slice(7) + '\n');
-    }
-    return spawn(...args);
-  };
-  syncBuiltinESMExports();
-}
+const [profile, room, presetId] = process.argv.slice(2) as [string, string, string, string];
+// Test-only observation: name the exact transient systemd unit so the parent can
+// clean it up on any failure path instead of orphaning it under a removed fixture.
+const spawn = cp.spawn as (...args: unknown[]) => unknown;
+(cp as unknown as { spawn: (...args: unknown[]) => unknown }).spawn = (...args) => {
+  const argv = args[1];
+  if (args[0] === '/usr/bin/systemd-run' && Array.isArray(argv)) {
+    const unit = argv.find((value) => String(value).startsWith('--unit='));
+    if (unit) writeSync(1, 'unit ' + String(unit).slice(7) + '\n');
+  }
+  return spawn(...args);
+};
+syncBuiltinESMExports();
 const { openOceanProfile } = await import('../dist/ocean/profile.js');
 type Task = { worktreeRoot: string | null };
 const sandbox = async (task: Task) => ({ root: task.worktreeRoot! });

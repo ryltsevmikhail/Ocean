@@ -40,9 +40,6 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   const outputBytes = Math.min(retainedBytes, 1048576);
   const unit = 'ocean-worker-' + randomUUID() + '.service';
   const ready = 'OCEAN_READY_' + randomUUID();
-  // Only a child that exited on its own may report completion. systemd treats a
-  // SIGTERM stop as a clean exit, so an externally stopped unit must not look passed.
-  const complete = 'OCEAN_COMPLETE_' + randomUUID();
   const script = `
     process.stdout.write(${JSON.stringify(ready)} + '\\n');
     const chunks = [];
@@ -58,7 +55,7 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
       child.on('error',()=>process.exit(127));
       child.on('exit',(code,signal)=>{
         if(signal!==null)process.exit(143);
-        process.stdout.write(${JSON.stringify(complete)} + '\\n',()=>process.exit(code ?? 128));
+        process.exit(code ?? 128);
       });
     });
   `;
@@ -75,8 +72,6 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   let truncated = false;
   let readyBuffer = '';
   let admitted = false;
-  let completed = false;
-  let tail = '';
   let closed = false;
   let stopping: Promise<void> | undefined;
   const nodeBinary = await realpath(process.execPath);
@@ -136,8 +131,6 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   child.stderr.on('data', retain);
   child.stdout.on('data', (chunk: Buffer) => {
     if (admitted) {
-      tail = (tail + chunk.toString('utf8')).slice(-(complete.length + 8));
-      if (tail.includes(complete)) completed = true;
       retain(chunk);
       return;
     }
@@ -189,17 +182,11 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   clearTimeout(timer);
   request.signal?.removeEventListener('abort', abort);
   await stop();
-  if (exitCode === 0 && reason === 'exit' && !completed) reason = 'unavailable';
-  if (!truncated) {
-    const text = output.toString('utf8');
-    output = Buffer.from(
-      text
-        .split(complete + '\n')
-        .join('')
-        .split(complete)
-        .join(''),
-    );
-  }
+  // The supervisor exits 75 when the host stopped its unit, and systemd maps that
+  // stop to a clean-looking status only when the main process died of SIGTERM
+  // without a handler. An admitted run with a plain exit-0 status therefore had
+  // its child exit on its own; no stdout token can be forged in this namespace.
+  if (exitCode === 0 && reason === 'exit' && !admitted) reason = 'unavailable';
   let cleanupConfirmed = false;
   if (observed.cgroup !== null) {
     try {

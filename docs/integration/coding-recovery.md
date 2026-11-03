@@ -291,9 +291,15 @@ covered by the shared-runtime `effect` SIGKILL case and is cited, not duplicated
 
 The cgroup case exposed one genuine defect: systemd reports `SIGTERM` as a clean
 service exit, so `systemd-run --wait` returned exit 0 for an externally stopped
-unit and the runtime could record a killed preset as passed. The minimal fix in
-`sandbox-supervision.ts` requires a per-run completion sentinel that only an
-independently exited child can produce; stopped or signal-terminated units now
-report `unavailable`/non-zero and are never counted as passed. Ordinary exit-0
-runs still pass. This is a host-process qualification, not power-loss, installed
-artifact or Desktop GUI qualification.
+unit and the runtime could record a killed preset as passed. The fix moves
+completion to a child-invisible channel in `sandbox-supervision.ts` and
+`sandbox-launcher.ts`: the trusted host-side supervisor, outside the project PID
+namespace, exits with the reserved status 75 when the unit is stopped, and
+`systemd-run --wait` propagates that non-zero status. Project code cannot signal
+or fake the supervisor, and completion no longer depends on a token embedded in
+the in-sandbox argv or on stdout bytes, so it cannot be forged and does not
+consume the retained-output limit. An admitted run whose supervisor exited 0
+without being stopped is the only shape recorded as passed; stopped or
+signal-terminated units are never passed and ordinary exit-0 runs still pass,
+including one that fills the retained-output cap exactly. This is a host-process
+qualification, not power-loss, installed artifact or Desktop GUI qualification.
