@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import console from 'node:console';
 import { chromium } from 'playwright-core';
 import { fixture, windowEnv } from './owner.mjs';
+import { launchDesktopGroup } from './desktop-launcher.mjs';
 import { closePage } from './window-close.mjs';
 import { damagedPreparation } from './send-recovery.mjs';
 
@@ -36,7 +37,7 @@ async function wait(condition, ms = 10000) {
 }
 async function launch() {
   rmSync(portFile, { force: true });
-  const proc = spawn(
+  const launcher = launchDesktopGroup(
     'pnpm',
     [
       '--filter',
@@ -46,15 +47,15 @@ async function launch() {
       '--remote-debugging-port=0',
       '--ozone-platform=wayland',
     ],
-    { env: windowEnv(f), detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
+    windowEnv(f),
   );
+  gui = launcher;
+  const { proc } = launcher;
   let log = '';
   proc.stdout.on('data', (b) => (log = (log + b).slice(-4000)));
   proc.stderr.on('data', (b) => (log = (log + b).slice(-4000)));
-  const closed = new Promise((resolve) => proc.once('close', resolve));
-  gui = { proc, closed };
   await wait(() => {
-    if (proc.exitCode !== null) throw Error('desktop exited ' + log);
+    if (proc.exitCode !== null || proc.signalCode !== null) throw Error('desktop exited ' + log);
     return existsSync(portFile);
   }, 30000);
   const [port] = readFileSync(portFile, 'utf8').split('\n');
@@ -64,8 +65,7 @@ async function launch() {
   page.setDefaultTimeout(10000);
   async function close() {
     await closePage(page);
-    await wait(() => proc.exitCode !== null);
-    assert.equal(await closed, 0);
+    assert.equal(await launcher.waitForClose(), 0);
     gui = undefined;
   }
   return { page, close };
@@ -215,10 +215,7 @@ try {
   );
 } finally {
   try {
-    if (gui && gui.proc.exitCode === null && gui.proc.signalCode === null) {
-      process.kill(-gui.proc.pid, 'SIGKILL');
-      await gui.closed;
-    }
+    await gui?.dispose();
   } finally {
     tui?.kill();
     await f.close();
