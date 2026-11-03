@@ -412,12 +412,30 @@ socket or uncertain execution drain gives an incomplete stop and retains the
 owner. Identity checks and filesystem mutations share the existing trusted
 same-UID host boundary.
 
-Linux process tests kill an actual listening owner after a synthetic durable
-claim, restart twice after SIGKILL and twice after clean stop, and verify that
-two independent authenticated clients see the same receipt and uncertain run.
-The persisted dispatch and effect counters both stay at one. The opt-in native
-coding test kills the listening owner after an approved sandbox write and
-before journal settlement, then reopens twice. Namespace tests exercise a real
-same-inode bind mount and a foreign UID. The room PTY suite covers physical
-hangup and SIGTERM. Desktop shared-runtime, asset-complete
-backup/restore and installed/live Ocean 1.1 acceptance remain open.
+## Committed-source process qualification
+
+On 2026-11-03 the clean Linux worktree at `f7dac84dd7cd227a0e93e528549ffda4a394b434` passed the four shared-runtime cases below. All clients used disposable profiles. The listening owners used deterministic providers. Independent Task 8 and whole shared-runtime reviews are pending. Installed Ocean 1.1, complete backup/restore, physical Desktop picker/clipboard and a live-provider release candidate have separate gates.
+
+1. **Room TUI detach.** The standard CLI ran under a controlling PTY. After the terminal displayed its run ID, the driver closed the master or sent SIGTERM. A new SDK process observed the same running turn before the provider was released. Reopening the TUI read one committed answer. For physical hangup the receipt was `f4beaf3f-b6e6-4bf0-bf0d-2c840fe1b4ac`, user message `2d4d664eefa04632b8a85e3f731838bd`, run `tr_26affae000a74510aa11be7771f9be17`, answer `reply_26affae000a74510aa11be7771f9be17`. Each terminal case recorded one provider dispatch.
+2. **Lost submit receipt.** The owner destroyed the socket before writing the committed receipt. Independent SDK processes read and retried request `submit`. Changes to text, recipient, task and room returned `request_conflict` on each side of SIGKILL and restart. The completed case kept user message `9b0e79c92f304c499586784d1c001bb3`, run `tr_78476e211e8547ada226f48b123eca2c`, one answer and original/successor dispatch counts 1/0. An independently gated case exposed `admitted_before_run` at version 0. After restart its receipt still identified message `303993a8c3a6422ea06da85bd08d2d4b` and run `tr_bfd06906c3c94c9ea3680e54f4a5c225`. Its turn was failed, aggregate absent, result null and counts 0/0.
+3. **One-use write.** Two SDK processes each read the same version-1 card and complete digest-verified preview before racing allow-once. Both read the persisted version-2 winner, including on an opposite stale vote. Pending version mismatch, foreign room/run and changed digest refused. Run `tr_d2cd096374894e1b9f4e3757a4426284` consumed write card `c6538ea2-109c-4517-9e5d-6a8380b6df3a`, digest `c9e566b5ab43ce5a640fcdca3e28673fc495612440391a2d9d89db036eb77bec`. The executor recorded one write. A second run advanced only the decision clock past expiry between card read and vote. Both clients read expired, the underlying grant was denied and the write counter stayed zero. The text-only review suite separately checked the exact continuation receipt.
+4. **Unknown effect.** SIGKILL interrupted a real listener after its one-use journal claim and durable synthetic effect counter, before result settlement. Ordinary explicit start recovered profile evidence twice after SIGKILL and twice after clean stop. Two independent clients saw the original receipt and uncertain run on each new instance. Run `tr_14bbdfc5e1844f738747cb5f19d57a15` retained its single inbound message, pending effect, room hold and null result. On a separate first restart from the started claim, the instrumented successor for run `tr_33fd43c9b5ba4de69353fe39bfc03799` retained original dispatch/effect counts 1/1 and produced zero successor dispatches, including through retries. A fresh same-model control tripped that provider once. No cancellation event was added. The native write fixture separately killed a listening owner after its approved sandbox edit and before journal settlement. Owner exit supplies no evidence of descendant termination.
+
+**Desktop.** Two actual `pnpm --filter @ocean/desktop start` launches used one isolated owner and Desktop store. Request `b6fe4bbe-89fa-4569-8b8a-6a749cccbd98` recovered message `bc7b3c40317d4249b436313c380c0a93` after a dropped acknowledgement. Run `tr_c8c744392a90477387f703ef66c7e191` yielded `reply_c8c744392a90477387f703ef66c7e191` with one provider dispatch. The independently launched public SDK and PTY observed the same live run while the first window closed. Reopening the standard app recovered exactly one result. Electron 45.2.1 (embedded Node 24.22.1) resolved only ten wire contract modules, seven SDK modules and four Node built-ins on the public client import.
+
+**Reproduction.** Linux 7.2.8-9-omarchy x86_64, Node 26.13.0, pnpm 12.16.1, system Python 3.14.8, bubblewrap 0.13.1, systemd 262 and Wayland. From the committed workspace root, these commands exited 0.
+
+```sh
+pnpm install --frozen-lockfile --offline
+pnpm build
+pnpm check
+pnpm format:check
+pnpm exec vitest run --maxWorkers=2 apps/cli/src/acp/{agent,agent-provider,permissions,shutdown}.test.ts apps/cli/src/ocean/{room-tui-process,remote-command-process,remote-send-signal,remote-review-process,remote-offline-boundary,remote-coding-process,remote-hello-refusal,operations}.test.ts apps/cli/src/local-runtime/{admission-process,lost-receipt-process,restart-process,decision-process,process,restart-refusals,observation}.test.ts packages/tools-node/src/local-runtime-security.test.ts packages/application/src/coding-apply-recovery.test.ts
+OCEAN_SANDBOX_NATIVE=1 pnpm exec vitest run --maxWorkers=1 apps/cli/src/local-runtime/{vote-process-native,decision-native,decision-crash,binder-netns-native,endpoint-native}.test.ts apps/cli/src/ocean/{room-tui-coding-native,remote-shutdown-native}.test.ts packages/tools-node/src/sandbox-native.test.ts
+node --test apps/desktop/qa/window-close.test.mjs
+pnpm --filter @ocean/desktop bundle
+node apps/desktop/qa/entrypoint.mjs
+node apps/desktop/qa/smoke.mjs
+```
+
+Clean root check passed 1,251 tests in 222 files, with 62 skipped. The development workspace included a separate atlas suite and passed 1,324 in 223 files with the same skips. The explicit process and access matrix passed 107 in 21 files. This includes the actual CLI and ACP stdio owner-busy exit 3, separate-profile session updates, exact review, stale endpoint refusal, bounded reads and observation backpressure. The opt-in native run passed 27 in 8 files, including journal recovery, foreign UID and mount refusal, live kernel socket attestation, sandbox containment and observable cgroup cleanup on supported paths.

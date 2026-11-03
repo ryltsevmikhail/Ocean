@@ -131,22 +131,22 @@ Task 5 covers the standard TUI decision presentation.
 - [x] RED→GREEN independent client process uses only versioned public contract to authenticate, list rooms/history, submit/resume/get result, observe and decide; no Runtime/SQLite/application internals imported. Document a raw-wire hello/submit/read/observe/decision transcript.
 - [x] Migrate the imported `apps/desktop` worker-per-request host (`1c8d8c3`) to the delivered authenticated client port. Qualify штатный `pnpm --filter @ocean/desktop start` against an isolated test profile and deterministic provider. Preserve source checkout/branch/installed app; never use real credentials or user's live profile. Keep scoped attachment import/receipts/history/preview/export; current providers remain text-only, and CLI backup still excludes attachment bytes.
 - [x] Add explicit endpoint/profile configuration to the in-repository host; its current `main.ts`/`worker.ts` has no such seam. Verify window close detaches rather than killing execution. If GUI qualification cannot run, record exact incompatibility and GUI NOT VERIFIED with reason while independent protocol client is verified.
-- [ ] Required gates; commit `docs: qualify desktop shared-runtime client contract`; review. GUI status is an explicit acceptance result, not silently omitted.
+- [x] Desktop source, GUI gates and independent review passed through `0a2a2d0`.
 
 ## Task 8: Four process acceptance cases and candidate evidence
 
 **Files:** local-runtime acceptance tests/drivers, fixture workers/provider counters; docs/integration/local-runtime.md RC evidence and parent Ocean1.1 plan.
 
-- [ ] Run standard TUI PTY detach case and independent second-client reconnect: identical runId, one committed answer, provider counter1.
-- [ ] Kill transport after durable submit before receipt: same requestId gives same runId, changed binding refuses, provider counter1. Repeat around runtime restart and admitted-before-run gap.
-- [ ] Show pending operation to two separate clients; race decisions, check persisted winner visible to both, stale decision rejected, effect count1.
-- [ ] SIGKILL actual runtime after journal started before effect result. Restart/attach both clients; same uncertain outcome, no repeated effect and no confirmed cancellation without evidence. Retain application hold and no-auto-retry.
-- [ ] Run root pnpm check, pnpm build, pnpm format:check; record exact test commands/output/counters/platform, ACP and ordinary CLI matrix, socket access negatives, desktop GUI result separately. Live providers not required/authorized for these deterministic gates.
-- [ ] Review whole shared-runtime branch scope, fix findings, commit `test: qualify shared runtime tui and desktop protocol`. Only then mark this first delivery complete. Resume remaining Ocean1.1 stage7 backup/restore/installed/liveRC work with runtime ownership assumptions updated. Schedules remain a later explicitly separate stage.
+- [x] Detach the standard room TUI under a controlling PTY. A separate client observes the original live run, one committed answer and one provider dispatch.
+- [x] Drop the submit reply after durable admission. Exact retries recover the original receipt across restart. Changed bindings refuse. The pre-aggregate crash preserves the receipt with zero provider dispatches.
+- [x] Race two independent viewers of one pending write. Both read the stored winner, an opposite stale vote cannot grant again, and the counted effect executes once. Wrong bindings and versions refuse before consent. An expired operation executes zero times.
+- [x] SIGKILL the listening owner after journal start and before effect settlement. Two clients recover the same uncertain run. The room hold persists. An instrumented first successor records zero dispatches.
+- [x] Qualify committed source `f7dac84` with root checks, explicit process/CLI/ACP/access and opt-in native tests, and the isolated actual GUI.
+- [ ] Complete independent Task 8 review and whole shared-runtime review from `8e03b0a`, and address findings before accepting this first delivery. Remaining Ocean 1.1 stage 7 backup/restore and installed/live RC work follows that review.
 
 ## Execution state
 
-Tasks 1–6 passed independent review through `c612775`. The in-repository Desktop now uses the authenticated SDK and passed deterministic Linux GUI qualification. Task 7 awaits independent review. Task 8 retains the four process acceptance cases and release evidence.
+Tasks 1–7 passed independent review through `0a2a2d0`. Task 8 qualified committed source `f7dac84` against four process cases and the isolated Linux GUI. Independent Task 8 review and whole shared-runtime review from the Desktop import at `8e03b0a` are pending. See the [commands and results](../../integration/local-runtime.md#committed-source-process-qualification).
 Ocean1.1 previous checkpoint: `5d032ae`, 1032 passed/41 skipped, build/format and
 14 native tests recorded; these are previous coding recovery evidence, not proof
 of shared-runtime acceptance. Workpackage7.5 was stopped before implementation:

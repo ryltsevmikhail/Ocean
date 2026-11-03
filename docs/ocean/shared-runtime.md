@@ -173,6 +173,10 @@ The attachment store is Desktop-local. History decoration binds a room, embedded
 
 ## Acceptance
 
+The four cases below have committed-source evidence at `f7dac84`. Independent
+Task 8 and whole shared-runtime review are pending before first-delivery
+acceptance. See the [process and GUI results](../integration/local-runtime.md#committed-source-process-qualification).
+
 1. Start runtime; use the standard room TUI to submit and see runId. Kill/detach
    TUI during a controlled provider generation. A separate client reconnects to
    that room/run and sees one committed answer; provider-call counter is exactly 1.
