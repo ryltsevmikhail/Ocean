@@ -3,7 +3,7 @@ import type {
   CodingFinalizationStore,
   ProjectLeaseReleasePort,
 } from './coding-finalization-ports.js';
-import { finalizationReceiptMatches } from './coding-finalization-result.js';
+import { finalizationReceiptMatches, finalizationReleaseId } from './coding-finalization-result.js';
 /**
  * Startup only narrows uncertainty. A matching durable registry receipt
  * publishes `finalized`; anything else is held `uncertain` and is never
@@ -16,12 +16,19 @@ export function recoverCodingFinalizations(
   store.recover();
   for (const record of store.unresolvedFinalizing()) {
     let receipt: CodingFinalizationReleaseReceipt | null = null;
+    let legacy = false;
     try {
-      receipt = leases.releaseReceipt(record.requestId);
+      receipt = leases.releaseReceipt(finalizationReleaseId(record));
+      // Old intents used a profile-local request id. Read it only when the new
+      // identity is absent; never bypass contradictory/corrupt scoped evidence.
+      if (!receipt) {
+        receipt = leases.releaseReceipt(record.requestId);
+        legacy = true;
+      }
     } catch {
       receipt = null;
     }
-    if (receipt && finalizationReceiptMatches(record, receipt)) {
+    if (receipt && finalizationReceiptMatches(record, receipt, legacy)) {
       store.atomic((tx) =>
         tx.publish({
           ...record,
