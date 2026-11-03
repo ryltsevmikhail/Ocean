@@ -14,7 +14,8 @@ const HELP = `ocean ${CLI_VERSION} — Ocean command line
 
 Usage:
   ocean install --archive /archive --sha256 HASH --prefix /user/prefix
-  ocean runtime start|status|stop --profile /path [--json]
+  ocean runtime start|restore|status|stop --profile /path [--json]
+  ocean rebind inspect|preview|confirm|result --config /selection.json --profile /path
   ocean doctor [--static] [--profile /path] [--json]
   ocean backup --to /new/snapshot --profile /path
   ocean restore --from /snapshot --profile /new/profile
@@ -55,6 +56,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     command === '--json' ||
     [
       'runtime',
+      'rebind',
       'coding',
       'project',
       'init',
