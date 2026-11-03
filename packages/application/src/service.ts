@@ -19,7 +19,7 @@ import {
   type TaskRunId,
 } from '@runnets/domain';
 
-import { commandConflict, snapshotCommand } from './command-commit.js';
+import { commandConflict, snapshotCommand, type CommandLookup } from './command-commit.js';
 
 import type {
   CommandDedupPort,
@@ -116,6 +116,13 @@ export class TaskRunService {
     };
     if (dedup !== undefined) await dedup.put(receipt);
     return ok(receipt);
+  }
+
+  /** Inspect an exact request-bound receipt without authorizing new execution. */
+  lookupCommand(command: CommandLookup): Promise<Result<CommandReceipt | null>> {
+    const commands = this.#deps.log.commands;
+    if (!commands) throw Error('atomic_commands_required');
+    return commands.lookup(snapshotCommand(command));
   }
 
   /** Synchronous committed head for decisions sharing an adapter transaction. */

@@ -1,3 +1,4 @@
+import { createEffectResolutions, unresolvedEffectSql } from './tool-effect-resolution.js';
 import type {
   ToolEffectContext,
   ToolEffectOutcome,
@@ -23,6 +24,7 @@ export class SqliteToolJournal implements ToolJournalPort {
         ('started', 'completed', 'failed', 'uncertain', 'not_started')),
       PRIMARY KEY(task_run_id, attempt_id, id)
     ) STRICT`);
+    createEffectResolutions(db);
   }
   /** Existing or conflicting identities never authorize a second external dispatch. */
   async claim(
@@ -32,6 +34,10 @@ export class SqliteToolJournal implements ToolJournalPort {
     fingerprint: string,
   ): Promise<boolean> {
     await Promise.resolve();
+    return this.claimNow(id, tool, context, fingerprint);
+  }
+  /** Synchronous admission for callers already inside the store transaction. */
+  claimNow(id: string, tool: string, context: ToolEffectContext, fingerprint: string): boolean {
     if (context.taskRunId === '' || context.attemptId === '' || fingerprint === '')
       throw new Error('tool claim requires run, attempt and request identity');
     // Legacy claims lack scope and cannot safely be assigned or replayed.
@@ -41,8 +47,8 @@ export class SqliteToolJournal implements ToolJournalPort {
         `INSERT INTO tool_invocations_v2
       (id, tool, task_run_id, attempt_id, fingerprint, outcome)
       SELECT ?, ?, ?, ?, ?, 'started'
-      WHERE NOT EXISTS (SELECT 1 FROM tool_invocations_v2
-        WHERE outcome IN ('started', 'uncertain'))
+      WHERE NOT EXISTS (SELECT 1 FROM tool_invocations_v2 e
+        WHERE ${unresolvedEffectSql('e')})
       AND NOT EXISTS (SELECT 1 FROM tool_invocations_v1
         WHERE outcome IN ('started', 'uncertain'))
       ON CONFLICT DO NOTHING`,
@@ -63,6 +69,13 @@ export class SqliteToolJournal implements ToolJournalPort {
     context?: ToolEffectContext,
   ): Promise<void> {
     await Promise.resolve();
+    this.settleNow(id, outcome, context);
+  }
+  settleNow(
+    id: string,
+    outcome: Exclude<ToolEffectOutcome, 'started'>,
+    context?: ToolEffectContext,
+  ): void {
     if (context === undefined) throw new Error('tool effect context required');
     const result = this.#db
       .prepare(
@@ -71,6 +84,34 @@ export class SqliteToolJournal implements ToolJournalPort {
       )
       .run(outcome, id, context.taskRunId, context.attemptId);
     if (result.changes !== 1) throw new Error('tool claim is missing or already settled');
+  }
+  /** Transaction-local recovery can retain an existing hold, never upgrade its outcome. */
+  holdNow(id: string, context: ToolEffectContext): void {
+    const row = this.#db
+      .prepare(
+        'SELECT outcome FROM tool_invocations_v2 WHERE id=? AND task_run_id=? AND attempt_id=?',
+      )
+      .get(id, context.taskRunId, context.attemptId);
+    if (row?.['outcome'] === 'uncertain') return;
+    this.settleNow(id, 'uncertain', context);
+  }
+  /** Called only inside the owner's durable reconciliation transaction; never rewrites history. */
+  reconcileApplyNow(
+    id: string,
+    context: ToolEffectContext,
+    fingerprint: string,
+    payload: string,
+  ): void {
+    if (context.taskRunId !== 'apply-' + id || context.attemptId !== 'apply')
+      throw Error('invalid apply effect context');
+    const result = this.#db
+      .prepare(
+        `INSERT INTO tool_effect_resolutions_v1
+      SELECT id,task_run_id,attempt_id,fingerprint,? FROM tool_invocations_v2
+      WHERE id=? AND task_run_id=? AND attempt_id=? AND fingerprint=? AND tool='coding_apply' AND outcome='uncertain'`,
+      )
+      .run(payload, id, context.taskRunId, context.attemptId, fingerprint);
+    if (result.changes !== 1) throw Error('unresolved apply effect missing');
   }
   /** Includes legacy unresolved claims globally so upgrades cannot hide uncertainty. */
   async pending(taskRunId?: string): Promise<readonly ToolEffectRecord[]> {
@@ -82,15 +123,11 @@ export class SqliteToolJournal implements ToolJournalPort {
     const rows =
       taskRunId === undefined
         ? this.#db
-            .prepare(
-              `SELECT * FROM tool_invocations_v2
-          WHERE outcome IN ('started', 'uncertain')`,
-            )
+            .prepare(`SELECT e.* FROM tool_invocations_v2 e WHERE ${unresolvedEffectSql('e')}`)
             .all()
         : this.#db
             .prepare(
-              `SELECT * FROM tool_invocations_v2
-          WHERE task_run_id = ? AND outcome IN ('started', 'uncertain')`,
+              `SELECT e.* FROM tool_invocations_v2 e WHERE e.task_run_id = ? AND ${unresolvedEffectSql('e')}`,
             )
             .all(taskRunId);
     const records: ToolEffectRecord[] = rows.map((row) => ({

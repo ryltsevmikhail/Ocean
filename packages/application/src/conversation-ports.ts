@@ -37,7 +37,17 @@ export type ConversationReply =
   | { readonly kind: 'review'; readonly data: ChatReview };
 export interface ConversationReceipt {
   readonly binding: string;
-  readonly reply: ConversationReply;
+  readonly reply:
+    | ConversationReply
+    | {
+        readonly kind: 'review_request';
+        readonly data: {
+          readonly id: string;
+          readonly workspaceId: string;
+          readonly roomId: string;
+          readonly taskRunId: string;
+        };
+      };
 }
 /** Synchronous transaction surface; implementations must roll back writes on exceptions. */
 export interface ConversationTransaction {
@@ -46,6 +56,7 @@ export interface ConversationTransaction {
   roomPolicy(roomId: string): RoomExecutionPolicy | null;
   putRoomPolicy(policy: RoomExecutionPolicy): void;
   chatTurn(id: string): ChatTurn | null;
+  roomChatRun(workspaceId: string, roomId: string, runId: string): ChatTurn | null;
   chatTurns(): readonly ChatTurn[];
   activeChatTurn(roomId: string): ChatTurn | null;
   putChatTurn(turn: ChatTurn): void;
@@ -64,6 +75,12 @@ export interface ConversationTransaction {
   putMessage(message: ConversationMessage): void;
   receipt(requestId: string): ConversationReceipt | null;
   putReceipt(requestId: string, receipt: ConversationReceipt): void;
+  completeReviewRequest(
+    requestId: string,
+    decisionId: string,
+    binding: string,
+    review: ChatReview,
+  ): void;
 }
 export interface ConversationStore {
   /** Commit data and receipt together, without asynchronous suspension. */

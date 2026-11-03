@@ -22,6 +22,7 @@ export interface CodingArtifactTransaction {
   worktree(taskId: string): CodingWorktree | null;
   putWorktree(binding: CodingWorktree): void;
   changeset(hash: string): Changeset | null;
+  latestChangeset(taskId: string): Changeset | null;
   putChangeset(value: Changeset): void;
   captureReceipt(id: string): ChangesetReceipt | null;
   putCaptureReceipt(id: string, value: ChangesetReceipt): void;

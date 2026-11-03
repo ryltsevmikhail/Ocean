@@ -9,23 +9,54 @@
 import { createBudget } from './budget.js';
 import type { EventEnvelope, TaskRunEvent, TaskRunEventType } from './events.js';
 import { policyId, type TaskRunId } from './ids.js';
-import { ABSENT, isTerminal, type TaskRunAggregate, type TaskRunState } from './state.js';
+import {
+  ABSENT,
+  isTerminal,
+  type TaskRunAggregate,
+  type TaskRunState,
+  type TaskRunStatus,
+} from './state.js';
+
+/** A null transition advances version while preserving status. Shared by replay and bounded reads. */
+export const STATUS_AFTER_EVENT = {
+  'task_run.created': 'created',
+  'task_run.queued': 'queued',
+  'task_run.admitted': 'admitted',
+  'attempt.started': 'running',
+  'attempt.usage_recorded': null,
+  'task_run.waiting': 'waiting',
+  'task_run.resumed': 'running',
+  'attempt.retry_scheduled': 'retrying',
+  'task_run.checkpointing': 'checkpointing',
+  'checkpoint.committed': 'running',
+  'task_run.reconciling': 'reconciling',
+  'task_run.reconciled': 'running',
+  'task_run.reconciliation_failed': 'unrecoverable',
+  'task_run.cancelling': 'cancelling',
+  'task_run.cancelled': 'cancelled',
+  'task_run.succeeded': 'succeeded',
+  'task_run.failed': 'failed',
+  'task_run.budget_exhausted': 'budget_exhausted',
+  'task_run.policy_denied': 'policy_denied',
+} as const satisfies Record<TaskRunEventType, TaskRunStatus | null>;
 
 function apply(state: TaskRunState, event: TaskRunEvent): TaskRunState {
-  const next = { ...state, version: event.sequence };
+  const next = {
+    ...state,
+    version: event.sequence,
+    status: STATUS_AFTER_EVENT[event.type] ?? state.status,
+  };
 
   switch (event.type) {
     case 'task_run.created':
       // Creation is handled by `evolve`; a second creation is a broken stream.
       throw new Error(`task run ${event.aggregateId} already exists`);
     case 'task_run.queued':
-      return { ...next, status: 'queued' };
     case 'task_run.admitted':
-      return { ...next, status: 'admitted' };
+      return next;
     case 'attempt.started':
       return {
         ...next,
-        status: 'running',
         activeAttempt: {
           attemptId: event.payload.attemptId,
           ordinal: event.payload.ordinal,
@@ -56,57 +87,51 @@ function apply(state: TaskRunState, event: TaskRunEvent): TaskRunState {
       };
     }
     case 'task_run.waiting':
-      return { ...next, status: 'waiting', waitingReason: event.payload.reason };
+      return { ...next, waitingReason: event.payload.reason };
     case 'task_run.resumed':
-      return { ...next, status: 'running', waitingReason: null };
+      return { ...next, waitingReason: null };
     case 'attempt.retry_scheduled':
-      return { ...next, status: 'retrying', waitingReason: null };
+      return { ...next, waitingReason: null };
     case 'task_run.checkpointing':
-      return { ...next, status: 'checkpointing', pendingCheckpointId: event.payload.checkpointId };
+      return { ...next, pendingCheckpointId: event.payload.checkpointId };
     case 'checkpoint.committed':
       return {
         ...next,
-        status: 'running',
         pendingCheckpointId: null,
         lastCommittedCheckpointId: event.payload.checkpointId,
       };
     case 'task_run.reconciling':
-      return { ...next, status: 'reconciling', waitingReason: event.payload.reason };
+      return { ...next, waitingReason: event.payload.reason };
     case 'task_run.reconciled':
-      return { ...next, status: 'running', waitingReason: null };
+      return { ...next, waitingReason: null };
     case 'task_run.reconciliation_failed':
       return {
         ...next,
-        status: 'unrecoverable',
         waitingReason: null,
         terminal: { status: 'unrecoverable', failure: event.payload, summary: null },
       };
     case 'task_run.cancelling':
-      return { ...next, status: 'cancelling', cancellationCause: event.payload.cause };
+      return { ...next, cancellationCause: event.payload.cause };
     case 'task_run.cancelled':
       return {
         ...next,
-        status: 'cancelled',
         terminal: { status: 'cancelled', failure: null, summary: event.payload.cleanup },
       };
     case 'task_run.succeeded':
       return {
         ...next,
-        status: 'succeeded',
         waitingReason: null,
         terminal: { status: 'succeeded', failure: null, summary: event.payload.summary },
       };
     case 'task_run.failed':
       return {
         ...next,
-        status: 'failed',
         waitingReason: null,
         terminal: { status: 'failed', failure: event.payload.failure, summary: null },
       };
     case 'task_run.budget_exhausted':
       return {
         ...next,
-        status: 'budget_exhausted',
         waitingReason: null,
         terminal: {
           status: 'budget_exhausted',
@@ -117,7 +142,6 @@ function apply(state: TaskRunState, event: TaskRunEvent): TaskRunState {
     case 'task_run.policy_denied':
       return {
         ...next,
-        status: 'policy_denied',
         waitingReason: null,
         terminal: {
           status: 'policy_denied',
@@ -141,7 +165,7 @@ export function evolve(aggregate: TaskRunAggregate, event: TaskRunEvent): TaskRu
     const p = event.payload;
     const state: TaskRunState = {
       id: event.aggregateId as TaskRunId,
-      status: 'created',
+      status: STATUS_AFTER_EVENT['task_run.created'],
       version: event.sequence,
       conversationId: p.conversationId,
       workspaceId: p.workspaceId,

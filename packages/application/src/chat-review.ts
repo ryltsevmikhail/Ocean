@@ -28,6 +28,15 @@ export interface ReviewApprovalPort {
   /** Trusted host asks the local owner. This port is never part of a wire request. */
   confirm(snapshot: ReviewSnapshot, signal: AbortSignal): Promise<boolean>;
 }
+function ackBinding(input: AcknowledgeChatInput) {
+  return JSON.stringify([
+    'AcknowledgeTextOnly',
+    input.workspaceId,
+    input.taskRunId,
+    input.reviewVersion,
+    input.reason,
+  ]);
+}
 /** Owner review is a separate audited decision; it cannot settle effects or terminate tasks. */
 export class ChatReviewService {
   readonly #deps: ChatReviewDeps;
@@ -52,28 +61,66 @@ export class ChatReviewService {
     });
     return id === null ? conversationFailure('review_unavailable') : this.review(workspaceId, id);
   }
+  receipt(
+    workspaceId: string,
+    roomId: string,
+    taskRunId: string,
+    requestId: string,
+  ): ChatReview | null {
+    return this.#deps.store.atomic((tx) => {
+      const reply = tx.receipt(requestId)?.reply;
+      if (reply?.kind !== 'review') return null;
+      const review = reply.data;
+      return review.workspaceId === workspaceId &&
+        review.roomId === roomId &&
+        review.taskRunId === taskRunId
+        ? review
+        : null;
+    });
+  }
+  hasRequest(requestId: string) {
+    return this.#deps.store.atomic((tx) => tx.receipt(requestId) !== null);
+  }
+  /** Reserve the global receipt and insert the immutable card on the owner's transaction connection. */
+  reserve(input: AcknowledgeChatInput, roomId: string, decisionId: string, insert: () => void) {
+    this.#deps.store.atomic((tx) => {
+      if (tx.receipt(input.requestId) !== null) throw Error('request_conflict');
+      tx.putReceipt(input.requestId, {
+        binding: ackBinding(input),
+        reply: {
+          kind: 'review_request',
+          data: {
+            id: decisionId,
+            workspaceId: input.workspaceId,
+            roomId,
+            taskRunId: input.taskRunId,
+          },
+        },
+      });
+      insert();
+    });
+  }
   async acknowledge(
     submitted: AcknowledgeChatInput,
     approval: ReviewApprovalPort,
     signal: AbortSignal,
+    decisionId?: string,
   ): Promise<ConversationResult<ChatReview>> {
     const input = Object.freeze({ ...submitted });
     if (!validConversationText(input.requestId, 128) || !validConversationText(input.reason, 2048))
       return conversationFailure('invalid_input');
-    const binding = JSON.stringify([
-      'AcknowledgeTextOnly',
-      input.workspaceId,
-      input.taskRunId,
-      input.reviewVersion,
-      input.reason,
-    ]);
-    const retry = this.#deps.store.atomic((tx) => {
-      const receipt = tx.receipt(input.requestId);
-      if (receipt === null) return null;
-      return receipt.binding === binding && receipt.reply.kind === 'review'
-        ? ok(receipt.reply.data)
+    const binding = ackBinding(input);
+    const prior = (tx: ConversationTransaction): ConversationResult<ChatReview> | null => {
+      const previous = tx.receipt(input.requestId);
+      if (!previous)
+        return decisionId === undefined ? null : conversationFailure('request_conflict');
+      if (previous.binding !== binding) return conversationFailure('request_conflict');
+      if (previous.reply.kind === 'review') return ok(previous.reply.data);
+      return previous.reply.kind === 'review_request' && previous.reply.data.id === decisionId
+        ? null
         : conversationFailure('request_conflict');
-    });
+    };
+    const retry = this.#deps.store.atomic(prior);
     if (retry !== null) return retry;
     const seen = await this.review(input.workspaceId, input.taskRunId);
     if (!seen.ok) return seen;
@@ -88,11 +135,8 @@ export class ChatReviewService {
     return this.#deps.store.atomic((tx) => {
       if (tx.workspace()?.id !== input.workspaceId)
         return conversationFailure('workspace_conflict');
-      const receipt = tx.receipt(input.requestId);
-      if (receipt !== null)
-        return receipt.binding === binding && receipt.reply.kind === 'review'
-          ? ok(receipt.reply.data)
-          : conversationFailure('request_conflict');
+      const existing = prior(tx);
+      if (existing) return existing;
       const turn = tx.chatTurns().find((t) => t.taskRunId === input.taskRunId);
       if (
         turn === undefined ||
@@ -137,7 +181,8 @@ export class ChatReviewService {
       tx.putReview(review);
       tx.putRoomPolicy({ roomId: turn.roomId, mode: 'text_only', reviewId: review.id });
       tx.putChatTurn({ ...turn, continuationReviewId: review.id });
-      tx.putReceipt(input.requestId, { binding, reply: { kind: 'review', data: review } });
+      if (decisionId) tx.completeReviewRequest(input.requestId, decisionId, binding, review);
+      else tx.putReceipt(input.requestId, { binding, reply: { kind: 'review', data: review } });
       return ok(review);
     });
   }

@@ -3,6 +3,7 @@ export type ChatTurnStatus =
   'accepted' | 'dispatching' | 'prepared' | 'completed' | 'failed' | 'uncertain' | 'cancelled';
 /** Durable admission and publication facts; a retry never creates new execution authority. */
 export interface ChatTurn {
+  readonly codingTaskId?: string;
   readonly continuationReviewId?: string;
   readonly id: string;
   readonly workspaceId: string;

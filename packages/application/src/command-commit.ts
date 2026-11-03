@@ -7,9 +7,12 @@ import {
 } from '@runnets/domain';
 import type { AppendMeta, CommandReceipt } from './ports.js';
 
+/** Read-only binding comparison accepts the original external ID before domain ID validation. */
+export type CommandLookup = Omit<AnyCommand, 'taskRunId'> & { readonly taskRunId: string };
+
 /** Atomic command writes bind identity to the complete submitted request. */
 export interface CommandCommitPort {
-  lookup(command: AnyCommand): Promise<Result<CommandReceipt | null>>;
+  lookup(command: CommandLookup): Promise<Result<CommandReceipt | null>>;
   commit(
     command: AnyCommand,
     version: number,
@@ -19,15 +22,15 @@ export interface CommandCommitPort {
 }
 
 /** Canonical request identity is independent of object key insertion order. */
-export function commandBinding(command: AnyCommand): string {
+export function commandBinding(command: CommandLookup): string {
   return JSON.stringify(canonical(command));
 }
 
 /** Detach and freeze the complete request before any asynchronous suspension. */
-export function snapshotCommand(command: AnyCommand): AnyCommand {
+export function snapshotCommand<T extends CommandLookup>(command: T): T {
   // Canonical traversal constructs fresh objects; freezing recursively closes
   // every mutable alias while preserving the domain's JSON payload contract.
-  return freeze(canonical(command)) as AnyCommand;
+  return freeze(canonical(command)) as T;
 }
 
 function freeze(value: unknown): unknown {

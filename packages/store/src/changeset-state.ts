@@ -24,6 +24,8 @@ export function memoryCodingArtifacts(state: CodingArtifactState): CodingArtifac
       state.worktrees.set(value.taskId, structuredClone(value));
     },
     changeset: (id) => state.changesets.get(id) ?? null,
+    latestChangeset: (taskId) =>
+      [...state.changesets.values()].filter((v) => v.taskId === taskId).at(-1) ?? null,
     putChangeset: (value) => {
       const old = state.changesets.get(value.hash);
       if (old && JSON.stringify(old) !== JSON.stringify(value)) throw Error('Immutable changeset');

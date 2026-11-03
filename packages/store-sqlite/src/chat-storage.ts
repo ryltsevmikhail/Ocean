@@ -4,7 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { readText } from './rows.js';
 type ChatStorage = Pick<
   ConversationTransaction,
-  'chatTurn' | 'chatTurns' | 'activeChatTurn' | 'putChatTurn'
+  'chatTurn' | 'roomChatRun' | 'chatTurns' | 'activeChatTurn' | 'putChatTurn'
 >;
 function decode(row: Record<string, unknown>): ChatTurn {
   const value: unknown = JSON.parse(readText(row, 'payload'));
@@ -27,6 +27,14 @@ export function chatStorage(db: DatabaseSync): ChatStorage {
   return {
     chatTurn(id) {
       const row = db.prepare('SELECT * FROM ocean_chat_turns WHERE id=?').get(id);
+      return row === undefined ? null : decode(row);
+    },
+    roomChatRun(workspaceId, roomId, runId) {
+      const row = db
+        .prepare(
+          'SELECT * FROM ocean_chat_turns WHERE task_run_id=? AND room_id=? AND workspace_id=?',
+        )
+        .get(runId, roomId, workspaceId);
       return row === undefined ? null : decode(row);
     },
     chatTurns: () => db.prepare('SELECT * FROM ocean_chat_turns').all().map(decode),

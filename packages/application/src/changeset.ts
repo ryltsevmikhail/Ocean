@@ -30,15 +30,23 @@ export class CodingChangesetService {
       this.#deps.restored ||
       !task ||
       task.lease.ownerId !== this.#deps.ownerId ||
-      !codingCapabilities(task, access).includes(access.capability) ||
       !tx.participates(access.workspaceId, access.roomId, access.botId)
     )
       return null;
-    if (frozen)
-      return access.capability === 'changeset_read' ||
-        (task.devBotId === access.botId && access.capability === 'project_read')
+    if (frozen) {
+      // Disabled tasks keep immutable diff/review reads for their exact participants,
+      // but every capability is empty so no execution authority is revived.
+      const disabled = task.status === 'finalizing' || task.status === 'finalized',
+        participant =
+          access.capability === 'changeset_read'
+            ? task.reviewBotId === access.botId && task.reviewRoomId === access.roomId
+            : task.devBotId === access.botId && task.ownerRoomId === access.roomId;
+      return codingCapabilities(task, access).includes(access.capability) ||
+        (disabled && participant)
         ? task
         : null;
+    }
+    if (!codingCapabilities(task, access).includes(access.capability)) return null;
     if (
       access.capability !== 'project_read' ||
       access.botId !== task.devBotId ||
@@ -137,9 +145,17 @@ export class CodingChangesetService {
       return codingFailure(error instanceof CodingArtifactError ? error.code : 'recovery_required');
     }
   }
-  async capture(input: CodingAccess, requestId: string): Promise<CodingResult<Changeset>> {
+  capture(input: CodingAccess, requestId: string): Promise<CodingResult<Changeset>> {
+    if (!validConversationText(requestId, 128))
+      return Promise.resolve(codingFailure('invalid_input'));
+    return this.#snapshot(input, requestId);
+  }
+  /** Inspect the same verified tree without publishing an artifact or a capture receipt. */
+  preview(input: CodingAccess): Promise<CodingResult<Changeset>> {
+    return this.#snapshot(input);
+  }
+  async #snapshot(input: CodingAccess, requestId?: string): Promise<CodingResult<Changeset>> {
     const access = structuredClone(input);
-    if (!validConversationText(requestId, 128)) return codingFailure('invalid_input');
     const binding = JSON.stringify([
       access.taskId,
       access.workspaceId,
@@ -150,7 +166,10 @@ export class CodingChangesetService {
     ]);
     const receipt = this.#deps.store.atomic((tx) => {
       const task = this.#task(tx, access, true);
-      return task && access.botId === task.devBotId && access.capability === 'project_read'
+      return requestId !== undefined &&
+        task &&
+        access.botId === task.devBotId &&
+        access.capability === 'project_read'
         ? tx.captureReceipt(requestId)
         : null;
     });
@@ -163,7 +182,7 @@ export class CodingChangesetService {
       if (!task) return null;
       const worktree = tx.worktree(task.id);
       return worktree?.state === 'ready' && this.#deps.leases.owns(worktree.lease)
-        ? { task, worktree, receipt: tx.captureReceipt(requestId) }
+        ? { task, worktree, receipt: requestId === undefined ? null : tx.captureReceipt(requestId) }
         : null;
     });
     if (!selected) return codingFailure('coding_denied');
@@ -189,6 +208,7 @@ export class CodingChangesetService {
         worktree = tx.worktree(access.taskId);
       if (!task || worktree?.state !== 'ready' || !this.#deps.leases.owns(worktree.lease))
         return codingFailure('recovery_required');
+      if (requestId === undefined) return ok(snapshot);
       const old = tx.captureReceipt(requestId);
       if (old)
         return old.binding === binding && tx.changeset(old.hash)
@@ -197,6 +217,14 @@ export class CodingChangesetService {
       tx.putChangeset(snapshot);
       tx.putCaptureReceipt(requestId, { binding, hash: snapshot.hash });
       return ok(snapshot);
+    });
+  }
+  /** Latest stored immutable changeset for a disabled task; never captures or executes. */
+  history(access: CodingAccess): CodingResult<Changeset> {
+    return this.#deps.store.atomic((tx) => {
+      const task = this.#task(tx, access, true),
+        snapshot = task ? tx.latestChangeset(task.id) : null;
+      return task && snapshot ? ok(snapshot) : codingFailure('coding_denied');
     });
   }
   read(access: CodingAccess, hash: string): CodingResult<Changeset> {

@@ -14,7 +14,12 @@ export interface WorkspaceBackend {
   };
   read(path: string): Promise<string | null>;
   list(path: string): Promise<readonly FileEntry[]>;
-  write(path: string, content: string, expected: string | null): Promise<void>;
+  write(
+    path: string,
+    content: string,
+    expected: string | null,
+    signal?: AbortSignal,
+  ): Promise<void>;
   command(
     program: string,
     args: readonly string[],
@@ -47,6 +52,7 @@ export function blockedName(name: string): boolean {
     ['.git', 'node_modules', '.ssh', '.aws', '.config', '.npmrc', '.netrc', '.DS_Store'].includes(
       name,
     ) ||
+    /^\.ocean-(?:recovery-|.*\.tmp$)/.test(name) ||
     /^\.env(?:\.|$)/i.test(name) ||
     /\.(?:pem|key|p12|pfx)$/i.test(name) ||
     /^id_(?:rsa|ed25519)/.test(name)

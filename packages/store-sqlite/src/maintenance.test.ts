@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -55,4 +55,78 @@ it('snapshots WAL with exclusive maintenance ownership and preserves unresolved 
   expect(copy.prepare('SELECT outcome FROM tool_invocations_v1').get()?.outcome).toBe('uncertain');
   copy.close();
   db.close();
+});
+
+it.each(['before_begin', 'after_schema'])(
+  'full doctor reads schema, ownership and summary in one snapshot during %s owner admission',
+  (when) => {
+    const { path } = setup();
+    ownSqliteRuntime(path)();
+    const writer = new DatabaseSync(path);
+    let claimed = false;
+    const claim = () => {
+      if (claimed) return;
+      claimed = true;
+      writer.exec('BEGIN IMMEDIATE');
+      writer.prepare('INSERT INTO runtime_owner_v1 VALUES(1,?,?)').run('racing-owner', process.pid);
+      writer.prepare("INSERT INTO tool_invocations_v1 VALUES('late','synthetic','started')").run();
+      writer.exec('COMMIT');
+    };
+    const exec = DatabaseSync.prototype.exec,
+      prepare = DatabaseSync.prototype.prepare;
+    const begin = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
+      this: DatabaseSync,
+      sql,
+    ) {
+      if (this !== writer && sql === 'BEGIN' && when === 'before_begin') claim();
+      return exec.call(this, sql);
+    });
+    const read = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+      this: DatabaseSync,
+      sql,
+    ) {
+      if (this !== writer && when === 'after_schema' && sql.includes("name='runtime_owner_v1'"))
+        claim();
+      return prepare.call(this, sql);
+    });
+    try {
+      const inspection = inspectDatabase(path);
+      expect(claimed).toBe(true);
+      expect(inspection).toMatchObject(
+        when === 'before_begin'
+          ? { status: 'owner_busy' }
+          : { status: 'ok', summary: { pendingEffects: 0 } },
+      );
+      expect(writer.prepare('SELECT owner FROM runtime_owner_v1').get()?.['owner']).toBe(
+        'racing-owner',
+      );
+    } finally {
+      read.mockRestore();
+      begin.mockRestore();
+      writer.close();
+    }
+  },
+);
+
+it('does not report a bound zero-coding Desktop profile as a SQLite-only backup', async () => {
+  const { root, path } = setup();
+  const db = new DatabaseSync(path);
+  db.prepare("INSERT INTO meta(key,value) VALUES('desktop_assets_binding',?)").run(
+    JSON.stringify({ root: '/inert/test/source' }),
+  );
+  db.close();
+  await expect(snapshotDatabase(path, join(root, 'copy.sqlite'))).rejects.toThrow(
+    'desktop_assets_unavailable',
+  );
+});
+it('refuses SQLite-only backup of an admitted enrollment with unknown filesystem outcome', async () => {
+  const { root, path } = setup();
+  const db = new DatabaseSync(path);
+  db.prepare(
+    "INSERT INTO ocean_desktop_operations VALUES('enrollment','/synthetic/userData','started',NULL)",
+  ).run();
+  db.close();
+  await expect(snapshotDatabase(path, join(root, 'unknown-copy.sqlite'))).rejects.toThrow(
+    'desktop_assets_unavailable',
+  );
 });

@@ -1,0 +1,26 @@
+{
+  "name": "@ocean/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "bundle": "vue-tsc --noEmit -p tsconfig.json && vite build && rolldown src/host/preload.ts --platform node --external electron --format cjs --file dist/preload.cjs",
+    "start": "pnpm -w build && pnpm bundle && electron ."
+  },
+  "dependencies": {
+    "@runnets/tools-node": "workspace:*",
+    "vue": "3.5.44",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@vitejs/plugin-vue": "6.0.10",
+    "electron": "45.2.1",
+    "playwright-core": "1.64.1",
+    "rolldown": "1.2.16",
+    "vite": "8.3.5",
+    "vue-tsc": "3.3.14"
+  },
+  "main": "dist/types/host/main.js"
+}

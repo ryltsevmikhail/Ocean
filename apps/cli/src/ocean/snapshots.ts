@@ -1,3 +1,6 @@
+import { backupProfileV2, restoreProfileV2 } from './profile-snapshot-v2.js';
+import { readSnapshotManifest } from './snapshot-manifest.js';
+import type { ProfileBackupManifest } from '@runnets/domain';
 /** Snapshots contain history, never environment credentials or workspace files. */
 import {
   existsSync,
@@ -10,15 +13,8 @@ import {
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
-import { inspectDatabase, snapshotDatabase, type DatabaseSummary } from '@runnets/store-sqlite';
-import {
-  atomicPrivateJson,
-  absolutePath,
-  assertPrivate,
-  assertProfileFiles,
-  syncFile,
-} from './private-files.js';
-import { CLI_VERSION } from '../version.js';
+import { inspectDatabase, type DatabaseSummary } from '@runnets/store-sqlite';
+import { atomicPrivateJson, absolutePath, assertPrivate, syncFile } from './private-files.js';
 
 interface Snapshot {
   readonly format: 1;
@@ -42,56 +38,19 @@ function writePrivate(path: string, value: unknown): void {
   writeFileSync(path, JSON.stringify(value, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
   syncFile(path);
 }
-export async function backupProfile(profile: string, to: string): Promise<Snapshot> {
-  assertProfileFiles(profile);
-  if (!existsSync(join(profile, 'runtime.sqlite'))) throw new Error('profile_missing');
-  createDirectory(to);
-  try {
-    const path = join(to, 'runtime.sqlite');
-    const summary = await snapshotDatabase(join(profile, 'runtime.sqlite'), path);
-    syncFile(path);
-    const manifest: Snapshot = {
-      format: 1,
-      createdAt: new Date().toISOString(),
-      cli: CLI_VERSION,
-      node: process.version,
-      sha256: digest(path),
-      bytes: readFileSync(path).length,
-      summary,
-    };
-    writePrivate(join(to, 'snapshot.json'), manifest);
-    syncFile(to);
-    syncFile(dirname(to));
-    // Receipt is informational, never used as proof a backup remains valid.
-    try {
-      atomicPrivateJson(join(profile, 'last-backup.json'), {
-        createdAt: manifest.createdAt,
-        sha256: manifest.sha256,
-      });
-    } catch {
-      /* Snapshot remains verified. */
-    }
-    return manifest;
-  } catch (error) {
-    rmSync(to, { recursive: true, force: true });
-    throw error;
-  }
-}
-export function restoreProfile(from: string, to: string): Snapshot {
+function restoreProfileLegacy(from: string, to: string, manifest: Snapshot): Snapshot {
   absolutePath(from);
   absolutePath(to);
   assertPrivate(from, true);
   assertPrivate(join(from, 'snapshot.json'), false);
   assertPrivate(join(from, 'runtime.sqlite'), false);
-  let manifest: Snapshot;
   try {
-    manifest = JSON.parse(readFileSync(join(from, 'snapshot.json'), 'utf8')) as Snapshot;
     if (
       manifest.format !== 1 ||
       !/^[a-f0-9]{64}$/.test(manifest.sha256) ||
       !Number.isSafeInteger(manifest.bytes) ||
       manifest.bytes <= 0 ||
-      ![5, 6, 7].includes(manifest.summary.schema) ||
+      ![5, 6, 7, 8, 9, 10, 11, 12, 13].includes(manifest.summary.schema) ||
       !Number.isFinite(Date.parse(manifest.createdAt))
     )
       throw new Error();
@@ -110,6 +69,7 @@ export function restoreProfile(from: string, to: string): Snapshot {
     if (
       inspection.status !== 'ok' ||
       inspection.summary.externalCodingAssets ||
+      inspection.summary.externalDesktopAssets ||
       JSON.stringify(inspection.summary) !== JSON.stringify(manifest.summary)
     )
       throw new Error('invalid_backup');
@@ -129,5 +89,32 @@ export function restoreProfile(from: string, to: string): Snapshot {
   } catch (error) {
     rmSync(to, { recursive: true, force: true });
     throw error;
+  }
+}
+
+/** New backups bind the full selected graph; format 1 remains readable as metadata-only evidence. */
+export async function backupProfile(
+  profile: string,
+  to: string,
+  options?: { managedDirectory?: string },
+): Promise<Extract<ProfileBackupManifest, { format: 2 }>> {
+  return backupProfileV2(profile, to, options?.managedDirectory);
+}
+export function restoreProfile(from: string, to: string): ProfileBackupManifest {
+  absolutePath(from);
+  assertPrivate(from, true);
+  assertPrivate(join(from, 'snapshot.json'), false);
+  try {
+    const manifest = readSnapshotManifest(from) as Snapshot | { format: 2 };
+    return manifest.format === 2
+      ? restoreProfileV2(from, to)
+      : restoreProfileLegacy(from, to, manifest);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      ['destination_exists', 'invalid_input', 'insecure_permissions'].includes(error.message)
+    )
+      throw error;
+    throw Error('invalid_backup');
   }
 }

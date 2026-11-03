@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, openSync, closeSync, readFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -84,9 +85,14 @@ it('backup keeps schema7 task/rights; restored runtime refuses all coding author
   const created = await service.start(input, { confirm: async () => true });
   expect(created.ok).toBe(true);
   store.close();
+  writeFileSync(
+    join(profile, 'coding-projects.json'),
+    JSON.stringify([{ id: 'registered', root: '/project', testPresets: [], mounts: [] }]),
+    { mode: 0o600 },
+  );
   const snapshot = join(root, 'backup'),
     restored = join(root, 'restored');
-  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(7);
+  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(14);
   restoreProfile(snapshot, restored);
   const copy = openSqliteStore({ path: join(restored, 'runtime.sqlite') });
   expect(copy.coding.atomic((tx) => tx.task('task'))).toEqual(created.ok ? created.value : null);
@@ -128,7 +134,7 @@ it('still backs up and restores a released schema5 snapshot without migrating th
     restored = join(root, 'restored');
   expect((await backupProfile(profile, backup)).summary.schema).toBe(5);
   restoreProfile(backup, restored);
-  for (const file of [path, join(restored, 'runtime.sqlite')]) {
+  for (const file of [path, join(restored, 'restore-origin', 'runtime.sqlite')]) {
     const check = new DatabaseSync(file, { readOnly: true });
     expect(check.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe(
       '5',

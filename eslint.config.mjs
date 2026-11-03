@@ -27,7 +27,7 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['*/src/*', '@runnets/*/*'],
+              group: ['*/src/*', '@runnets/*/*', '!@runnets/tools-node/local-runtime-client'],
               message:
                 'Import another package through its public entry point (@runnets/<name>), not its internals.',
             },
@@ -39,7 +39,15 @@ export default tseslint.config(
   {
     // Tests and root config files are intentionally outside the build projects,
     // so they are linted without type information instead of failing to parse.
-    files: ['**/*.test.ts', '*.config.ts', 'eslint.config.mjs'],
+    files: [
+      '**/*.test.ts',
+      '**/test-fixtures/**/*.ts',
+      '*.config.ts',
+      'apps/desktop/vite.config.ts',
+      'apps/desktop/qa/*.mjs',
+      'examples/local-runtime-client.mjs',
+      'eslint.config.mjs',
+    ],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       parserOptions: { projectService: false, project: false },

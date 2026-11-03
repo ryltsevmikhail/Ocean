@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Радостный">
+  <defs>
+    <radialGradient id="clay" cx="31%" cy="22%" r="85%">
+      <stop offset="0" stop-color="var(--lit, #ffcb35)"/>
+      <stop offset=".31" stop-color="var(--soft, #ffc317)"/>
+      <stop offset=".60" stop-color="var(--face, #FFBF09)"/>
+      <stop offset=".93" stop-color="var(--shade, #b08406)"/>
+      <stop offset="1" stop-color="var(--deep, #785a04)"/>
+    </radialGradient>
+    <radialGradient id="nose-clay" cx="30%" cy="18%" r="90%">
+      <stop offset="0" stop-color="var(--lit, #ffcb35)"/>
+      <stop offset=".31" stop-color="var(--soft, #ffc317)"/>
+      <stop offset=".60" stop-color="var(--face, #FFBF09)"/>
+      <stop offset=".93" stop-color="var(--shade, #b08406)"/>
+      <stop offset="1" stop-color="var(--deep, #785a04)"/>
+    </radialGradient>
+    <radialGradient id="ivory" cx="31%" cy="22%" r="85%">
+      <stop offset="0" stop-color="#fff5d8"/>
+      <stop offset=".54" stop-color="#f7e9c8"/>
+      <stop offset=".84" stop-color="#e0cfb1"/>
+      <stop offset="1" stop-color="#b5a290"/>
+    </radialGradient>
+    <radialGradient id="pupil" cx="31%" cy="22%" r="85%">
+      <stop offset="0" stop-color="#494047"/>
+      <stop offset=".56" stop-color="#302b33"/>
+      <stop offset="1" stop-color="#1e1b23"/>
+    </radialGradient>
+    <linearGradient id="cavity" x2="0" y2="1">
+      <stop offset="0" stop-color="#291827"/>
+      <stop offset=".55" stop-color="#3d2235"/>
+      <stop offset="1" stop-color="#674153"/>
+    </linearGradient>
+    <filter id="feather" x="-20%" y="-65%" width="140%" height="240%">
+      <feGaussianBlur stdDeviation=".8"/>
+    </filter>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="2" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  2 2 2 0 -2.55"/>
+    </filter>
+    <clipPath id="silhouette">
+      <path d="M47 6C67 4 83 13 91 34C99 57 96 78 81 87C65 97 32 97 16 86C1 76 0 60 5 42C11 20 25 8 47 6Z"/>
+    </clipPath>
+    <radialGradient id="contact">
+      <stop stop-color="#201329" stop-opacity=".64"/>
+      <stop offset=".55" stop-color="#201329" stop-opacity=".32"/>
+      <stop offset="1" stop-color="#201329" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="eye-0">
+      <ellipse cx="0" cy="0" rx="10.5" ry="9"/>
+    </clipPath>
+    <clipPath id="eye-1">
+      <ellipse cx="0" cy="0" rx="10.5" ry="9"/>
+    </clipPath>
+  </defs>
+  <g id="head">
+    <g id="face">
+      <path d="M47 6C67 4 83 13 91 34C99 57 96 78 81 87C65 97 32 97 16 86C1 76 0 60 5 42C11 20 25 8 47 6Z" fill="url(#clay)"/>
+      <g clip-path="url(#silhouette)" class="grain">
+        <rect width="96" height="96" filter="url(#grain)" opacity=".08"/>
+      </g>
+    </g>
+    <g id="expression">
+      <g id="mouth">
+        <use href="#smile-line" transform="translate(0 1.2)" fill="none" stroke="#ffdfbd" stroke-opacity=".2" stroke-width="1.4"/>
+        <path d="M17 54C31 61 57 64 78 50C73 72 60 83 46 82C31 81 21 68 17 54Z" data-smile="M16 51C32 60 58 62 79 47C75 74 60 86 45 85C29 83 18 66 16 51Z" id="smile-line" fill="url(#cavity)"/>
+      </g>
+      <g id="eyes">
+        <g data-eye="">
+          <g transform="translate(30 43) rotate(-10)">
+            <ellipse cx="0" cy="1.7" rx="12.5" ry="11" fill="url(#contact)"/>
+            <ellipse cx="0" cy="0" rx="10.5" ry="9" fill="url(#ivory)" data-sclera=""/>
+            <g clip-path="url(#eye-0)">
+              <g data-pupil="">
+                <ellipse cx="1" cy="2" rx="5.67" ry="6.1803" fill="url(#pupil)"/>
+                <ellipse cx="-0.4175" cy="-0.5515" rx="1.2474" ry="1.134" fill="#fff4dc" class="glint"/>
+              </g>
+            </g>
+          </g>
+        </g>
+        <path data-crease="" d="M22.125 43Q30 47 37.875 42" fill="none" stroke="var(--deep, #785a04)" stroke-width="3.3" stroke-linecap="round" opacity="0"/>
+        <g data-eye="">
+          <g transform="translate(64 42) rotate(10)">
+            <ellipse cx="0" cy="1.7" rx="12.5" ry="11" fill="url(#contact)"/>
+            <ellipse cx="0" cy="0" rx="10.5" ry="9" fill="url(#ivory)" data-sclera=""/>
+            <g clip-path="url(#eye-1)">
+              <g data-pupil="">
+                <ellipse cx="-1" cy="2" rx="5.67" ry="6.1803" fill="url(#pupil)"/>
+                <ellipse cx="-2.4175" cy="-0.5515" rx="1.2474" ry="1.134" fill="#fff4dc" class="glint"/>
+              </g>
+            </g>
+          </g>
+        </g>
+        <path data-crease="" d="M56.125 42Q64 46 71.875 41" fill="none" stroke="var(--deep, #785a04)" stroke-width="3.3" stroke-linecap="round" opacity="0"/>
+      </g>
+      <g id="brows" fill="none" stroke-linecap="round">
+        <path d="M18 29.7Q22 16 31.2 19.3C34.3 20.5 34.1 24 31 24Q24.5 22.2 20 31.2Q17.6 32 18 29.7Z" transform="translate(.5 1.4)" fill="var(--deep, #785a04)" opacity=".58" filter="url(#feather)"/>
+        <path d="M18 29.7Q22 16 31.2 19.3C34.3 20.5 34.1 24 31 24Q24.5 22.2 20 31.2Q17.6 32 18 29.7Z" fill="url(#clay)"/>
+        <path d="M61 21.7Q69 15 75.2 24.3C78.3 25.5 78.1 29 75 29Q71.5 21.2 63 23.2Q60.6 24 61 21.7Z" transform="translate(.5 1.4)" fill="var(--deep, #785a04)" opacity=".58" filter="url(#feather)"/>
+        <path d="M61 21.7Q69 15 75.2 24.3C78.3 25.5 78.1 29 75 29Q71.5 21.2 63 23.2Q60.6 24 61 21.7Z" fill="url(#clay)"/>
+      </g>
+      <g id="nose">
+        <ellipse cx="47.6" cy="49.8" rx="9.182" ry="6.952" fill="url(#contact)"/>
+        <ellipse cx="47" cy="48" rx="7.182" ry="5.152" fill="url(#nose-clay)"/>
+      </g>
+    </g>
+  </g>
+</svg>

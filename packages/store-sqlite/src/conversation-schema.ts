@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { ownerBusy } from './maintenance-owner.js';
 
 export const CONVERSATION_TABLES = [
   'ocean_workspace',
@@ -54,20 +55,6 @@ export function migrateConversations(db: DatabaseSync): void {
 
 /** A known live or unverifiable owner must never have its schema changed underneath it. */
 export function assertMigrationOwnerAbsent(db: DatabaseSync): void {
-  const exists = db
-    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='runtime_owner_v1'")
-    .get();
-  if (exists === undefined) return;
-  const row = db.prepare('SELECT pid FROM runtime_owner_v1 WHERE singleton=1').get();
-  if (row === undefined) return;
-  const pid = row['pid'];
-  if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0)
-    throw new Error('Schema migration refused: runtime owner is unverified');
-  try {
-    process.kill(pid, 0);
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ESRCH') return;
-    throw new Error('Schema migration refused: runtime owner is unverified');
-  }
-  throw new Error('Schema migration refused: runtime owner is live');
+  if (ownerBusy(db))
+    throw new Error('Schema migration refused: runtime owner is live or unverified');
 }

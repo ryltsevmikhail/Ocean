@@ -1,21 +1,56 @@
-# Desktop client integration
+# Desktop clients and runtime integration
 
-How an out-of-repository desktop application attaches to this runtime, and what
-exactly it is expected to call. The client behavior below was inspected in
-the shipped Linux driver; an end-to-end desktop handshake has not been
-qualified. No client source is vendored into this repository.
+## In-repository Ocean Desktop
 
-## What the client is
+The Linux Electron/Vue client in `apps/desktop` shares the local runtime with the standard room TUI. Initialize the private profile and workspace with the CLI first. Start the foreground owner in one terminal, then launch Desktop in a second terminal with the same canonical profile and runtime directory.
 
-- The desktop application is **RunneBot** (`runnebot` 0.1.111, Electron, Linux
-  x86_64), distributed as `runnebot-0.1.111-linux-x64.tar.gz`.
-- RunneBot is a rebranded fork of **OpenMausBot** (Electron + React, MIT). Its
-  `package.json` declares `RunneBot: a local-first chat app for running a team of
-AI agents (fork of OpenMausBot)`, with `repository → milind-soni/OpenMausBot`
-  and `homepage → Ryltsevmg/runne-os`.
-- The desktop side is owned by other projects (`Ryltsevmg/runne-os` for the
-  fork lineage and the OS distribution). Ocean does **not** contain UI,
-  windowing, packaging or OS integration, and must not grow them.
+```sh
+pnpm ocean runtime start --profile /absolute/private/profile --json
+# Another terminal
+OCEAN_DESKTOP_PROFILE=/absolute/private/profile pnpm --filter @ocean/desktop start
+```
+
+For an isolated window, append `--user-data-dir=/absolute/private/desktop` to the start command. Without an override Desktop selects `<userData>/conversation/profile`, the profile path of the imported client. It connects only. An absent profile requires explicit CLI initialization, an absent owner requires explicit start, and authentication or endpoint errors are shown in the window. The provider configuration belongs to the foreground owner. The profile panel shows its authenticated profile hash, instance UUID, protocol and state.
+
+The sandboxed renderer sends validated room and attachment commands to Electron main. Only the file-backed main frame of that window can invoke them. Main authenticates through the public `@runnets/tools-node/local-runtime-client` export and closes each bounded request connection when it finishes. Electron 45.2.1's embedded Node 24.22.1 was exercised with this client export on Linux. The owner and workspace build continue to use Node 26. The renderer receives no connection descriptor, provider configuration or arbitrary path/exec interface.
+
+A send displays the durable message/run receipt as soon as the owner acknowledges it. A group note has no run. The window follows scoped room/run watermarks, pages committed history and runs using the authoritative turn ID (which need not match the run ID), and displays read failures separately from admission. An uncertain acknowledgement in a living window retains the original UUID, recipient, text and attachment IDs for the explicit retry button. Every automatic recovery success passes the original prepared content through binding-checked admission. The locally persisted prepared body permits an exact retry even when attachment bytes disappear. Missing or corrupt preparation evidence keeps the original UUID and draft unresolved; an identity-only owner receipt cannot establish content agreement. A local or owner binding conflict keeps that same pending command, including across later preparation failures. A first-attempt refusal such as `context_limit` leaves the draft and recipient editable. Reopening the room reads the owner's committed history and runs. Closing the window detaches. The cancel button identifies a run and version and requests cancellation against that binding. The run projection reports the actual outcome. Room tasks show performer and pending decision IDs. Inspect and vote on the complete operation in the room TUI or the public client example.
+
+### Runtime-owned attachments
+
+File selection, paste and drop retain four files of at most 10 MiB each. Electron
+main uses the authenticated `DesktopAttachmentClient` for chunked import, exact
+preparation and authorized reads. Runtime owns canonical blobs, metadata and
+request receipts. Native image/text previews and save dialogs remain in the host;
+exports use the exact bytes checked by the runtime/client digest path.
+
+The original default and alternate stores are explicit migration sources. The
+owner copies and verifies them into a new private profile store, then commits the
+binding; original directories stay untouched and cannot become authority again.
+Missing required data and unknown migration/preparation outcomes refuse. Relocating
+the profile or changing an enrolled userData does not silently select another
+store. See [Desktop ownership and capture](desktop-assets.md) for exact namespaces,
+protocol and supported/refused legacy states. CLI format-1 backup refuses bound
+Desktop assets; full format 2 and full restore remain open.
+
+### Historical Linux GUI qualification (before 7.7)
+
+```sh
+pnpm build
+pnpm --filter @ocean/desktop bundle
+node apps/desktop/qa/smoke.mjs
+node apps/desktop/qa/entrypoint.mjs
+```
+
+These historical results do not qualify the new runtime-owned asset layout. The scripts need separate requalification; no current installed or open Desktop was changed for 7.7. The Wayland drivers create private temporary userData, workspace, runtime directory and profile. The explicitly started owner uses a deterministic in-process HTTP replacement and a fixture-only key. The entrypoint driver launches the actual `pnpm --filter @ocean/desktop start` command twice. Only the disposable window enables a loopback debugging port. The driver drops a committed attachment-send acknowledgement, damages and removes the local attachment receipt while retaining the draft, then recovers the original admission from the restored frozen binding after local attachment bytes go missing, observes the same receipt from a separate SDK process and starts the standard room TUI in a PTY. It closes the window while generation waits, releases the provider and verifies one answer and one dispatch across clients and a reopened GUI. A separate GUI case fills room history, verifies a context refusal causes zero dispatches, then edits and submits a shorter turn. Transfer QA uses synthetic file inputs, paste/drop events and an intercepted save dialog, and compares the exported image and binary bytes. Physical OS clipboard, interactive file pickers, installed app and live providers require separate qualification.
+
+## External RunneBot / ACP client
+
+The following contract describes the separately inspected **RunneBot**
+(`runnebot` 0.1.111, Electron/React, Linux x86_64), an MIT OpenMausBot fork from
+`Ryltsevmg/runne-os`. That client's source is not vendored here and its ACP
+handshake has not been qualified end-to-end. Its external-engine contract is
+separate from the imported Ocean Desktop host above.
 
 ## How a desktop client attaches an external engine
 

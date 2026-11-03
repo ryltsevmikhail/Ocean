@@ -33,6 +33,12 @@ export function changesetStorage(db: DatabaseSync): CodingArtifactTransaction {
     ON CONFLICT(task_id) DO UPDATE SET state=excluded.state,payload=excluded.payload`,
       ).run(value.taskId, value.root, value.state, JSON.stringify(value));
     },
+    latestChangeset: (taskId) => {
+      const row = db
+        .prepare('SELECT hash FROM ocean_changesets WHERE task_id=? ORDER BY rowid DESC LIMIT 1')
+        .get(taskId);
+      return row ? changesetStorage(db).changeset(String(row['hash'])) : null;
+    },
     changeset: (hash) => {
       const row = db.prepare('SELECT * FROM ocean_changesets WHERE hash=?').get(hash);
       if (!row) return null;

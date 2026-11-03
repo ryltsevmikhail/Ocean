@@ -13,12 +13,14 @@ import type { ChatMessage, ProviderPort } from './provider.js';
 import { roomContext } from './room-context.js';
 
 export interface DirectChatRequest {
+  readonly taskId?: string;
   readonly workspaceId: string;
   readonly requestId: string;
   readonly roomId: string;
   readonly text: string;
   readonly to?: string | undefined;
 }
+export type ChatAdmissionMode = 'admit' | 'existing_only';
 export type ChatAdmission =
   | { readonly turn: ChatTurn; readonly fresh: boolean; readonly messages: readonly ChatMessage[] }
   | { readonly record: ConversationMessage };
@@ -28,11 +30,13 @@ export function admitChat(
   deps: ConversationServiceDeps,
   request: DirectChatRequest,
   provider: ProviderPort | null,
+  policy: { readonly mode: ChatAdmissionMode; readonly codingAvailable: boolean },
 ): ConversationResult<ChatAdmission> {
   if (
     ![request.workspaceId, request.requestId, request.roomId].every((id) =>
       validConversationText(id, 128),
     ) ||
+    (request.taskId !== undefined && !validConversationText(request.taskId, 128)) ||
     !validConversationText(request.text, 16384)
   )
     return conversationFailure('invalid_input');
@@ -43,6 +47,7 @@ export function admitChat(
     request.roomId,
     request.text,
     ...(request.to === undefined ? [] : [request.to]),
+    ...(request.taskId === undefined ? [] : [{ codingTaskId: request.taskId }]),
   ]);
   return deps.store.atomic((tx) => {
     const receipt = tx.receipt(request.requestId);
@@ -54,10 +59,15 @@ export function admitChat(
       if (turn === null) throw new Error('chat receipt has no turn');
       return ok({ turn, fresh: false, messages: [] });
     }
+    if (policy.mode === 'existing_only') return conversationFailure('admission_closed');
+    if (request.taskId !== undefined && !policy.codingAvailable)
+      return conversationFailure('invalid_input');
     if (tx.workspace()?.id !== request.workspaceId)
       return conversationFailure('workspace_conflict');
     const room = tx.room(request.roomId);
     if (room === null) return conversationFailure('unknown_room');
+    if (request.taskId !== undefined && tx.roomPolicy(room.id)?.mode === 'text_only')
+      return conversationFailure('recovery_required');
     const address = roomAddress(request.text, request.to);
     if (!address.ok) return address;
     const memberIds = room.kind === 'direct' ? [room.botId] : room.botIds;
@@ -70,6 +80,8 @@ export function admitChat(
     if (address.value !== null && selected === null) return conversationFailure('unknown_bot');
     if (selected !== null && !memberIds.includes(selected.id))
       return conversationFailure('not_member');
+    if (selected === null && request.taskId !== undefined)
+      return conversationFailure('invalid_input');
     if (selected === null) {
       const record: ConversationMessage = {
         id: deps.nextId(),
@@ -102,6 +114,7 @@ export function admitChat(
     const messageId = deps.nextId();
     const seq = tx.nextSequence(room.id);
     const turn: ChatTurn = {
+      ...(request.taskId === undefined ? {} : { codingTaskId: request.taskId }),
       id,
       workspaceId: request.workspaceId,
       roomId: room.id,

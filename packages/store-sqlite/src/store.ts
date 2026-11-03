@@ -1,5 +1,25 @@
+import { desktopAssetStore } from './desktop-assets.js';
+import { restoreOriginStore } from './restore-origin.js';
+import type { RestoreOriginStore } from '@runnets/application';
+import type { ProfileRebindStore } from '@runnets/application';
+import { profileRebindStore } from './profile-rebind.js';
+import type { DesktopAssetStore } from '@runnets/application';
+import { profileReads, type ProfileReads } from './profile-reads.js';
+import { openEndpointProof, type EndpointProof } from './endpoint-proof.js';
+import { SqliteOwnerDecisions } from './owner-decisions.js';
+import { SqliteCodingApplyResolutionStore } from './coding-apply-resolution.js';
+import type { CodingApplyResolutionStore } from '@runnets/application';
+import { SqliteCodingApplyStore } from './coding-apply-storage.js';
+import type { CodingApplyStore } from '@runnets/application';
+import { SqliteCodingReviewStore } from './coding-review-storage.js';
+import type { CodingReviewStore } from '@runnets/application';
+import { SqliteCodingTestEvidenceStore } from './coding-test-evidence.js';
+import type { CodingTestEvidenceStore } from '@runnets/application';
+import { SqliteCodingApprovalStore } from './coding-approval-storage.js';
 import { SqliteCodingStore } from './coding-store.js';
-import type { CodingStore } from '@runnets/application';
+import type { CodingApprovalStore, CodingStore } from '@runnets/application';
+import { finalizationStore } from './coding-finalization-store.js';
+import type { CodingFinalizationStore } from '@runnets/application';
 /**
  * Public factory for the durable SQLite store.
  *
@@ -10,6 +30,7 @@ import type { CodingStore } from '@runnets/application';
  */
 
 import type {
+  OwnerDecisionStore,
   CommandDedupPort,
   EventLogPort,
   IdGenerator,
@@ -19,6 +40,8 @@ import type {
 import type { TaskRunId } from '@runnets/domain';
 import type { DatabaseSync } from 'node:sqlite';
 
+import { roomRuntimeReads } from './room-runtime-reads.js';
+import type { RoomRunReadPort } from '@runnets/application';
 import { SqliteConversationStore } from './conversations.js';
 
 import { SqliteCheckpointStore, type CheckpointStore } from './checkpoints.js';
@@ -39,7 +62,20 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  readonly restoration: RestoreOriginStore;
+  readonly rebind: ProfileRebindStore;
+  readonly desktopAssets: DesktopAssetStore;
+  openProfileReads(ownerId: string): ProfileReads;
+  openEndpointProof(): EndpointProof;
+  readonly ownerDecisions: OwnerDecisionStore;
+  openRoomReads(now: () => number): RoomRunReadPort;
   readonly coding: CodingStore;
+  readonly finalization: CodingFinalizationStore;
+  readonly codingApplications: CodingApplyStore;
+  readonly codingResolutions: CodingApplyResolutionStore;
+  readonly codingReviews: CodingReviewStore;
+  readonly codingEvidence: CodingTestEvidenceStore;
+  readonly codingApprovals: CodingApprovalStore;
   readonly conversations: ConversationStore;
   readonly log: EventLogPort;
   readonly dedup: CommandDedupPort;
@@ -71,19 +107,36 @@ export function openSqliteStore(options: OpenSqliteStoreOptions): SqliteStore {
 }
 
 function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore {
+  // SQLite indexes equal keys by rowid, so a reverse seek finds the latest matching preset.
+  db.exec(`CREATE INDEX IF NOT EXISTS ocean_evidence_preset
+    ON ocean_coding_test_evidence(task_id,json_extract(payload,'$.presetId'))`);
   const generator = ids ?? createDurableIdGenerator(db);
   const log = new SqliteEventLog(db, generator);
   const dedup = new SqliteCommandDedup(db);
   const checkpoints = new SqliteCheckpointStore(db, log);
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
+  const tools = new SqliteToolJournal(db);
   return {
+    restoration: restoreOriginStore(db),
+    rebind: profileRebindStore(db, tools),
+    desktopAssets: desktopAssetStore(db),
+    openProfileReads: (ownerId) => profileReads(db, ownerId),
+    openEndpointProof: () => openEndpointProof(db),
+    ownerDecisions: new SqliteOwnerDecisions(db),
+    openRoomReads: (now) => roomRuntimeReads(db, now),
     coding: new SqliteCodingStore(db),
+    finalization: finalizationStore(db, tools),
+    codingApplications: new SqliteCodingApplyStore(db),
+    codingResolutions: new SqliteCodingApplyResolutionStore(db),
+    codingReviews: new SqliteCodingReviewStore(db),
+    codingEvidence: new SqliteCodingTestEvidenceStore(db),
+    codingApprovals: new SqliteCodingApprovalStore(db),
     conversations: new SqliteConversationStore(db),
     log,
     dedup,
     checkpoints,
-    tools: new SqliteToolJournal(db),
+    tools,
     recover(taskRunId: TaskRunId): Promise<RecoveryResult> {
       return recovery.recover(taskRunId);
     },

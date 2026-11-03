@@ -1,3 +1,12 @@
+import { routeProfileCommand } from './remote-command.js';
+import { privatePath } from './private-files.js';
+import { profileDirectory } from './profile.js';
+import { codingProgress } from './coding-progress.js';
+import { readFileSync, statSync } from 'node:fs';
+import { registeredCodingTools } from './coding-project-host.js';
+import { registerCodingProject } from './coding-projects.js';
+import { terminalCodingConfirm } from './coding-command.js';
+import { runCodingCommand } from './coding-command.js';
 import { checkRestoredAccess } from './restored.js';
 import { runOperations } from './operations.js';
 import { runReviewCommand, terminalReviewApproval } from './review.js';
@@ -8,9 +17,10 @@ import { createProviderFromEnv } from '../engine/provider.js';
 import { terminalText } from '../tui/approval.js';
 import { canonicalWorkspace, openOceanProfile } from './profile.js';
 import { oceanArguments, required } from './arguments.js';
-import type { Runtime } from '../runtime.js';
+import type { Runtime, RuntimeOptions } from '../runtime.js';
 
 export interface OceanCommandOptions {
+  readonly codingTools?: RuntimeOptions['codingTools'];
   readonly restoredApproval?: () => Promise<boolean>;
   readonly input?: Readable;
   readonly reviewApproval?: ReviewApprovalPort;
@@ -30,10 +40,28 @@ export async function runOceanCommand(
   try {
     const args = oceanArguments(argv);
     const { command, positional, flags } = args;
+    if (command === 'runtime') {
+      const { runRuntimeCommand } = await import('./runtime-command.js');
+      return await runRuntimeCommand(args, output);
+    }
+    if (command === 'rebind') {
+      const { runRebindCommand } = await import('./rebind-command.js');
+      return await runRebindCommand(args, options.input ?? process.stdin, output, error);
+    }
     if (args.bots.length > 1 && !(command === 'room' && positional[0] === 'group'))
       throw new Error('Repeated --bot is only valid for group creation');
+    if (process.env['RUNNE_DB'] !== undefined || process.env['RUNNE_MODE'] !== undefined)
+      throw Error('invalid_input');
+    // An insecure or missing doctor target has only static diagnostic evidence.
+    const diagnostic =
+      command === 'doctor' &&
+      (args.staticDoctor || !privatePath(profileDirectory(flags.get('profile')), true));
+    if (command !== 'tui' && !diagnostic) {
+      const remote = await routeProfileCommand(args, options.input ?? process.stdin, output, error);
+      if (remote !== null) return remote;
+    }
     if (['doctor', 'backup', 'restore'].includes(command)) {
-      const result = await runOperations(args);
+      const result = await runOperations(diagnostic ? { ...args, staticDoctor: true } : args);
       output.write(JSON.stringify({ version: 1, ok: true, data: result.data }) + '\n');
       return result.code;
     }
@@ -48,10 +76,19 @@ export async function runOceanCommand(
       return await runDirectTui({
         profile: flags.get('profile'),
         roomId: required(flags, 'room'),
-        provider: options.provider,
+        ...(flags.has('task') ? { taskId: required(flags, 'task') } : {}),
+        input: options.input ?? process.stdin,
+        output,
       });
     }
-    runtime = openOceanProfile(flags.get('profile'), command === 'init');
+    runtime = openOceanProfile(flags.get('profile'), command === 'init', {
+      requireUnpublished: true,
+      ...(options.codingTools
+        ? { codingTools: options.codingTools }
+        : command === 'send' && flags.has('task')
+          ? { codingTools: registeredCodingTools(flags.get('profile')) }
+          : {}),
+    });
     await runtime.ready;
     const requestId = flags.get('request-id') ?? randomUUID();
     const workspaceId = 'ws_ocean';
@@ -64,7 +101,26 @@ export async function runOceanCommand(
       return result.value;
     };
     let data: unknown;
-    if (command === 'init') {
+    if (command === 'project' && positional[0] === 'add') {
+      const config = required(flags, 'config');
+      if (statSync(config).size > 1048576) throw Error('project configuration too large');
+      data = await registerCodingProject(
+        flags.get('profile'),
+        JSON.parse(readFileSync(config, 'utf8')) as unknown,
+        terminalCodingConfirm,
+      );
+    } else if (command === 'coding') {
+      data = await runCodingCommand(
+        runtime,
+        args,
+        requestId,
+        args.positional[0] === 'review'
+          ? options.provider === undefined
+            ? createProviderFromEnv(process.env)
+            : options.provider
+          : null,
+      );
+    } else if (command === 'init') {
       data = execute({
         type: 'BindWorkspace',
         requestId: flags.get('request-id') ?? 'ocean-init',
@@ -160,10 +216,12 @@ export async function runOceanCommand(
           requestId,
           text: required(flags, 'text'),
           to: flags.get('to'),
+          ...(flags.has('task') ? { taskId: required(flags, 'task') } : {}),
           provider:
             options.provider === undefined ? createProviderFromEnv(process.env) : options.provider,
           signal: controller.signal,
           emit: (update) => {
+            codingProgress(update, error);
             if (!json && update.sessionUpdate === 'agent_message_chunk')
               error.write(terminalText(update.content.text));
           },
@@ -193,7 +251,15 @@ export async function runOceanCommand(
         JSON.stringify({ version: 1, ok: false, error: { code: safe, message: safe } }) + '\n',
       );
     else error.write(terminalText(message) + '\n');
-    return ['owner_busy', 'room_busy'].includes(safe)
+    return [
+      'maintenance_required',
+      'runtime_draining',
+      'owner_busy',
+      'room_busy',
+      'runtime_absent',
+      'runtime_unreachable',
+      'endpoint_exists',
+    ].includes(safe)
       ? 3
       : [
             'provider_unavailable',

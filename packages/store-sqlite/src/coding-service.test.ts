@@ -76,7 +76,7 @@ function setup(
     devBotId: dev.value.data.id,
     reviewBotId: review.value.data.id,
     devCapabilities: ['project_read', 'propose_write', 'run_test_preset'] as const,
-    testPresets: [{ id: 'test', program: 'pnpm', args: ['test'], cwd: '.' }],
+    testPresets: [{ id: 'test', program: 'pnpm', args: ['test'], cwd: '.' as const }],
   };
   return {
     service,
@@ -90,6 +90,32 @@ function setup(
   };
 }
 for (const kind of ['memory', 'sqlite'] as const) {
+  it(
+    kind + ' an old start receipt cannot authorize or appear as a task owned by a new epoch',
+    async () => {
+      const s = setup(kind);
+      expect((await s.service.start(s.input, { confirm: async () => true })).ok).toBe(true);
+      const fresh = new CodingTaskService({
+        store: s.coding,
+        leases: s.leases,
+        journal: s.journal,
+        ownerId: 'new-epoch',
+        clock: { now: () => new Date() },
+        projects: {
+          inspect: async () => {
+            throw Error('old request must not inspect projects');
+          },
+        },
+      });
+      expect(
+        await fresh.start(s.input, {
+          confirm: async () => {
+            throw Error('old request must not ask for new authority');
+          },
+        }),
+      ).toMatchObject({ ok: false, error: { code: 'coding_denied' } });
+    },
+  );
   it(kind + ' scopes immutable task rights; profiles/role prose alone grant nothing', async () => {
     const s = setup(kind);
     const access = {
@@ -239,6 +265,7 @@ for (const kind of ['memory', 'sqlite'] as const) {
               if (tx.task('task')) throw Error('injected commit failure');
               return value;
             }),
+          projectHeld: () => false,
         },
         leases: s.leases,
         journal: s.journal,

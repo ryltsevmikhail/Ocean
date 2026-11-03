@@ -61,7 +61,6 @@ it('rejects command identity reuse with another task, actor, version or payload'
   for (const variant of variants) expect((await service.execute(variant)).ok).toBe(false);
   expect(await log.load(taskRunId('tr_other'))).toHaveLength(0);
 });
-
 it('rolls back events if the atomic receipt insert fails', async () => {
   const { db, log, service } = setup();
   db.exec(`CREATE TRIGGER reject_receipt BEFORE INSERT ON command_receipts
@@ -208,4 +207,94 @@ it('binds the decision to a request snapshot taken before asynchronous work', as
   expect(result.value.events[0]?.payload).toMatchObject({ model: 'model' });
   expect(await service.execute(command)).toEqual(result);
   expect((await service.execute(submitted)).ok).toBe(false);
+});
+it('rejects a different cancellation binding before decoding the original command’s event data', async () => {
+  const { db, service } = setup();
+  try {
+    const created = await service.execute(command);
+    expect(created.ok).toBe(true);
+    const cancel: AnyCommand = {
+      commandId: 'room-cancel-same',
+      taskRunId: command.taskRunId,
+      expectedVersion: 1,
+      type: 'RequestCancel',
+      actor: { kind: 'user', id: 'owner' },
+      payload: { cause: 'room one' },
+    };
+    expect((await service.execute(cancel)).ok).toBe(true);
+    db.prepare(
+      "UPDATE command_receipts SET events='private undecodable event' WHERE command_id=?",
+    ).run(cancel.commandId);
+    await expect(
+      service.lookupCommand({ ...cancel, payload: { cause: 'room two' } }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } });
+  } finally {
+    db.close();
+  }
+});
+it('settles a cancelling active attempt once and keeps an actual budget overrun terminal without claiming cleanup', async () => {
+  const { db, service, log } = setup();
+  const run = async (
+    type: AnyCommand['type'],
+    version: number,
+    payload: unknown,
+    id = String(version),
+  ) =>
+    service.execute({
+      type,
+      taskRunId: command.taskRunId,
+      commandId: id,
+      actor: command.actor,
+      expectedVersion: version,
+      payload,
+    } as AnyCommand);
+  try {
+    expect(
+      (
+        await service.execute({
+          ...command,
+          payload: { ...command.payload, budget: { ...unlimitedBudget(), provider_tokens: 2 } },
+        })
+      ).ok,
+    ).toBe(true);
+    expect((await run('Admit', 1, {})).ok).toBe(true);
+    expect((await run('Schedule', 2, {})).ok).toBe(true);
+    expect(
+      (
+        await run('StartAttempt', 3, {
+          attemptId: 'a',
+          reason: 'initial',
+          model: 'fake',
+          provider: 'test',
+        })
+      ).ok,
+    ).toBe(true);
+    expect((await run('RequestCancel', 4, { cause: 'owner requested' })).ok).toBe(true);
+    const usage = { inputTokens: 2, outputTokens: 1, totalTokens: 3 };
+    expect(await run('RecordUsage', 5, { attemptId: 'foreign', usage }, 'wrong')).toMatchObject({
+      ok: false,
+      error: { code: 'invariant_violation' },
+    });
+    const settle = () => run('RecordUsage', 5, { attemptId: 'a', usage });
+    const settled = await settle();
+    expect(settled).toMatchObject({ ok: true, value: { version: 7 } });
+    expect(await settle()).toEqual(settled);
+    expect(await service.state(command.taskRunId)).toMatchObject({
+      version: 7,
+      status: 'budget_exhausted',
+      cancellationCause: 'owner requested',
+      budget: { consumed: { provider_tokens: 3 } },
+    });
+    expect((await log.load(command.taskRunId)).slice(4).map((e) => e.type)).toEqual([
+      'task_run.cancelling',
+      'attempt.usage_recorded',
+      'task_run.budget_exhausted',
+    ]);
+    expect(await run('CompleteCleanup', 7, { cleanup: 'completed' })).toMatchObject({
+      ok: false,
+      error: { code: 'terminal_state' },
+    });
+  } finally {
+    db.close();
+  }
 });

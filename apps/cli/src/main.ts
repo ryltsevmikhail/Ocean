@@ -14,7 +14,9 @@ const HELP = `ocean ${CLI_VERSION} — Ocean command line
 
 Usage:
   ocean install --archive /archive --sha256 HASH --prefix /user/prefix
-  ocean doctor [--profile /path] [--json]
+  ocean runtime start|restore|status|stop --profile /path [--json]
+  ocean rebind inspect|preview|confirm|result --config /selection.json --profile /path
+  ocean doctor [--static] [--profile /path] [--json]
   ocean backup --to /new/snapshot --profile /path
   ocean restore --from /snapshot --profile /new/profile
   ocean init --workspace dir [--profile /path]
@@ -38,7 +40,8 @@ Usage:
   runne --version       print the CLI version
   runne help            show this message
 
-Exit codes: 0 success, 1 runtime failure, 2 usage error.
+Exit codes: 0 success, 1 runtime failure, 2 invalid input/security, 3 unavailable/maintenance, 4 operation refusal/incomplete.
+Interrupted shared send: 130 SIGINT, 143 SIGTERM.
 `;
 
 export async function main(argv: readonly string[]): Promise<number> {
@@ -51,9 +54,21 @@ export async function main(argv: readonly string[]): Promise<number> {
   if (
     command === '--profile' ||
     command === '--json' ||
-    ['init', 'bot', 'room', 'send', 'history', 'run', 'doctor', 'backup', 'restore'].includes(
-      command ?? '',
-    ) ||
+    [
+      'runtime',
+      'rebind',
+      'coding',
+      'project',
+      'init',
+      'bot',
+      'room',
+      'send',
+      'history',
+      'run',
+      'doctor',
+      'backup',
+      'restore',
+    ].includes(command ?? '') ||
     (command === 'tui' && rest.includes('--room'))
   ) {
     const { runOceanCommand } = await import('./ocean/command.js');
@@ -119,4 +134,11 @@ export async function main(argv: readonly string[]): Promise<number> {
   return 2;
 }
 
-process.exitCode = await main(process.argv.slice(2));
+process.exitCode = await main(process.argv.slice(2)).catch((error: unknown) => {
+  // Legacy RUNNE_DB hosts have no local-runtime wire envelope.
+  if (error instanceof Error && 'code' in error && error.code === 'endpoint_exists') {
+    process.stderr.write('endpoint_exists\n');
+    return 3;
+  }
+  throw error;
+});

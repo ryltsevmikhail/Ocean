@@ -67,7 +67,9 @@ async function runExclusiveTurn(input: TurnInput): Promise<TurnOutcome> {
     );
   const max = Math.min(64, Math.max(1, input.maxModelRequests ?? 24));
   const messages: ChatMessage[] = [
-    ...(input.tools === undefined ? [] : [{ role: 'system' as const, content: SYSTEM }]),
+    ...(input.tools === undefined
+      ? []
+      : [{ role: 'system' as const, content: input.tools.instructions ?? SYSTEM }]),
     ...input.messages,
   ];
   const history: ChatMessage[] = [];

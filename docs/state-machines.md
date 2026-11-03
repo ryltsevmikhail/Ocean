@@ -43,6 +43,7 @@ stateDiagram-v2
     running --> succeeded: Complete
     running --> failed: Fail
     running --> budget_exhausted: ExhaustBudget / RecordUsage over limit
+    cancelling --> budget_exhausted: RecordUsage over limit
     running --> policy_denied: DenyPolicy
     cancelling --> cancelled: CompleteCleanup
 ```
@@ -56,7 +57,7 @@ stateDiagram-v2
 | `Admit`            | `created`                | `task_run.queued`                | `queued`           |
 | `Schedule`         | `queued`                 | `task_run.admitted`              | `admitted`         |
 | `StartAttempt`     | `admitted`, `retrying`   | `attempt.started`                | `running`          |
-| `RecordUsage`      | `running`                | `attempt.usage_recorded`         | `running`          |
+| `RecordUsage`      | `running`, `cancelling`  | `attempt.usage_recorded`         | See §10            |
 | `Wait`             | `running`                | `task_run.waiting`               | `waiting`          |
 | `Resume`           | `waiting`                | `task_run.resumed`               | `running`          |
 | `Retry`            | `running`                | `attempt.retry_scheduled`        | `retrying`         |
@@ -210,9 +211,11 @@ run becomes terminal. Other dimensions (cost, active time, tools, retries,
 children, processes) are still reset by replay to their creation values; the
 reserve/settle/release helpers are not yet driven by committed events.
 
-A turn must settle usage before it succeeds, fails or cancels: the host commits
-`RecordUsage` first, so a budget overrun is durable even when the turn itself
-fails.
+A provider can deliver final usage after an explicit cancellation request.
+The active attempt may settle that usage in `cancelling` before cleanup. The
+existing atomic budget-overrun rule (ADR-0012) still applies. A budget terminal
+retains the prior cancellation cause. Billing evidence alone cannot establish
+provider or descendant cleanup.
 
 ## 11. Concurrency and conflicts
 

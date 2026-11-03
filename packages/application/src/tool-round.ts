@@ -26,7 +26,7 @@ export async function executeTools(
       toolCallId: id,
       title: call.name,
       kind:
-        call.name === 'run_command'
+        call.name === 'run_command' || call.name === 'run_test'
           ? 'execute'
           : call.name === 'read_file'
             ? 'read'

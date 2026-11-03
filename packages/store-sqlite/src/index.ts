@@ -15,3 +15,16 @@ export { ownSqliteRuntime } from './ownership.js';
 
 export { inspectDatabase, snapshotDatabase } from './maintenance.js';
 export type { DatabaseSummary, DatabaseInspection } from './maintenance.js';
+
+export { SqliteCodingApprovalStore } from './coding-approval-storage.js';
+export { readCodingBackupInventory } from './coding-backup-inventory.js';
+export { snapshotCodingDatabase } from './maintenance.js';
+export type { CodingDatabaseSnapshot } from './maintenance.js';
+export type { EndpointProof } from './endpoint-proof.js';
+export type { ProfileReads } from './profile-reads.js';
+export { readDesktopBackupInventory } from './desktop-inventory.js';
+export { readProfileRestoreSnapshot } from './restore-snapshot.js';
+export { readRestorationAuthority } from './restoration-authority.js';
+export { readRestorationBackupState } from './restoration-backup.js';
+export { finalizationStore } from './coding-finalization-store.js';
+export { projectFinalizationHeld } from './coding-finalization-holds.js';

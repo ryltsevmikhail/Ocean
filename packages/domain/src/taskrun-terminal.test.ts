@@ -241,7 +241,7 @@ describe('command source table', () => {
     expect(COMMAND_SOURCES.Admit).toEqual(['created']);
     expect(COMMAND_SOURCES.Schedule).toEqual(['queued']);
     expect(COMMAND_SOURCES.StartAttempt).toEqual(['admitted', 'retrying']);
-    expect(COMMAND_SOURCES.RecordUsage).toEqual(['running']);
+    expect(COMMAND_SOURCES.RecordUsage).toEqual(['running', 'cancelling']);
     expect(COMMAND_SOURCES.CompleteCleanup).toEqual(['cancelling']);
     expect(COMMAND_SOURCES.RequestCancel).toEqual([
       'created',

@@ -6,7 +6,7 @@ export function migrateCoding(db: DatabaseSync): void {
  CREATE TABLE ocean_coding_tasks(
   id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL,project_root TEXT NOT NULL,
   owner_room_id TEXT NOT NULL,dev_bot_id TEXT NOT NULL,review_room_id TEXT NOT NULL,review_bot_id TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('reserved','cancelled')),
+  status TEXT NOT NULL CHECK(status IN ('reserved','cancelled','finalizing','finalized')),
   policy_version INTEGER NOT NULL CHECK(policy_version=1),payload TEXT NOT NULL,
   UNIQUE(workspace_id,id),
   FOREIGN KEY(workspace_id) REFERENCES ocean_workspace(id),

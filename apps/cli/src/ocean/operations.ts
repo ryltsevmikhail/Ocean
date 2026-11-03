@@ -19,9 +19,11 @@ export async function runOperations(
       ['runtime.sqlite', 'runtime.sqlite-wal', 'runtime.sqlite-shm', 'restore-guard.json'].every(
         (name) => !existsSync(join(profile, name)) || privatePath(join(profile, name), false),
       );
-    const database = permissions
-      ? inspectDatabase(join(profile, 'runtime.sqlite'))
-      : { status: 'unavailable' };
+    const database = args.staticDoctor
+      ? { status: 'not_inspected' }
+      : permissions
+        ? inspectDatabase(join(profile, 'runtime.sqlite'))
+        : { status: 'unavailable' };
     let lastBackup: unknown = null;
     if (permissions && privatePath(join(profile, 'last-backup.json'), false)) {
       try {
@@ -42,7 +44,8 @@ export async function runOperations(
           const marker = JSON.parse(readFileSync(join(profile, 'restore-guard.json'), 'utf8')) as {
             state?: unknown;
           };
-          if (marker.state === 'ready') restorationState = 'ready';
+          if (marker.state === 'ready' && !existsSync(join(profile, '.incomplete')))
+            restorationState = 'ready';
         } catch {
           /* Incomplete remains unavailable for execution. */
         }
@@ -53,7 +56,7 @@ export async function runOperations(
     return {
       code:
         permissions &&
-        database.status === 'ok' &&
+        (database.status === 'ok' || database.status === 'not_inspected') &&
         platform &&
         node &&
         restorationState !== 'incomplete'

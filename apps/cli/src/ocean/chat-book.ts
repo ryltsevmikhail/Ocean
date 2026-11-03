@@ -1,3 +1,4 @@
+import { codingPanelLines } from './coding-panel.js';
 import { RoomReviewController } from './room-review.js';
 import { randomUUID } from 'node:crypto';
 import { taskRunId, type TaskRunId } from '@runnets/domain';
@@ -13,6 +14,7 @@ export class ChatRunBook implements RunBookPort {
   readonly #runtime: Runtime;
   readonly #reviews: RoomReviewController;
   readonly #roomId: string;
+  readonly #taskId: string | undefined;
   readonly #provider: ProviderPort | null;
   readonly #entries: RunEntry[] = [];
   #controller: AbortController | null = null;
@@ -21,11 +23,15 @@ export class ChatRunBook implements RunBookPort {
   #names = new Map<string, string>();
   model = '';
   providerId: string | null = null;
-  constructor(runtime: Runtime, roomId: string, provider: ProviderPort | null) {
+  constructor(runtime: Runtime, roomId: string, provider: ProviderPort | null, taskId?: string) {
     this.#runtime = runtime;
+    this.#taskId = taskId;
     this.#reviews = new RoomReviewController(runtime, roomId);
     this.#roomId = roomId;
     this.#provider = provider;
+  }
+  async loadChangeset(entry: RunEntry): Promise<void> {
+    entry.codingLines = await codingPanelLines(this.#runtime, this.#roomId, this.#taskId);
   }
   setReviewApproval(approval: ReviewApprovalPort): void {
     this.#reviews.setApproval(approval);
@@ -94,6 +100,7 @@ export class ChatRunBook implements RunBookPort {
         roomId: this.#roomId,
         requestId: randomUUID(),
         text: prompt,
+        ...(this.#taskId === undefined ? {} : { taskId: this.#taskId }),
         provider: this.#provider,
         signal: controller.signal,
         emit,
@@ -104,7 +111,8 @@ export class ChatRunBook implements RunBookPort {
         },
       });
       if (!result.ok) throw new Error(result.error.code);
-      entry.stream = this.#transcript();
+      const privateEvidence = entry.stream.filter((line) => line.kind === 'tool');
+      entry.stream = [...this.#transcript(), ...privateEvidence];
       const turn = result.value;
       if (turn.status === 'recorded')
         return {

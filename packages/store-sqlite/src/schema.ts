@@ -1,5 +1,3 @@
-import { CHANGESET_TABLES, migrateChangesets } from './changeset-schema.js';
-import { CODING_TABLES, migrateCoding } from './coding-schema.js';
 /**
  * Database profile and schema.
  *
@@ -11,21 +9,14 @@ import { CODING_TABLES, migrateCoding } from './coding-schema.js';
 
 import { DatabaseSync } from 'node:sqlite';
 
-import {
-  CONVERSATION_TABLES,
-  migrateConversations,
-  assertMigrationOwnerAbsent,
-} from './conversation-schema.js';
-
-import { CHAT_TABLES, migrateChats } from './chat-schema.js';
-
-import { migrateGroups } from './group-schema.js';
-
-import { REVIEW_TABLES, migrateReviews } from './review-schema.js';
+import { assertMigrationOwnerAbsent } from './conversation-schema.js';
 
 import { readText } from './rows.js';
+import { applyMigrations } from './schema-migrations.js';
 
-export const SCHEMA_VERSION = 7;
+import { ownerBusy } from './maintenance-owner.js';
+import { userTables } from './schema-inspection.js';
+export const SCHEMA_VERSION = 14;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -92,13 +83,17 @@ export function assertBusyTimeout(busyTimeoutMs: number): void {
  * The connection is closed again when the profile or the schema check fails, so
  * a caller never receives a half-initialized handle.
  */
-export function openDatabase(path: string, busyTimeoutMs: number): DatabaseSync {
+export function openDatabase(
+  path: string,
+  busyTimeoutMs: number,
+  requireOwnerAbsent = false,
+): DatabaseSync {
   assertBusyTimeout(busyTimeoutMs);
   const db = new DatabaseSync(path, { enableForeignKeyConstraints: true });
   try {
     db.exec('PRAGMA synchronous = FULL');
     db.exec('PRAGMA busy_timeout = ' + String(busyTimeoutMs));
-    initializeSchema(db);
+    initializeSchema(db, requireOwnerAbsent);
     applyDurabilityProfile(db, busyTimeoutMs);
     if (path !== ':memory:') assertWalMode(db);
     return db;
@@ -128,20 +123,26 @@ export function applyDurabilityProfile(db: DatabaseSync, busyTimeoutMs: number):
  * An existing database must carry the supported schema version and every table;
  * anything else is refused rather than silently overwritten.
  */
-export function initializeSchema(db: DatabaseSync): void {
+export function initializeSchema(db: DatabaseSync, requireOwnerAbsent = false): void {
   if (db.isTransaction) throw new Error('Schema initialization requires its own transaction');
   const foreignKeys = db.prepare('PRAGMA foreign_keys').get()?.['foreign_keys'] === 1;
   // Parent-table replacement is isolated in one transaction and checked before commit.
   if (foreignKeys) db.exec('PRAGMA foreign_keys=OFF');
   try {
-    initializeSchemaTransaction(db);
+    initializeSchemaTransaction(db, requireOwnerAbsent);
   } finally {
     if (foreignKeys) db.exec('PRAGMA foreign_keys=ON');
   }
 }
-function initializeSchemaTransaction(db: DatabaseSync): void {
+function initializeSchemaTransaction(db: DatabaseSync, requireOwnerAbsent: boolean): void {
   db.exec('BEGIN IMMEDIATE');
   try {
+    // Prospective execution ownership is checked inside the schema transaction before writes.
+    if (requireOwnerAbsent && ownerBusy(db))
+      throw Object.assign(
+        Error('Durable runtime is owned by a live or unverified process; refusing recovery'),
+        { code: 'owner_busy' },
+      );
     const existing = userTables(db);
     let previousVersion = 1;
     if (!existing.has('meta')) {
@@ -168,33 +169,7 @@ function initializeSchemaTransaction(db: DatabaseSync): void {
     if (!receiptColumns.some((column) => column['name'] === 'request_binding')) {
       db.exec('ALTER TABLE command_receipts ADD COLUMN request_binding TEXT');
     }
-    if (previousVersion === 1) {
-      migrateConversations(db);
-      if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
-        throw new Error('Schema migration failed foreign key check');
-    } else {
-      for (const table of CONVERSATION_TABLES) {
-        if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
-      }
-    }
-    if (previousVersion < 3) migrateChats(db);
-    else
-      for (const table of CHAT_TABLES) {
-        if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
-      }
-    if (previousVersion < 4) migrateGroups(db);
-    if (previousVersion < 5) migrateReviews(db);
-    else
-      for (const table of REVIEW_TABLES)
-        if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
-    if (previousVersion < 6) migrateCoding(db);
-    else
-      for (const table of CODING_TABLES)
-        if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
-    if (previousVersion < 7) migrateChangesets(db);
-    else
-      for (const table of CHANGESET_TABLES)
-        if (!existing.has(table)) throw new Error('database schema is missing table ' + table);
+    applyMigrations(db, previousVersion, existing);
     if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
       throw new Error('Schema foreign key check failed');
     db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(SCHEMA_VERSION));
@@ -245,15 +220,4 @@ function assertSchemaVersion(db: DatabaseSync): number {
     );
   }
   return version;
-}
-
-function userTables(db: DatabaseSync): ReadonlySet<string> {
-  const rows = db
-    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
-    .all();
-  const names = new Set<string>();
-  for (const row of rows) {
-    names.add(readText(row, 'name'));
-  }
-  return names;
 }

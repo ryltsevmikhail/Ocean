@@ -20,6 +20,8 @@ export interface CodingTransaction extends CodingArtifactTransaction {
 }
 export interface CodingStore {
   atomic<T>(work: (tx: CodingTransaction) => T): T;
+  /** A finalizing/uncertain finalization still holds this project root. */
+  projectHeld(projectRoot: string): boolean;
 }
 export interface ProjectLeasePort {
   acquire(projectRoot: string, holder: ProjectLeaseHolder): CodingResult<ProjectLease>;

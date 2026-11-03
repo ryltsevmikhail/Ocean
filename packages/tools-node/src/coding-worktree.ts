@@ -15,9 +15,12 @@ import { codingTree, FILE_BYTES, TREE_BYTES } from './coding-tree.js';
 import { blockedName } from './backend.js';
 /** Creates metadata without Git checkout, then materializes raw blobs without hooks/filters. */
 export class GitCodingWorktrees implements WorktreePort {
-  readonly #directory: string;
-  constructor(directory = join(homedir(), '.local/state/ocean-worktrees')) {
-    this.#directory = resolve(directory);
+  readonly #configured: string | undefined;
+  constructor(directory?: string) {
+    this.#configured = directory === undefined ? undefined : resolve(directory);
+  }
+  get #directory(): string {
+    return this.#configured ?? join(homedir(), '.local/state/ocean-worktrees');
   }
   async plan(task: CodingTask): Promise<WorktreePlan> {
     const id = createHash('sha256')

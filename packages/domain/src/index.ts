@@ -26,5 +26,30 @@ export * from './chat-review.js';
 
 export * from './coding-task.js';
 export * from './coding-policy.js';
+export * from './coding-finalization.js';
+export * from './coding-finalization-valid.js';
+export * from './coding-finalization-valid-records.js';
 
 export * from './changeset.js';
+
+export * from './coding-approval.js';
+export * from './coding-approval-state.js';
+export * from './coding-review.js';
+export * from './coding-test-evidence.js';
+export * from './coding-apply.js';
+export * from './coding-apply-state.js';
+export * from './coding-apply-observation.js';
+export * from './coding-apply-resolution.js';
+export * from './coding-backup.js';
+export * from './coding-asset-manifest.js';
+export { validCodingBackupPolicy, validCodingBackupPresets } from './coding-backup-policy.js';
+export * from './desktop-assets.js';
+export * from './restore-origin.js';
+export * from './profile-rebind.js';
+export {
+  validProfileBackupManifest,
+  type ProfileBackupManifest,
+  type ProfileBackupAssetIdentity,
+  type ProfileBackupSummary,
+} from './profile-backup.js';
+export * from './profile-lineage.js';

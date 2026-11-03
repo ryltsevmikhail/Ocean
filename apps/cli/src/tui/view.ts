@@ -1,5 +1,6 @@
 /** A single scrollable body, a bottom editor and secondary panels on demand. */
-import type { EventEnvelope, TaskRunAggregate, TaskRunId } from '@runnets/domain';
+import type { TaskRunAggregate, TaskRunId } from '@runnets/domain';
+import type { LocalTurnReceipt, LocalRunSnapshot, LocalRunEvent } from '@runnets/contracts';
 import type { UiState } from './state.js';
 import type { Size, StreamLine } from './types.js';
 import { fit, wrap } from './text.js';
@@ -7,11 +8,15 @@ import { transcriptLines, tailPage } from './transcript.js';
 import { details, eventLines, HELP, taskLines } from './panels.js';
 
 export interface RunViewData {
-  readonly taskRunId: TaskRunId;
+  readonly taskRunId: TaskRunId | null;
+  readonly receipt?: LocalTurnReceipt;
+  readonly remote?: LocalRunSnapshot;
+  readonly performer?: { handle: string; provider: string; model: string };
   readonly aggregate: TaskRunAggregate | null;
-  readonly events: readonly EventEnvelope[];
+  readonly events: readonly Pick<LocalRunEvent, 'sequence' | 'type'>[];
   readonly stream: readonly StreamLine[];
   readonly liveMode: string | null;
+  readonly codingLines?: readonly string[];
 }
 export interface FrameInput {
   readonly workspace?: string | undefined;
@@ -36,8 +41,17 @@ function draftRows(input: FrameInput, width: number): string[] {
   const start = Math.max(0, cursorRow - 2);
   return rows.slice(start, start + 3);
 }
+function runLabel(run: LocalRunSnapshot): string {
+  return run.runId + ' [v' + run.version + ']';
+}
 function status(input: FrameInput): string {
   const selected = input.runs[input.ui.selectedIndex];
+  if (selected?.remote) {
+    const run = selected.remote;
+    return `${runLabel(run)} · ${run.taskStatus} · ${run.turnStatus} · ${input.ui.status ?? ''}`;
+  }
+  if (selected?.receipt?.runId) return selected.receipt.runId + ' · admitted · awaiting run state';
+  if (selected?.taskRunId === null) return 'Room · ' + (input.ui.status ?? 'ready');
   const state = selected?.aggregate;
   const tokens =
     state === undefined || state === null || state.status === 'absent'
@@ -58,6 +72,15 @@ function content(
     return {
       title: 'Details · Esc close',
       lines: details(selected, input.workspace)
+        .flatMap((line) => wrap(line, width))
+        .slice(input.ui.eventScroll, input.ui.eventScroll + height),
+    };
+  if (focus === 'changeset')
+    return {
+      title: 'Changeset · F6 refresh · PgUp/PgDn scroll · Esc close',
+      lines: (
+        selected?.codingLines ?? ['No coding changeset. Open a task-bound room to inspect changes.']
+      )
         .flatMap((line) => wrap(line, width))
         .slice(input.ui.eventScroll, input.ui.eventScroll + height),
     };
@@ -95,11 +118,14 @@ export function navigationContext(input: FrameInput): {
   const { columns, rows } = dimensions(input.size);
   const selected = input.runs[input.ui.selectedIndex];
   const eventCount =
-    input.ui.focus === 'details'
-      ? details(selected, input.workspace).flatMap((line) => wrap(line, columns)).length
-      : input.ui.focus === 'help'
-        ? HELP.flatMap((line) => wrap(line, columns)).length
-        : eventLines(selected, columns).length;
+    input.ui.focus === 'changeset'
+      ? (selected?.codingLines ?? ['No coding changeset.']).flatMap((line) => wrap(line, columns))
+          .length
+      : input.ui.focus === 'details'
+        ? details(selected, input.workspace).flatMap((line) => wrap(line, columns)).length
+        : input.ui.focus === 'help'
+          ? HELP.flatMap((line) => wrap(line, columns)).length
+          : eventLines(selected, columns).length;
   return {
     dialogCount:
       selected === undefined
@@ -129,11 +155,19 @@ export function anchorDialogue(
   };
 }
 
-/** Render one full-height frame; normal conversation receives nearly all available rows. */
+export interface PresentedFrame {
+  text: string;
+  cancel?: { run: LocalRunSnapshot; size: Size };
+}
 export function renderFrame(input: FrameInput): string {
+  return presentFrame(input, input.size).text;
+}
+/** Compact frames omit status. Only a complete binding in the actual status row authorizes cancel. */
+export function presentFrame(input: FrameInput, physical: Size): PresentedFrame {
   const { columns, rows } = dimensions(input.size);
   const editor = draftRows(input, columns);
-  const header = `RunneTS TUI · ${input.provider ?? 'offline'} / ${input.model}${input.workspace === undefined ? '' : ` · ${input.workspace}`}`;
+  const bot = input.runs[input.ui.selectedIndex]?.performer;
+  const header = `RunneTS TUI · ${bot?.provider ?? input.provider ?? 'offline'} / ${bot ? '@' + bot.handle + ' / ' + bot.model : input.model}${input.workspace === undefined ? '' : ` · ${input.workspace}`}`;
   if (rows < 9) {
     const selected = input.runs[input.ui.selectedIndex];
     const latest = selected === undefined ? [] : transcriptLines(selected.stream, columns, false);
@@ -144,20 +178,24 @@ export function renderFrame(input: FrameInput): string {
       'F1 help · PgUp/PgDn scroll',
     ];
     while (compact.length < rows) compact.splice(1, 0, '');
-    return compact
-      .slice(0, rows)
-      .map((line) => fit(line, columns))
-      .join('\n');
+    return {
+      text: compact
+        .slice(0, rows)
+        .map((line) => fit(line, columns))
+        .join('\n'),
+    };
   }
   const height = rows - 5 - editor.length;
   const pane = content(input, columns, height);
   const body = [...pane.lines];
   while (body.length < height) body.push('');
   const footer =
-    'Enter send · PgUp/PgDn scroll · F2 tasks · F3 events · F4 details · F5 reasoning · Esc cancel';
-  return [
+    'Enter send · PgUp/PgDn scroll · F2 tasks · F3 events · F4 details · F5 reasoning · F6 changeset · Esc cancel';
+  const run = input.runs[input.ui.selectedIndex]?.remote;
+  const statusRow = fit(status(input), columns);
+  const text = [
     header,
-    status(input),
+    statusRow,
     `─ ${pane.title} `,
     ...body.slice(0, height),
     '─'.repeat(columns),
@@ -166,4 +204,7 @@ export function renderFrame(input: FrameInput): string {
   ]
     .map((line) => fit(line, columns))
     .join('\n');
+  if (run && physical.rows >= 9 && fit(statusRow, physical.columns).startsWith(runLabel(run)))
+    return { text, cancel: { run, size: physical } };
+  return { text };
 }
