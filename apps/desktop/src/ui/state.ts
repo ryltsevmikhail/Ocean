@@ -1,7 +1,7 @@
 import { ref, computed, onMounted } from 'vue';
 import type { Bot, Room, Command, Run } from '../protocol.js';
 import { pages, useRoomFeed } from './room-feed.js';
-import { call } from './bridge.js';
+import { call, SendFailure, submitDraft } from './bridge.js';
 import { explain } from './dom.js';
 
 export function useDesktop() {
@@ -135,7 +135,8 @@ export function useDesktop() {
   async function send(attachments: string[] = []) {
     const r = room.value;
     if (!r) return;
-    const command = unconfirmed.get(r.id) ?? {
+    const original = unconfirmed.get(r.id);
+    const command = original ?? {
       op: 'send',
       room: r.id,
       text: draft.value,
@@ -143,9 +144,9 @@ export function useDesktop() {
       to: r.kind === 'group' ? recipient.value || null : null,
       requestId: uuid(),
     };
-    unconfirmed.set(r.id, command);
+
     try {
-      const result = await call(command);
+      const result = await submitDraft(command, original !== undefined);
       admittedRun.value = result.runId;
       receipt.value = 'Принято · ' + result.messageId + ' · ' + (result.runId ?? 'recorded');
       unconfirmed.delete(r.id);
@@ -154,27 +155,15 @@ export function useDesktop() {
       recipient.value = '';
       sent.value++;
     } catch (error) {
-      // Keep the exact draft and UUID on every ambiguous acknowledgement. Retry only by user action.
       if (
-        error instanceof Error &&
-        [
-          'invalid_input',
-          'invalid_request',
-          'invalid_attachment',
-          'attachment_corrupted',
-          'attachment_unavailable',
-          'message_too_large',
-          'choose_recipient',
-          'room_busy',
-          'runtime_draining',
-          'provider_unavailable',
-          'recovery_required',
-          'not_member',
-        ].includes(error.message)
+        error instanceof SendFailure &&
+        (!original || (error.stage === 'refused' && error.message !== 'request_conflict'))
       ) {
         unconfirmed.delete(r.id);
         uncertain.value = false;
+        if (original) receipt.value = '';
       } else {
+        unconfirmed.set(r.id, command);
         uncertain.value = true;
         receipt.value = 'Квитанция не подтверждена · ' + command.requestId;
       }

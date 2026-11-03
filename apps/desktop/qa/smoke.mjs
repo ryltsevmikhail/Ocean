@@ -1,4 +1,5 @@
 import { fixture, windowEnv } from './owner.mjs';
+import { contextRefusal } from './send-recovery.mjs';
 import { checkTransfers } from './transfers.mjs';
 import { Buffer } from 'node:buffer';
 import console from 'node:console';
@@ -270,6 +271,7 @@ try {
   await page.locator('#history').getByText('private-only', { exact: true }).waitFor();
   assert.doesNotMatch(await page.locator('#history').innerText(), /implement|inspect/);
   assert.equal(await page.locator('#history .attachment-card').count(), 0);
+  await contextRefusal(page, f);
   console.log(
     'Window: explicit dev → review, private context, cancellation with uncertain runtime outcome and restart passed',
   );

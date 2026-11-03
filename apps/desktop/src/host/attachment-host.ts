@@ -82,6 +82,7 @@ export class AttachmentHost {
   }
   async prepare(c: Extract<Command, { op: 'send' }>) {
     this.check(c.room);
+    if (c.to === null && /^\s*@/.test(c.text)) throw Error('choose_recipient');
     const ids = c.attachments ?? [];
     const receipt = join(this.root, 'attachments', c.room, c.requestId + '.json');
     try {

@@ -31,3 +31,15 @@ describe('renderer and host contract', () => {
     ).toBe(true);
   });
 });
+
+it('only reads a receipt by its fixed-workspace room and UUID, without accepting a proposed binding', () => {
+  const ref = { op: 'receipt', room: 'room_a', requestId: crypto.randomUUID() };
+  expect(commands.safeParse(ref).success).toBe(true);
+  for (const change of [
+    { text: 'changed' },
+    { to: 'other' },
+    { workspaceId: 'elsewhere' },
+    { attachments: [] },
+  ])
+    expect(commands.safeParse({ ...ref, ...change }).success).toBe(false);
+});

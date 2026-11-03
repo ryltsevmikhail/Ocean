@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import console from 'node:console';
 import { chromium } from 'playwright-core';
 import { fixture, windowEnv } from './owner.mjs';
+import { damagedPreparation } from './send-recovery.mjs';
 
 const f = await fixture(),
   userData = join(f.root, 'desktop'),
@@ -121,7 +122,7 @@ try {
   await unknown.waitFor();
   assert.ok((await unknown.textContent()).includes(original));
   const committed = await peer('resume', room, original);
-  await first.page.getByRole('button', { name: 'Повторить исходный запрос' }).click();
+  await damagedPreparation(first.page, f, userData, room, original, committed);
   await first.page
     .locator('#feedback')
     .getByText('Принято · ' + committed.messageId + ' · ' + committed.runId)

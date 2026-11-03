@@ -10,6 +10,8 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
     ...('after' in c && typeof c.after === 'string' ? { after: c.after } : {}),
   };
   switch (c.op) {
+    case 'receipt':
+      return client.getReceipt({ workspaceId, roomId: c.room, requestId: c.requestId });
     case 'status':
       return client.status();
     case 'bot':
@@ -66,8 +68,6 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
         requestId: c.requestId,
       });
     case 'send':
-      if (!c.text.trim()) throw Error('invalid_request');
-      if (c.to === null && /^\s*@/.test(c.text)) throw Error('choose_recipient');
       return client.submit({
         workspaceId,
         roomId: c.room,

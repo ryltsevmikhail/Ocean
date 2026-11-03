@@ -14,6 +14,7 @@ const requestId = z.uuid();
 const room = { room: id };
 export const commands = z.discriminatedUnion('op', [
   z.strictObject({ op: z.literal('status') }),
+  z.strictObject({ op: z.literal('receipt'), ...room, requestId }),
   z.strictObject({ op: z.literal('bots'), after: id.optional() }),
   z.strictObject({ op: z.literal('rooms'), after: id.optional() }),
   z.strictObject({ op: z.literal('runs'), ...room, after: id.optional() }),
@@ -106,12 +107,22 @@ export const run = z.object({
   taskStatus: z.string().max(64),
   pendingDecisionIds: z.array(z.string().max(128)).max(200),
 });
+const receipt = z.object({
+  workspaceId: z.literal('ws_ocean'),
+  roomId: id,
+  requestId,
+  messageId: id,
+  turnId: id.nullable(),
+  runId: id.nullable(),
+});
+const sendStage = z.enum(['preparation', 'refused']);
+export type SendStage = z.infer<typeof sendStage>;
 export const envelope = z.discriminatedUnion('ok', [
   z.object({ version: z.literal(1), ok: z.literal(true), data: z.unknown() }),
   z.object({
     version: z.literal(1),
     ok: z.literal(false),
-    error: z.object({ code: z.string().regex(/^[a-z_]+$/) }),
+    error: z.object({ code: z.string().regex(/^[a-z_]+$/), sendStage: sendStage.optional() }),
   }),
 ]);
 export const outputs = {
@@ -133,14 +144,8 @@ export const outputs = {
   group: z.object({ kind: z.literal('room'), data: roomDto }),
   direct: z.object({ kind: z.literal('room'), data: roomDto }),
   bot: z.object({ kind: z.literal('bot'), data: bot }),
-  send: z.object({
-    workspaceId: z.literal('ws_ocean'),
-    roomId: id,
-    requestId,
-    messageId: id,
-    turnId: id.nullable(),
-    runId: id.nullable(),
-  }),
+  send: receipt,
+  receipt: receipt.nullable(),
 };
 export type Bot = z.infer<typeof bot>;
 export type Room = z.infer<typeof roomDto>;

@@ -7,13 +7,33 @@ import { pathToFileURL } from 'node:url';
 
 import { AttachmentHost } from './attachment-host.js';
 import { attachmentCommands } from '../attachments.js';
-import { commands, outputs } from '../protocol.js';
+import { commands, outputs, type SendStage } from '../protocol.js';
 
 process.umask(0o077);
 app.enableSandbox();
 const dist = resolve(import.meta.dirname, '../..');
 const page = pathToFileURL(join(dist, 'web/index.html')).href;
-const failure = (code: string) => ({ version: 1, ok: false, error: { code } });
+const failure = (code: string, sendStage?: SendStage) => ({
+  version: 1,
+  ok: false,
+  error: sendStage ? { code, sendStage } : { code },
+});
+// These codes are definitive only at the authenticated turns.submit boundary.
+// A transport loss or an invalid success envelope leaves admission unknown.
+const admissionRefusals = new Set([
+  'invalid_params',
+  'invalid_input',
+  'request_conflict',
+  'runtime_draining',
+  'workspace_conflict',
+  'unknown_room',
+  'unknown_bot',
+  'not_member',
+  'room_busy',
+  'recovery_required',
+  'provider_unavailable',
+  'context_limit',
+]);
 async function open() {
   const userData = app.getPath('userData');
   const profile = process.env['OCEAN_DESKTOP_PROFILE'] ?? join(userData, 'conversation', 'profile');
@@ -51,7 +71,9 @@ async function open() {
     const asset = attachmentCommands.safeParse(raw);
     const parsed = commands.safeParse(raw);
     if (!parsed.success && !asset.success) return failure('invalid_request');
-    if (inflight >= 8) return failure('client_busy');
+    let phase: 'preparation' | 'submit' | undefined =
+      parsed.success && parsed.data.op === 'send' ? 'preparation' : undefined;
+    if (inflight >= 8) return failure('client_busy', phase);
     inflight++;
     try {
       const client = await connectLocalRuntime({ profile, signal: detached.signal }).catch(
@@ -69,7 +91,9 @@ async function open() {
         if (!parsed.success) return failure('invalid_request');
         const c = parsed.data;
         const input = c.op === 'send' ? await media.prepare(c) : c;
+        if (c.op === 'send') phase = 'submit';
         const reply = await dispatch(client, input);
+        phase = undefined;
         let data = outputs[c.op].parse(reply);
         if (c.op === 'rooms') for (const r of outputs.rooms.parse(data)) media.rooms.add(r.id);
         if (c.op === 'direct' || c.op === 'group')
@@ -80,12 +104,19 @@ async function open() {
         client.close();
       }
     } catch (e) {
-      return failure(
+      const code =
         e instanceof Error && /^[a-z_]+$/.test(e.message)
           ? e.message
           : (e as NodeJS.ErrnoException)?.code === 'ENOENT'
             ? 'attachment_unavailable'
-            : 'outcome_unknown',
+            : 'outcome_unknown';
+      return failure(
+        code,
+        phase === 'preparation'
+          ? 'preparation'
+          : phase === 'submit' && admissionRefusals.has(code)
+            ? 'refused'
+            : undefined,
       );
     } finally {
       inflight--;
