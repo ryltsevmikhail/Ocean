@@ -1,5 +1,12 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  appendFileSync,
+  readFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
@@ -48,6 +55,7 @@ export async function fixture(options = {}) {
   }
   command('init', '--workspace', workspace);
   let owner,
+    identity,
     exit,
     log = '';
   async function start() {
@@ -69,7 +77,11 @@ export async function fixture(options = {}) {
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
-    exit = new Promise((resolve) => owner.once('close', resolve));
+    const stat = readFileSync('/proc/' + owner.pid + '/stat', 'utf8');
+    identity = { pid: owner.pid, start: stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19] };
+    exit = new Promise((resolve) =>
+      owner.once('close', (code, signal) => resolve({ code, signal })),
+    );
     owner.stdout.on('data', (b) => (log += b));
     owner.stderr.on('data', (b) => (log += b));
     for (let i = 0; i < 200; i++) {
@@ -77,8 +89,15 @@ export async function fixture(options = {}) {
       if (owner.exitCode !== null) break;
       await setTimeout(50);
     }
-    await stop();
-    throw Error('owner startup failed ' + log);
+    const failure = Error('owner startup failed ' + log);
+    try {
+      await stop();
+    } catch (error) {
+      failure.cause = error;
+      await retire(error);
+    }
+    writeFileSync(join(root, 'startup-error.log'), String(failure), { mode: 0o600 });
+    throw failure;
   }
   async function stop() {
     if (owner.exitCode === null) command('runtime', 'stop');
@@ -86,15 +105,40 @@ export async function fixture(options = {}) {
     writeFileSync(join(root, 'owner.log'), log, { mode: 0o600 });
     writeFileSync(join(root, 'owner-' + owner.pid + '.log'), log, { mode: 0o600 });
   }
+  async function retire(error) {
+    let sameOwner = false;
+    try {
+      const stat = readFileSync('/proc/' + identity.pid + '/stat', 'utf8');
+      sameOwner = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19] === identity.start;
+    } catch (readError) {
+      if (readError.code !== 'ENOENT') throw readError;
+    }
+    if (sameOwner) owner.kill('SIGKILL');
+    const outcome = await exit;
+    // Retirement of this process is not confirmation of an Ocean effect's cancellation.
+    // Keep startup/stop diagnostics and all uncertain fixture state for inspection.
+    writeFileSync(join(root, 'owner.log'), log, { mode: 0o600 });
+    writeFileSync(join(root, 'owner-' + owner.pid + '.log'), log, { mode: 0o600 });
+    writeFileSync(join(root, 'cleanup-stop-error.log'), String(error), { mode: 0o600 });
+    writeFileSync(
+      join(root, 'cleanup-owner-exit.json'),
+      JSON.stringify(
+        {
+          ...identity,
+          signalRequested: sameOwner ? 'SIGKILL' : null,
+          outcome,
+        },
+        null,
+        2,
+      ),
+      { mode: 0o600 },
+    );
+  }
   async function close() {
     try {
       await stop();
     } catch (error) {
-      writeFileSync(join(root, 'cleanup-stop-error.log'), String(error), { mode: 0o600 });
-      owner.kill('SIGKILL');
-      await exit;
-      writeFileSync(join(root, 'owner.log'), log, { mode: 0o600 });
-      writeFileSync(join(root, 'owner-' + owner.pid + '.log'), log, { mode: 0o600 });
+      await retire(error);
     }
     if (!(options.preserve ?? process.env.OCEAN_QA_PRESERVE === '1'))
       rmSync(root, { recursive: true, force: true });
