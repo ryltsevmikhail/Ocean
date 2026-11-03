@@ -625,7 +625,17 @@ roots and selected tree/file sources retain private witnesses. A whole-subgraph
 metadata preflight precedes dependency body reads. After the last consumer, every
 source, task tree, mapping root and registry/absence is checked again, including
 content hashes that detect same-size, unchanged-timestamp shared-memory writes.
-Consumer DTO mutation cannot redefine those expectations. No source is repaired,
+Task-tree metadata is checked against its original private witness before any
+initial or final body read. The archive uses the same capture lifecycle for tree
+and dependency consumers: every selected task/root/policy, current tree namespace,
+virtual mapping and shared budget is validated before the first tree copy. Budget
+preflight includes the complete frozen inventory, retained tree witnesses and the
+prospective catalog; it charges each snapshot incrementally before retaining more.
+A later invalid/stale/over-budget tree therefore cannot cause an earlier tree to
+be copied. The optional tree consumer receives only newly verified originating
+captures after this shared preflight. Unchanged-timestamp content mutation still
+refuses at the hash check. Consumer DTO mutation cannot redefine those expectations.
+No source is repaired,
 reset, cleaned, pruned or modified. Failed output remains incomplete evidence.
 
 One shared subgraph budget limits stored and logical bytes to 2 GiB and entries

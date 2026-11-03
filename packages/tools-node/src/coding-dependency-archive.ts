@@ -94,22 +94,17 @@ export async function archiveCodingDependencyAssets(
   }
   const root = createOutput(destination);
   try {
-    const seen = new Set<string>();
-    for (const tree of trees) {
-      const name = 'tree-' + tree.capture.manifest.hash;
-      if (seen.has(name)) continue;
-      archiveCodingAssetTree(tree.capture, join(destination, name));
-      seen.add(name);
-    }
-    const catalog = await captureCodingDependencyAssets(
-      frozen,
-      profile,
-      trees,
-      ({ slot, capture }) => {
-        archiveCodingAssetTree(capture, join(destination, slot));
-        return Promise.resolve();
-      },
-    );
+    const archive = ({
+      slot,
+      capture,
+    }: {
+      slot: string;
+      capture: CodingDependencyTree['capture'];
+    }) => {
+      archiveCodingAssetTree(capture, join(destination, slot));
+      return Promise.resolve();
+    };
+    const catalog = await captureCodingDependencyAssets(frozen, profile, trees, archive, archive);
     checkAssetPath(root, destination);
     writePrivate(join(assetFdPath(root), 'inventory.json'), frozen);
     writePrivate(join(assetFdPath(root), 'catalog.json'), catalog);

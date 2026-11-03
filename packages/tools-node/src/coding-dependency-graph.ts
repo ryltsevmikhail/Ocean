@@ -21,8 +21,8 @@ import {
   dependencyHash,
   dependencyFail,
 } from './coding-dependency-config.js';
-import { dependencyVirtualTree } from './coding-dependency-mapping.js';
-import { validateCodingAssetLinks } from './coding-asset-links.js';
+import { holdDependencyTree } from './coding-dependency-tree.js';
+import { dependencyTaskRecord } from './coding-dependency-record.js';
 export type {
   CodingDependencyTree,
   CodingDependencyInput,
@@ -41,6 +41,7 @@ export async function captureCodingDependencyAssets(
   profile: string,
   taskTrees: readonly CodingDependencyTree[],
   consume: (input: CodingDependencyInput) => Promise<void>,
+  consumeTree?: (input: CodingDependencyInput) => Promise<void>,
 ): Promise<CodingDependencyCatalog> {
   const inventory = structuredClone(frozen),
     { hash: inventoryHash, ...body } = inventory;
@@ -54,7 +55,8 @@ export async function captureCodingDependencyAssets(
     return dependencyFail();
   const held = holdCodingConfiguration(profile),
     opened: number[] = [],
-    mappingRoots = new Map<string, ReturnType<typeof holdDependencyMappingRoot>>();
+    mappingRoots = new Map<string, ReturnType<typeof holdDependencyMappingRoot>>(),
+    treeSources = new Map<string, ReturnType<typeof holdDependencyTree>>();
   try {
     const projects = held.projects.map((p) => ({
       ...p,
@@ -62,6 +64,8 @@ export async function captureCodingDependencyAssets(
         ? ('selected' as const)
         : ('metadata-only' as const),
     }));
+    const budget = new DependencyBudget();
+    budget.metadata([held.configuration, projects, inventory]);
     const trees = new Map<string, CodingAssetCapture>();
     for (const input of taskTrees) {
       const task = inventory.tasks.find((t) => t.id === input.taskId),
@@ -74,6 +78,7 @@ export async function captureCodingDependencyAssets(
         trees.has(task.id)
       )
         return dependencyFail();
+      budget.capture(snapshot);
       trees.set(task.id, snapshot);
     }
     const plans = new Map<
@@ -148,8 +153,6 @@ export async function captureCodingDependencyAssets(
       )
         return dependencyFail();
     }
-    const budget = new DependencyBudget();
-    budget.metadata([held.configuration, projects, inventory.tasks]);
     // All namespaces, types, mounts and alias counts precede ANY dependency content.
     for (const plan of plans.values()) {
       plan.fd = fs.openSync(plan.root, assetDirectoryFlags);
@@ -170,23 +173,43 @@ export async function captureCodingDependencyAssets(
       );
       budget.capture(plan.metadata);
     }
-    for (const tree of trees.values()) budget.capture(tree);
+    for (const [taskId, tree] of trees) treeSources.set(taskId, holdDependencyTree(tree));
     const metadata = new Map([...plans].map(([slot, p]) => [slot, p.metadata!.manifest]));
-    // Resolve link text against metadata before hashing selected bodies.
-    for (const task of inventory.tasks) {
-      const project = projects.find((p) => p.root === task.projectRoot)!;
-      const mappings = project.mounts.map((m) => {
-        const slot = dependencyHash([m.source, m.target]),
-          plan = plans.get(slot)!;
-        return {
-          slot,
-          source: m.source,
-          target: m.target,
-          file: plan.file,
-          manifestHash: plan.metadata!.manifest.hash,
-        };
+    // Full selection, current original witnesses, links and aggregate accounting precede ALL consumers.
+    {
+      const tasks = inventory.tasks.map((task) => {
+        const record = dependencyTaskRecord(
+          task,
+          projects.find((p) => p.root === task.projectRoot)!,
+          trees.get(task.id)?.manifest,
+          metadata,
+          true,
+        );
+        budget.metadata(record);
+        return record;
       });
-      dependencyVirtualTree(mappings, metadata, trees.get(task.id)?.manifest, true);
+      if (
+        Buffer.byteLength(
+          JSON.stringify({
+            format: 1,
+            inventoryHash,
+            configuration: held.configuration,
+            projects,
+            tasks,
+          }),
+        ) > 16777216
+      )
+        throw Error('coding_asset_limit');
+    }
+    if (consumeTree) {
+      const consumed = new Set<string>();
+      for (const [taskId, tree] of trees) {
+        const slot = 'tree-' + tree.manifest.hash;
+        if (consumed.has(slot)) continue;
+        const capture = treeSources.get(taskId)!.capture();
+        await consumeTree({ slot, capture });
+        consumed.add(slot);
+      }
     }
     const manifests = new Map<string, CodingAssetManifest>(),
       witnesses = new Map<string, { state: string; hash: string }>();
@@ -206,32 +229,14 @@ export async function captureCodingDependencyAssets(
       witnesses.set(slot, { state: capture.sourceStateHash, hash: capture.manifest.hash });
       await consume({ slot, capture });
     }
-    const tasks = inventory.tasks.map((task) => {
-      const project = projects.find((p) => p.root === task.projectRoot)!;
-      const mappings = project.mounts.map((m) => {
-        const slot = dependencyHash([m.source, m.target]);
-        return {
-          slot,
-          source: m.source,
-          target: m.target,
-          file: plans.get(slot)!.file,
-          manifestHash: manifests.get(slot)!.hash,
-        };
-      });
-      const virtual = dependencyVirtualTree(mappings, manifests, trees.get(task.id)?.manifest);
-      const record = {
-        taskId: task.id,
-        projectId: project.id,
-        policyHash: dependencyHash([task.policyVersion, task.policy]),
-        treeHash: trees.get(task.id)?.manifest.hash ?? null,
-        treeSelection: trees.has(task.id) ? ('captured' as const) : ('not-supplied' as const),
-        mappings,
-        virtualHash: virtual.hash,
-        links: validateCodingAssetLinks(virtual),
-      };
-      budget.metadata(record);
-      return record;
-    });
+    const tasks = inventory.tasks.map((task) =>
+      dependencyTaskRecord(
+        task,
+        projects.find((p) => p.root === task.projectRoot)!,
+        trees.get(task.id)?.manifest,
+        manifests,
+      ),
+    );
     // Private snapshots, never consumer DTOs, define final expectations.
     for (const [slot, plan] of plans) {
       checkDependencyPath(plan.fd!, plan.root);
@@ -250,14 +255,7 @@ export async function captureCodingDependencyAssets(
       if (current.sourceStateHash !== expected.state || current.manifest.hash !== expected.hash)
         throw Error('stale_coding_asset');
     }
-    for (const tree of trees.values()) {
-      const current = captureAssetTreeAt(tree.root, tree.limits, tree.policy);
-      if (
-        current.sourceStateHash !== tree.sourceStateHash ||
-        current.manifest.hash !== tree.manifest.hash
-      )
-        throw Error('stale_coding_asset');
-    }
+    for (const tree of treeSources.values()) tree.capture();
     for (const root of mappingRoots.values()) root.verify();
     held.verify();
     const catalog = {
@@ -271,6 +269,7 @@ export async function captureCodingDependencyAssets(
     return { ...catalog, hash: dependencyHash(catalog) };
   } finally {
     for (const fd of opened) fs.closeSync(fd);
+    for (const tree of treeSources.values()) tree.close();
     for (const root of mappingRoots.values()) root.close();
     held.close();
   }

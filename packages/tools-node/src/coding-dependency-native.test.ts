@@ -26,6 +26,8 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         JSON.stringify({ type: 'module', exports: './dist/index.js' }),
       );
       for (const name of [
+        'coding-dependency-tree',
+        'coding-dependency-record',
         'coding-dependency-path',
         'coding-dependency-witness',
         'coding-dependency-budget',
