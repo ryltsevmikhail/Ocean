@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
-import { expect, it, vi } from 'vitest';
+import { expect, it as test, vi } from 'vitest';
 import {
   ProfileRebindService,
   RuntimeOwnerDecisions,
@@ -59,6 +59,8 @@ const textProvider: ProviderPort = {
   },
 };
 
+// This fixture creates a real coding sandbox; it requires host native qualification.
+const it = test.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1');
 it('keeps exact old task/changeset/review/run history and diffs readable from frozen origin evidence', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'rebind-history-'));
   fs.mkdirSync(join(root, 'home'), { mode: 0o700 });
