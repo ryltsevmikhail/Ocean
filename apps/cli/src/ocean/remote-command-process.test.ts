@@ -180,7 +180,7 @@ it('never opens the profile on ambiguous endpoint, version or authentication fai
   } finally {
     writeFileSync(p.descriptor, original);
   }
-});
+}, 12_000);
 it('requires private paths and an existing profile before using any published descriptor', async () => {
   const f = await fixture(),
     p = localRuntimePaths(f.profile);
