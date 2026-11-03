@@ -168,7 +168,7 @@ it('refuses the full owner matrix and keeps two racing clients to one exact rele
       },
       { timeout: 15000 },
     );
-    expect(finalized.release.receipt?.operationId).toBe('race-1');
+    expect(finalized.release.receipt?.operationId).toBe('ocean-finalize-v2-' + card.bindingDigest);
     const registry = leaseRegistryRows(f.registryPath);
     expect(registry.receipts).toHaveLength(1);
     expect(registry.leases).toHaveLength(1);

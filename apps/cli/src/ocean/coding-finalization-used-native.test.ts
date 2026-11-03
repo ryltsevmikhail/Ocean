@@ -119,9 +119,12 @@ itNative(
         await service.join();
         expect(service.result(selection)).toMatchObject({
           state: 'finalized',
-          release: { state: 'released', receipt: { operationId: 'finish-used' } },
+          release: {
+            state: 'released',
+            receipt: { operationId: 'ocean-finalize-v2-' + card.bindingDigest },
+          },
         });
-        expect(leases.releaseReceipt('finish-used')?.tokenHash).toBe(
+        expect(leases.releaseReceipt('ocean-finalize-v2-' + card.bindingDigest)?.tokenHash).toBe(
           createHash('sha256').update(task.value.lease.token).digest('hex'),
         );
         expect(rows()).toEqual(before);

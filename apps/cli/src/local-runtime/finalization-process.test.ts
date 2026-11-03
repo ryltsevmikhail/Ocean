@@ -109,7 +109,7 @@ it('finalizes a genuinely prepared task and admits only one separately confirmed
         state: 'released',
         outcome: 'released',
         receipt: {
-          operationId: 'finalize-2',
+          operationId: 'ocean-finalize-v2-' + allow.bindingDigest,
           tokenHash: sha256(f.task.lease.token),
           bindingDigest: allow.bindingDigest,
         },
