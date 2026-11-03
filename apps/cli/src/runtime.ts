@@ -48,7 +48,6 @@ import {
   SequentialIdGenerator,
   systemClock,
 } from '@runnets/store';
-
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
   readonly desktopAssets?: DesktopAssetStore;
@@ -156,6 +155,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       close: () => {},
     };
   }
+  if (existsSync(join(dirname(dbPath), '.incomplete'))) throw new Error('recovery_required');
   if (existsSync(join(dirname(dbPath), 'restore-guard.json')) && !options.restoredAccess)
     throw new Error('restore_restricted');
   const release = ownSqliteRuntime(dbPath, options.requireUnpublished);

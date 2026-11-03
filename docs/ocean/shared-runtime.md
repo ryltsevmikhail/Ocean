@@ -178,7 +178,7 @@ existing 2 MiB frame limit. Durable preparation binds room/request/body/recipien
 and send admission; unknown publication outcomes never auto-replay. Native
 preview/save stays in Electron main. See the [Desktop asset contract](../integration/desktop-assets.md)
 for exact paths, limits, snapshot ownership, refusal states and qualification.
-Public full-format-2 backup, full restore/rebind and new GUI qualification remain open.
+The [7.8 composition](../integration/profile-backup.md) implements public format-2 backup and full inert quarantine from frozen SQLite and Desktop references. Authoritative execution rebind/reconciliation and new GUI qualification remain open. Accepted 7.7 checkpoint: `3114a857359dc6a842df9f70d3b7811b0177747c`, including reviewed fixes.
 
 ## Acceptance
 
@@ -205,4 +205,4 @@ provider/effect counters in synthetic fixtures, never live credentials. Document
 commands, exit statuses and transcript/state evidence. Root check/build/format,
 ACP compatibility, Linux socket/security, reconnect/backpressure and desktop-entry
 results are required. Passing these gates does not close the remaining Ocean1.1
-asset-complete backup/restore and live release RC gates.
+independent 7.8 review, executable restore/rebind and live release RC gates.

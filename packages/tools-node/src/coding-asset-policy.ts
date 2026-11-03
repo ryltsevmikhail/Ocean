@@ -14,7 +14,7 @@ export function checkAssetPolicy(
   before: BigIntStats,
   publicationCandidate = false,
 ): void {
-  if (policy === 'desktop') return desktopAssetPolicy(relative, before);
+  if (policy === 'desktop') return desktopAssetPolicy(relative, before, publicationCandidate);
   if ((policy === 'coding-worktree' || policy === 'coding-dependency') && relative) {
     const parts = relative.split('/');
     if (

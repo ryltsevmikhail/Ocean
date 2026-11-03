@@ -27,7 +27,21 @@ it.each(['secret-alias', 'protected', 'unknown-mount', 'fifo', 'later-root-secre
       if (kind === 'fifo') {
         const { execFileSync } = await import('node:child_process');
         execFileSync('mkfifo', [join(f.deps, 'node_modules/pipe')], {
-          env: { PATH: process.env['PATH'], HOME: process.env['HOME'] },
+          env: {
+            ...Object.fromEntries(
+              [
+                'HOME',
+                'XDG_RUNTIME_DIR',
+                'XDG_CONFIG_HOME',
+                'XDG_DATA_HOME',
+                'XDG_STATE_HOME',
+                'XDG_CACHE_HOME',
+                'TMPDIR',
+              ].map((key) => [key, process.env[key]]),
+            ),
+            PATH: process.env['PATH'],
+            HOME: process.env['HOME'],
+          },
         });
       }
       if (kind === 'later-root-secret') {

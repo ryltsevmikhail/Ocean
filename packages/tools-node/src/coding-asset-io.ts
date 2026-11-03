@@ -1,3 +1,4 @@
+import { checkProfileArchiveFile } from './profile-archive-context.js';
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -36,12 +37,13 @@ export function privateAssetChild(parent: number, name: string, expectedPath: st
     throw error;
   }
 }
-export function assetNames(fd: number, limit: number): string[] {
+export function assetNames(fd: number, limit: number, admit?: (name: string) => void): string[] {
   const listing = fs.opendirSync(assetFdPath(fd), { bufferSize: 32 });
   const names: string[] = [];
   try {
     for (let entry = listing.readSync(); entry !== null; entry = listing.readSync()) {
       if (names.length >= limit) throw Error('invalid_coding_asset_archive');
+      admit?.(entry.name);
       names.push(entry.name);
     }
   } finally {
@@ -63,6 +65,7 @@ export function readAssetBlob(
     fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
   );
   try {
+    checkProfileArchiveFile(file);
     const before = fs.fstatSync(file, { bigint: true });
     if (
       !before.isFile() ||

@@ -80,3 +80,26 @@ export {
 export type { DesktopAssetCapture, DesktopAssetCatalog } from './desktop-assets.js';
 export { desktopAssetFiles, desktopLegacyRoot } from './desktop-enrollment.js';
 export * from './local-desktop-client.js';
+
+export { captureProfileBackupAssets, type ProfileBackupCapture } from './profile-backup-capture.js';
+export { verifyProfileBackupAssets } from './profile-backup-verify.js';
+export { restoreProfileBackupAssets } from './profile-backup-restore.js';
+export type {
+  ProfileBackupSource,
+  ProfileBackupAssets,
+  ProfileBackupAssetCatalog,
+} from './profile-backup-types.js';
+export type { ProfileBackupLimits } from './profile-backup-session.js';
+export { ProfileBackupOutput } from './profile-backup-output.js';
+export {
+  profileBackupDatabaseIdentity,
+  verifyProfileBackupEnvelope,
+  verifyProfileBackupOutput,
+} from './profile-backup-envelope.js';
+
+export {
+  prepareProfileBackupAssets,
+  type PreparedProfileBackup,
+} from './profile-backup-prepare.js';
+
+export { copyProfileBackupDatabase } from './profile-backup-copy.js';

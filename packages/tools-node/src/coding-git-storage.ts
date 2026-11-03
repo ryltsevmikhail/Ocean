@@ -1,3 +1,5 @@
+import { checkProfileArchiveFile } from './profile-archive-context.js';
+import { profileBackupSession } from './profile-backup-session.js';
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -11,7 +13,8 @@ export function gitObjectStorage(fd: number, canonical: string, oidLength: numbe
   const states: [string, string][] = [];
   const mount = codingAssetMount(fd);
   let count = 0,
-    metadata = 0;
+    metadata = 0,
+    stored = 0;
   const walk = (directory: number, relative: string): void => {
     checkAssetPath(directory, join(canonical, relative));
     const directoryStat = fs.fstatSync(directory, { bigint: true });
@@ -62,6 +65,12 @@ export function gitObjectStorage(fd: number, canonical: string, oidLength: numbe
               : /^[a-f0-9]{2}$/.test(relative) &&
                 new RegExp('^[a-f0-9]{' + (oidLength - 2) + '}$').test(name);
         if (!valid || !stat.isFile() || stat.nlink !== 1n) return unsupportedGitStorage();
+        stored += Number(stat.size);
+        profileBackupSession.getStore()?.budget.charge('git-storage:' + canonical, {
+          stored,
+          entries: count,
+          metadata,
+        });
         // Linux O_PATH pins metadata without opening the object body for reading.
         const file = fs.openSync(
           join(assetFdPath(directory), name),
@@ -88,6 +97,7 @@ export function gitObjectStorage(fd: number, canonical: string, oidLength: numbe
   return createHash('sha256').update(JSON.stringify(states)).digest('hex');
 }
 export function readGitDescriptor(file: number, maxBytes: number): Buffer {
+  checkProfileArchiveFile(file);
   const before = fs.fstatSync(file, { bigint: true });
   if (
     !before.isFile() ||

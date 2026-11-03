@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, openSync, closeSync, readFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -84,6 +85,11 @@ it('backup keeps schema7 task/rights; restored runtime refuses all coding author
   const created = await service.start(input, { confirm: async () => true });
   expect(created.ok).toBe(true);
   store.close();
+  writeFileSync(
+    join(profile, 'coding-projects.json'),
+    JSON.stringify([{ id: 'registered', root: '/project', testPresets: [], mounts: [] }]),
+    { mode: 0o600 },
+  );
   const snapshot = join(root, 'backup'),
     restored = join(root, 'restored');
   expect((await backupProfile(profile, snapshot)).summary.schema).toBe(12);

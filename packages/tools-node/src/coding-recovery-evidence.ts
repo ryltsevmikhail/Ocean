@@ -1,7 +1,9 @@
+import { profileBackupSession } from './profile-backup-session.js';
+import { retainProfileClassification } from './profile-backup-file.js';
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import type { CodingAssetEntry } from '@runnets/domain';
+import type { CodingAssetEntry, CodingAssetManifest } from '@runnets/domain';
 import {
   codingAssetIdentity,
   codingAssetMount,
@@ -48,6 +50,7 @@ export function readRecoveryJsonBytes(
   limit: number,
   verifyDigest: boolean,
 ): Buffer {
+  profileBackupSession.getStore()?.checkMetadata();
   if (entry?.kind !== 'file' || entry.bytes > limit) return invalidRecovery();
   const path = join(assetFdPath(parent), name);
   const file = fs.openSync(
@@ -75,6 +78,7 @@ export function readRecoveryJsonBytes(
     check();
     if (verifyDigest && createHash('sha256').update(buffer).digest('hex') !== entry.sha256)
       throw Error('stale_coding_asset');
+    retainProfileClassification(file, join(directory, name), buffer);
     return buffer;
   } finally {
     fs.closeSync(file);
@@ -104,6 +108,29 @@ export function readCodingRecoveryRecords(
       2097152,
       true,
     );
+  return decodeCodingRecoveryRecords(
+    capture.manifest,
+    projects,
+    prefix,
+    read,
+    checkIntent,
+    publications,
+  );
+}
+/** Archive-only semantic decoder; the caller supplies bounded verified content by basename. */
+export function decodeCodingRecoveryRecords(
+  manifest: CodingAssetManifest,
+  projects: ReadonlySet<string>,
+  prefix: '' | 'files/',
+  read: (name: string) => Buffer,
+  checkIntent?: (intent: CodingRecoveryIntent) => void,
+  publications?: ReadonlySet<string>,
+): CodingRecoveryRecordEvidence[] {
+  const entries = new Map(
+    manifest.entries
+      .filter((e) => e.path.startsWith(prefix) && e.path !== prefix)
+      .map((e) => [e.path.slice(prefix.length), e]),
+  );
   const records: CodingRecoveryRecordEvidence[] = [];
   for (const name of entries.keys()) {
     if (!name.endsWith('.json')) continue;
@@ -149,7 +176,12 @@ export function readCodingRecoveryRecords(
     if (intent.before) {
       original = 'absent';
       if (before) {
-        const matches = matchesContent(before, intent.before);
+        const matches = matchesContent(
+          before.kind === 'hardlink'
+            ? manifest.entries.find((e) => e.path === before.target)
+            : before,
+          intent.before,
+        );
         original = matches ? 'matching' : 'conflict';
       }
     }
@@ -168,7 +200,13 @@ export function readCodingRecoveryRecords(
     });
   }
   const ids = new Set(records.map((record) => record.id));
-  if ([...entries.keys()].some((name) => !ids.has(name.split('.')[0]!))) return invalidRecovery();
+  if (
+    [...entries.keys()].some(
+      (name) =>
+        !ids.has(name.split('.')[0]!) || !/^[^.]+\.(?:json(?:\.next)?|before|after)$/.test(name),
+    )
+  )
+    return invalidRecovery();
   return records;
 }
 

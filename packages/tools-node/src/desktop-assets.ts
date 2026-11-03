@@ -1,3 +1,4 @@
+import { desktopAliasGuards } from './desktop-preparation-alias.js';
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import type { DesktopAssetInventory, CodingAssetManifest } from '@runnets/domain';
@@ -78,6 +79,8 @@ export function captureDesktopAssets(input: DesktopAssetInventory): DesktopAsset
         if (!paths.has(m.roomId + '/' + m.requestId + '.json'))
           throw Error('desktop_assets_missing');
     },
+    undefined,
+    (metadata, candidates) => desktopAliasGuards(inventory, metadata, candidates),
   );
   const preparations = freeze(
     checkDesktopEvidence(inventory, source.manifest, (path) => readDesktopSource(source, path)),

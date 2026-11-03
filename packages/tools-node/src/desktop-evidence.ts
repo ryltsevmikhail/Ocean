@@ -1,3 +1,7 @@
+import {
+  desktopPreparationAliases,
+  checkDesktopAliasReceipt,
+} from './desktop-preparation-alias.js';
 import { createHash } from 'node:crypto';
 import {
   decodeDesktopAttachments,
@@ -86,6 +90,7 @@ export function checkDesktopEvidence(
     )
       bad();
   }
+  const aliases = desktopPreparationAliases(inventory, manifest);
   const entries = new Map(manifest.entries.map((e) => [e.path, e]));
   const bytes = (path: string) => {
     const entry = entries.get(path);
@@ -141,6 +146,8 @@ export function checkDesktopEvidence(
       )
         return bad();
     }
+    if (aliases.has(room + '/' + requestId + '.json'))
+      checkDesktopAliasReceipt(inventory, room, requestId, value);
     return value;
   };
   const preparations: { room: string; requestId: string; receipt: DesktopPreparation }[] = [];

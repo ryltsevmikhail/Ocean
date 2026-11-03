@@ -1,18 +1,18 @@
 # Ocean 1.1 coding backup development
 
-Status: stage 7 in progress. Validated database inventory and an ownership-held
-capture port are implemented. Selected-root manifests and content-addressed archive copy are implemented.
-Selected-root quarantine materialization and interrupted native worktree-create
-evidence capture are also implemented. The shared-runtime source delivery is
-accepted through correction `dc9e244` and acceptance `56bbef0`; capture still uses
-the actual ownership-held frozen SQLite API, without ownership bypass.
-Workpackage 7.5 is accepted at `a6b3958`, including independent Git object
-identity/closure and compressed/inflated/reconstructed pack bounds. Workpackage
-7.6 is accepted at `ce482d5` and adds the frozen configuration/dependency subgraph described below. Workpackage 7.7 adds the [runtime-owned Desktop subgraph](desktop-assets.md), pending independent acceptance.
-Complete external-asset graph selection, format-2 publication and full profile restore
-are not implemented yet. User-facing
-backup still refuses external coding assets with coding_assets_unavailable.
-This boundary must remain until all asset completeness/restore gates pass.
+Status: stage 7 remains in progress. Workpackage 7.8 now composes the accepted
+worktree/Git, recovery, dependency and Desktop subgraphs into public format 2,
+independent verification and complete private inert quarantine. See the current
+[complete-profile contract, commands, limits and remaining gates](profile-backup.md).
+Independent 7.8 review is still required. The accepted 7.7 checkpoint is
+`3114a857359dc6a842df9f70d3b7811b0177747c`, including reviewed fixes.
+
+The sections below preserve the earlier subgraph contracts and qualification
+history. Their checkpoint-specific statements about future format-2 work are
+superseded by the linked 7.8 contract; their standalone APIs do not by themselves
+prove whole-profile completeness. Shared-runtime acceptance remains through
+`dc9e244`/`56bbef0`, Git integrity through 7.5 `a6b3958`, and frozen dependencies
+through 7.6 `ce482d5`. Capture uses actual ownership-held frozen SQLite metadata.
 
 ## Validated frozen inventory
 
@@ -667,26 +667,15 @@ restored workspace package after source removal. That native fixture first faile
 before worker launch due to its mountpoint setup; the corrected worker run passes.
 No installed profile, key, provider or user coordination registry is used.
 
-## Remaining format-2 work
+## Unified composition and remaining release work
 
-Integrate the selected managed-worktree, partial Git, recovery and frozen
-configuration/dependency subgraphs with the complete bounded external graph.
-The Desktop subgraph and trusted isolated legacy enrollment are implemented in
-7.7 development source (not part of accepted 7.6); independent acceptance and
-unified integration remain open. The receipt link/unlink alias interval still
-refuses capture and preserves source evidence. Full backup must support required
-partial states or truthfully refuse, never silently omit them. Distinguish
-planned-but-absent assets from lost ready assets. Resolve dependency/symlink
-relationships explicitly; never traverse arbitrary home/root paths as a shortcut.
-Preserve required data or refuse unsupported layouts without a false full-backup
-claim. Do not automatically read/copy provider-key files or enable project hooks.
-
-Capture with pinned paths, per-file hashes/size/mode, stable source verification,
-private output ownership and confirmed cleanup only of newly created output.
-Verify missing/corrupt/escaped assets as restore failures. Restored assets belong
-in a private quarantine with old approvals/authority inert until explicit owner
-rebind and effect reconciliation. Maintain old format-1 compatibility and verify
-the full installed Linux round trip before marking this gate complete.
+The [7.8 composition](profile-backup.md) implements complete source selection,
+shared budgets, format-2 publication, archive-only verification and private
+quarantine. It distinguishes planned absence from missing ready assets and closes
+the exact operation-bound Desktop preparation alias interval. Failed output stays
+incomplete; no source cleanup or repair is used as rollback. Executable task
+restore, authoritative owner rebind/reconciliation, remaining crash intervals,
+installed/interactive/live qualification and final release review remain open.
 
 ## Desktop attachment/preparation subgraph (7.7)
 
@@ -699,4 +688,5 @@ public Desktop capture/archive/verify/materialize ports compose with this copied
 SQLite snapshot; they are not unified format 2. See [exact protocol and limits](desktop-assets.md).
 Bound Desktop assets and unenrolled legacy markers refuse new format-1 backup;
 old text-only format-1 restore compatibility and external-coding refusal remain.
-Full global budgets, complete restore/rebind and release/crash gates stay OPEN.
+The 7.8 layer supplies global budgets and complete inert quarantine. Executable
+restore/rebind and the release/crash gates listed there remain OPEN.

@@ -8,12 +8,14 @@ import {
   archiveCodingAssetTree,
   archivePartialCodingGit,
   verifyPartialCodingGitArchive,
+  verifyProfileBackupEnvelope,
 } from '@runnets/tools-node';
 import {
   readCodingBackupInventory,
   snapshotCodingDatabase,
   inspectDatabase,
 } from '@runnets/store-sqlite';
+import { backupProfile, restoreProfile } from './snapshots.js';
 import { createRuntime } from '../runtime.js';
 import { killCreateAt } from '../../test-fixtures/coding-create-worker.test.js';
 import type { CodingAccess } from '@runnets/domain';
@@ -30,6 +32,7 @@ it
   'captures actual interrupted creation at %s across two reopenings without replay or promotion',
   async (phase) => {
     const outer = fs.mkdtempSync(join(tmpdir(), 'ocean-create-crash-')),
+      backupParent = fs.mkdtempSync(join(tmpdir(), 'ocean-create-full-backup-')),
       home = join(outer, 'home'),
       project = join(outer, 'project'),
       managed = join(outer, 'worktrees'),
@@ -131,8 +134,51 @@ it
           });
         }
       }
+      fs.chmodSync(db, 0o600);
+      fs.writeFileSync(
+        join(outer, 'coding-projects.json'),
+        JSON.stringify([
+          {
+            id: 'registered',
+            root: project,
+            testPresets: initial.tasks[0]!.policy.testPresets,
+            mounts: [],
+          },
+        ]),
+        { mode: 0o600 },
+      );
+      const fullArchive = join(backupParent, 'archive');
+      const manifest = await backupProfile(outer, fullArchive, { managedDirectory: managed });
+      expect(manifest.format).toBe(2);
+      fs.rmSync(outer, { recursive: true });
+      expect(verifyProfileBackupEnvelope(fullArchive)).toEqual(manifest);
+      const restored = join(backupParent, 'quarantine');
+      restoreProfile(fullArchive, restored);
+      const slot = worktree.root.split('/').at(-1)!;
+      const gitEvidence = join(restored, 'assets', 'evidence', 'git', slot);
+      expect(fs.existsSync(join(gitEvidence, 'index'))).toBe(phase === 'after_read_tree');
+      expect(fs.readFileSync(join(gitEvidence, 'pack')).subarray(0, 4).toString()).toBe('PACK');
+      expect(readCodingBackupInventory(join(restored, 'runtime.sqlite')).worktrees[0]).toEqual(
+        worktree,
+      );
+      for (const entry of before)
+        expect(
+          fs.readFileSync(
+            join(
+              restored,
+              'assets',
+              'worktrees',
+              slot,
+              'materialized',
+              'tree',
+              'workspace',
+              entry.name,
+            ),
+          ),
+        ).toEqual(entry.bytes);
     } finally {
       vi.unstubAllEnvs();
+      fs.rmSync(backupParent, { recursive: true, force: true });
       fs.rmSync(outer, { recursive: true, force: true });
     }
   },

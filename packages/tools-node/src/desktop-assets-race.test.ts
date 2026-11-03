@@ -125,7 +125,22 @@ with open(sys.argv[1],'r+b') as file,mmap.mmap(file.fileno(),0,access=mmap.ACCES
  if sys.stdin.buffer.read(1)==b'!':page[:]=b'HELLO'`,
       f.file,
     ],
-    { env: { HOME: f.root } },
+    {
+      env: {
+        ...Object.fromEntries(
+          [
+            'HOME',
+            'XDG_RUNTIME_DIR',
+            'XDG_CONFIG_HOME',
+            'XDG_DATA_HOME',
+            'XDG_STATE_HOME',
+            'XDG_CACHE_HOME',
+            'TMPDIR',
+          ].map((key) => [key, process.env[key]]),
+        ),
+        HOME: f.root,
+      },
+    },
   );
   const exited = once(child, 'close');
   try {

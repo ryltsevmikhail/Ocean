@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import { profileBackupSession } from './profile-backup-session.js';
 import { createHash } from 'node:crypto';
 import { scanAssetSource } from './coding-asset-source.js';
 import { planAssetSelection } from './coding-asset-selection.js';
@@ -107,7 +109,10 @@ export function captureAssetTreeAt(
     entries: new Map(metadata.sourceEntries),
     mount: metadata.sourceMount,
   };
-  if (metadata) preflight?.(metadata);
+  if (metadata) {
+    profileBackupSession.getStore()?.admit(metadata);
+    preflight?.(metadata);
+  }
   const guards = metadata && candidates && publication?.(metadata, candidates);
   const first = scanAssetSource(
       root,
@@ -135,6 +140,46 @@ export function captureAssetTreeAt(
   )
     throw Error('stale_coding_asset');
   issuedCaptures.set(first, { digest: captureDigest(first), ...(guards && { guards }) });
+  const session = profileBackupSession.getStore();
+  if (session) {
+    const origin = structuredClone(first),
+      fd = fs.openSync(
+        pinned === undefined ? root : '/proc/self/fd/' + pinned,
+        fs.constants.O_RDONLY |
+          fs.constants.O_DIRECTORY |
+          (pinned === undefined ? fs.constants.O_NOFOLLOW : 0),
+      );
+    const checkMetadata = () => {
+      const current = scanAssetSource(
+        root,
+        limits,
+        policy,
+        expected,
+        true,
+        fd,
+        selection,
+        guards && { guards },
+      );
+      if (current.sourceStateHash !== origin.sourceStateHash) throw Error('stale_coding_asset');
+    };
+    session.retain('tree:' + root + ':' + JSON.stringify(paths ?? null), origin.manifest.hash, {
+      metadata: checkMetadata,
+      bytes: () => {
+        const current = scanAssetSource(
+          root,
+          limits,
+          policy,
+          expected,
+          false,
+          fd,
+          selection,
+          guards && { guards },
+        );
+        if (current.manifest.hash !== origin.manifest.hash) throw Error('stale_coding_asset');
+      },
+      close: () => fs.closeSync(fd),
+    });
+  }
   return first;
 }
 /** Verify captured bytes as well as source identities after consuming the evidence. */

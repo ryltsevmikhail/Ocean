@@ -13,6 +13,17 @@ export function partialFixture(shape = 'no-checkout', objectFormat = 'sha1', sep
   fs.mkdirSync(project);
   fs.mkdirSync(managed, { mode: 0o700 });
   const env = {
+    ...Object.fromEntries(
+      [
+        'HOME',
+        'XDG_RUNTIME_DIR',
+        'XDG_CONFIG_HOME',
+        'XDG_DATA_HOME',
+        'XDG_STATE_HOME',
+        'XDG_CACHE_HOME',
+        'TMPDIR',
+      ].map((key) => [key, process.env[key]]),
+    ),
     PATH: '/usr/bin',
     HOME: home,
     GIT_CONFIG_NOSYSTEM: '1',

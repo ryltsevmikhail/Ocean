@@ -1,3 +1,4 @@
+import { profileBackupSession } from './profile-backup-session.js';
 import { registerPartialGit } from './coding-git-partial-origin.js';
 import * as fs from 'node:fs';
 import { join } from 'node:path';
@@ -49,6 +50,7 @@ export function holdPartialCodingGit(
   managedDirectory: string,
   preflight?: (root: number) => void,
 ) {
+  profileBackupSession.getStore()?.checkMetadata();
   const observer = new GitEvidenceObserver();
   let indexFd: number | undefined;
   try {
@@ -73,7 +75,7 @@ export function holdPartialCodingGit(
     observer.verify();
     if (observation.rootFd !== null) preflight?.(observation.rootFd);
     observer.verify();
-    const packed = packCodingGitObjects(binding.baseCommit, objects, indexFd);
+    const packed = packCodingGitObjects(binding.baseCommit, objects, indexFd, binding.root);
     const indexHash = index === null ? null : gitDigest(index),
       packHash = packed.packSha256;
     let active = true;
@@ -84,7 +86,10 @@ export function holdPartialCodingGit(
         throw Error('stale_coding_git_storage');
       if (storage !== gitObjectStorage(objects, objectPath, binding.baseCommit.length))
         throw Error('stale_coding_git_storage');
-      if (packCodingGitObjects(binding.baseCommit, objects, indexFd).packSha256 !== packHash)
+      if (
+        packCodingGitObjects(binding.baseCommit, objects, indexFd, binding.root).packSha256 !==
+        packHash
+      )
         throw Error('stale_coding_git_storage');
       observer.verify();
     };
@@ -102,15 +107,29 @@ export function holdPartialCodingGit(
       binding.gitCommonDir,
       binding.projectRoot,
     ]);
+    const close = () => {
+      active = false;
+      if (indexFd !== undefined) fs.closeSync(indexFd);
+      observer.close();
+    };
+    const session = profileBackupSession.getStore();
+    if (session)
+      session.retain('partial-git:' + binding.root, packHash + ':' + indexHash, {
+        metadata: () => {
+          observer.verify(true);
+          if (storage !== gitObjectStorage(objects, objectPath, binding.baseCommit.length))
+            throw Error('stale_coding_git_storage');
+        },
+        bytes: verify,
+        close,
+      });
     return {
       capture,
       rootFd: observation.rootFd,
       verifyBinding: () => observer.verify(),
       verify,
       close: () => {
-        active = false;
-        if (indexFd !== undefined) fs.closeSync(indexFd);
-        observer.close();
+        if (!session) close();
       },
     };
   } catch (error) {

@@ -27,6 +27,17 @@ export function graphFixture(count = 1) {
       execFileSync('/usr/bin/git', ['-C', project, ...args], {
         encoding: 'utf8',
         env: {
+          ...Object.fromEntries(
+            [
+              'HOME',
+              'XDG_RUNTIME_DIR',
+              'XDG_CONFIG_HOME',
+              'XDG_DATA_HOME',
+              'XDG_STATE_HOME',
+              'XDG_CACHE_HOME',
+              'TMPDIR',
+            ].map((key) => [key, process.env[key]]),
+          ),
           PATH: '/usr/bin',
           GIT_CONFIG_GLOBAL: '/dev/null',
           GIT_CONFIG_NOSYSTEM: '1',

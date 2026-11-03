@@ -44,7 +44,8 @@ export async function runOperations(
           const marker = JSON.parse(readFileSync(join(profile, 'restore-guard.json'), 'utf8')) as {
             state?: unknown;
           };
-          if (marker.state === 'ready') restorationState = 'ready';
+          if (marker.state === 'ready' && !existsSync(join(profile, '.incomplete')))
+            restorationState = 'ready';
         } catch {
           /* Incomplete remains unavailable for execution. */
         }

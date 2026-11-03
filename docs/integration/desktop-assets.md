@@ -97,9 +97,13 @@ Supported incomplete evidence includes private `.upload-*` directories and
 unlinked `<request>.json.<uuid>.tmp` files. External hardlinks, symlinks, protected
 names, nested mounts, missing required blobs/metadata/receipts, corrupt references,
 legacy receipts without the complete prepared-body binding and observed source
-changes refuse. A receipt interrupted between link and unlink has two inode names;
-7.7 deliberately refuses this interval (`protected_desktop_asset`) and preserves
-both source names. It does not claim all crash states are capturable.
+changes refuse. The accepted 7.7 checkpoint `3114a85` refused the receipt link/unlink interval.
+The [7.8 unified layer](profile-backup.md) now retains its exact two same-room
+receipt names only for one frozen started preparation with full request/body/to/ID
+binding, exact two-link membership, no sent association and original private
+mount/identity/byte proof. Outside/third aliases and ambiguous or completed
+operations still refuse before bodies. Both names remain inert after restoration;
+this exception does not permit arbitrary external hardlinks.
 
 ## Qualification and remaining gates
 
@@ -122,9 +126,11 @@ Run root `pnpm check`, `pnpm build`, `pnpm format:check`; targeted process:
 native: `OCEAN_SANDBOX_NATIVE=1 pnpm exec vitest run --config vitest.process.config.ts packages/tools-node/src/desktop-assets-native.test.ts`.
 Use explicit disposable HOME, XDG_RUNTIME_DIR and userData for every qualification.
 
-Public format 1 still refuses external coding assets and now refuses bound
+The low-level SQLite-only capture port still refuses external coding and bound
 Desktop assets; unregistered marker-bearing profiles require explicit enrollment
 instead of silently producing a new SQLite-only backup. Old format-1 text-only
-archives retain their historical summary shape and restore guard. Full format 2,
-unified cross-subgraph budgets, full profile restore/rebind, remaining crash
-intervals, installed/live RC, final whole-branch review and publication remain OPEN.
+archives retain their historical summary shape and restore guard. New public
+backups use [format 2](profile-backup.md), including zero-coding-task Desktop
+profiles. Unified budgets and inert quarantine are implemented in 7.8; executable
+rebind, remaining crash intervals, installed/live RC, current GUI acceptance,
+final whole-branch review and publication remain OPEN.

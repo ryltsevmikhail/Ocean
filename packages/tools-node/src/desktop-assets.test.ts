@@ -239,3 +239,39 @@ it.each(['missing', 'changed-original-body'])(
     expect(() => captureDesktopAssets(inventory)).toThrow('desktop_asset_corrupted');
   },
 );
+
+it('retains the exact started preparation link/unlink pair after source deletion', () => {
+  const f = fixture(),
+    canonical = f.requestId + '.json',
+    temporary = canonical + '.32345678-1234-4123-8123-123456789abc.tmp';
+  fs.linkSync(join(f.root, f.room, canonical), join(f.root, f.room, temporary));
+  const inventory = {
+    ...f.inventory,
+    messages: [],
+    operations: [
+      {
+        id: 'prepare:' + f.room + ':' + f.requestId,
+        binding: JSON.stringify({
+          room: f.room,
+          requestId: f.requestId,
+          body: f.receipt.body,
+          to: null,
+          ids: [f.id],
+        }),
+        state: 'started' as const,
+        result: null,
+      },
+    ],
+  };
+  const archive = join(f.parent, 'alias-archive');
+  archiveDesktopAssets(captureDesktopAssets(inventory), archive);
+  fs.rmSync(f.root, { recursive: true });
+  expect(verifyDesktopAssetArchive(archive).inventory.operations[0]?.state).toBe('started');
+  const output = join(f.parent, 'alias-quarantine');
+  restoreDesktopAssets(archive, output);
+  const first = join(output, 'tree', f.room, canonical),
+    second = join(output, 'tree', f.room, temporary);
+  expect(fs.readFileSync(first, 'utf8')).toBe(JSON.stringify(f.receipt));
+  expect(fs.statSync(first).ino).toBe(fs.statSync(second).ino);
+  expect(fs.statSync(first).nlink).toBe(2);
+});

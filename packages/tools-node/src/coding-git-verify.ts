@@ -7,7 +7,11 @@ type PackEvidence = Pick<
   'baseCommit' | 'objectFormat' | 'objectIds' | 'objectBytes' | 'pack'
 >;
 /** Verify actual object identities and exact reachable closure without any source repository. */
-export function verifyCodingGitPack(evidence: PackEvidence, index: Buffer | null): void {
+export function verifyCodingGitPack(
+  evidence: PackEvidence,
+  index: Buffer | null,
+  charge?: (bytes: number) => void,
+): void {
   try {
     const { baseCommit, objectFormat, objectIds, objectBytes, pack } = evidence;
     const oid = new RegExp('^[a-f0-9]{' + (objectFormat === 'sha1' ? 40 : 64) + '}$');
@@ -18,7 +22,7 @@ export function verifyCodingGitPack(evidence: PackEvidence, index: Buffer | null
       objectIds.some((id) => !oid.test(id)) ||
       new Set(objectIds).size !== objectIds.length ||
       !objectIds.includes(baseCommit) ||
-      preflightGitPack(pack, objectFormat, objectIds.length) !== objectBytes
+      preflightGitPack(pack, objectFormat, objectIds.length, 2147483648, charge) !== objectBytes
     )
       return invalidGitPack();
     withPrivateGit(objectFormat, index, (git) => {

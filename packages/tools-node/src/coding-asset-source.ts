@@ -1,3 +1,4 @@
+import { checkProfileArchiveFile } from './profile-archive-context.js';
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { type AssetSelection } from './coding-asset-selection.js';
@@ -34,6 +35,12 @@ export function scanAssetSource(
   pinned?: number,
   selection?: AssetSelection,
   publications?: { candidates?: Set<string>; guards?: PublicationGuards },
+  account?: (values: {
+    stored: number;
+    logical: number;
+    metadata: number;
+    entries: number;
+  }) => void,
 ): CodingAssetCapture {
   const uid = process.getuid?.();
   if (process.platform !== 'linux' || uid === undefined || fs.realpathSync(root) !== root)
@@ -48,9 +55,17 @@ export function scanAssetSource(
   const buffer = Buffer.alloc(1048576),
     emptyName = Buffer.alloc(0);
   let bytes = 0,
+    logicalBytes = 0,
     metadataBytes = selection ? Buffer.byteLength(JSON.stringify(selection.paths)) + 128 : 0,
     pendingNames = 0,
     pendingBytes = 0;
+  const reserve = (stored = bytes, extraEntries = 0) =>
+    account?.({
+      stored,
+      logical: logicalBytes,
+      metadata: 4 * (metadataBytes + pendingBytes + 256),
+      entries: entries.length + pendingNames + extraEntries,
+    });
   const check = (stat: fs.BigIntStats) => {
     if (stat.uid !== BigInt(uid) || (stat.mode & 0o7000n) !== 0n)
       throw Error('unsupported_coding_asset');
@@ -59,6 +74,7 @@ export function scanAssetSource(
     metadataBytes += Buffer.byteLength(JSON.stringify(entry)) + codingAssetIdentity(stat).length;
     if (entries.length + pendingNames >= limits.entries || metadataBytes + pendingBytes > 33554432)
       throw Error('coding_asset_limit');
+    reserve(bytes, 1);
     entries.push(entry);
     states.push([entry.path, codingAssetIdentity(stat)]);
   };
@@ -129,6 +145,7 @@ export function scanAssetSource(
                 throw Error('coding_asset_limit');
               pendingNames++;
               pendingBytes += length;
+              reserve();
               // latin1 preserves raw name bytes so invalid UTF-8 cannot be silently replaced.
               names.push(Buffer.from(entry.name, 'latin1'));
             }
@@ -165,7 +182,7 @@ export function scanAssetSource(
     const key = before.dev + ':' + before.ino,
       previous = inodes.get(key);
     if (
-      (selection || policy === 'coding-dependency') &&
+      (selection || policy === 'coding-dependency' || policy === 'desktop') &&
       policy !== 'classified-legacy' &&
       metadataOnly &&
       before.nlink > 1n
@@ -175,6 +192,8 @@ export function scanAssetSource(
       aliases.set(key, group);
     }
     if (!previous && before.size > BigInt(limits.bytes - bytes)) throw Error('coding_asset_limit');
+    logicalBytes += Number(before.size);
+    reserve(bytes + (previous ? 0 : Number(before.size)));
     const file = fs.openSync(
       path,
       (metadataOnly ? 0x200000 : fs.constants.O_RDONLY) |
@@ -190,6 +209,7 @@ export function scanAssetSource(
         append({ path: relative, kind: 'hardlink', target: previous.path }, before);
         return;
       }
+      if (!metadataOnly) checkProfileArchiveFile(file);
       const size = Number(before.size);
       const hashBody = () => hashAssetBytes(file, metadataOnly ? 0 : size, buffer);
       const sha256 = guard ? guard.read(file, hashBody) : hashBody();

@@ -9,6 +9,7 @@ export function preflightGitPack(
   format: 'sha1' | 'sha256',
   count: number,
   inflatedLimit = 2147483648,
+  charge?: (bytes: number) => void,
 ): number {
   const oidBytes = format === 'sha1' ? 20 : 32,
     end = pack.length - oidBytes;
@@ -51,6 +52,7 @@ export function preflightGitPack(
     // Charge the declared entry bytes before inflation, including delta instructions.
     // A lowered ceiling permits bounded callers/tests; it cannot relax the production limit.
     inflated += size;
+    charge?.(Math.max(inflated, logical));
     if (inflated > inflatedLimit) return invalidGitPack();
     if (type === 6) {
       let part = byte(),
@@ -102,6 +104,7 @@ export function preflightGitPack(
       objectSize = deltaSize();
     }
     logical += objectSize;
+    charge?.(Math.max(inflated, logical));
     if (logical > 2147483648) return invalidGitPack();
   }
   if (offset !== end) return invalidGitPack();

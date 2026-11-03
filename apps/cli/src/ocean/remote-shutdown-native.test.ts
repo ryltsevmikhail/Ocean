@@ -44,6 +44,17 @@ it.runIf(process.env['OCEAN_SANDBOX_NATIVE'] === '1').each(['pending', 'descenda
         ['--input-type=module', '-e', program, profile, phase],
         {
           env: {
+            ...Object.fromEntries(
+              [
+                'HOME',
+                'XDG_RUNTIME_DIR',
+                'XDG_CONFIG_HOME',
+                'XDG_DATA_HOME',
+                'XDG_STATE_HOME',
+                'XDG_CACHE_HOME',
+                'TMPDIR',
+              ].map((key) => [key, process.env[key]]),
+            ),
             PATH: process.env['PATH'],
             HOME: process.env['HOME'],
             XDG_RUNTIME_DIR: run,

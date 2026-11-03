@@ -1,3 +1,4 @@
+import { profileBackupSession } from './profile-backup-session.js';
 import { checkDependencyPath } from './coding-dependency-path.js';
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -80,6 +81,7 @@ export interface FrozenCodingConfiguration {
 }
 /** The owning profile must already be under maintenance ownership. Keeps absence and content witnesses private. */
 export function holdCodingConfiguration(profile: string) {
+  profileBackupSession.getStore()?.checkMetadata();
   const root = privateAssetDirectory(profile);
   let file: number | undefined;
   try {
@@ -118,7 +120,7 @@ export function holdCodingConfiguration(profile: string) {
         offset += n;
       }
     }
-    const verify = () => {
+    const verify = (metadataOnly = false) => {
       checkDependencyPath(root, profile);
       if (
         codingAssetIdentity(fs.fstatSync(root, { bigint: true })) !== rootState ||
@@ -138,6 +140,7 @@ export function holdCodingConfiguration(profile: string) {
         codingAssetMount(file) !== mount
       )
         throw Error('stale_coding_asset');
+      if (metadataOnly) return;
       const current = Buffer.alloc(bytes!.length);
       let offset = 0;
       while (offset < current.length) {

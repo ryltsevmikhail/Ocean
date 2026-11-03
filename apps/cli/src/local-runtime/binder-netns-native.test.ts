@@ -88,7 +88,22 @@ it.runIf(
         paths.endpoint,
         evidence,
       ],
-      { env: { PATH: process.env['PATH'] } },
+      {
+        env: {
+          ...Object.fromEntries(
+            [
+              'HOME',
+              'XDG_RUNTIME_DIR',
+              'XDG_CONFIG_HOME',
+              'XDG_DATA_HOME',
+              'XDG_STATE_HOME',
+              'XDG_CACHE_HOME',
+              'TMPDIR',
+            ].map((key) => [key, process.env[key]]),
+          ),
+          PATH: process.env['PATH'],
+        },
+      },
     );
     const exit = once(processF, 'close');
     try {

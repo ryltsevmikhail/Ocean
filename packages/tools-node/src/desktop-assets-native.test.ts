@@ -21,6 +21,8 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
     try {
       for (const name of [
         'coding-asset-scan',
+        'profile-backup-session',
+        'profile-archive-context',
         'coding-asset-source',
         'coding-asset-selection',
         'coding-asset-state',

@@ -1,3 +1,4 @@
+import { profileBackupSession } from './profile-backup-session.js';
 import { codingGitRoots } from './coding-git-roots.js';
 import { verifyCodingGitPack } from './coding-git-verify.js';
 import * as fs from 'node:fs';
@@ -8,7 +9,13 @@ import { join } from 'node:path';
 import { assetDirectoryFlags, assetFdPath, checkAssetPath } from './coding-asset-io.js';
 import { readGitDescriptor, unsupportedGitStorage } from './coding-git-storage.js';
 /** Pack only explicit base/index roots through sterile local Git and inherited descriptors. */
-export function packCodingGitObjects(baseCommit: string, objects: number, indexFd?: number) {
+export function packCodingGitObjects(
+  baseCommit: string,
+  objects: number,
+  indexFd?: number,
+  occurrence?: string,
+  reserveOnly = false,
+) {
   const index = indexFd === undefined ? null : readGitDescriptor(indexFd, 16777216);
   let scratch: string | undefined, scratchFd: number | undefined;
   const scratchEntries: string[] = [];
@@ -107,6 +114,28 @@ export function packCodingGitObjects(baseCommit: string, objects: number, indexF
       )
         return unsupportedGitStorage();
     }
+    const accountingKey =
+      'git-closure:' +
+      (occurrence ?? fs.realpathSync(assetFdPath(objects))) +
+      ':' +
+      baseCommit +
+      ':' +
+      (index ? createHash('sha256').update(index).digest('hex') : 'absent');
+    profileBackupSession.getStore()?.budget.charge(accountingKey, {
+      logical: bytes,
+      entries: objectIds.length,
+      metadata: Buffer.byteLength(JSON.stringify(objectIds)),
+    });
+    if (reserveOnly)
+      return {
+        format: 1 as const,
+        baseCommit,
+        objectFormat,
+        objectIds: objectIds.sort(),
+        objectBytes: bytes,
+        pack: Buffer.alloc(0),
+        packSha256: '',
+      };
     const pack = git(
       [
         'pack-objects',
@@ -128,8 +157,13 @@ export function packCodingGitObjects(baseCommit: string, objects: number, indexF
       new Set(objectIds).size !== objectIds.length
     )
       return unsupportedGitStorage();
+    profileBackupSession.getStore()?.budget.charge(accountingKey, { stored: pack.length });
     try {
-      verifyCodingGitPack({ baseCommit, objectFormat, objectIds, objectBytes: bytes, pack }, index);
+      verifyCodingGitPack(
+        { baseCommit, objectFormat, objectIds, objectBytes: bytes, pack },
+        index,
+        (logical) => profileBackupSession.getStore()?.budget.charge(accountingKey, { logical }),
+      );
     } catch {
       throw Error('coding_git_capture_failed');
     }

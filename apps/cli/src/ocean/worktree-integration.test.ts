@@ -155,9 +155,9 @@ it('persists a real worktree/full diff across reopen, holds legacy writers and r
     ).toBe(true);
     expect(await service.changes.capture(access, 'capture')).toEqual(captured);
     await expect(backupProfile(profile, join(root, 'incomplete-backup'))).rejects.toThrow(
-      'coding_assets_unavailable',
+      'invalid_coding_inventory',
     );
-    expect(existsSync(join(root, 'incomplete-backup'))).toBe(false);
+    expect(existsSync(join(root, 'incomplete-backup', '.incomplete'))).toBe(true);
     expect(store.coding.atomic((tx) => tx.task('task'))?.worktreeRoot).toBe(prepared.value.root);
     renameSync(prepared.value.root, join(root, 'moved-worktree'));
     expect(await service.changes.prepare(access, { confirm: async () => true })).toMatchObject({

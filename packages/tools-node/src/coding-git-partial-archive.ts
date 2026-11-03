@@ -1,3 +1,4 @@
+import type { ProfileBackupBudget } from './profile-backup-session.js';
 import { verifyCodingGitPack } from './coding-git-verify.js';
 import * as fs from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -156,13 +157,15 @@ export function archivePartialCodingGit(capture: CodingPartialGitCapture, path: 
 export function verifyPartialCodingGitArchive(
   path: string,
   expected: string,
+  budget?: ProfileBackupBudget,
 ): CodingPartialGitCapture {
-  return verifyArchive(path, expected, false);
+  return verifyArchive(path, expected, false, budget);
 }
 function verifyArchive(
   path: string,
   expected: string,
   incomplete: boolean,
+  budget?: ProfileBackupBudget,
 ): CodingPartialGitCapture {
   if (!sha(expected)) return fail();
   const privateFd = privateAssetDirectory(path),
@@ -197,6 +200,11 @@ function verifyArchive(
     ] as const)
       if (!Number.isSafeInteger(m[field]) || Number(m[field]) < 0 || Number(m[field]) > limit)
         return fail();
+    const accountingKey = 'git:' + path;
+    budget?.charge(accountingKey, {
+      logical: Number(m['objectBytes']),
+      entries: m['objectIds'].length,
+    });
     const indexBytes = m['indexBytes'];
     if (
       !(indexBytes === null
@@ -246,6 +254,7 @@ function verifyArchive(
         pack,
       },
       index,
+      (logical) => budget?.charge(accountingKey, { logical }),
     );
     observer.verify();
     checkAssetPath(privateFd, path);

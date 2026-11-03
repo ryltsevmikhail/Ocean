@@ -23,7 +23,21 @@ async function probe(program: string): Promise<Record<string, unknown>> {
     import { connectLocalRuntime, localRuntimePaths } from './packages/tools-node/dist/index.js';
     const profile = process.argv[1], paths = localRuntimePaths(profile);`;
   const child = spawn(process.execPath, ['--input-type=module', '-e', imports + program, profile], {
-    env: { PATH: process.env['PATH'], XDG_RUNTIME_DIR: run },
+    env: {
+      ...Object.fromEntries(
+        [
+          'HOME',
+          'XDG_RUNTIME_DIR',
+          'XDG_CONFIG_HOME',
+          'XDG_DATA_HOME',
+          'XDG_STATE_HOME',
+          'XDG_CACHE_HOME',
+          'TMPDIR',
+        ].map((key) => [key, process.env[key]]),
+      ),
+      PATH: process.env['PATH'],
+      XDG_RUNTIME_DIR: run,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let errors = '',

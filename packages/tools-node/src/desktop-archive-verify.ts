@@ -1,3 +1,4 @@
+import { checkProfileArchiveFile } from './profile-archive-context.js';
 import * as fs from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -28,6 +29,7 @@ export function readDesktopArchiveFile(
       fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
     );
   try {
+    checkProfileArchiveFile(fd);
     const before = fs.fstatSync(fd, { bigint: true }),
       state = codingAssetIdentity(before) + ':' + codingAssetMount(fd);
     if (

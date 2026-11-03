@@ -60,7 +60,22 @@ async function fixture(kill = true) {
     const p = spawn(
       process.execPath,
       ['apps/cli/dist/main.js', 'runtime', 'start', '--profile', profile, '--json'],
-      { env: { XDG_RUNTIME_DIR: run } },
+      {
+        env: {
+          ...Object.fromEntries(
+            [
+              'HOME',
+              'XDG_RUNTIME_DIR',
+              'XDG_CONFIG_HOME',
+              'XDG_DATA_HOME',
+              'XDG_STATE_HOME',
+              'XDG_CACHE_HOME',
+              'TMPDIR',
+            ].map((key) => [key, process.env[key]]),
+          ),
+          XDG_RUNTIME_DIR: run,
+        },
+      },
     );
     const exit = once(p, 'close');
     try {

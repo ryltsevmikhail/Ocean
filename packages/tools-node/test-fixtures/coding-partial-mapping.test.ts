@@ -19,7 +19,22 @@ with open(sys.argv[1],'r+b') as f, mmap.mmap(f.fileno(),0,access=mmap.ACCESS_WRI
   const child = spawn(
     '/usr/bin/python3',
     ['-I', '-S', '-c', script, path, replacement.toString('hex')],
-    { env: { HOME: dirname(path) } },
+    {
+      env: {
+        ...Object.fromEntries(
+          [
+            'HOME',
+            'XDG_RUNTIME_DIR',
+            'XDG_CONFIG_HOME',
+            'XDG_DATA_HOME',
+            'XDG_STATE_HOME',
+            'XDG_CACHE_HOME',
+            'TMPDIR',
+          ].map((key) => [key, process.env[key]]),
+        ),
+        HOME: dirname(path),
+      },
+    },
   );
   const closed = once(child, 'close');
   const identity = () => {

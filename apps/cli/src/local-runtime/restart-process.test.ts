@@ -84,7 +84,22 @@ it.runIf(process.platform === 'linux').each(['cli', 'successor'])(
                 { ...ref, cursor },
               ]),
             ],
-            { env: { XDG_RUNTIME_DIR: run } },
+            {
+              env: {
+                ...Object.fromEntries(
+                  [
+                    'HOME',
+                    'XDG_RUNTIME_DIR',
+                    'XDG_CONFIG_HOME',
+                    'XDG_DATA_HOME',
+                    'XDG_STATE_HOME',
+                    'XDG_CACHE_HOME',
+                    'TMPDIR',
+                  ].map((key) => [key, process.env[key]]),
+                ),
+                XDG_RUNTIME_DIR: run,
+              },
+            },
           );
           return JSON.parse(stdout);
         };
@@ -178,7 +193,22 @@ it.runIf(process.platform === 'linux').each(['cli', 'successor'])(
       `,
           profile,
         ],
-        { env: { XDG_RUNTIME_DIR: run } },
+        {
+          env: {
+            ...Object.fromEntries(
+              [
+                'HOME',
+                'XDG_RUNTIME_DIR',
+                'XDG_CONFIG_HOME',
+                'XDG_DATA_HOME',
+                'XDG_STATE_HOME',
+                'XDG_CACHE_HOME',
+                'TMPDIR',
+              ].map((key) => [key, process.env[key]]),
+            ),
+            XDG_RUNTIME_DIR: run,
+          },
+        },
       );
       expect(await new Promise((r) => partial.once('close', (_code, signal) => r(signal)))).toBe(
         'SIGKILL',

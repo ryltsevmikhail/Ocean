@@ -57,7 +57,22 @@ it.runIf(native).each([true, false])(
     await runtime.ready;
     runtime.close();
     const path = join(profile, 'runtime.sqlite');
-    const env = { PATH: process.env['PATH'], HOME: root, XDG_RUNTIME_DIR: run };
+    const env = {
+      ...Object.fromEntries(
+        [
+          'HOME',
+          'XDG_RUNTIME_DIR',
+          'XDG_CONFIG_HOME',
+          'XDG_DATA_HOME',
+          'XDG_STATE_HOME',
+          'XDG_CACHE_HOME',
+          'TMPDIR',
+        ].map((key) => [key, process.env[key]]),
+      ),
+      PATH: process.env['PATH'],
+      HOME: root,
+      XDG_RUNTIME_DIR: run,
+    };
     const owner = namespace
       ? launch([resolve('apps/cli/dist/main.js'), 'acp'], { ...env, RUNNE_DB: path }, true)
       : launch(

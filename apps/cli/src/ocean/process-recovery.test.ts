@@ -84,7 +84,23 @@ async function killAt(path: string, roomId: string, phase: string): Promise<void
   const child = spawn(
     process.execPath,
     ['--input-type=module', '-e', worker, root, path, roomId, phase],
-    { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env['PATH'] } },
+    {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...Object.fromEntries(
+          [
+            'HOME',
+            'XDG_RUNTIME_DIR',
+            'XDG_CONFIG_HOME',
+            'XDG_DATA_HOME',
+            'XDG_STATE_HOME',
+            'XDG_CACHE_HOME',
+            'TMPDIR',
+          ].map((key) => [key, process.env[key]]),
+        ),
+        PATH: process.env['PATH'],
+      },
+    },
   );
   let error = '';
   child.stderr.on('data', (b: Buffer) => {

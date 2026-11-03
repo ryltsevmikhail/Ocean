@@ -1,9 +1,12 @@
-import { readDesktopBackupInventory } from './desktop-inventory.js';
+import { desktopInventory, readDesktopBackupInventory } from './desktop-inventory.js';
 import type { DesktopAssetInventory } from '@runnets/domain';
 import { assertUnpublished } from './endpoint-proof.js';
 import { ownerBusy, ownerAlive as alive } from './maintenance-owner.js';
-import { readCodingBackupInventory } from './coding-backup-inventory.js';
-import { snapshotFileHash } from './backup-file.js';
+import {
+  readCodingBackupInventory,
+  readMaintenanceCodingInventory,
+} from './coding-backup-inventory.js';
+import { holdBackupObservation } from './backup-observation.js';
 import type { CodingBackupInventory } from '@runnets/domain';
 import { unresolvedEffectSql } from './tool-effect-resolution.js';
 /** Local, non-dispatching inspection and exclusive SQLite online backup. */
@@ -119,26 +122,42 @@ export interface CodingDatabaseSnapshot<T> {
   readonly inventory: CodingBackupInventory;
   readonly assets: T;
 }
+export type CodingSnapshotDestination =
+  | string
+  | ((
+      inventory: CodingBackupInventory,
+      desktop: DesktopAssetInventory,
+      databaseBytes: number,
+    ) => string);
 /** Low-level capture port. The host must verify and publish its complete asset manifest separately. */
 export async function snapshotCodingDatabase<T>(
   path: string,
-  destination: string,
+  destination: CodingSnapshotDestination,
   capture: (inventory: CodingBackupInventory, desktop: DesktopAssetInventory) => Promise<T>,
+  finalize?: (
+    snapshot: CodingDatabaseSnapshot<T>,
+    verifyFrozen: () => void,
+  ) => Promise<void | (() => void)>,
 ): Promise<CodingDatabaseSnapshot<T>> {
-  const result = await snapshotOwned(path, destination, capture);
+  const result = await snapshotOwned(path, destination, capture, finalize);
   if (!result.inventory) throw Error('invalid_coding_inventory');
   return { summary: result.summary, inventory: result.inventory, assets: result.assets as T };
 }
 async function snapshotOwned<T>(
   path: string,
-  destination: string,
+  selection: CodingSnapshotDestination,
   capture?: (inventory: CodingBackupInventory, desktop: DesktopAssetInventory) => Promise<T>,
+  finalize?: (
+    snapshot: CodingDatabaseSnapshot<T>,
+    verifyFrozen: () => void,
+  ) => Promise<void | (() => void)>,
 ): Promise<{ summary: DatabaseSummary; inventory?: CodingBackupInventory; assets?: T }> {
   if (!existsSync(path) || !lstatSync(path).isFile() || lstatSync(path).isSymbolicLink())
     throw new Error('profile_missing');
-  if (existsSync(destination)) throw new Error('destination_exists');
+  if (typeof selection === 'string' && existsSync(selection)) throw new Error('destination_exists');
   const db = new DatabaseSync(path);
-  let release: (() => void) | undefined;
+  let release: (() => void) | undefined,
+    frozen: ReturnType<typeof holdBackupObservation> | undefined;
   try {
     if (![5, 6, 10, 11, SCHEMA_VERSION].includes(schema(db))) throw new Error('unsupported_schema');
     if (ownerBusy(db)) throw new Error('owner_busy');
@@ -170,6 +189,20 @@ async function snapshotOwned<T>(
     )
       throw Error('desktop_assets_unbound');
     if (original.externalCodingAssets && !capture) throw new Error('coding_assets_unavailable');
+    const initial =
+      typeof selection === 'function'
+        ? { coding: readMaintenanceCodingInventory(db), desktop: desktopInventory(db) }
+        : undefined;
+    const destination =
+      typeof selection === 'string'
+        ? selection
+        : selection(
+            structuredClone(initial!.coding),
+            structuredClone(initial!.desktop),
+            Number(db.prepare('PRAGMA page_count').get()?.['page_count']) *
+              Number(db.prepare('PRAGMA page_size').get()?.['page_size']),
+          );
+    if (existsSync(destination)) throw Error('destination_exists');
     await backup(db, destination);
     chmodSync(destination, 0o600);
     const snapshot = new DatabaseSync(destination);
@@ -181,19 +214,26 @@ async function snapshotOwned<T>(
       snapshot.close();
     }
     if (!capture) return { summary: original };
-    const inventory = readCodingBackupInventory(destination),
-      digest = snapshotFileHash(destination);
-    const assets = await capture(
-      structuredClone(inventory),
-      readDesktopBackupInventory(destination),
-    );
+    frozen = holdBackupObservation(destination);
+    const inventory = readCodingBackupInventory(destination);
+    const desktop = readDesktopBackupInventory(destination);
     if (
-      snapshotFileHash(destination) !== digest ||
-      readCodingBackupInventory(destination).hash !== inventory.hash
+      initial &&
+      (initial.coding.hash !== inventory.hash ||
+        JSON.stringify(initial.desktop) !== JSON.stringify(desktop))
     )
       throw Error('snapshot_mismatch');
-    return { summary: original, inventory, assets };
+    const assets = await capture(structuredClone(inventory), desktop);
+    frozen.verify();
+    if (readCodingBackupInventory(destination).hash !== inventory.hash)
+      throw Error('snapshot_mismatch');
+    const result = { summary: original, inventory, assets };
+    const publish = await finalize?.(result, frozen.verify);
+    frozen.verify();
+    publish?.();
+    return result;
   } finally {
+    frozen?.close();
     try {
       release?.();
     } finally {

@@ -42,7 +42,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         while(!out.includes('\\n')&&owner.exitCode===null) await new Promise(r=>setTimeout(r,10));
         console.log(JSON.stringify({started:JSON.parse(out).data?.state??JSON.parse(out).error?.code}));
         if(out.includes('"state":"ready"')) {
-          const acp=spawn('/node',['/app/apps/cli/dist/main.js','acp'],{env:{...env,RUNNE_DB:'/profile/runtime.sqlite'},stdio:'pipe'});
+          const acp=spawn('/node',['/app/apps/cli/dist/main.js','acp'],{env:{ ...Object.fromEntries(['HOME', 'XDG_RUNTIME_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'TMPDIR'].map(key => [key, process.env[key]])),...env,RUNNE_DB:'/profile/runtime.sqlite'},stdio:'pipe'});
           const acpExit=once(acp,'close');let err='';acp.stderr.on('data',b=>err+=b);acp.stdin.end();
           console.log(JSON.stringify({acp:(await acpExit)[0],error:err.trim()}));
           await cli(['runtime','stop','--profile','/profile','--json']);
@@ -50,7 +50,23 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         await exit;
       `,
         ],
-        { env: { PATH: process.env['PATH'] }, timeout: 10000 },
+        {
+          env: {
+            ...Object.fromEntries(
+              [
+                'HOME',
+                'XDG_RUNTIME_DIR',
+                'XDG_CONFIG_HOME',
+                'XDG_DATA_HOME',
+                'XDG_STATE_HOME',
+                'XDG_CACHE_HOME',
+                'TMPDIR',
+              ].map((key) => [key, process.env[key]]),
+            ),
+            PATH: process.env['PATH'],
+          },
+          timeout: 10000,
+        },
       );
       const lines = stdout
         .trim()

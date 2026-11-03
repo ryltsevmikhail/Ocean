@@ -19,6 +19,8 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         'coding-git-storage.js',
         'coding-asset-io.js',
         'coding-asset-scan.js',
+        'profile-backup-session.js',
+        'profile-archive-context.js',
         'coding-asset-policy.js',
         'desktop-asset-policy.js',
         'coding-asset-selection.js',

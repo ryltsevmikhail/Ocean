@@ -10,12 +10,14 @@ import {
   captureDesktopAssets,
   archiveDesktopAssets,
   restoreDesktopAssets,
+  verifyProfileBackupEnvelope,
 } from '@runnets/tools-node';
 import {
   snapshotCodingDatabase,
   snapshotDatabase,
   readDesktopBackupInventory,
 } from '@runnets/store-sqlite';
+import { backupProfile, restoreProfile } from '../ocean/snapshots.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { startLocalRuntime } from './host.js';
 import { rooms } from '../../test-fixtures/local-runtime-admission.test.js';
@@ -44,7 +46,22 @@ async function fixture() {
       ['--input-type=module', '-e', script, profile, userData, room],
       {
         cwd: resolve('.'),
-        env: { PATH: process.env['PATH'], HOME: home, XDG_RUNTIME_DIR: run },
+        env: {
+          ...Object.fromEntries(
+            [
+              'HOME',
+              'XDG_RUNTIME_DIR',
+              'XDG_CONFIG_HOME',
+              'XDG_DATA_HOME',
+              'XDG_STATE_HOME',
+              'XDG_CACHE_HOME',
+              'TMPDIR',
+            ].map((key) => [key, process.env[key]]),
+          ),
+          PATH: process.env['PATH'],
+          HOME: home,
+          XDG_RUNTIME_DIR: run,
+        },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
     );
@@ -124,8 +141,11 @@ console.log(JSON.stringify({info,requestId:id,receipt,retry}));next.close();proc
         return archiveDesktopAssets(captureDesktopAssets(desktop), archive);
       },
     );
+    const fullArchive = join(f.root, 'full-archive');
+    expect((await backupProfile(f.profile, fullArchive)).format).toBe(2);
     fs.rmSync(f.profile, { recursive: true });
     fs.rmSync(f.userData, { recursive: true });
+    restoreProfile(fullArchive, join(f.root, 'full-quarantine'));
     restoreDesktopAssets(archive, join(f.root, 'quarantine'));
     const info = result['info'] as { id: string };
     expect(
@@ -136,7 +156,7 @@ console.log(JSON.stringify({info,requestId:id,receipt,retry}));next.close();proc
   },
 );
 it.runIf(process.platform === 'linux')(
-  'SIGKILL at actual preparation link/unlink leaves unknown outcome and truthfully refuses receipt aliases',
+  'SIGKILL preparation aliases and interrupted public publication retain evidence through source-deleted quarantine without replay',
   async () => {
     const f = await fixture();
     const owner =
@@ -153,6 +173,7 @@ const host=await startLocalRuntime({profile:process.argv[1],provider:null});cons
       requestId = randomUUID();
     await expect(host.prepare(f.room, requestId, 'caption', null, [info.id])).rejects.toThrow();
     expect(await owner.exit).toBeNull();
+    expect(owner.child.signalCode).toBe('SIGKILL');
     const next = await startLocalRuntime({ profile: f.profile, provider: null });
     cleanup.push(() => next.stop());
     const c = await connectLocalRuntime({ profile: f.profile });
@@ -169,7 +190,54 @@ const host=await startLocalRuntime({profile:process.argv[1],provider:null});cons
     ).toBe(true);
     const names = fs.readdirSync(join(inventory.binding!.root, f.room));
     expect(names.filter((n) => n.startsWith(requestId))).toHaveLength(2);
-    expect(() => captureDesktopAssets(inventory)).toThrow('protected_desktop_asset');
+    const again = await startLocalRuntime({ profile: f.profile, provider: null });
+    const againClient = await connectLocalRuntime({ profile: f.profile });
+    try {
+      await expect(
+        new DesktopAttachmentClient(againClient).prepare(f.room, requestId, 'caption', null, [
+          info.id,
+        ]),
+      ).rejects.toThrow('desktop_outcome_unknown');
+    } finally {
+      againClient.close();
+      await again.stop();
+    }
+    const killed =
+      f.launch(String.raw`import fs from 'node:fs';import {dirname,join} from 'node:path';import {syncBuiltinESMExports} from 'node:module';
+const destination=join(dirname(process.argv[1]),'killed-backup'),unlink=fs.unlinkSync;
+fs.unlinkSync=(path)=>{if(String(path).endsWith('/.incomplete')&&fs.realpathSync(dirname(String(path)))===destination){fs.writeSync(1,JSON.stringify({publication:'before-root-marker'})+'\n');process.kill(process.pid,'SIGKILL');}return unlink(path);};syncBuiltinESMExports();
+const {backupProfile}=await import('./apps/cli/dist/ocean/snapshots.js');await backupProfile(process.argv[1],destination);process.exit(2);`);
+    expect(await killed.exit, killed.error()).toBeNull();
+    expect(killed.child.signalCode).toBe('SIGKILL');
+    expect(await killed.line(0)).toEqual({ publication: 'before-root-marker' });
+    expect(fs.existsSync(join(f.root, 'killed-backup', '.incomplete'))).toBe(true);
+    expect(() => verifyProfileBackupEnvelope(join(f.root, 'killed-backup'))).toThrow();
     expect(fs.readdirSync(join(inventory.binding!.root, f.room))).toEqual(names);
+    const archive = join(f.root, 'complete-backup');
+    const manifest = await backupProfile(f.profile, archive);
+    expect(manifest.format).toBe(2);
+    fs.rmSync(f.profile, { recursive: true });
+    fs.rmSync(f.userData, { recursive: true });
+    expect(verifyProfileBackupEnvelope(archive)).toEqual(manifest);
+    const quarantine = join(f.root, 'quarantine');
+    restoreProfile(archive, quarantine);
+    const saved = readDesktopBackupInventory(join(quarantine, 'runtime.sqlite'));
+    expect(
+      saved.operations.find((o) => o.id === 'prepare:' + f.room + ':' + requestId)?.state,
+    ).toBe('started');
+    const restoredRoom = join(quarantine, 'assets', 'desktop', 'tree', f.room),
+      pair = names.filter((n) => n.startsWith(requestId));
+    expect(fs.statSync(join(restoredRoom, pair[0]!)).ino).toBe(
+      fs.statSync(join(restoredRoom, pair[1]!)).ino,
+    );
+    for (let reopening = 0; reopening < 2; reopening++)
+      await expect(startLocalRuntime({ profile: quarantine, provider: null })).rejects.toThrow(
+        'restore_restricted',
+      );
+    expect(readDesktopBackupInventory(join(quarantine, 'runtime.sqlite')).operations).toEqual(
+      saved.operations,
+    );
+    expect(fs.existsSync(f.profile)).toBe(false);
+    expect(fs.existsSync(f.userData)).toBe(false);
   },
 );

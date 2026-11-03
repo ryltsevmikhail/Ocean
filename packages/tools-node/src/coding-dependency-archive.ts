@@ -1,3 +1,5 @@
+import { profileArchiveContext } from './profile-archive-context.js';
+import { chargeProfileManifest } from './profile-backup-accounting.js';
 import * as fs from 'node:fs';
 import { join, dirname, basename, resolve } from 'node:path';
 import type { CodingAssetManifest, CodingBackupInventory } from '@runnets/domain';
@@ -134,6 +136,8 @@ function verifyArchive(directory: string, incomplete = false) {
       if (!/^(?:tree-)?[a-f0-9]{64}$/.test(name)) return dependencyFail();
       const manifest = verifyCodingAssetArchive(join(directory, name));
       budget.manifest(manifest);
+      const shared = profileArchiveContext.getStore()?.budget;
+      if (shared) chargeProfileManifest(shared, join(directory, name), manifest);
       manifests.set(name, manifest);
     }
     verifyDependencyCatalog(inventory, catalog, manifests);

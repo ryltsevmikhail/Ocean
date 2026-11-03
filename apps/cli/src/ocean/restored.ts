@@ -7,6 +7,7 @@ import { assertPrivate } from './private-files.js';
 import type { OceanArguments } from './arguments.js';
 export function isRestored(profile?: string): boolean {
   const marker = join(profileDirectory(profile), 'restore-guard.json');
+  if (existsSync(join(profileDirectory(profile), '.incomplete'))) throw Error('recovery_required');
   if (!existsSync(marker)) return false;
   assertPrivate(marker, false);
   try {

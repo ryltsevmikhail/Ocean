@@ -10,6 +10,7 @@ function check(
   mode: number,
   size: number,
   links: number,
+  candidate = false,
 ): void {
   const parts = path.split('/');
   const valid =
@@ -28,12 +29,15 @@ function check(
   if (
     !valid ||
     mode !== (dir ? 0o700 : 0o600) ||
-    (!dir && (!file || links !== 1 || size > (parts[2] === 'blob' ? 10485760 : 131072)))
+    (!dir &&
+      (!file ||
+        (links !== 1 && !(candidate && links === 2 && parts.length === 2)) ||
+        size > (parts[2] === 'blob' ? 10485760 : 131072)))
   )
     throw Error('protected_desktop_asset');
 }
 /** Full namespace and private mode checks run in the metadata-only traversal. */
-export function desktopAssetPolicy(path: string, s: BigIntStats): void {
+export function desktopAssetPolicy(path: string, s: BigIntStats, candidate = false): void {
   check(
     path,
     s.isDirectory(),
@@ -41,16 +45,20 @@ export function desktopAssetPolicy(path: string, s: BigIntStats): void {
     Number(s.mode & 0o777n),
     Number(s.size),
     Number(s.nlink),
+    candidate,
   );
 }
 export function desktopManifestPolicy(entries: readonly CodingAssetEntry[]): void {
-  for (const e of entries)
+  for (const e of entries) {
+    const target = e.kind === 'hardlink' ? entries.find((t) => t.path === e.target) : e;
     check(
       e.path,
       e.kind === 'directory',
-      e.kind === 'file',
-      'mode' in e ? e.mode : 0,
+      e.kind === 'file' || (e.kind === 'hardlink' && target?.kind === 'file'),
+      target && 'mode' in target ? target.mode : 0,
       e.kind === 'file' ? e.bytes : 0,
       e.kind === 'hardlink' ? 2 : 1,
+      e.kind === 'hardlink',
     );
+  }
 }

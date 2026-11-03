@@ -154,7 +154,21 @@ with open(sys.argv[1],'r+b') as f, mmap.mmap(f.fileno(),0,access=mmap.ACCESS_WRI
         other,
         Buffer.from(changed).toString('hex'),
       ],
-      { env: {} },
+      {
+        env: {
+          ...Object.fromEntries(
+            [
+              'HOME',
+              'XDG_RUNTIME_DIR',
+              'XDG_CONFIG_HOME',
+              'XDG_DATA_HOME',
+              'XDG_STATE_HOME',
+              'XDG_CACHE_HOME',
+              'TMPDIR',
+            ].map((key) => [key, process.env[key]]),
+          ),
+        },
+      },
     );
     const exited = once(child, 'close');
     try {

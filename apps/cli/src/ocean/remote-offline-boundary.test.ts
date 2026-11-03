@@ -82,7 +82,20 @@ it('only attested runtime restart may recover the published profile after a real
   const offline = openOceanProfile(profile, true);
   await offline.ready;
   offline.close();
-  const env = { XDG_RUNTIME_DIR: run },
+  const env = {
+      ...Object.fromEntries(
+        [
+          'HOME',
+          'XDG_RUNTIME_DIR',
+          'XDG_CONFIG_HOME',
+          'XDG_DATA_HOME',
+          'XDG_STATE_HOME',
+          'XDG_CACHE_HOME',
+          'TMPDIR',
+        ].map((key) => [key, process.env[key]]),
+      ),
+      XDG_RUNTIME_DIR: run,
+    },
     owner = child(['runtime', 'start', '--profile', profile], env);
   let successor: ReturnType<typeof child> | undefined;
   try {

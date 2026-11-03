@@ -23,7 +23,21 @@ it
       profile = join(root, 'profile');
     const runDir = join(root, 'run');
     mkdirSync(runDir, { mode: 0o700 });
-    const env = { PATH: process.env['PATH'], XDG_RUNTIME_DIR: runDir };
+    const env = {
+      ...Object.fromEntries(
+        [
+          'HOME',
+          'XDG_RUNTIME_DIR',
+          'XDG_CONFIG_HOME',
+          'XDG_DATA_HOME',
+          'XDG_STATE_HOME',
+          'XDG_CACHE_HOME',
+          'TMPDIR',
+        ].map((key) => [key, process.env[key]]),
+      ),
+      PATH: process.env['PATH'],
+      XDG_RUNTIME_DIR: runDir,
+    };
     const runtime = openOceanProfile(profile, true);
     await runtime.ready;
     const { groupId, ...request } = rooms(runtime.conversations);

@@ -19,12 +19,20 @@ const MAX_TASKS = 1000,
 export function readCodingBackupInventory(path: string): CodingBackupInventory {
   const db = new DatabaseSync(path, { readOnly: true });
   try {
+    if (ownerBusy(db)) throw Error('owner_busy');
+    return readMaintenanceCodingInventory(db);
+  } finally {
+    db.close();
+  }
+}
+/** Internal only: caller already holds maintenance ownership of this connection. */
+export function readMaintenanceCodingInventory(db: DatabaseSync): CodingBackupInventory {
+  try {
     const version = Number(
       db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
     );
     if (!Number.isSafeInteger(version) || version < 5 || version > SCHEMA_VERSION)
       throw Error('unsupported_schema');
-    if (ownerBusy(db)) throw Error('owner_busy');
     db.exec('BEGIN');
     if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
       throw Error('invalid_coding_inventory');
@@ -210,6 +218,5 @@ export function readCodingBackupInventory(path: string): CodingBackupInventory {
     throw Error('invalid_coding_inventory');
   } finally {
     if (db.isTransaction) db.exec('ROLLBACK');
-    db.close();
   }
 }

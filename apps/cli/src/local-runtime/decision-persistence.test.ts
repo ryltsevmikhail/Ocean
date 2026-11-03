@@ -87,7 +87,24 @@ it.each(['cancelled', 'expired'])(
           q.roomId,
           outcome,
         ],
-        { env: { PATH: process.env['PATH'], XDG_RUNTIME_DIR: runDir }, timeout: 5000 },
+        {
+          env: {
+            ...Object.fromEntries(
+              [
+                'HOME',
+                'XDG_RUNTIME_DIR',
+                'XDG_CONFIG_HOME',
+                'XDG_DATA_HOME',
+                'XDG_STATE_HOME',
+                'XDG_CACHE_HOME',
+                'TMPDIR',
+              ].map((key) => [key, process.env[key]]),
+            ),
+            PATH: process.env['PATH'],
+            XDG_RUNTIME_DIR: runDir,
+          },
+          timeout: 5000,
+        },
       );
       expect(JSON.parse(stdout)).toEqual({
         dispatches: 0,

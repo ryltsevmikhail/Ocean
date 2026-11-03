@@ -139,7 +139,7 @@ export class GitEvidenceObserver {
     record.names = { count: names.length, sha256: gitDigest(JSON.stringify(names)) };
     return names;
   }
-  verify(): void {
+  verify(metadataOnly = false): void {
     for (const record of this.#seen.values()) {
       const current = fs.openSync(record.path, 0x200000 | fs.constants.O_NOFOLLOW);
       try {
@@ -159,6 +159,7 @@ export class GitEvidenceObserver {
       )
         throw Error('stale_coding_git_storage');
       if (
+        !metadataOnly &&
         record.bytes &&
         gitDigest(readGitDescriptor(record.fd, record.bytes.length)) !== record.bytes.sha256
       )
