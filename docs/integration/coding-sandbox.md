@@ -367,3 +367,46 @@ and commands. A command observation exception also holds that backend.
 The backend hold also covers filesystem worker uncertainty. A native
 fault-injection test loses cleanup evidence after a real file read and verifies
 that subsequent reads, writes and commands on that backend are refused.
+
+## Shared-runtime cold preset qualification
+
+The shared-runtime correction separates source tests from built-entry-point
+process qualification. `pnpm test` requires no prior dist or incremental build;
+`pnpm test:process` performs its own build. Both remain mandatory in `pnpm check`.
+The complete 252-file committed test selection is the disjoint union of 222
+source files and 30 process files. Opt-in native behavior is qualified separately.
+
+The 2026-11-03 measurements used a fresh source archive for each command and a
+frozen offline dependency copy with single-linked files. All mounts, private
+HOME, missing passwd, namespace restrictions and production supervision remained
+unchanged. Each invoked `pnpm --config.verify-deps-before-run=false <preset>`;
+test additionally used `--configLoader native`. Kernel peak counters were sampled
+every 5ms and matched to the returned service cgroup. Elapsed time includes
+inventory and supervision. No other qualification suite ran concurrently.
+
+| Preset    | Elapsed (s) | Observed memory.peak (bytes) | Observed pids.peak | Retained output (bytes) |
+| --------- | ----------: | ---------------------------: | -----------------: | ----------------------: |
+| test      |       58.36 |                   1075236864 |                126 |                   27756 |
+| typecheck |       13.95 |                    949415936 |                 56 |                      18 |
+| lint      |       15.27 |                   1704751104 |                 60 |                      11 |
+| build     |        5.29 |                    932151296 |                 56 |                       9 |
+
+Each exited 0 with untruncated output and confirmed cgroup cleanup under the
+unchanged 60s, 2GiB, 256-task and 32KiB limits. Test retained its complete
+1,186-passed/39-skipped summary. All four presets used source `67665e9`,
+including the final preparation-cancellation and isolated fixture corrections.
+The first default-reporter test also exited 0 (58.82s) but truncated its 32KiB
+output; compact reporting corrected that evidence limitation without reducing
+test coverage. The test timing margin is narrow: this is a measurement on the
+qualified Linux host, not a guarantee for slower hosts or concurrent workloads.
+A timeout still fails closed. Before expanding the suite, qualify either a
+faster complete configuration or explicit bounded shards whose combined evidence
+covers the full source selection; do not silently omit tests or raise limits.
+
+Runtime endpoint composition now refuses an effective credential/socket directory
+under `/usr`, which is visible in every production worker. A real private
+mount-namespace regression proves refusal before publication and retains normal
+private XDG and short `/tmp` fallback negative controls. The worker mount set is
+unchanged. Profile runtime startup with an explicit path no longer discovers HOME
+or passwd eagerly; per-user coding worktree/lease defaults still resolve when
+those adapters are actually used.
