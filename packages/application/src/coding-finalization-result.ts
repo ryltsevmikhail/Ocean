@@ -5,21 +5,30 @@ import type {
   CodingFinalizationResult,
   CodingTask,
 } from '@runnets/domain';
-/** Exact receipt provenance; nothing weaker may finalize a task. */
+/** Global registry identity derives only from the already durable exact preview. */
+export function finalizationReleaseId(
+  record: Pick<CodingFinalizationRecord, 'bindingDigest'>,
+): string {
+  return 'ocean-finalize-v2-' + record.bindingDigest;
+}
+/** Exact receipt provenance; legacy ids are accepted only by read-only recovery. */
 export function finalizationReceiptMatches(
   record: CodingFinalizationRecord,
   receipt: CodingFinalizationReleaseReceipt,
+  legacy = false,
 ): boolean {
   const b = record.preview.binding;
   return (
-    receipt.operationId === record.requestId &&
+    receipt.operationId === (legacy ? record.requestId : finalizationReleaseId(record)) &&
     receipt.bindingDigest === record.bindingDigest &&
     receipt.taskId === b.task.id &&
     receipt.workspaceId === b.task.workspaceId &&
     receipt.ownerId === b.owner.profileOwnerId &&
     receipt.projectRoot === b.project.root &&
     receipt.tokenHash === b.lease.tokenHash &&
-    receipt.holderHash === b.lease.holderHash
+    receipt.holderHash === b.lease.holderHash &&
+    receipt.registry.path === b.lease.registry.path &&
+    receipt.registry.schema === b.lease.registry.schema
   );
 }
 export function finalizationResult(

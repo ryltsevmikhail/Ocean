@@ -10,7 +10,7 @@ import type {
   CodingFinalizationStore,
   ProjectLeaseReleasePort,
 } from './coding-finalization-ports.js';
-import { finalizationReceiptMatches } from './coding-finalization-result.js';
+import { finalizationReceiptMatches, finalizationReleaseId } from './coding-finalization-result.js';
 import {
   finalizationRef,
   finalizationSelectionOf,
@@ -45,7 +45,7 @@ function intentOf(
 ): CodingFinalizationReleaseIntent {
   const b = record.preview.binding;
   return {
-    operationId: record.requestId,
+    operationId: finalizationReleaseId(record),
     bindingDigest: record.bindingDigest,
     taskId: b.task.id,
     workspaceId: b.task.workspaceId,

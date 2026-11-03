@@ -103,10 +103,10 @@ export interface FinalizationFixture {
   close(): void;
 }
 /** Genuine protected prepared task with captured diff, test evidence and a completed review. */
-export async function preparedFinalizationTask(): Promise<FinalizationFixture> {
+export async function preparedFinalizationTask(sharedHome?: string): Promise<FinalizationFixture> {
   const root = mkdtempSync(join(tmpdir(), 'ocean-finalize-'));
-  const home = join(root, 'home');
-  mkdirSync(home, { mode: 0o700 });
+  const home = sharedHome ?? join(root, 'home');
+  if (!sharedHome) mkdirSync(home, { mode: 0o700 });
   vi.stubEnv('HOME', home);
   const project = join(root, 'project');
   mkdirSync(project);
