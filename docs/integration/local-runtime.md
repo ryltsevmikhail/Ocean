@@ -17,7 +17,9 @@ pnpm ocean runtime start --profile /absolute/private/profile --json
 
 Start stays in the foreground and emits a ready status only after exclusive
 SQLite ownership and existing conversation, coding-apply and effect-journal
-recovery succeed. The foreground host resolves its provider from its own environment.
+recovery succeed. Starting the Linux owner requires the system Python 3 interpreter at
+`/usr/bin/python3` for its socket bootstrap. Missing bootstrap support refuses
+startup with `endpoint_verification_unavailable`. The foreground host resolves its provider from its own environment.
 A synthetic or disabled provider can be injected by host composition. A
 restored profile, including a dangling restore-guard symlink, refuses
 `restore_restricted` before publishing an endpoint;
@@ -294,16 +296,31 @@ again after the asynchronous probe before retiring the prior names. The owner
 fsyncs the endpoint directory and clears the matching SQLite proof.
 
 The stable `runtime.sock` and descriptor layout preserve protocol-1 clients and
-the short path limit. On Linux a short-lived Node process binds the socket under
-a private umask relative to the inherited directory FD. Its only application
-message transfers the listener and inode identity over private IPC. It receives
-no application environment or connection capability. The owner pins the inode,
-acknowledges the handoff and waits for the binder to exit. The binder exits on
-parent disconnect or after five seconds. The owner enforces a 5.5-second helper
-deadline. A bounded pre-publication check verifies that connecting to the pinned
-inode reaches the received listener. The owner applies mode 0600 to the pinned
-inode. Closing its transferred listener cannot unlink a replacement socket.
-Only the long-lived owner opens SQLite, authenticates clients and serves requests.
+the short path limit. The Linux bootstrap runs `/usr/bin/python3 -I -S` with a
+fixed standard-library program, an inherited private directory FD and an empty
+application environment. It binds the listener under a private umask and opens
+a nonfollowing filesystem pin. A local probe reserves a unique abstract Unix
+socket address with embedded NULs and 32 random bytes. It connects through the
+pin. The listening FD itself accepts the connection. While the probe still
+holds the address, the bootstrap compares every byte of the kernel-reported
+peer address to the reserved address. A forwarding listener creates a separate
+kernel peer and fails this check. No proof payload is sent through the stream.
+
+The bootstrap execs the host Node binary with the same listening FD and
+filesystem pin. Node adopts that FD with `server.listen({fd})` and transfers
+the server and pinned identity over private IPC. The owner independently pins
+the named inode, verifies the identity, acknowledges and waits for helper exit
+before chmod or publication. The probe connect and accept have one-second
+timeouts. The bootstrap has a five-second alarm and the owner enforces a
+5.5-second deadline. Closing a transferred server cannot unlink a pathname.
+The helper receives no connection capability. Only the long-lived owner opens
+SQLite, authenticates clients and serves requests.
+
+The SQLite digest includes a format tag for the direct kernel binding check.
+A stale digest created by the earlier stream-challenge implementation cannot
+authorize retirement. Stop a running older owner cleanly before switching
+implementations. The public version-1 descriptor and client handshake are
+unchanged.
 
 Start publishes a freshly generated descriptor using a synced exclusive
 temporary file and a no-replace hard link. It removes the temporary link,

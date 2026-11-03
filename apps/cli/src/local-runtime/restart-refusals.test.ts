@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import {
   chmodSync,
+  closeSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -25,7 +27,7 @@ import { connectLocalRuntime, localRuntimePaths } from '@runnets/tools-node';
 import { openOceanProfile } from '../ocean/profile.js';
 import { startLocalRuntime } from './host.js';
 import { recoverEndpoint } from './endpoint.js';
-import { EndpointLayout, profileKey } from './endpoint-files.js';
+import { EndpointLayout, mount, profileKey } from './endpoint-files.js';
 const cleanup: (() => void | Promise<void>)[] = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
@@ -245,4 +247,40 @@ it('preserves an in-place descriptor substitution between publication and activa
     hook.mockRestore();
   }
   expect(readFileSync(paths.descriptor, 'utf8')).toBe('foreign-publication');
+});
+
+it('refuses a matching legacy digest produced without the direct kernel binding check', async () => {
+  const { paths, profile } = await fixture();
+  // Reconstruct the original c518d4b publication format using only these synthetic files.
+  const layout = new EndpointLayout(paths, profileKey(paths));
+  const legacy = createHash('sha256').update(layout.identity);
+  try {
+    for (const name of ['runtime.sock', 'connection.json']) {
+      const fd = layout.pin(name);
+      try {
+        const s = fstatSync(fd, { bigint: true });
+        const key = [mount(fd), s.dev, s.ino, s.birthtimeNs, s.mode, s.uid, s.gid].join(':');
+        legacy.update(JSON.stringify([key, String(s.ctimeNs), String(s.mtimeNs), String(s.size)]));
+        if (name === 'connection.json') legacy.update(readFileSync(paths.descriptor));
+      } finally {
+        closeSync(fd);
+      }
+    }
+  } finally {
+    layout.close();
+  }
+  const db = new DatabaseSync(join(profile, 'runtime.sqlite'));
+  try {
+    db.prepare('UPDATE local_endpoint_v1 SET digest=?').run(legacy.digest('hex'));
+  } finally {
+    db.close();
+  }
+  const entries = snapshot(paths.directory);
+  const start = startLocalRuntime({ profile, provider: null }).then(async (host) => {
+    await host.stop();
+    await host.closed;
+    return 'accepted old binding';
+  });
+  await expect(start).rejects.toThrow('endpoint_exists');
+  expect(snapshot(paths.directory)).toEqual(entries);
 });

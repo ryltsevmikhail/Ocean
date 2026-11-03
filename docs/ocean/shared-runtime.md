@@ -55,6 +55,8 @@ SQLite ownership is the authoritative single-owner guard. After recovery, ordina
 start may retire a dead predecessor's exact SQLite-attested files in the same
 private layout. It pins and checks the file and mount identities, requires a
 definitive refused connection, and rechecks the binding before retirement.
+For fresh publication the Linux bootstrap requires `/usr/bin/python3` and verifies
+the pinned socket against the direct kernel peer accepted by the listening FD.
 Unattested or partial layouts refuse. Publish ready only after durable endpoint
 publication. See the [lifecycle and refusal states](../integration/local-runtime.md#safety-and-qualification-limits).
 
