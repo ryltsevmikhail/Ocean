@@ -439,3 +439,9 @@ node apps/desktop/qa/smoke.mjs
 ```
 
 Clean root check passed 1,251 tests in 222 files, with 62 skipped. The development workspace included a separate atlas suite and passed 1,324 in 223 files with the same skips. The explicit process and access matrix passed 107 in 21 files. This includes the actual CLI and ACP stdio owner-busy exit 3, separate-profile session updates, exact review, stale endpoint refusal, bounded reads and observation backpressure. The opt-in native run passed 27 in 8 files, including journal recovery, foreign UID and mount refusal, live kernel socket attestation, sandbox containment and observable cgroup cleanup on supported paths.
+
+### Desktop launcher teardown recheck
+
+The QA driver at `8e8eeefbfba0dfb803a18d07983da16cc983bd19` tracks the detached process group through launcher exit. A close requires both closed stdio and an absent group. The driver bounds normal close and failure cleanup and reports a signal-permission error. Five driver tests passed in the clean worktree, including a signalled real launcher with a live child holding its pipe. Run `node --test apps/desktop/qa/{desktop-launcher,window-close}.test.mjs` from the workspace root.
+
+The standard two-window acceptance driver also passed on that commit. The reattached TUI, SDK and Desktop observed run `tr_d7ae59c3db994340ba574532454b78b6` with one provider dispatch. An independent injected page-close failure exercised the deadline and teardown of the disposable GUI. The runtime process/access and opt-in native matrix above was qualified at `f7dac84`.
