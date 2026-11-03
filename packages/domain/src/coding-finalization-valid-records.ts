@@ -90,7 +90,12 @@ export function validCodingFinalizationResult(value: unknown): value is CodingFi
     (value['reason'] === null || text(value['reason'], 8192)) &&
     hex(value['bindingDigest']) &&
     ['reserved', 'cancelled', 'finalizing', 'finalized'].includes(String(value['taskStatus'])) &&
-    ((['preview', 'refused'].includes(state) && value['taskStatus'] === 'reserved') ||
+    // `taskStatus` is the current task state while `state` is the historical
+    // record state: a refused record stays readable after the same task is
+    // later finalized, so refused accepts every prepared-lifecycle status.
+    ((state === 'preview' && value['taskStatus'] === 'reserved') ||
+      (state === 'refused' &&
+        ['reserved', 'finalizing', 'finalized'].includes(String(value['taskStatus']))) ||
       (['finalizing', 'uncertain'].includes(state) && value['taskStatus'] === 'finalizing') ||
       (state === 'finalized' && value['taskStatus'] === 'finalized')) &&
     validCodingFinalizationRelease(value['release']) &&

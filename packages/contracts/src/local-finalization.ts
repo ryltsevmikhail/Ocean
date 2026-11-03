@@ -163,7 +163,10 @@ export function isLocalFinalizationResult(value: unknown): value is LocalFinaliz
     (value['reason'] === null || text(value['reason'], 8192)) &&
     bindingDigest(value['bindingDigest']) &&
     ['reserved', 'cancelled', 'finalizing', 'finalized'].includes(status) &&
-    ((['preview', 'refused'].includes(state) && status === 'reserved') ||
+    // A refused record keeps its historical state while `taskStatus` reflects
+    // the current task, which may have been finalized afterwards.
+    ((state === 'preview' && status === 'reserved') ||
+      (state === 'refused' && ['reserved', 'finalizing', 'finalized'].includes(status)) ||
       (['finalizing', 'uncertain'].includes(state) && status === 'finalizing') ||
       (state === 'finalized' && status === 'finalized')) &&
     release(value['release']) &&

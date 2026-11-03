@@ -22,6 +22,13 @@ export async function runFinalizationCommand(
     requestId: required(args.flags, 'request-id'),
   };
   if (action === 'result') return client.finalizationResult(selection);
+  // Refuse an unconfirmable terminal before creating any preview record or card.
+  if (
+    action === 'confirm' &&
+    ((input as Readable & { isTTY?: boolean }).isTTY !== true ||
+      (error as Writable & { isTTY?: boolean }).isTTY !== true)
+  )
+    throw Error('approval_required');
   const card = await client.previewFinalization(selection);
   const ref = {
     workspaceId: card.workspaceId,
@@ -31,11 +38,6 @@ export async function runFinalizationCommand(
   };
   const preview = await client.decisionPreview(ref);
   if (action === 'preview') return { card, preview: JSON.parse(preview) as unknown };
-  if (
-    (input as Readable & { isTTY?: boolean }).isTTY !== true ||
-    (error as Writable & { isTTY?: boolean }).isTTY !== true
-  )
-    throw Error('approval_required');
   error.write(
     visibleControls(
       `Finalization decision ${card.decisionId} v${card.version}; SHA-256 ${card.bindingDigest}\n${preview}`,

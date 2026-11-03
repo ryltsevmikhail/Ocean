@@ -1,7 +1,4 @@
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import { createRuntime } from '../runtime.js';
 import { startLocalRuntime } from './host.js';
@@ -11,71 +8,9 @@ import {
   leaseRegistryRows,
   preparedFinalizationTask,
   worktreeBytesHash,
-} from '../ocean/coding-finalization-fixture.js';
+} from '../../test-fixtures/coding-finalization-fixture.js';
+import { crashFinalization } from '../../test-fixtures/finalization-crash-worker.js';
 import type { CodingAccess } from '@runnets/domain';
-const repository = fileURLToPath(new URL('../../../..', import.meta.url));
-const worker = String.raw`
-import fs from 'node:fs';
-import {join} from 'node:path';
-const [repository,db,phase]=process.argv.slice(1);
-const registry=join(process.env.HOME,'.local/state/ocean-coordination/leases.sqlite');
-let sawDisable=false,sawResult=false,halted=false;
-const halt=(name)=>{if(halted)return;halted=true;fs.writeSync(1,name+'\n');Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);};
-const {DatabaseSync}=await import('node:sqlite');
-const originalPrepare=DatabaseSync.prototype.prepare;
-const originalExec=DatabaseSync.prototype.exec;
-DatabaseSync.prototype.prepare=function(sql){
- const stmt=originalPrepare.call(this,sql);
- if(String(sql).includes('ocean_coding_finalizations')){
-  const run=stmt.run.bind(stmt);
-  stmt.run=(...args)=>{
-   if(args.some((a)=>typeof a==='string'&&a.includes('"state":"finalizing"')))sawDisable=true;
-   if(args.some((a)=>typeof a==='string'&&a.includes('"state":"finalized"')))sawResult=true;
-   return run(...args);
-  };
- }
- return stmt;
-};
-DatabaseSync.prototype.exec=function(sql){
- const db=this,r=originalExec.call(this,sql),loc=String(db.location()),text=String(sql).trim().toUpperCase();
- if(loc===dbPathOf&&text.startsWith('COMMIT')){
-  if(phase==='intent'&&sawDisable)halt('intent');
-  if(phase==='result'&&sawResult)halt('result');
- }
- if(loc===registry){
-  if(text.startsWith('BEGIN IMMEDIATE')&&phase==='registry_begin')halt('registry_begin');
-  if(text.startsWith('COMMIT')&&phase==='registry_commit')halt('registry_commit');
- }
- return r;
-};
-const dbPathOf=db;
-const {pathToFileURL}=await import('node:url');
-const dist=(path)=>pathToFileURL(join(repository,path)).href;
-const {openSqliteStore}=await import(dist('packages/store-sqlite/dist/index.js'));
-const {CodingFinalizationService,RuntimeOwnerDecisions}=await import(dist('packages/application/dist/index.js'));
-const {SqliteProjectLeases}=await import(dist('packages/tools-node/dist/index.js'));
-const {createHash}=await import('node:crypto');
-const store=openSqliteStore({path:db});
-const task=store.coding.atomic((tx)=>tx.task('task'));
-const owner=new RuntimeOwnerDecisions(store.ownerDecisions,Date.now);
-const leases=new SqliteProjectLeases();
-const service=new CodingFinalizationService({
- store:store.finalization,
- leases,
- owner,
- clock:{now:()=>new Date()},
- ownerId:task.lease.ownerId,
- epochId:null,
- restored:false,
- nextId:()=>'decision-1',
- digest:(text)=>createHash('sha256').update(text).digest('hex'),
-});
-const selection={workspaceId:task.workspaceId,roomId:task.ownerRoomId,taskId:task.id,requestId:'finalize-crash'};
-const card=await service.preview(selection,new AbortController().signal);
-await owner.resolve({workspaceId:card.workspaceId,roomId:card.roomId,runId:card.runId,decisionId:card.decisionId},card.bindingDigest,card.version,'allow-once');
-await service.join();
-process.stdout.write('finished\n');
-`;
 function state(dbPath: string) {
   const db = new DatabaseSync(dbPath, { readOnly: true });
   try {
@@ -98,32 +33,7 @@ it.each(['intent', 'registry_begin', 'registry_commit', 'result'])(
     const tree = worktreeBytesHash(f.worktree);
     const evidence = codingRows(f.db, 'task');
     try {
-      const child = spawn(
-        process.execPath,
-        ['--input-type=module', '-e', worker, repository, f.db, phase],
-        {
-          env: { ...process.env },
-          stdio: ['ignore', 'pipe', 'pipe'],
-        },
-      );
-      let errors = '';
-      child.stderr.on('data', (data: Buffer) => {
-        errors += data.toString();
-      });
-      const closed = once(child, 'close');
-      try {
-        const line = await Promise.race([
-          once(child.stdout, 'data').then(([data]) => String(data).trim()),
-          closed.then(() => {
-            throw Error('worker exited: ' + errors);
-          }),
-        ]);
-        expect(line).toBe(phase);
-      } finally {
-        child.kill('SIGKILL');
-        await closed;
-      }
-      expect(child.signalCode).toBe('SIGKILL');
+      await crashFinalization(f.db, phase);
       const after = state(f.db);
       const beforeReopen = leaseRegistryRows(f.registryPath);
       if (phase === 'intent' || phase === 'registry_begin') {
@@ -192,6 +102,26 @@ it.each(['intent', 'registry_begin', 'registry_commit', 'result'])(
             state: 'uncertain',
             taskStatus: 'finalizing',
             release: { state: 'unproven', outcome: null, receipt: null },
+          });
+          // A held task keeps its exact frozen changeset readable over the public view.
+          const frozen = await client.codingRead('coding.diff', {
+            workspaceId: 'ws_ocean',
+            id: 'task',
+            roomId: f.room,
+          });
+          expect(frozen).toEqual({
+            ...f.changeset,
+            kind: 'frozen',
+            tests: [
+              {
+                presetId: null,
+                hash: f.evidence.hash,
+                passed: true,
+                afterTreeHash: f.evidence.afterTreeHash,
+              },
+            ],
+            workspaceId: 'ws_ocean',
+            roomId: f.room,
           });
         } finally {
           client.close();

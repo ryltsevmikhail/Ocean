@@ -213,6 +213,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         store.codingReviews,
         (task) =>
           !codingDeps.restored &&
+          task.status === 'reserved' &&
           task.lease.ownerId === codingDeps.ownerId &&
           task.policy.reviewCapabilities.includes('changeset_read'),
       ),

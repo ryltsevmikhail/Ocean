@@ -8,7 +8,8 @@ import {
   preparedFinalizationTask,
   sha256,
   worktreeBytesHash,
-} from '../ocean/coding-finalization-fixture.js';
+} from '../../test-fixtures/coding-finalization-fixture.js';
+import { runCli } from '../../test-fixtures/cli-command.js';
 import type { CodingAccess } from '@runnets/domain';
 const taskOf = (rows: readonly string[]) => JSON.parse(rows[0]!) as Record<string, unknown>;
 const successorInput = (
@@ -136,6 +137,53 @@ it('finalizes a genuinely prepared task and admits only one separately confirmed
       await expect(
         client.previewFinalization({ ...selection, requestId: 'finalize-late' }),
       ).rejects.toThrow('finalization_already_disabled');
+      // The earlier refusal keeps its historical state readable after the task
+      // is later finalized; only the task status is current.
+      expect(await client.finalizationResult(selection)).toMatchObject({
+        state: 'refused',
+        taskStatus: 'finalized',
+        release: { state: 'not_started', outcome: null, receipt: null },
+      });
+      // A finalized task keeps its exact frozen changeset readable through the
+      // public view contract; the preview variant must not be fabricated.
+      const frozen = await client.codingRead('coding.diff', {
+        workspaceId: 'ws_ocean',
+        id: 'task',
+        roomId: f.room,
+      });
+      expect(frozen).toEqual({
+        ...f.changeset,
+        kind: 'frozen',
+        tests: [
+          {
+            presetId: null,
+            hash: f.evidence.hash,
+            passed: true,
+            afterTreeHash: f.evidence.afterTreeHash,
+          },
+        ],
+        workspaceId: 'ws_ocean',
+        roomId: f.room,
+      });
+      const cli = await runCli([
+        'coding',
+        'diff',
+        'task',
+        '--profile',
+        f.profile,
+        '--room',
+        f.room,
+      ]);
+      expect(cli.code).toBe(0);
+      expect(cli.output).toMatchObject({
+        ok: true,
+        data: {
+          kind: 'frozen',
+          hash: f.changeset.hash,
+          diff: f.changeset.diff,
+          taskId: 'task',
+        },
+      });
     } finally {
       client.close();
       await host.stop();
@@ -180,6 +228,40 @@ it('finalizes a genuinely prepared task and admits only one separately confirmed
           ok: true,
           value: f.changeset,
         });
+        // No edit or application authority survives the disable, and the public
+        // review service cannot start a new request for a disabled task.
+        expect(
+          await runtime.codingApply!.apply(
+            {
+              id: 'apply-late',
+              workspaceId: 'ws_ocean',
+              taskId: 'task',
+              changesetHash: f.changeset.hash,
+              reviewRequestId: 'review-1',
+              expectedBase: f.changeset.baseCommit,
+            },
+            {
+              confirm: () => {
+                throw Error('must not confirm');
+              },
+            },
+          ),
+        ).toMatchObject({ ok: false, error: { code: 'coding_denied' } });
+        expect(
+          await runtime.codingReview!.request(
+            {
+              id: 'review-late',
+              workspaceId: 'ws_ocean',
+              taskId: 'task',
+              changesetHash: f.changeset.hash,
+            },
+            {
+              confirm: () => {
+                throw Error('must not confirm');
+              },
+            },
+          ),
+        ).toMatchObject({ ok: false, error: { code: 'coding_denied' } });
         if (reopen === 1) {
           expect(
             await runtime.coding.start(successorInput(f), {

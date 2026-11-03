@@ -72,3 +72,42 @@ it('requires primitive Git modes in a frozen diff', async () => {
   }));
   await expect(c.codingRead('coding.diff', q)).rejects.toThrow('invalid_frame');
 });
+it('accepts the exact frozen diff frame of a disabled task', async () => {
+  const q = { workspaceId: 'ws', roomId: 'r', id: 'task' },
+    hash = 'a'.repeat(64);
+  const frozen = {
+    workspaceId: q.workspaceId,
+    roomId: q.roomId,
+    taskId: q.id,
+    kind: 'frozen',
+    id: hash,
+    hash,
+    baseCommit: 'b'.repeat(40),
+    beforeTreeHash: hash,
+    afterTreeHash: hash,
+    diff: 'frozen diff',
+    files: [{ path: 'f', before: null, after: { text: 'body', sha256: hash, mode: '100644' } }],
+    tests: [{ presetId: null, hash, passed: true, afterTreeHash: hash }],
+  };
+  const text = JSON.stringify(frozen);
+  const c = localPanelClient(async () => ({
+    ...q,
+    offset: 0,
+    version: createHash('sha256').update(text).digest('hex'),
+    length: text.length,
+    text,
+  }));
+  await expect(c.codingRead('coding.diff', q)).resolves.toEqual(frozen);
+  const malformed = JSON.stringify({
+    ...frozen,
+    tests: [{ presetId: null, hash, passed: 'yes', afterTreeHash: hash }],
+  });
+  const invalid = localPanelClient(async () => ({
+    ...q,
+    offset: 0,
+    version: createHash('sha256').update(malformed).digest('hex'),
+    length: malformed.length,
+    text: malformed,
+  }));
+  await expect(invalid.codingRead('coding.diff', q)).rejects.toThrow('invalid_frame');
+});

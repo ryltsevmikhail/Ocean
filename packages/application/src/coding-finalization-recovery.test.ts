@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { CodingFinalizationService } from './coding-finalization.js';
 import { RuntimeOwnerDecisions } from './owner-decisions.js';
-import { digest, fixture, ref, until } from './coding-finalization-fakes.js';
+import { digest, fixture, ref, until } from '../test-fixtures/coding-finalization-fakes.js';
 it('keeps an unproven registry outcome held and never retries it', async () => {
   const f = fixture({ release: 'registry_missing' });
   const card = await f.service.preview(f.selection, new AbortController().signal);

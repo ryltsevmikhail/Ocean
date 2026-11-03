@@ -47,6 +47,25 @@ export interface LocalDiffView {
     };
   }[];
 }
+/** Read-only frozen history for a finalizing/finalized task; no preview/evidence capability. */
+export interface LocalFrozenDiffView {
+  workspaceId: string;
+  roomId: string;
+  taskId: string;
+  kind: 'frozen';
+  hash: string;
+  baseCommit: string;
+  beforeTreeHash: string;
+  afterTreeHash: string;
+  diff: string;
+  files: readonly { path: string; before: Content | null; after: Content | null }[];
+  tests: readonly {
+    presetId: string | null;
+    hash: string;
+    passed: boolean;
+    afterTreeHash: string;
+  }[];
+}
 export interface LocalApplyView {
   workspaceId: string;
   roomId: string;
@@ -135,6 +154,30 @@ function diff(v: Record<string, unknown>, q: LocalCodingRead) {
     })
   );
 }
+function frozen(v: Record<string, unknown>, q: LocalCodingRead) {
+  return (
+    v['kind'] === 'frozen' &&
+    v['taskId'] === q.id &&
+    v['hash'] === v['id'] &&
+    bindingDigest(v['hash']) &&
+    bindingDigest(v['beforeTreeHash']) &&
+    bindingDigest(v['afterTreeHash']) &&
+    str(v, 'baseCommit', 'diff') &&
+    Array.isArray(v['files']) &&
+    v['files'].every(
+      (f: unknown) => rec(f) && str(f, 'path') && content(f['before']) && content(f['after']),
+    ) &&
+    Array.isArray(v['tests']) &&
+    v['tests'].every(
+      (t: unknown) =>
+        rec(t) &&
+        (t['presetId'] === null || typeof t['presetId'] === 'string') &&
+        bindingDigest(t['hash']) &&
+        typeof t['passed'] === 'boolean' &&
+        bindingDigest(t['afterTreeHash']),
+    )
+  );
+}
 function inspection(v: Record<string, unknown>, q: LocalCodingRead) {
   const r = v['receipt'],
     d = v['resolution'];
@@ -164,7 +207,8 @@ function inspection(v: Record<string, unknown>, q: LocalCodingRead) {
         str(d, 'reason')))
   );
 }
-export type LocalCodingView = LocalCodingTaskView | LocalDiffView | LocalApplyView;
+export type LocalCodingView =
+  LocalCodingTaskView | LocalDiffView | LocalFrozenDiffView | LocalApplyView;
 export function isCodingView(
   v: unknown,
   method: CodingReadMethod,
@@ -174,5 +218,6 @@ export function isCodingView(
   if (method === 'coding.show') return task(v, q);
   if (typeof v['roomId'] !== 'string' || (q.roomId !== undefined && v['roomId'] !== q.roomId))
     return false;
-  return method === 'coding.diff' ? diff(v, q) : inspection(v, q);
+  if (method === 'coding.diff') return v['kind'] === 'frozen' ? frozen(v, q) : diff(v, q);
+  return inspection(v, q);
 }

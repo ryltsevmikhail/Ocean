@@ -41,6 +41,7 @@ export default tseslint.config(
     // so they are linted without type information instead of failing to parse.
     files: [
       '**/*.test.ts',
+      '**/test-fixtures/**/*.ts',
       '*.config.ts',
       'apps/desktop/vite.config.ts',
       'apps/desktop/qa/*.mjs',

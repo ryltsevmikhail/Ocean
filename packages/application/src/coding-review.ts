@@ -67,6 +67,7 @@ export class CodingReviewService {
         changeset = tx.changeset(i.changesetHash);
       if (
         !task ||
+        task.status !== 'reserved' ||
         task.workspaceId !== i.workspaceId ||
         !this.#admit(task) ||
         !changeset ||
@@ -99,6 +100,7 @@ export class CodingReviewService {
       if (tx.reviewRequest(i.id)) return codingFailure('request_conflict');
       if (
         !task ||
+        task.status !== 'reserved' ||
         !this.#admit(task) ||
         !changeset ||
         task.reviewRoomId !== prepared.request.reviewRoomId ||
@@ -122,6 +124,7 @@ export class CodingReviewService {
         !request ||
         request.status !== 'requested' ||
         !task ||
+        task.status !== 'reserved' ||
         !this.#admit(task) ||
         !changeset ||
         !codingReviewCurrent(request.binding, changeset, tx.evidenceHashes(task.id))

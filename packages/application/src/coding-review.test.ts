@@ -166,3 +166,79 @@ it.each(['success', 'failure'])(
     expect(calls).toBe(1);
   },
 );
+
+it.each(['finalizing', 'finalized', 'cancelled'] as const)(
+  'refuses a %s task review request and dispatch even when the host admission allows it',
+  async (status) => {
+    const artifact: Changeset = {
+      id: 'c',
+      hash: 'hash',
+      taskId: task.id,
+      baseCommit: 'base',
+      beforeTreeHash: 'before',
+      afterTreeHash: 'after',
+      files: [],
+      diff: 'complete',
+    };
+    const disabled = { ...task, status };
+    let request: CodingReviewRequest | null = null,
+      calls = 0;
+    const service = new CodingReviewService(
+      {
+        atomic: (work) =>
+          work({
+            task: () => disabled,
+            changeset: () => artifact,
+            reviewRequest: () => request,
+            reviewVerdict: () => null,
+            putReviewRequest: (value) => {
+              request = structuredClone(value);
+            },
+            putReviewVerdict: () => {},
+            evidenceHashes: () => [],
+            evidence: () => [],
+          }),
+      },
+      () => true,
+    );
+    expect(
+      await service.request(
+        {
+          id: 'review',
+          workspaceId: disabled.workspaceId,
+          taskId: disabled.id,
+          changesetHash: 'hash',
+        },
+        {
+          confirm: async () => {
+            throw Error('must not confirm');
+          },
+        },
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'coding_denied' } });
+    request = {
+      id: 'review',
+      workspaceId: disabled.workspaceId,
+      reviewRoomId: disabled.reviewRoomId,
+      reviewerBotId: disabled.reviewBotId,
+      status: 'requested',
+      contextGrant: [],
+      binding: {
+        taskId: disabled.id,
+        changesetHash: 'hash',
+        baseCommit: 'base',
+        afterTreeHash: 'after',
+        testEvidenceHashes: [],
+      },
+    };
+    expect(
+      await service.dispatch('review', {
+        review: async () => {
+          calls++;
+          return { verdict: 'approve' as const, findings: [], summary: 'must not run' };
+        },
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'coding_denied' } });
+    expect(calls).toBe(0);
+  },
+);

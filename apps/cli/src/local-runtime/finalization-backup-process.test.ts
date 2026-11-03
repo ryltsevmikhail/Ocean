@@ -13,7 +13,7 @@ import {
   codingRows,
   leaseRegistryRows,
   preparedFinalizationTask,
-} from '../ocean/coding-finalization-fixture.js';
+} from '../../test-fixtures/coding-finalization-fixture.js';
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 async function finalizeLive(
   f: Awaited<ReturnType<typeof preparedFinalizationTask>>,

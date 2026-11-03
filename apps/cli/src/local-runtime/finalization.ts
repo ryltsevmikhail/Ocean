@@ -17,6 +17,7 @@ export class RuntimeFinalization {
     owner: RuntimeOwnerDecisions,
     ownerId: string,
     epochId: string | null,
+    restored: boolean,
     now: () => number = Date.now,
   ) {
     this.#service = new CodingFinalizationService({
@@ -25,7 +26,7 @@ export class RuntimeFinalization {
       leases: new SqliteProjectLeases(),
       ownerId,
       epochId,
-      restored: false,
+      restored,
       clock: { now: () => new Date(now()) },
       nextId: randomUUID,
       digest: (text) => createHash('sha256').update(text).digest('hex'),
@@ -62,7 +63,9 @@ export class RuntimeFinalization {
   async drain(): Promise<'settled' | 'uncertain'> {
     this.#closing = true;
     try {
-      await this.#service.join();
+      // Abort the pending owner waiters so a held preview is durably refused
+      // instead of making stop wait for the five-minute decision expiry.
+      await this.#service.close();
       await Promise.all(this.#jobs);
       return 'settled';
     } catch {

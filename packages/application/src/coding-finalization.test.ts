@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { digest, fixture, ref, until } from './coding-finalization-fakes.js';
+import { digest, fixture, ref, until } from '../test-fixtures/coding-finalization-fakes.js';
 it('denies without touching the task or the registry', async () => {
   const f = fixture();
   const card = await f.service.preview(f.selection, new AbortController().signal);
@@ -72,4 +72,25 @@ it('invalidates an allowed decision when the task changed while awaiting it', as
   await until(() => f.store.records.get('finalize-1')?.state === 'refused');
   expect(f.releases()).toBe(0);
   expect(f.store.tasks.get('task')?.status).toBe('reserved');
+});
+it('keeps an old refused result readable after the same task is later finalized', async () => {
+  const f = fixture();
+  const denied = await f.service.preview(f.selection, new AbortController().signal);
+  await f.decisions.resolve(ref(denied), denied.bindingDigest, denied.version, 'deny');
+  await until(() => f.store.records.get('finalize-1')?.state === 'refused');
+  const second = { ...f.selection, requestId: 'finalize-2' };
+  const allowed = await f.service.preview(second, new AbortController().signal);
+  await f.decisions.resolve(ref(allowed), allowed.bindingDigest, allowed.version, 'allow-once');
+  await until(() => f.store.records.get('finalize-2')?.state === 'finalized');
+  // The refused record keeps its historical decision; the task status is the
+  // current one, so the pair is not a same-moment invariant.
+  expect(f.service.result(f.selection)).toMatchObject({
+    state: 'refused',
+    taskStatus: 'finalized',
+    release: { state: 'not_started', outcome: null, receipt: null },
+  });
+  expect(f.service.result(second)).toMatchObject({
+    state: 'finalized',
+    taskStatus: 'finalized',
+  });
 });

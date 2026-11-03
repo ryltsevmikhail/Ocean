@@ -37,6 +37,9 @@ assets inertly: ordinary restored admission refuses before opening it, no
 original or restored profile attempts the release again, and original live
 profile leases are never transferred or stolen. The coordination registry's
 durable release receipt is separate and is never rewritten by backup/restore.
+Because no owner reconciliation command exists for an `uncertain` finalization,
+such a restored task remains disabled and its project reservation stays held
+indefinitely; nothing retries the release or transfers the lease.
 This is development-source behavior for workpackage 7.10; installed, current GUI
 and fresh live release qualification remain planned gates.
 

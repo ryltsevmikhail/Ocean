@@ -14,8 +14,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { vi } from 'vitest';
-import { createRuntime } from '../runtime.js';
-import { registerCodingProject } from './coding-projects.js';
+/* eslint-disable no-restricted-imports -- Test-only fixture composing the same CLI package's runtime and project hosts. */
+import { createRuntime } from '../src/runtime.js';
+import { registerCodingProject } from '../src/ocean/coding-projects.js';
 import type { CodingAccess, CodingTask, CodingTestEvidence, Changeset } from '@runnets/domain';
 import type { ConversationCommand } from '@runnets/application';
 const sandbox = (task: { worktreeRoot: string | null }) =>

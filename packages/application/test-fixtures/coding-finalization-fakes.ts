@@ -1,11 +1,17 @@
 import { createHash } from 'node:crypto';
-import type { CodingTask, CodingWorktree, ProjectLease } from '@runnets/domain';
+/* eslint-disable no-restricted-imports -- Test-only fakes for the same application package's domain-facing ports. */
+import type {
+  CodingFinalizationReleaseIntent,
+  CodingTask,
+  CodingWorktree,
+  ProjectLease,
+} from '@runnets/domain';
 import type {
   CodingFinalizationStore,
   CodingFinalizationTransaction,
-} from './coding-finalization-ports.js';
+} from '../src/coding-finalization-ports.js';
 import type { CodingFinalizationRecord } from '@runnets/domain';
-import { CodingFinalizationService } from './coding-finalization.js';
+import { CodingFinalizationService } from '../src/coding-finalization.js';
 import {
   RuntimeOwnerDecisions,
   type DecisionOutcome,
@@ -13,7 +19,7 @@ import {
   type OwnerDecisionRef,
   type OwnerDecisionScope,
   type OwnerDecisionStore,
-} from './owner-decisions.js';
+} from '../src/owner-decisions.js';
 export const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 export class MemoryOwnerDecisions implements OwnerDecisionStore {
   readonly rows = new Map<string, OwnerDecision>();
@@ -207,7 +213,7 @@ export function fixture(
     owns: (value: ProjectLease) => value.ownerId === 'owner',
     release: () => false,
     identity: () => ({ path: '/registry/leases.sqlite', schema: 'project_leases_v1' }),
-    releaseExact: (value: ProjectLease) => {
+    releaseExact: (value: ProjectLease, intent: CodingFinalizationReleaseIntent) => {
       releases++;
       store.events.push('release');
       if (store.tasks.get('task')!.status !== 'finalizing') throw Error('release_before_disable');
@@ -218,14 +224,14 @@ export function fixture(
         outcome: 'released' as const,
         receipt: {
           version: 1 as const,
-          operationId: 'finalize-1',
-          bindingDigest: store.records.get('finalize-1')!.bindingDigest,
-          taskId: 'task',
-          workspaceId: 'ws',
+          operationId: intent.operationId,
+          bindingDigest: intent.bindingDigest,
+          taskId: intent.taskId,
+          workspaceId: intent.workspaceId,
           ownerId: value.ownerId,
-          projectRoot: '/project',
-          tokenHash: digest(value.token),
-          holderHash: digest(JSON.stringify(value)),
+          projectRoot: intent.projectRoot,
+          tokenHash: intent.tokenHash,
+          holderHash: intent.holderHash,
           releasedAt: new Date(clock.at).toISOString(),
           registry: { path: '/registry/leases.sqlite', schema: 'project_leases_v1' },
         },

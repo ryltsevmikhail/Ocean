@@ -111,11 +111,13 @@ export async function startLocalRuntime(
     );
     if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
       throw Error('durable_runtime_required');
+    const restored = options.restore === true || runtime.restored === true;
     const finalization = new RuntimeFinalization(
       runtime.finalization,
       decisions.owner,
       runtime.ownerId,
       runtime.openRebindStore().active()?.preview.epochId ?? null,
+      restored,
       options.now,
     );
     const reads = runtime.openProfileReads?.();

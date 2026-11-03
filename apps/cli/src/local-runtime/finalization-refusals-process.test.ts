@@ -1,28 +1,13 @@
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
-import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { expect, it, vi } from 'vitest';
 import { startLocalRuntime } from './host.js';
 import { connectLocalRuntime } from '@runnets/tools-node';
 import {
+  codingRows,
   leaseRegistryRows,
   preparedFinalizationTask,
-} from '../ocean/coding-finalization-fixture.js';
-const repository = fileURLToPath(new URL('../../../..', import.meta.url));
-async function runCli(args: string[]): Promise<{ code: number; output: unknown }> {
-  const child = spawn(process.execPath, ['apps/cli/dist/main.js', ...args, '--json'], {
-    cwd: repository,
-    env: { ...process.env },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  let output = '';
-  child.stdout.on('data', (data: Buffer) => {
-    output += data.toString();
-  });
-  const [code] = (await once(child, 'close')) as [number];
-  return { code, output: JSON.parse(output) as unknown };
-}
+} from '../../test-fixtures/coding-finalization-fixture.js';
+import { runCli } from '../../test-fixtures/cli-command.js';
 it('refuses the full owner matrix and keeps two racing clients to one exact release', async () => {
   const f = await preparedFinalizationTask();
   const host = await startLocalRuntime({
@@ -108,6 +93,41 @@ it('refuses the full owner matrix and keeps two racing clients to one exact rele
     ]);
     expect(confirm.code).not.toBe(0);
     expect(confirm.output).toMatchObject({ ok: false, error: { code: 'approval_required' } });
+    // A non-TTY confirmation is refused before it can open a new preview or card.
+    const fresh = await runCli([
+      'coding',
+      'finalize',
+      'confirm',
+      '--profile',
+      f.profile,
+      '--room',
+      f.room,
+      '--task-id',
+      'task',
+      '--request-id',
+      'cli-fresh',
+    ]);
+    expect(fresh.code).not.toBe(0);
+    expect(fresh.output).toMatchObject({ ok: false, error: { code: 'approval_required' } });
+    const cardDb = new DatabaseSync(f.db, { readOnly: true });
+    try {
+      expect(
+        cardDb
+          .prepare(
+            "SELECT count(*) AS n FROM ocean_owner_decisions WHERE runId='finalize-cli-fresh'",
+          )
+          .get(),
+      ).toMatchObject({ n: 0 });
+      expect(
+        cardDb
+          .prepare(
+            "SELECT count(*) AS n FROM ocean_coding_finalizations WHERE request_id='cli-fresh'",
+          )
+          .get(),
+      ).toMatchObject({ n: 0 });
+    } finally {
+      cardDb.close();
+    }
     await one.resolveDecision({
       workspaceId: 'ws_ocean',
       roomId: f.room,
@@ -180,4 +200,35 @@ it('refuses the full owner matrix and keeps two racing clients to one exact rele
   } finally {
     f.close();
   }
+}, 60000);
+it('closes a pending finalization preview while stopping instead of reporting stop_incomplete', async () => {
+  const f = await preparedFinalizationTask();
+  const host = await startLocalRuntime({
+    profile: f.profile,
+    provider: null,
+    codingTools: { sandbox: f.sandbox, inspectSandbox: f.sandbox },
+    drainDeadlineMs: 3000,
+  });
+  const client = await connectLocalRuntime({ profile: f.profile });
+  try {
+    const selection = {
+      workspaceId: 'ws_ocean',
+      roomId: f.room,
+      taskId: 'task',
+      requestId: 'drain-1',
+    };
+    expect(await client.previewFinalization(selection)).toMatchObject({ status: 'pending' });
+  } finally {
+    client.close();
+  }
+  expect((await host.stop()).outcome).toBe('complete');
+  await host.closed;
+  // The pending preview became a durable refusal; nothing was released.
+  expect(
+    codingRows(f.db, 'task').finalization.map((row) => JSON.parse(row)['state'] as string),
+  ).toEqual(['refused']);
+  const registry = leaseRegistryRows(f.registryPath);
+  expect(registry.leases).toHaveLength(2);
+  expect(registry.receipts).toHaveLength(0);
+  f.close();
 }, 60000);
