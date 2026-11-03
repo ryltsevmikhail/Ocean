@@ -142,11 +142,11 @@ Task 5 covers the standard TUI decision presentation.
 - [x] Race two independent viewers of one pending write. Both read the stored winner, an opposite stale vote cannot grant again, and the counted effect executes once. Wrong bindings and versions refuse before consent. An expired operation executes zero times.
 - [x] SIGKILL the listening owner after journal start and before effect settlement. Two clients recover the same uncertain run. The room hold persists. An instrumented first successor records zero dispatches.
 - [x] Qualify committed source `f7dac84` with root checks, explicit process/CLI/ACP/access and opt-in native tests, and the isolated actual GUI.
-- [ ] Complete independent Task 8 review and whole shared-runtime review from `8e03b0a`, and address findings before accepting this first delivery. Remaining Ocean 1.1 stage 7 backup/restore and installed/live RC work follows that review.
+- [x] Complete independent Task 8 review and whole shared-runtime review from `8e03b0a`, including the consolidated correction through `dc9e244`. All ten findings are addressed; the scoped re-review reports no new Critical/Important breakage. Remaining Ocean 1.1 stage 7 backup/restore and installed/live RC work follows this source delivery.
 
 ## Execution state
 
-Tasks 1–7 passed independent review through `0a2a2d0`. Task 8 qualified committed source `f7dac84` against four process cases and the isolated Linux GUI. Independent Task 8 review and whole shared-runtime review from the Desktop import at `8e03b0a` are pending. See the [commands and results](../../integration/local-runtime.md#committed-source-process-qualification).
+Tasks 1–7 passed independent review through `0a2a2d0`. Task 8 qualified committed source `f7dac84` against four process cases and the isolated Linux GUI. Independent Task 8 review passed through `3056aa0`. Whole shared-runtime review from the Desktop import at `8e03b0a` and its one scoped correction re-review passed through `dc9e244`. Final source `67665e9` passed clean checks, cold production presets and actual isolated GUI qualification. Native evidence covers all 71 cases through the explicitly recorded passing-file/revision union; it is not a single all-green final-revision run. See the [commands and results](../../integration/local-runtime.md#committed-source-process-qualification).
 Ocean1.1 previous checkpoint: `5d032ae`, 1032 passed/41 skipped, build/format and
 14 native tests recorded; these are previous coding recovery evidence, not proof
 of shared-runtime acceptance. Workpackage7.5 was stopped before implementation:
