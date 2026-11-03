@@ -92,12 +92,17 @@ it('rejects wrong checksum, traversal, links, malformed archives and foreign lau
   expect(() => installArchive(a.path, a.hash, other)).toThrow('invalid_prefix');
 });
 
-it('packaged install command upgrades and rolls back from an independent installation', () => {
-  const root = temporary(),
-    repo = join(root, 'repo');
+/** Minimal committed release checkout; the standalone Apache-2.0 tree has no LICENSES directory. */
+function releaseRepo(base: string, options: { licenses?: boolean } = {}): string {
+  mkdirSync(base, { recursive: true });
+  const repo = join(base, 'repo');
   mkdirSync(repo);
-  for (const dir of ['apps/cli/dist/release', 'packages/domain/dist', 'LICENSES', 'docs'])
+  for (const dir of ['apps/cli/dist/release', 'packages/domain/dist', 'docs'])
     mkdirSync(join(repo, dir), { recursive: true });
+  if (options.licenses !== false) {
+    mkdirSync(join(repo, 'LICENSES'), { recursive: true });
+    writeFileSync(join(repo, 'LICENSES/fixture-notice.txt'), 'fixture notice');
+  }
   for (const dir of ['apps/cli', 'packages/domain'])
     writeFileSync(
       join(repo, dir, 'package.json'),
@@ -120,6 +125,24 @@ it('packaged install command upgrades and rolls back from an independent install
     ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture'],
     { cwd: repo },
   );
+  return repo;
+}
+it('packages a standalone checkout without a LICENSES tree and includes one when present', () => {
+  const root = temporary(),
+    absent = packageRelease(
+      releaseRepo(join(root, 'absent'), { licenses: false }),
+      '0.1.0',
+      join(root, 'a'),
+    ),
+    present = packageRelease(releaseRepo(join(root, 'present')), '0.1.0', join(root, 'b'));
+  const absentFiles = archiveFiles(readFileSync(absent.archive)),
+    presentFiles = archiveFiles(readFileSync(present.archive));
+  expect([...absentFiles.keys()].some((name) => name.startsWith('LICENSES/'))).toBe(false);
+  expect(presentFiles.has('LICENSES/fixture-notice.txt')).toBe(true);
+});
+it('packaged install command upgrades and rolls back from an independent installation', () => {
+  const root = temporary(),
+    repo = releaseRepo(root);
   const a = packageRelease(repo, '0.1.0', join(root, 'a')),
     b = packageRelease(repo, '0.2.0', join(root, 'b'));
   expect(

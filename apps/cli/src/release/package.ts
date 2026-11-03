@@ -1,6 +1,6 @@
 /** Assemble only compiled first-party runtime modules and explicit public documentation. */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createArchive } from './archive.js';
 import { archiveFiles, sha256, type ReleaseManifest } from './installer.js';
@@ -77,7 +77,8 @@ export function packageRelease(
       else throw new Error('Unexpected document link');
     }
   };
-  copyDocs(join(root, 'LICENSES'), 'LICENSES/');
+  // The standalone Apache-2.0 checkout has no third-party LICENSES tree; include it when present.
+  if (existsSync(join(root, 'LICENSES'))) copyDocs(join(root, 'LICENSES'), 'LICENSES/');
   copyDocs(join(root, 'docs'), 'docs/');
   add(
     'package.json',
