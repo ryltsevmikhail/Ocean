@@ -14,7 +14,7 @@ export function acquireOwnership(
   db: DatabaseSync,
   owner: RuntimeOwner,
   isAlive: (pid: number) => boolean,
-  requireUnpublished = false,
+  requireUnpublished = true,
 ): () => void {
   withImmediateTransaction(db, () => {
     db.exec(`CREATE TABLE IF NOT EXISTS runtime_owner_v1 (
@@ -41,7 +41,7 @@ export function acquireOwnership(
 }
 
 /** Claim this file-backed runtime before reconciliation; OS liveness is not process-stop evidence. */
-export function ownSqliteRuntime(path: string, requireUnpublished = false): () => void {
+export function ownSqliteRuntime(path: string, requireUnpublished = true): () => void {
   const db = openDatabase(path, DEFAULT_BUSY_TIMEOUT_MS);
   try {
     const release = acquireOwnership(

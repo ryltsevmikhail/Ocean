@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { chmodSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -103,3 +104,68 @@ it.each(['diff', 'held'])(
   },
   12000,
 );
+
+it('returns every scoped pending application across the SQLite Unicode binary page boundary', async () => {
+  const f = await codingWorkflowFixture('direct'),
+    path = join(f.directory, 'runtime.sqlite');
+  try {
+    const db = new DatabaseSync(path);
+    const ids = [
+      ...Array.from({ length: 200 }, (_, n) => '\ue000' + String(n).padStart(3, '0')),
+      '\u{10000}',
+    ];
+    try {
+      // Model retained uncertain claims. No operation, journal dispatch or source write runs in this fixture.
+      const put = db.prepare('INSERT INTO ocean_coding_applications VALUES(?,?)'),
+        held = db.prepare(
+          "INSERT INTO tool_invocations_v2 VALUES(?,'coding_apply',?,'apply',?,'uncertain')",
+        );
+      db.exec('BEGIN');
+      for (const id of ids) {
+        const intent = {
+          id,
+          taskId: 'task',
+          changesetHash: 'a'.repeat(64),
+          reviewRequestId: 'synthetic',
+          expectedBase: f.base,
+          status: 'applying',
+          files: [],
+        };
+        put.run(id, JSON.stringify({ ...intent, status: 'uncertain' }));
+        held.run(
+          id,
+          'apply-' + id,
+          createHash('sha256').update(JSON.stringify(intent)).digest('hex'),
+        );
+      }
+      db.exec('COMMIT');
+    } finally {
+      db.close();
+    }
+    f.runtime.close();
+    chmodSync(path, 0o600);
+    const run = join(f.directory, 'r');
+    mkdirSync(run, { mode: 0o700 });
+    vi.stubEnv('XDG_RUNTIME_DIR', run);
+    const host = await startLocalRuntime({ profile: f.directory, provider: null });
+    try {
+      const result = await profileCli(f.directory, run)('coding', 'pending', '--room', f.room);
+      expect(result).toMatchObject({
+        code: 0,
+        reply: {
+          version: 1,
+          ok: true,
+          data: { scope: 'coding_applications', roomId: f.room, omittedPendingEffects: 0 },
+        },
+      });
+      expect(result.reply.data.applications).toEqual(
+        ids.map((applicationId) => ({ applicationId, outcome: 'uncertain' })),
+      );
+    } finally {
+      await host.stop();
+    }
+  } finally {
+    vi.unstubAllEnvs();
+    f.close();
+  }
+});

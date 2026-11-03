@@ -57,6 +57,8 @@ export async function startLocalRuntime(
   const originalProfile = profileKey(paths);
   let decisions: RuntimeDecisions;
   const runtime = openOceanProfile(paths.profile, false, {
+    // This host alone validates and retires a surviving publication before serving.
+    requireUnpublished: false,
     codingTools: {
       ...(options.codingTools ?? registeredCodingTools(paths.profile)),
       owner: (turn, signal) => decisions.coding(turn, signal),

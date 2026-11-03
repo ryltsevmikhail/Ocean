@@ -29,5 +29,5 @@ export function assertUnpublished(db: DatabaseSync) {
     db.prepare("SELECT 1 FROM sqlite_master WHERE name='local_endpoint_v1'").get() &&
     db.prepare('SELECT 1 FROM local_endpoint_v1 LIMIT 1').get()
   )
-    throw Error('endpoint_exists');
+    throw Object.assign(Error('endpoint_exists'), { code: 'endpoint_exists' });
 }

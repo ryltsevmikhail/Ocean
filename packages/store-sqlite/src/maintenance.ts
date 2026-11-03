@@ -79,9 +79,9 @@ export function inspectDatabase(path: string): DatabaseInspection {
   let db: DatabaseSync | undefined;
   try {
     db = new DatabaseSync(path, { readOnly: true });
+    db.exec('BEGIN');
     if (![5, 6, 10, SCHEMA_VERSION].includes(schema(db))) return { status: 'unsupported_schema' };
     if (ownerBusy(db)) return { status: 'owner_busy' };
-    db.exec('BEGIN');
     assertUnpublished(db);
     const result = summary(db);
     db.exec('ROLLBACK');

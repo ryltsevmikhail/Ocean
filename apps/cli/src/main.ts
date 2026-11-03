@@ -132,4 +132,11 @@ export async function main(argv: readonly string[]): Promise<number> {
   return 2;
 }
 
-process.exitCode = await main(process.argv.slice(2));
+process.exitCode = await main(process.argv.slice(2)).catch((error: unknown) => {
+  // Legacy RUNNE_DB hosts have no local-runtime wire envelope.
+  if (error instanceof Error && 'code' in error && error.code === 'endpoint_exists') {
+    process.stderr.write('endpoint_exists\n');
+    return 3;
+  }
+  throw error;
+});

@@ -23,7 +23,14 @@ export async function pages<T, K extends string | number>(
     const page = await read(after);
     if (!page.length) return rows;
     const next = key(page[page.length - 1]!);
-    if (after !== undefined && next <= after) throw Error('invalid_frame');
+    if (after !== undefined) {
+      // The owner pages SQLite TEXT IDs with BINARY collation, including legacy Unicode IDs.
+      const advanced =
+        typeof next === 'string' && typeof after === 'string'
+          ? Buffer.compare(Buffer.from(next), Buffer.from(after)) > 0
+          : typeof next === 'number' && typeof after === 'number' && next > after;
+      if (!advanced) throw Error('invalid_frame');
+    }
     rows.push(...page);
     after = next;
   }
