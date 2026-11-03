@@ -26,6 +26,7 @@ function leases(root: string): { token: string; root: string }[] {
   }
 }
 
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('refuses the whole public inspection/preview matrix and an explicit restore without its marker', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'restore-refusals-'));
   fs.mkdirSync(join(root, 'home'), { mode: 0o700 });
@@ -184,4 +185,4 @@ it('refuses the whole public inspection/preview matrix and an explicit restore w
     fs.rmSync(root, { recursive: true, force: true });
     vi.unstubAllEnvs();
   }
-});
+}, 30_000);

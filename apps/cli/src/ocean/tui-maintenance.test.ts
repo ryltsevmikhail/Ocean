@@ -11,6 +11,7 @@ import { codingWorkflowFixture } from './coding-workflow-fixture.js';
 import { runDirectTui } from './tui.js';
 import { backupProfile, restoreProfile } from './snapshots.js';
 
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('admits a TUI only through the maintenance host and refuses its ordinary turn submit', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'tui-maintenance-'));
   fs.mkdirSync(join(root, 'home'), { mode: 0o700 });
@@ -102,4 +103,4 @@ it('admits a TUI only through the maintenance host and refuses its ordinary turn
     fs.rmSync(root, { recursive: true, force: true });
     vi.unstubAllEnvs();
   }
-});
+}, 60_000);

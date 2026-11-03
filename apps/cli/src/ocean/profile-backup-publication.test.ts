@@ -35,6 +35,7 @@ async function fixture() {
   vi.stubEnv('XDG_RUNTIME_DIR', join(root, 'run'));
   return { root, f: await fullBackupFixture(root, () => codingWorkflowFixture('direct'), false) };
 }
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('retains an incomplete root when copied SQLite changes during the last archive consumers', async () => {
   const { root, f } = await fixture(),
     actual = await vi.importActual<typeof fs>('node:fs'),
@@ -61,7 +62,7 @@ it('retains an incomplete root when copied SQLite changes during the last archiv
   } finally {
     f.close();
   }
-});
+}, 30_000);
 it('keeps quarantine incomplete if the original archive changes during the final consumer', async () => {
   const { root, f } = await fixture(),
     actual = await vi.importActual<typeof fs>('node:fs'),
@@ -84,7 +85,7 @@ it('keeps quarantine incomplete if the original archive changes during the final
   } finally {
     f.close();
   }
-});
+}, 30_000);
 
 it('keeps sources original after the final verifyFrozen read inside publication', async () => {
   const { root, f } = await fixture(),
@@ -116,7 +117,7 @@ it('keeps sources original after the final verifyFrozen read inside publication'
   } finally {
     f.close();
   }
-});
+}, 30_000);
 
 it('rechecks the original copied SQLite metadata after final source verification reads', async () => {
   const { root, f } = await fixture(),
@@ -152,7 +153,7 @@ it('rechecks the original copied SQLite metadata after final source verification
   } finally {
     f.close();
   }
-});
+}, 30_000);
 
 it('refuses pre-warmed mmap corruption of copied SQLite during the final source reader', async () => {
   const { root, f } = await fixture(),
@@ -254,4 +255,4 @@ with open(sys.argv[1],'r+b') as f,mmap.mmap(f.fileno(),0,access=mmap.ACCESS_WRIT
     if (exited) expect((await exited)[0]).toBe(0);
     f.close();
   }
-});
+}, 30_000);

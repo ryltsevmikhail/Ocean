@@ -28,13 +28,20 @@ export class RoomConnection {
     for (;;) {
       this.#closed.signal.throwIfAborted();
       const connection = (this.#peer ??= this.#connect(this.#closed.signal));
+      let connected = false;
       try {
         const client = await connection;
+        connected = true;
         this.#closed.signal.throwIfAborted();
         return await operation(client);
       } catch (error) {
-        if (!(error instanceof Error && transportErrors.has(error.message)) || this.closed)
-          throw error;
+        // A restarting owner binds its socket before publishing its descriptor.
+        // Retry that read-only handshake gap, never an operation's same-named error.
+        const retry =
+          error instanceof Error &&
+          (transportErrors.has(error.message) ||
+            (!connected && error.message === 'endpoint_exists'));
+        if (!retry || this.closed) throw error;
         if (error.message !== 'observer_busy' && this.#peer === connection) {
           this.#peer = undefined;
           void connection.then(

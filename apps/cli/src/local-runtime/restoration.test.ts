@@ -10,6 +10,7 @@ import { startLocalRuntime, type LocalRuntimeHost } from './host.js';
 import { codingWorkflowFixture } from '../ocean/coding-workflow-fixture.js';
 import { backupProfile, restoreProfile } from '../ocean/snapshots.js';
 
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('uses one common owner decision across clients, then opens a verified ordinary epoch', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'restore-host-'));
   fs.mkdirSync(join(root, 'home'), { mode: 0o700 });
@@ -114,7 +115,7 @@ it('uses one common owner decision across clients, then opens a verified ordinar
     fs.rmSync(root, { recursive: true, force: true });
     vi.unstubAllEnvs();
   }
-});
+}, 30_000);
 
 it('lets two racing clients establish exactly one binding from distinct previews', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'restore-race-'));
@@ -255,4 +256,4 @@ it('lets two racing clients establish exactly one binding from distinct previews
     fs.rmSync(root, { recursive: true, force: true });
     vi.unstubAllEnvs();
   }
-});
+}, 30_000);

@@ -20,6 +20,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('independently refuses malformed membership and recomputed semantic tampering after source deletion', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'ocean-profile-tamper-'));
   roots.push(root);
@@ -137,7 +138,7 @@ it('independently refuses malformed membership and recomputed semantic tampering
   } finally {
     f.close();
   }
-});
+}, 30_000);
 it('refuses quarantine inside its source archive before creating an entry', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'ocean-restore-admission-'));
   roots.push(root);
@@ -156,4 +157,4 @@ it('refuses quarantine inside its source archive before creating an entry', asyn
   } finally {
     f.close();
   }
-});
+}, 30_000);
