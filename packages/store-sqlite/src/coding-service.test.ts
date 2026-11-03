@@ -265,6 +265,7 @@ for (const kind of ['memory', 'sqlite'] as const) {
               if (tx.task('task')) throw Error('injected commit failure');
               return value;
             }),
+          projectHeld: () => false,
         },
         leases: s.leases,
         journal: s.journal,

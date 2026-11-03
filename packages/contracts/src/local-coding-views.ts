@@ -12,7 +12,7 @@ export interface LocalCodingTaskView {
   projectRoot: string;
   worktreeRoot: string | null;
   baseCommit: string;
-  status: 'reserved' | 'cancelled';
+  status: 'reserved' | 'cancelled' | 'finalizing' | 'finalized';
   policy: {
     version: 1;
     devCapabilities: readonly string[];
@@ -90,7 +90,7 @@ function task(v: Record<string, unknown>, q: LocalCodingRead) {
     str(v, 'ownerRoomId', 'reviewRoomId', 'devBotId', 'reviewBotId', 'projectRoot', 'baseCommit') &&
     (q.roomId === undefined || q.roomId === v['ownerRoomId']) &&
     (typeof v['worktreeRoot'] === 'string' || v['worktreeRoot'] === null) &&
-    (v['status'] === 'reserved' || v['status'] === 'cancelled') &&
+    ['reserved', 'cancelled', 'finalizing', 'finalized'].includes(String(v['status'])) &&
     v['policyVersion'] === 1 &&
     !('lease' in v) &&
     rec(p) &&

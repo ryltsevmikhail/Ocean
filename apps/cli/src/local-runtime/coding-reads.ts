@@ -30,6 +30,24 @@ export async function codingRead(
     return metadata;
   }
   if (method === 'coding.diff') {
+    if (task.status === 'finalizing' || task.status === 'finalized') {
+      const frozen = runtime.codingChanges.history({
+        workspaceId: q.workspaceId,
+        taskId,
+        roomId,
+        botId: task.devBotId,
+        policyVersion: task.policyVersion,
+        capability: 'project_read',
+      });
+      if (!frozen.ok) throw Error(frozen.error.code);
+      const tests = (runtime.codingEvidence?.list(taskId) ?? []).map((e) => ({
+        presetId: e.presetId ?? null,
+        hash: e.hash,
+        passed: codingTestPassed(e),
+        afterTreeHash: e.afterTreeHash,
+      }));
+      return { ...frozen.value, kind: 'frozen', tests, workspaceId: q.workspaceId, roomId };
+    }
     const result = await runtime.codingChanges.preview({
       workspaceId: q.workspaceId,
       taskId,

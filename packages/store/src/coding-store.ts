@@ -6,6 +6,12 @@ import type {
   CodingReceipt,
 } from '@runnets/application';
 import type { CodingTask } from '@runnets/domain';
+const CODING_STATUS_TRANSITIONS: Record<CodingTask['status'], readonly CodingTask['status'][]> = {
+  reserved: ['reserved', 'cancelled', 'finalizing'],
+  cancelled: ['cancelled'],
+  finalizing: ['finalizing', 'finalized'],
+  finalized: ['finalized'],
+};
 /** Copy-on-write snapshots are published only after successful synchronous work. */
 export class InMemoryCodingStore implements CodingStore {
   #tasks = new Map<string, CodingTask>();
@@ -15,6 +21,10 @@ export class InMemoryCodingStore implements CodingStore {
   readonly #conversations: ConversationStore;
   constructor(conversations: ConversationStore) {
     this.#conversations = conversations;
+  }
+  /** Ephemeral runtime has coding disabled and never composes finalization. */
+  projectHeld(): boolean {
+    return false;
   }
   atomic<T>(work: (tx: CodingTransaction) => T): T {
     if (this.#active) throw Error('nested coding transaction');
@@ -32,7 +42,7 @@ export class InMemoryCodingStore implements CodingStore {
             old &&
             (JSON.stringify({ ...old, status: t.status, worktreeRoot: t.worktreeRoot }) !==
               JSON.stringify(t) ||
-              (old.status === 'cancelled' && t.status !== 'cancelled') ||
+              !CODING_STATUS_TRANSITIONS[old.status].includes(t.status) ||
               (old.worktreeRoot !== null && old.worktreeRoot !== t.worktreeRoot))
           )
             throw Error('Immutable coding binding');

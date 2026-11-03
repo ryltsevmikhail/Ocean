@@ -29,6 +29,17 @@ all frozen inventory and subgraph catalog identities. Immutable changeset text
 remains in its authoritative SQLite payload; the reader checks its hashes and
 exact file descriptors rather than inventing external copies.
 
+Prepared-task finalization records (schema 14 `ocean_coding_finalizations` plus
+the task status) live in ordinary profile tables, so a format-2 backup and
+restore copy them byte-exactly. A restored finalizing/uncertain/finalized task
+keeps its exact historical state, release intent/receipt reference and retained
+assets inertly: ordinary restored admission refuses before opening it, no
+original or restored profile attempts the release again, and original live
+profile leases are never transferred or stolen. The coordination registry's
+durable release receipt is separate and is never rewritten by backup/restore.
+This is development-source behavior for workpackage 7.10; installed, current GUI
+and fresh live release qualification remain planned gates.
+
 `snapshotCodingDatabase` holds exclusive maintenance ownership through source
 preparation, online SQLite backup, archive consumers and publication preparation.
 Its optional destination selector admits every frozen external source before the

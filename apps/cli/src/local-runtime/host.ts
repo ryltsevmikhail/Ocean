@@ -32,6 +32,9 @@ import { createProviderFromEnv } from '../engine/provider.js';
 import type { RuntimeOptions } from '../runtime.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
+import { drainBeforeDeadline } from './drain.js';
+import { RuntimeFinalization } from './finalization.js';
+import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
 export interface LocalRuntimeHost {
   readonly identity: LocalRuntimeIdentity;
   readonly recovery: RuntimeRecovery;
@@ -106,6 +109,15 @@ export async function startLocalRuntime(
       decisions.owner,
       options.now,
     );
+    if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
+      throw Error('durable_runtime_required');
+    const finalization = new RuntimeFinalization(
+      runtime.finalization,
+      decisions.owner,
+      runtime.ownerId,
+      runtime.openRebindStore().active()?.preview.epochId ?? null,
+      options.now,
+    );
     const reads = runtime.openProfileReads?.();
     if (!reads) throw Error('durable_runtime_required');
     const panels = new CodingPanelQueries(runtime, reads);
@@ -127,6 +139,7 @@ export async function startLocalRuntime(
         'coding.panel',
         ...PROFILE_METHODS,
         ...LOCAL_RESTORE_METHODS,
+        ...(options.restore ? [] : LOCAL_FINALIZATION_METHODS),
         ...(options.restore ? ['restore.maintenance'] : []),
       ],
     };
@@ -173,6 +186,7 @@ export async function startLocalRuntime(
                   decisions.drain(),
                   panels.drain(),
                   restoration.drain(),
+                  finalization.drain(),
                 ]);
                 return jobs === 'settled' && extra === 'settled' ? 'settled' : 'uncertain';
               }, drainDeadlineMs)) !== 'settled'
@@ -223,6 +237,8 @@ export async function startLocalRuntime(
             return restoration.dispatch(method, params);
           if (options.restore && !maintenanceRead(method))
             return { error: { code: 'restore_restricted' } };
+          if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
+            return finalization.dispatch(method, params);
           if (method === 'desktop.assets') return desktop(params, state !== 'ready');
           if (method === 'turns.submit') {
             const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
@@ -267,23 +283,6 @@ export async function startLocalRuntime(
       runtime.close();
     }
     throw error;
-  }
-}
-
-async function drainBeforeDeadline(
-  drain: () => Promise<'settled' | 'uncertain'>,
-  deadlineMs: number,
-): Promise<'settled' | 'uncertain'> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      drain(),
-      new Promise<'uncertain'>((resolve) => {
-        timer = setTimeout(() => resolve('uncertain'), deadlineMs);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
   }
 }
 

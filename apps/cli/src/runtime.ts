@@ -29,7 +29,9 @@ import {
   DirectChatService,
   ChatReviewService,
   reconcileInterrupted,
+  recoverCodingFinalizations,
   type OwnerDecisionStore,
+  type CodingFinalizationStore,
   type Clock,
   type CodingTestEvidenceStore,
   type RuntimeRecovery,
@@ -37,16 +39,8 @@ import {
 } from '@runnets/application';
 import { openSqliteStore, ownSqliteRuntime } from '@runnets/store-sqlite';
 import type { EndpointProof, ProfileReads } from '@runnets/store-sqlite';
-import {
-  InMemoryCommandDedup,
-  InMemoryCodingStore,
-  InMemoryCodingApprovalStore,
-  InMemoryProjectLeases,
-  InMemoryConversationStore,
-  InMemoryToolJournal,
-  InMemoryEventLog,
-  systemClock,
-} from '@runnets/store';
+import { systemClock } from '@runnets/store';
+import { createEphemeralRuntime } from './runtime-ephemeral.js';
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
   readonly restored?: boolean;
@@ -57,6 +51,10 @@ export interface Runtime {
   readonly ownerDecisions: OwnerDecisionStore;
   openRoomRuns?(): RoomRuntimeRuns;
   readonly coding: CodingTaskService;
+  /** Durable finalization store; absent on the ephemeral host. */
+  readonly finalization?: CodingFinalizationStore;
+  /** Current durable profile owner identity (lease owner); absent when ephemeral. */
+  readonly ownerId?: string;
   readonly codingReview?: CodingReviewService;
   readonly codingApply?: CodingApplyService;
   readonly codingApplyInspection?: CodingApplyInspectionService;
@@ -92,52 +90,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     throw new Error('Durable mode requires a persistent RUNNE_DB file');
   if (mode === 'ephemeral' && persistent)
     throw new Error('Ephemeral mode cannot use a persistent RUNNE_DB file');
-  if (mode === 'ephemeral') {
-    const service = serviceOver(
-      new InMemoryEventLog(),
-      new InMemoryCommandDedup(),
-      false,
-      options.clock,
-    );
-    const journal = new InMemoryToolJournal();
-    const deps = {
-      store: new InMemoryConversationStore(),
-      clock: options.clock ?? systemClock,
-      nextId: () => randomUUID().replaceAll('-', ''),
-    };
-    const codingDeps = {
-      store: new InMemoryCodingStore(deps.store),
-      leases: new InMemoryProjectLeases(),
-      projects: new GitCodingProject(),
-      journal,
-      ownerId: 'ephemeral-' + randomUUID(),
-      enabled: false,
-      clock: deps.clock,
-    };
-    return {
-      ownerDecisions: deps.store.ownerDecisions,
-      service,
-      coding: new CodingTaskService(codingDeps),
-      codingApprovals: new CodingApprovalService({
-        store: new InMemoryCodingApprovalStore(),
-        now: () => deps.clock.now().getTime(),
-        admit: () => false,
-        restored: false,
-      }),
-      codingChanges: new CodingChangesetService({
-        ...codingDeps,
-        worktrees: new GitCodingWorktrees(options.codingWorktreeDirectory),
-        snapshots: new GitCodingSnapshots(),
-      }),
-      conversations: new ConversationService(deps),
-      chat: new DirectChatService({ ...deps, tasks: service }),
-      reviews: new ChatReviewService({ ...deps, tasks: service, journal }),
-      durable: false,
-      toolJournal: journal,
-      ready: Promise.resolve({ tasks: [], effects: [] }),
-      close: () => {},
-    };
-  }
+  if (mode === 'ephemeral') return createEphemeralRuntime(options);
   if (runtimeIncomplete(dirname(dbPath))) throw new Error('recovery_required');
   const release = ownSqliteRuntime(dbPath, options.requireUnpublished);
   try {
@@ -171,6 +124,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       clock: deps.clock,
       restored,
     };
+    if (!restored) recoverCodingFinalizations(store.finalization, codingDeps.leases);
     const coding = new CodingTaskService(codingDeps);
     const codingApprovals = new CodingApprovalService({
       authorityId: randomUUID(),
@@ -206,6 +160,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     });
     return {
       restored,
+      finalization: store.finalization,
+      ownerId: codingDeps.ownerId,
       openRebindStore: () => store.rebind,
       service,
       ownerDecisions: store.ownerDecisions,

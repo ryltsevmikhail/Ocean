@@ -64,6 +64,7 @@ export async function runCodingCommand(
     if (!result.ok) throw Error(result.error.code);
     return result.value;
   }
+  if (args.positional[0] === 'finalize') throw Error('runtime_required');
   if (args.positional[0] === 'apply') return runCodingApplyCommand(runtime, args, requestId);
   if (['diff', 'review'].includes(args.positional[0] ?? ''))
     return runCodingReviewCommand(runtime, args, requestId, provider);

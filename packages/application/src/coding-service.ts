@@ -56,6 +56,8 @@ export class CodingTaskService {
       return task ? ok(task) : codingFailure('recovery_required');
     }
     if (this.#pending()) return codingFailure('recovery_required');
+    // A finalizing/uncertain finalization still owns the project reservation.
+    if (this.#deps.store.projectHeld(i.projectRoot)) return codingFailure('recovery_required');
     if (this.#deps.store.atomic((tx) => tx.task(i.taskId)))
       return codingFailure('request_conflict');
     let project: Awaited<ReturnType<CodingProjectPort['inspect']>>;
@@ -65,6 +67,7 @@ export class CodingTaskService {
       return codingFailure('invalid_input');
     }
     if (!project.clean) return codingFailure('project_changed');
+    if (this.#deps.store.projectHeld(project.root)) return codingFailure('recovery_required');
     if (!this.#deps.store.atomic((tx) => codingParticipants(tx, i, project.root)))
       return codingFailure('coding_denied');
     const policy: CodingPolicy = {
@@ -118,7 +121,12 @@ export class CodingTaskService {
           ? ok(tx.task(receipt.taskId)!)
           : codingFailure('request_conflict');
       if (tx.task(i.taskId)) return this.#rejectUnused(tx, lease.value, 'request_conflict');
-      if (this.#pending()) return this.#rejectUnused(tx, lease.value, 'recovery_required');
+      if (
+        this.#pending() ||
+        this.#deps.store.projectHeld(i.projectRoot) ||
+        this.#deps.store.projectHeld(project.root)
+      )
+        return this.#rejectUnused(tx, lease.value, 'recovery_required');
       if (!codingParticipants(tx, i, project.root))
         return this.#rejectUnused(tx, lease.value, 'coding_denied');
       if (!this.#deps.leases.owns(lease.value)) return codingFailure('project_busy');
@@ -190,6 +198,9 @@ export class CodingTaskService {
     if (!task || task.workspaceId !== workspaceId || task.lease.ownerId !== this.#deps.ownerId)
       return codingFailure('coding_denied');
     if (task.worktreeRoot !== null) return codingFailure('recovery_required');
+    // Finalization is not cancellation: never claim a disabled task was cancelled.
+    if (task.status !== 'reserved' && task.status !== 'cancelled')
+      return codingFailure('recovery_required');
     if (
       task.status === 'reserved' &&
       !(await owner.confirm(

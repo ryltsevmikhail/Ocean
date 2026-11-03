@@ -26,6 +26,9 @@ export * from './chat-review.js';
 
 export * from './coding-task.js';
 export * from './coding-policy.js';
+export * from './coding-finalization.js';
+export * from './coding-finalization-valid.js';
+export * from './coding-finalization-valid-records.js';
 
 export * from './changeset.js';
 

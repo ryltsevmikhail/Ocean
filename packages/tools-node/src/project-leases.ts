@@ -8,13 +8,19 @@ import {
   ok,
   codingFailure,
   projectRootsOverlap,
+  validCodingFinalizationReleaseReceipt,
   type ProjectLease,
   type ProjectLeaseHolder,
   type CodingResult,
+  type CodingFinalizationRegistryIdentity,
+  type CodingFinalizationReleaseIntent,
+  type CodingFinalizationReleaseReceipt,
 } from '@runnets/domain';
-import type { ProjectLeasePort } from '@runnets/application';
+import type { ProjectLeasePort, ProjectLeaseReleasePort } from '@runnets/application';
+export type ProjectLeaseReleaseOutcome = ReturnType<ProjectLeaseReleasePort['releaseExact']>;
 export const defaultProjectLeaseDirectory = (): string =>
   join(homedir(), '.local/state/ocean-coordination');
+const RECEIPT_SCHEMA = 'project_leases_v1+project_lease_receipts_v1';
 function privateFile(path: string, directory: boolean): void {
   const s = lstatSync(path);
   if (
@@ -26,6 +32,29 @@ function privateFile(path: string, directory: boolean): void {
   )
     throw Error('Unsafe project lease registry');
 }
+const receiptColumns = 'operation_id,binding_digest,task_id,token_hash,holder_hash,payload';
+function decodeReceipt(row: Record<string, unknown> | undefined): CodingFinalizationReleaseReceipt {
+  if (!row) throw Error('registry_corrupt');
+  const receipt = JSON.parse(String(row['payload'])) as CodingFinalizationReleaseReceipt;
+  if (
+    !validCodingFinalizationReleaseReceipt(receipt) ||
+    receipt.operationId !== row['operation_id'] ||
+    receipt.bindingDigest !== row['binding_digest'] ||
+    receipt.taskId !== row['task_id'] ||
+    receipt.tokenHash !== row['token_hash'] ||
+    receipt.holderHash !== row['holder_hash']
+  )
+    throw Error('registry_corrupt');
+  return receipt;
+}
+const receiptRow = (r: CodingFinalizationReleaseReceipt) => [
+  r.operationId,
+  r.bindingDigest,
+  r.taskId,
+  r.tokenHash,
+  r.holderHash,
+  JSON.stringify(r),
+];
 export class SqliteProjectLeases implements ProjectLeasePort {
   readonly #configured: string | undefined;
   constructor(directory?: string) {
@@ -33,6 +62,9 @@ export class SqliteProjectLeases implements ProjectLeasePort {
   }
   get #directory(): string {
     return this.#configured ?? defaultProjectLeaseDirectory();
+  }
+  #path(): string {
+    return join(resolve(this.#directory), 'leases.sqlite');
   }
   #open(): DatabaseSync {
     mkdirSync(this.#directory, { recursive: true, mode: 0o700 });
@@ -49,12 +81,19 @@ export class SqliteProjectLeases implements ProjectLeasePort {
     const db = new DatabaseSync(path);
     try {
       db.exec(`PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL;
-    CREATE TABLE IF NOT EXISTS project_leases_v1(token TEXT PRIMARY KEY,root TEXT NOT NULL,payload TEXT NOT NULL) STRICT;`);
+    CREATE TABLE IF NOT EXISTS project_leases_v1(token TEXT PRIMARY KEY,root TEXT NOT NULL,payload TEXT NOT NULL) STRICT;
+    CREATE TABLE IF NOT EXISTS project_lease_receipts_v1(
+      operation_id TEXT PRIMARY KEY,binding_digest TEXT NOT NULL,task_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL,holder_hash TEXT NOT NULL,payload TEXT NOT NULL
+    ) STRICT;`);
       return db;
     } catch (error) {
       db.close();
       throw error;
     }
+  }
+  identity(): CodingFinalizationRegistryIdentity {
+    return { path: this.#path(), schema: RECEIPT_SCHEMA };
   }
   #all(db: DatabaseSync): ProjectLease[] {
     return db
@@ -66,6 +105,119 @@ export class SqliteProjectLeases implements ProjectLeasePort {
           throw Error('Invalid project lease');
         return lease;
       });
+  }
+  #exact(current: ProjectLease, lease: ProjectLease): boolean {
+    return (
+      current.token === lease.token &&
+      current.projectRoot === lease.projectRoot &&
+      current.ownerId === lease.ownerId &&
+      current.taskId === lease.taskId &&
+      current.requestId === lease.requestId &&
+      current.binding === lease.binding &&
+      current.kind === lease.kind
+    );
+  }
+  /** A missing registry is never created as part of a release. */
+  #existing(): DatabaseSync | null {
+    if (!existsSync(this.#directory) || !existsSync(this.#path())) return null;
+    try {
+      privateFile(this.#directory, true);
+      privateFile(this.#path(), false);
+      return new DatabaseSync(this.#path());
+    } catch {
+      throw Error('registry_corrupt');
+    }
+  }
+  releaseExact(
+    lease: ProjectLease,
+    intent: CodingFinalizationReleaseIntent,
+  ): ProjectLeaseReleaseOutcome {
+    let db: DatabaseSync | null;
+    try {
+      db = this.#existing();
+    } catch {
+      return { outcome: 'registry_corrupt', detail: 'unsafe_registry' };
+    }
+    if (!db) return { outcome: 'registry_missing', detail: 'registry_absent' };
+    try {
+      db.exec(`PRAGMA busy_timeout=5000;
+      CREATE TABLE IF NOT EXISTS project_lease_receipts_v1(
+        operation_id TEXT PRIMARY KEY,binding_digest TEXT NOT NULL,task_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL,holder_hash TEXT NOT NULL,payload TEXT NOT NULL
+      ) STRICT;`);
+      db.exec('BEGIN IMMEDIATE');
+      const existing = db
+        .prepare(
+          'SELECT ' + receiptColumns + ' FROM project_lease_receipts_v1 WHERE operation_id=?',
+        )
+        .get(intent.operationId);
+      if (existing) {
+        const receipt = decodeReceipt(existing);
+        db.exec('ROLLBACK');
+        return receipt.bindingDigest === intent.bindingDigest &&
+          receipt.tokenHash === intent.tokenHash &&
+          receipt.holderHash === intent.holderHash &&
+          receipt.taskId === intent.taskId
+          ? { outcome: 'released', receipt }
+          : { outcome: 'receipt_conflict', detail: 'operation_receipt_mismatch' };
+      }
+      const current = this.#all(db).find((entry) => entry.token === lease.token);
+      if (!current) {
+        db.exec('ROLLBACK');
+        return { outcome: 'absent' };
+      }
+      if (!this.#exact(current, lease)) {
+        db.exec('ROLLBACK');
+        return { outcome: 'mismatch', detail: 'holder_changed' };
+      }
+      const receipt: CodingFinalizationReleaseReceipt = {
+        version: 1,
+        ...intent,
+        registry: this.identity(),
+      };
+      if (!validCodingFinalizationReleaseReceipt(receipt)) throw Error('invalid_receipt');
+      db.prepare('DELETE FROM project_leases_v1 WHERE token=?').run(lease.token);
+      db.prepare('INSERT INTO project_lease_receipts_v1 VALUES(?,?,?,?,?,?)').run(
+        ...receiptRow(receipt),
+      );
+      db.exec('COMMIT');
+      return { outcome: 'released', receipt };
+    } catch (error) {
+      if (db.isTransaction) db.exec('ROLLBACK');
+      return {
+        outcome: 'registry_corrupt',
+        detail: error instanceof Error ? error.message : 'registry_failure',
+      };
+    } finally {
+      if (db.isOpen) db.close();
+    }
+  }
+  releaseReceipt(operationId: string): CodingFinalizationReleaseReceipt | null {
+    let db: DatabaseSync | null;
+    try {
+      db = this.#existing();
+    } catch {
+      throw Error('registry_corrupt');
+    }
+    if (!db) return null;
+    try {
+      if (
+        !db
+          .prepare(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='project_lease_receipts_v1'",
+          )
+          .get()
+      )
+        return null;
+      const row = db
+        .prepare(
+          'SELECT ' + receiptColumns + ' FROM project_lease_receipts_v1 WHERE operation_id=?',
+        )
+        .get(operationId);
+      return row ? decodeReceipt(row) : null;
+    } finally {
+      if (db.isOpen) db.close();
+    }
   }
   acquire(projectRoot: string, holder: ProjectLeaseHolder): CodingResult<ProjectLease> {
     if (

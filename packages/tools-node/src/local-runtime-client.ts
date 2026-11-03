@@ -1,6 +1,10 @@
 import { localDesktopClient, type LocalDesktopClient } from './local-desktop-client.js';
 import { localRestoreClient, type LocalRestoreClient } from './local-restore-client.js';
 import { localProfileClient, type LocalProfileClient } from './local-profile-client.js';
+import {
+  localFinalizationClient,
+  type LocalFinalizationClient,
+} from './local-finalization-client.js';
 import { localPanelClient, type LocalPanelClient } from './local-panel-client.js';
 import { randomUUID } from 'node:crypto';
 import { connect, type Socket } from 'node:net';
@@ -33,7 +37,8 @@ export interface LocalRuntimeClient
     LocalProfileClient,
     LocalRoomClient,
     LocalDecisionClient,
-    LocalPanelClient {
+    LocalPanelClient,
+    LocalFinalizationClient {
   readonly identity: LocalRuntimeIdentity;
   submit(request: LocalTurnRequest): Promise<LocalTurnReceipt>;
   getReceipt(query: LocalReceiptQuery): Promise<LocalTurnReceipt | null>;
@@ -145,6 +150,7 @@ async function connectDescriptor(
       ...localProfileClient(peer.request.bind(peer)),
       ...localPanelClient(peer.request.bind(peer)),
       ...localDecisionClient(peer.request.bind(peer)),
+      ...localFinalizationClient(peer.request.bind(peer)),
       ...localRoomClient(peer.request.bind(peer), identity),
       async submit(input) {
         const request = validatedParams(input, isLocalTurnRequest);

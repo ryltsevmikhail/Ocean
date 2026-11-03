@@ -69,6 +69,7 @@ describe('schema initialization', () => {
       'ocean_coding_applications',
       'ocean_coding_approval_claims',
       'ocean_coding_approvals',
+      'ocean_coding_finalizations',
       'ocean_coding_receipts',
       'ocean_coding_review_requests',
       'ocean_coding_review_verdicts',

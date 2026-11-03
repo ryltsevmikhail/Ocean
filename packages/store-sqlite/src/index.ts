@@ -26,3 +26,5 @@ export { readDesktopBackupInventory } from './desktop-inventory.js';
 export { readProfileRestoreSnapshot } from './restore-snapshot.js';
 export { readRestorationAuthority } from './restoration-authority.js';
 export { readRestorationBackupState } from './restoration-backup.js';
+export { finalizationStore } from './coding-finalization-store.js';
+export { projectFinalizationHeld } from './coding-finalization-holds.js';

@@ -4,6 +4,7 @@ export * from './executor.js';
 export * from './native.js';
 
 export * from './project-leases.js';
+export * from './local-finalization-client.js';
 export * from './coding-project.js';
 
 export * from './coding-worktree.js';

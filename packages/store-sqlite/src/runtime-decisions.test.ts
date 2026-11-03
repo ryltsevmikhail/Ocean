@@ -15,7 +15,7 @@ it('upgrades a v10 profile atomically and refuses a damaged v11 decision table',
     db.exec('DROP TABLE ocean_owner_decisions');
     initializeSchema(db);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '13',
+      '14',
     );
     db.exec('DROP TABLE ocean_owner_decisions');
     expect(() => initializeSchema(db)).toThrow('missing table');

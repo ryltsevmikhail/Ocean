@@ -20,7 +20,7 @@ export interface CodingBackupInventory {
     readonly baseCommit: string;
     readonly worktreeRoot: string | null;
     readonly ownerId: string;
-    readonly status: 'reserved' | 'cancelled';
+    readonly status: 'reserved' | 'cancelled' | 'finalizing' | 'finalized';
   }[];
   readonly worktrees: readonly CodingWorktree[];
   readonly changesets: readonly {

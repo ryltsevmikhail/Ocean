@@ -81,7 +81,7 @@ export function readMaintenanceCodingInventory(db: DatabaseSync): CodingBackupIn
           !text(value.lease?.ownerId) ||
           value.lease.taskId !== id ||
           value.lease.projectRoot !== value.projectRoot ||
-          !['reserved', 'cancelled'].includes(value.status)
+          !['reserved', 'cancelled', 'finalizing', 'finalized'].includes(value.status)
         )
           throw Error('invalid_coding_inventory');
         tasks.push(

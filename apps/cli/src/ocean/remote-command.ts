@@ -63,10 +63,13 @@ export async function routeProfileCommand(
       );
       return 0;
     }
+    const { runFinalizationCommand } = await import('./finalization-command.js');
     const result =
       args.command === 'run'
         ? await remoteRun(c, args, requestId, input, error, controller.signal)
-        : { data: await remoteCommand(c, args, requestId), code: 0 };
+        : args.command === 'coding' && args.positional[0] === 'finalize'
+          ? { data: await runFinalizationCommand(c, args, input, error), code: 0 }
+          : { data: await remoteCommand(c, args, requestId), code: 0 };
     output.write(JSON.stringify({ version: 1, ok: true, data: result.data }) + '\n');
     return result.code;
   } catch (e) {

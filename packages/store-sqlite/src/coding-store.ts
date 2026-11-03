@@ -3,6 +3,13 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { CodingStore, CodingTransaction } from '@runnets/application';
 import type { CodingTask } from '@runnets/domain';
 import { withImmediateTransaction } from './transaction.js';
+import { projectFinalizationHeld } from './coding-finalization-holds.js';
+const CODING_STATUS_TRANSITIONS: Record<CodingTask['status'], readonly CodingTask['status'][]> = {
+  reserved: ['reserved', 'cancelled', 'finalizing'],
+  cancelled: ['cancelled'],
+  finalizing: ['finalizing', 'finalized'],
+  finalized: ['finalized'],
+};
 export function task(row: Record<string, unknown> | undefined): CodingTask | null {
   if (!row) return null;
   const t = JSON.parse(String(row['payload'])) as CodingTask;
@@ -29,6 +36,9 @@ export class SqliteCodingStore implements CodingStore {
     const db = this.#db;
     return withImmediateTransaction(db, () => work(codingTransaction(db)));
   }
+  projectHeld(projectRoot: string): boolean {
+    return projectFinalizationHeld(this.#db, projectRoot);
+  }
 }
 
 export function codingTransaction(db: DatabaseSync): CodingTransaction {
@@ -41,7 +51,7 @@ export function codingTransaction(db: DatabaseSync): CodingTransaction {
         old &&
         (JSON.stringify({ ...old, status: t.status, worktreeRoot: t.worktreeRoot }) !==
           JSON.stringify(t) ||
-          (old.status === 'cancelled' && t.status !== 'cancelled') ||
+          !CODING_STATUS_TRANSITIONS[old.status].includes(t.status) ||
           (old.worktreeRoot !== null && old.worktreeRoot !== t.worktreeRoot))
       )
         throw Error('Immutable coding binding');

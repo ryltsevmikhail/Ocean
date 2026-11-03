@@ -96,7 +96,7 @@ export function inspectDatabase(path: string): DatabaseInspection {
   try {
     db = new DatabaseSync(path, { readOnly: true });
     db.exec('BEGIN');
-    if (![5, 6, 10, 11, 12, SCHEMA_VERSION].includes(schema(db)))
+    if (![5, 6, 10, 11, 12, 13, SCHEMA_VERSION].includes(schema(db)))
       return { status: 'unsupported_schema' };
     if (ownerBusy(db)) return { status: 'owner_busy' };
     assertUnpublished(db);
@@ -159,7 +159,7 @@ async function snapshotOwned<T>(
   let release: (() => void) | undefined,
     frozen: ReturnType<typeof holdBackupObservation> | undefined;
   try {
-    if (![5, 6, 10, 11, 12, SCHEMA_VERSION].includes(schema(db)))
+    if (![5, 6, 10, 11, 12, 13, SCHEMA_VERSION].includes(schema(db)))
       throw new Error('unsupported_schema');
     if (ownerBusy(db)) throw new Error('owner_busy');
     try {

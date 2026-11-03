@@ -30,15 +30,23 @@ export class CodingChangesetService {
       this.#deps.restored ||
       !task ||
       task.lease.ownerId !== this.#deps.ownerId ||
-      !codingCapabilities(task, access).includes(access.capability) ||
       !tx.participates(access.workspaceId, access.roomId, access.botId)
     )
       return null;
-    if (frozen)
-      return access.capability === 'changeset_read' ||
-        (task.devBotId === access.botId && access.capability === 'project_read')
+    if (frozen) {
+      // Disabled tasks keep immutable diff/review reads for their exact participants,
+      // but every capability is empty so no execution authority is revived.
+      const disabled = task.status === 'finalizing' || task.status === 'finalized',
+        participant =
+          access.capability === 'changeset_read'
+            ? task.reviewBotId === access.botId && task.reviewRoomId === access.roomId
+            : task.devBotId === access.botId && task.ownerRoomId === access.roomId;
+      return codingCapabilities(task, access).includes(access.capability) ||
+        (disabled && participant)
         ? task
         : null;
+    }
+    if (!codingCapabilities(task, access).includes(access.capability)) return null;
     if (
       access.capability !== 'project_read' ||
       access.botId !== task.devBotId ||
@@ -209,6 +217,14 @@ export class CodingChangesetService {
       tx.putChangeset(snapshot);
       tx.putCaptureReceipt(requestId, { binding, hash: snapshot.hash });
       return ok(snapshot);
+    });
+  }
+  /** Latest stored immutable changeset for a disabled task; never captures or executes. */
+  history(access: CodingAccess): CodingResult<Changeset> {
+    return this.#deps.store.atomic((tx) => {
+      const task = this.#task(tx, access, true),
+        snapshot = task ? tx.latestChangeset(task.id) : null;
+      return task && snapshot ? ok(snapshot) : codingFailure('coding_denied');
     });
   }
   read(access: CodingAccess, hash: string): CodingResult<Changeset> {

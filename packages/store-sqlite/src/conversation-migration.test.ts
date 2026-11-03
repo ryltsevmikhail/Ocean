@@ -113,7 +113,7 @@ it('migrates v1 without changing task events, receipts, checkpoints or unknown t
   );
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '13',
+    '14',
   );
   expect(
     ['events', 'command_receipts', 'checkpoints', 'tool_invocations_v1'].map((t) =>
@@ -140,7 +140,7 @@ it('rolls back an interrupted migration before version advancement, then allows 
   db.exec('DROP TABLE ocean_messages');
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '13',
+    '14',
   );
 });
 it('refuses schema migration beneath a live runtime owner without changing the database', () => {

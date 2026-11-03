@@ -18,7 +18,7 @@ it('migrates schema 9 application receipts atomically and refuses a missing curr
     initializeSchema(db);
     expect(db.prepare('SELECT * FROM ocean_coding_applications').all()).toEqual([]);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '13',
+      '14',
     );
     db.exec('DROP TABLE ocean_coding_applications');
     expect(() => initializeSchema(db)).toThrow('missing table ocean_coding_applications');

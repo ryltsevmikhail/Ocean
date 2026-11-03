@@ -18,6 +18,8 @@ import type { CodingTestEvidenceStore } from '@runnets/application';
 import { SqliteCodingApprovalStore } from './coding-approval-storage.js';
 import { SqliteCodingStore } from './coding-store.js';
 import type { CodingApprovalStore, CodingStore } from '@runnets/application';
+import { finalizationStore } from './coding-finalization-store.js';
+import type { CodingFinalizationStore } from '@runnets/application';
 /**
  * Public factory for the durable SQLite store.
  *
@@ -68,6 +70,7 @@ export interface SqliteStore {
   readonly ownerDecisions: OwnerDecisionStore;
   openRoomReads(now: () => number): RoomRunReadPort;
   readonly coding: CodingStore;
+  readonly finalization: CodingFinalizationStore;
   readonly codingApplications: CodingApplyStore;
   readonly codingResolutions: CodingApplyResolutionStore;
   readonly codingReviews: CodingReviewStore;
@@ -123,6 +126,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
     ownerDecisions: new SqliteOwnerDecisions(db),
     openRoomReads: (now) => roomRuntimeReads(db, now),
     coding: new SqliteCodingStore(db),
+    finalization: finalizationStore(db, tools),
     codingApplications: new SqliteCodingApplyStore(db),
     codingResolutions: new SqliteCodingApplyResolutionStore(db),
     codingReviews: new SqliteCodingReviewStore(db),

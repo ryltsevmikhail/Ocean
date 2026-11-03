@@ -15,12 +15,13 @@ export type CodingErrorCode =
   | 'project_changed';
 export type CodingResult<T> = Result<T, { readonly code: CodingErrorCode }>;
 export const codingFailure = (code: CodingErrorCode): CodingResult<never> => err({ code });
+export type ProjectLeaseKind = 'coding' | 'legacy-write' | 'legacy-command';
 export interface ProjectLeaseHolder {
   readonly ownerId: string;
   readonly taskId: string;
   readonly requestId: string;
   readonly binding: string;
-  readonly kind: 'coding' | 'legacy-write' | 'legacy-command';
+  readonly kind: ProjectLeaseKind;
 }
 export interface ProjectLease extends ProjectLeaseHolder {
   readonly projectRoot: string;
@@ -36,7 +37,8 @@ export interface CodingTask {
   readonly devBotId: string;
   readonly reviewBotId: string;
   readonly reviewRoomId: string;
-  readonly status: 'reserved' | 'cancelled';
+  /** `finalizing`/`finalized` disable every capability; they never mean cancelled. */
+  readonly status: 'reserved' | 'cancelled' | 'finalizing' | 'finalized';
   readonly policyVersion: 1;
   readonly policy: CodingPolicy;
   readonly lease: ProjectLease;

@@ -82,7 +82,7 @@ it('adds approval tables transactionally to schema 7', () => {
   );
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '13',
+    '14',
   );
   expect(db.prepare('SELECT count(*) AS n FROM ocean_coding_approvals').get()?.['n']).toBe(0);
 });
