@@ -1,4 +1,5 @@
 import { backupProfileV2, restoreProfileV2 } from './profile-snapshot-v2.js';
+import { readSnapshotManifest } from './snapshot-manifest.js';
 import type { ProfileBackupManifest } from '@runnets/domain';
 /** Snapshots contain history, never environment credentials or workspace files. */
 import {
@@ -37,15 +38,13 @@ function writePrivate(path: string, value: unknown): void {
   writeFileSync(path, JSON.stringify(value, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
   syncFile(path);
 }
-function restoreProfileLegacy(from: string, to: string): Snapshot {
+function restoreProfileLegacy(from: string, to: string, manifest: Snapshot): Snapshot {
   absolutePath(from);
   absolutePath(to);
   assertPrivate(from, true);
   assertPrivate(join(from, 'snapshot.json'), false);
   assertPrivate(join(from, 'runtime.sqlite'), false);
-  let manifest: Snapshot;
   try {
-    manifest = JSON.parse(readFileSync(join(from, 'snapshot.json'), 'utf8')) as Snapshot;
     if (
       manifest.format !== 1 ||
       !/^[a-f0-9]{64}$/.test(manifest.sha256) ||
@@ -106,10 +105,10 @@ export function restoreProfile(from: string, to: string): ProfileBackupManifest 
   assertPrivate(from, true);
   assertPrivate(join(from, 'snapshot.json'), false);
   try {
-    const manifest = JSON.parse(readFileSync(join(from, 'snapshot.json'), 'utf8')) as {
-      format?: unknown;
-    };
-    return manifest.format === 2 ? restoreProfileV2(from, to) : restoreProfileLegacy(from, to);
+    const manifest = readSnapshotManifest(from) as Snapshot | { format: 2 };
+    return manifest.format === 2
+      ? restoreProfileV2(from, to)
+      : restoreProfileLegacy(from, to, manifest);
   } catch (error) {
     if (
       error instanceof Error &&

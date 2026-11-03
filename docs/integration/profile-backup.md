@@ -36,7 +36,10 @@ host creates output. Initial coding/Desktop inventories must equal those decoded
 from the copied database. Existing string destinations and three-argument callers
 remain supported. A retained original copied-database FD, identity, mount and
 hash remain checked through the finalizer; publication is deferred until its
-last authoritative check.
+last authoritative check. Its final copied-database byte read precedes the final
+original-source session proof; the separately supplied copied-database metadata
+check then validates its original FD/path/mount identity without another body
+consumer before marker removal.
 
 `prepareProfileBackupAssets` returns an originating, single-use handle carrying
 the original source session. `captureProfileBackupAssets` also accepts the
@@ -108,6 +111,9 @@ an original checkout. Last archive checks precede root publication.
 
 Historical format-1 archives retain their existing metadata-only, text-only read
 semantics. They are never upgraded into complete coding backups by interpretation.
+The public format dispatcher pins and bounds `snapshot.json` to 32 MiB before
+allocating or parsing its body; the legacy validator uses those same decoded
+bytes. Format-2 routing is followed by full independent envelope verification.
 A successful format-2 restore permits the existing conversation-read and explicit
 new text-only confirmation flow. It does not rebind projects, revive old approvals,
 repeat uncertain operations, settle effects or enable coding execution.
@@ -126,7 +132,10 @@ copies stored in both worktree and dependency archives are charged separately;
 Git closures count separately for distinct archive occurrences even when sharing
 one object store. Rechecks of the same occurrence do not add another charge.
 Archive verification shares a budget across the envelope and all nested graph
-checks, with declared decode bounds charged before expansion. Accounting is
+checks. Known JSON metadata bodies are reserved together before the first archive
+body reader, including snapshot, catalogs and inventories. Rechecks share a charge
+only for the same original file identity and mount; equal content in separate
+files counts separately. Declared decode bounds are charged before expansion. Accounting is
 conservative: retained witnesses and source object storage can cause refusal
 below the nominal payload ceiling. Files stream in bounded buffers; one bounded
 Git pack/index and bounded catalogs/witnesses are processed at a time.

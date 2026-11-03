@@ -129,15 +129,17 @@ export type CodingSnapshotDestination =
       desktop: DesktopAssetInventory,
       databaseBytes: number,
     ) => string);
+type SnapshotFinalizer<T> = (
+  snapshot: CodingDatabaseSnapshot<T>,
+  verifyFrozen: () => void,
+  checkFrozenMetadata: () => void,
+) => Promise<void | (() => void)>;
 /** Low-level capture port. The host must verify and publish its complete asset manifest separately. */
 export async function snapshotCodingDatabase<T>(
   path: string,
   destination: CodingSnapshotDestination,
   capture: (inventory: CodingBackupInventory, desktop: DesktopAssetInventory) => Promise<T>,
-  finalize?: (
-    snapshot: CodingDatabaseSnapshot<T>,
-    verifyFrozen: () => void,
-  ) => Promise<void | (() => void)>,
+  finalize?: SnapshotFinalizer<T>,
 ): Promise<CodingDatabaseSnapshot<T>> {
   const result = await snapshotOwned(path, destination, capture, finalize);
   if (!result.inventory) throw Error('invalid_coding_inventory');
@@ -147,10 +149,7 @@ async function snapshotOwned<T>(
   path: string,
   selection: CodingSnapshotDestination,
   capture?: (inventory: CodingBackupInventory, desktop: DesktopAssetInventory) => Promise<T>,
-  finalize?: (
-    snapshot: CodingDatabaseSnapshot<T>,
-    verifyFrozen: () => void,
-  ) => Promise<void | (() => void)>,
+  finalize?: SnapshotFinalizer<T>,
 ): Promise<{ summary: DatabaseSummary; inventory?: CodingBackupInventory; assets?: T }> {
   if (!existsSync(path) || !lstatSync(path).isFile() || lstatSync(path).isSymbolicLink())
     throw new Error('profile_missing');
@@ -228,7 +227,7 @@ async function snapshotOwned<T>(
     if (readCodingBackupInventory(destination).hash !== inventory.hash)
       throw Error('snapshot_mismatch');
     const result = { summary: original, inventory, assets };
-    const publish = await finalize?.(result, frozen.verify);
+    const publish = await finalize?.(result, frozen.verify, frozen.metadata);
     frozen.verify();
     publish?.();
     return result;

@@ -77,3 +77,71 @@ it('keeps quarantine incomplete if the original archive changes during the final
     f.close();
   }
 });
+
+it('keeps sources original after the final verifyFrozen read inside publication', async () => {
+  const { root, f } = await fixture(),
+    actual = await vi.importActual<typeof fs>('node:fs'),
+    archive = join(root, 'backup');
+  let changed = false;
+  try {
+    vi.mocked(fs.readSync).mockImplementation(((...args: Parameters<typeof fs.readSync>) => {
+      const stack = new Error().stack ?? '';
+      if (
+        !changed &&
+        actual.realpathSync('/proc/self/fd/' + args[0]) === join(archive, 'runtime.sqlite') &&
+        stack.includes('profile-backup-capture') &&
+        stack.includes('publish') &&
+        stack.includes('backup-observation')
+      ) {
+        changed = true;
+        actual.appendFileSync(join(f.directory, 'coding-projects.json'), ' ');
+      }
+      return actual.readSync(...args);
+    }) as typeof fs.readSync);
+    await expect(
+      backupProfile(f.directory, archive, { managedDirectory: join(f.directory, 'worktrees') }),
+    ).rejects.toThrow();
+    expect(changed).toBe(true);
+    expect(fs.existsSync(join(archive, '.incomplete'))).toBe(true);
+    expect(fs.existsSync(join(archive, 'assets', '.incomplete'))).toBe(true);
+    expect(() => verifyProfileBackupEnvelope(archive)).toThrow();
+  } finally {
+    f.close();
+  }
+});
+
+it('rechecks the original copied SQLite metadata after final source verification reads', async () => {
+  const { root, f } = await fixture(),
+    actual = await vi.importActual<typeof fs>('node:fs'),
+    archive = join(root, 'backup');
+  let finalFrozenRead = false,
+    changed = false;
+  try {
+    vi.mocked(fs.readSync).mockImplementation(((...args: Parameters<typeof fs.readSync>) => {
+      const path = actual.realpathSync('/proc/self/fd/' + args[0]),
+        stack = new Error().stack ?? '';
+      if (
+        path === join(archive, 'runtime.sqlite') &&
+        stack.includes('profile-backup-capture') &&
+        stack.includes('publish') &&
+        stack.includes('backup-observation')
+      )
+        finalFrozenRead = true;
+      if (finalFrozenRead && !changed && path === join(f.directory, 'coding-projects.json')) {
+        changed = true;
+        actual.appendFileSync(join(archive, 'runtime.sqlite'), 'changed during final source proof');
+      }
+      return actual.readSync(...args);
+    }) as typeof fs.readSync);
+    await expect(
+      backupProfile(f.directory, archive, { managedDirectory: join(f.directory, 'worktrees') }),
+    ).rejects.toThrow('snapshot_mismatch');
+    expect(finalFrozenRead).toBe(true);
+    expect(changed).toBe(true);
+    expect(fs.existsSync(join(archive, '.incomplete'))).toBe(true);
+    expect(fs.existsSync(join(archive, 'assets', '.incomplete'))).toBe(true);
+    expect(() => verifyProfileBackupEnvelope(archive)).toThrow();
+  } finally {
+    f.close();
+  }
+});

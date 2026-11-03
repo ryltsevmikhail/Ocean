@@ -68,7 +68,18 @@ export function withProfileArchive<T>(
       )
         return bad();
     const expected = { entries: new Map(metadata.sourceEntries), mount: metadata.sourceMount },
-      original = scanAssetSource(directory, CODING_ASSET_LIMITS, 'all', expected, false, fd);
+      metadataFiles = metadata.manifest.entries.filter(
+        (entry) => entry.kind === 'file' && entry.path.endsWith('.json'),
+      );
+    // Admit the whole JSON body set before even the first streaming hash read.
+    // Identity+mount keys are shared by outer-envelope and nested archive checks.
+    for (const entry of metadataFiles) {
+      if (entry.kind !== 'file' || entry.bytes > 33554432) return bad();
+      budget.charge('archive-json:' + expected.mount + ':' + expected.entries.get(entry.path), {
+        metadata: entry.bytes,
+      });
+    }
+    const original = scanAssetSource(directory, CODING_ASSET_LIMITS, 'all', expected, false, fd);
     const result = profileArchiveContext.run(
       {
         budget,
