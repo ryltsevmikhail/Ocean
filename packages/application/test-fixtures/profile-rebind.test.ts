@@ -102,7 +102,9 @@ export function rebindFixture() {
   let holds: ProfileRebindHold[] = [],
     effects = 0,
     published = false,
-    changed = false;
+    changed = false,
+    planRoot: string | null = null,
+    planTree: string | null = null;
   const tx: ProfileRebindTransaction = {
     observe: () => {},
     origin: () => structuredClone(origin),
@@ -133,9 +135,9 @@ export function rebindFixture() {
   const files: ProfileRebindFiles = {
     inspect: async ({ selection }) => ({
       project: {
-        root: selection.projectRoot,
+        root: planRoot ?? selection.projectRoot,
         baseCommit: base,
-        treeHash: changed ? 'c'.repeat(64) : h,
+        treeHash: planTree ?? (changed ? 'c'.repeat(64) : h),
         witness: 'project-inode',
       },
       worktree: { root: '/new-worktree', branch: 'new-branch', gitCommonDir: '/new/.git' },
@@ -212,6 +214,12 @@ export function rebindFixture() {
     published: () => published,
     change: () => {
       changed = true;
+    },
+    planRoot: (value: string) => {
+      planRoot = value;
+    },
+    planTree: (value: string) => {
+      planTree = value;
     },
     expire: () => {
       at += 300000;

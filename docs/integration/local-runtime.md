@@ -480,10 +480,14 @@ namespace, schema, bounded frozen evidence, immutable archive and refusal detail
 
 ## Restored maintenance host and owner rebind (7.9 development source)
 
-A restored profile normally refuses ordinary runtime startup with
-`restore_restricted`, including when its filesystem guard is missing, malformed
-or dangling: durable origin/admission evidence is checked independently of that
-marker. `ocean runtime restore --profile PATH` deliberately starts a restricted
+A profile restored through the 7.9 durable origin refuses ordinary runtime
+startup with `restore_restricted`, including when its filesystem guard is
+missing, malformed or dangling: durable origin/admission evidence is checked
+independently of that marker. This is a 7.9 limit, not a retroactive property of
+legacy quarantines: a format-1 restore from 1.0 has no durable origin, so
+deleting its `restore-guard.json` still admits the profile as an ordinary live
+owner; an explicit restored flag keeps that historical text-only mode.
+`ocean runtime restore --profile PATH` deliberately starts a restricted
 maintenance host over the same authenticated endpoint and owner machinery. It
 serves history, common owner decisions and `restore.inspect`, `restore.preview`,
 `restore.result` with explicit `restore.maintenance`/`restore.preview`

@@ -172,13 +172,18 @@ async function snapshotOwned<T>(
     const desktopBinding = db
       .prepare("SELECT value FROM meta WHERE key='desktop_assets_binding'")
       .get()?.['value'];
-    if (
-      desktopBinding &&
-      capture &&
-      (JSON.parse(String(desktopBinding)) as { profileId?: string }).profileId !==
-        createHash('sha256').update(dirname(path)).digest('hex')
-    )
-      if (!restorationBackupState(db).origin) throw Error('desktop_binding_mismatch');
+    if (desktopBinding && capture) {
+      const boundProfileId = (JSON.parse(String(desktopBinding)) as { profileId?: string })
+        .profileId;
+      const ownProfileId = createHash('sha256').update(dirname(path)).digest('hex');
+      if (boundProfileId !== ownProfileId) {
+        // A binding owned by another profile is archived evidence. It is only
+        // admissible when a durable restore origin exists, and the public preparation
+        // entry (prepareProfileBackupAssets) then REQUIRES the frozen-snapshot reader so
+        // it becomes lineage evidence instead of current live Desktop authority.
+        if (!restorationBackupState(db).origin) throw Error('desktop_binding_mismatch');
+      }
+    }
     if (original.externalDesktopAssets && !capture) throw Error('desktop_assets_unavailable');
     if (
       !desktopBinding &&

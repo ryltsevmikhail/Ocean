@@ -199,13 +199,23 @@ export class ProfileRebindService {
         await this.#execute(record);
       })
       .catch((error: unknown) => {
+        const reason = error instanceof Error ? error.message : 'rebind_outcome_unknown';
         try {
           const current = this.#d.store.atomic((tx) => tx.record(i.requestId));
-          if (current && !['ready', 'refused', 'held'].includes(current.state))
-            this.#update(current, {
-              state: current.state === 'preview' ? 'refused' : 'held',
-              reason: error instanceof Error ? error.message : 'rebind_outcome_unknown',
-            });
+          if (!current || ['ready', 'refused', 'held'].includes(current.state)) return;
+          // A deterministic pre-effect refusal is a KNOWN outcome: the confirmation
+          // CAS persists no lease, and a busy registry acquire rolls back without
+          // creating a binding or starting materialization. Record it refused so the
+          // owner can retry with a new request instead of a permanent held block.
+          // Any outcome at or after a lease/materialization stays held: it is either
+          // partially applied or unknown, and is never retried, released or cancelled.
+          const known =
+            current.state === 'preview' ||
+            (current.state === 'confirmed' &&
+              reason === 'project_busy' &&
+              current.projectLease === null &&
+              current.worktreeLease === null);
+          this.#update(current, { state: known ? 'refused' : 'held', reason });
         } catch (failure) {
           this.#failure = failure;
         }

@@ -29,6 +29,11 @@ export function prepareProfileBackupAssets(
   destination: string,
   limits?: Partial<ProfileBackupLimits>,
 ): PreparedProfileBackup {
+  // An origin-bearing profile may hold an archived (old-profile) Desktop binding and
+  // pre-rebind tasks that are NOT live sources. Only lineage partition can separate
+  // frozen parent evidence from current live assets; without the frozen-snapshot
+  // reader a caller must not archive such a profile at all.
+  if (input.restoration?.origin && !input.readSnapshot) throw Error('restoration_lineage_required');
   const { readSnapshot, ...cloneable } = input;
   const source: ProfileBackupSource = {
     ...structuredClone(cloneable),

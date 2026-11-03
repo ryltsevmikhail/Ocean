@@ -79,7 +79,9 @@ export function profileRebindStore(db: DatabaseSync, journal: ToolJournalPort): 
       readonly ProfileRebindRecord['state'][]
     > = {
       preview: ['confirmed', 'refused', 'held'],
-      confirmed: ['confirmed', 'preparing', 'held'],
+      // A deterministic pre-effect refusal after the confirmation CAS (busy registry
+      // acquire, which rolls back) is durably refused; it creates no binding.
+      confirmed: ['confirmed', 'preparing', 'held', 'refused'],
       preparing: ['held'],
       ready: [],
       held: [],
@@ -89,6 +91,7 @@ export function profileRebindStore(db: DatabaseSync, journal: ToolJournalPort): 
       (!old && (r.state !== 'preview' || r.projectLease || r.worktreeLease || r.result)) ||
       (old && !transitions[old.state].includes(r.state)) ||
       r.result !== null ||
+      (r.state === 'refused' && (r.projectLease !== null || r.worktreeLease !== null)) ||
       (r.state === 'preparing' && (!r.projectLease || !r.worktreeLease))
     )
       throw Error('invalid_rebind_transition');

@@ -255,12 +255,32 @@ under `profile/rebind-<epoch>/materialized/tree` with fresh Git administration
 against the selected base, then publishes the successor task, worktree, workspace
 binding and optional new-profile Desktop storage in one SQLite transaction. If a
 crash leaves any step unknown, reopening turns the record into `held`; nothing is
-retried, promoted or cancelled, and removing `restore-guard.json` cannot admit
-the profile. After `ready`, stop the maintenance host and start ordinary
-`ocean runtime start --profile ...`; admission verifies the durable origin and
-exact ready epoch, older task identities cannot authorize, and old receipts,
-approvals, claims and request retries remain inert. Both original project history
-and archived changesets stay readable; only newly authorized work can execute.
+retried, promoted or cancelled, and removing `restore-guard.json` cannot admit a
+durable-origin (7.9) profile. Legacy marker-only format-1 quarantines have no
+durable origin and keep their historical behavior: with the marker deleted they
+admit as an ordinary live owner (the explicit restored flag still keeps that
+historical text-only mode; see the local runtime contract). After `ready`, stop
+the maintenance host and start ordinary `ocean runtime start --profile ...`;
+admission verifies the durable origin and exact ready epoch, older task
+identities cannot authorize, and old receipts, approvals, claims and request
+retries remain inert.
+
+A deterministic refusal before any external effect is durable as `refused`, not
+`held`: the confirmation CAS itself persists no lease, a busy global registry
+acquire rolls back without creating a binding, and no materialization starts, so
+the owner may retry with a new request. Any outcome at or after lease acquisition
+or the start of materialization remains `held` - partially applied or unknown -
+and is never retried, released, promoted or cancelled. A held record blocks a
+later preview for the same durable origin head; the supported recovery path is to
+restore a later verified archive into a new generation (which clears executable
+epoch authority), never to edit, delete or reinterpret the held record. Current
+live coding projections (`coding.show`, `coding.diff`, `coding.panel`) remain
+current-epoch/owner-scoped and refuse old task IDs; they are not an
+archived-execution read authority. Exact original task, changeset (including the
+stored diff), review, run, application and decision records remain readable as
+immutable evidence through the verified format-2 archive and the profile-owned
+frozen `restore-origin` database plus `assets/evidence`; reading that evidence
+grants no execution authority, and only newly authorized work can execute.
 
 Desktop storage transition: the owner preview exposes the planned new-profile
 binding for the epoch as `profileId`, `epochId`, root
@@ -281,7 +301,11 @@ required, and the exact original project root/global lease is never reclaimed or
 released by rebind. A restored context without the 7.9 frozen-origin evidence
 (`restore-origin`, `assets/evidence`, optional `restore-lineage`) remains
 read/text-only and refuses rebind; restore again from an archive produced by this
-code to gain the evidence. The live ready record's fresh Git administration and
+code to gain the evidence. Preparing a backup of an origin-bearing profile
+requires the frozen-snapshot lineage reader; a preparation that supplies the
+durable restoration state without it refuses `restoration_lineage_required`
+before creating a destination, so an archived old-profile Desktop binding is
+never archived as current live authority. The live ready record's fresh Git administration and
 loose branch reference live under the selected project's `.git`, so a backup
 after the project is deleted refuses rather than omitting them. Desktop rebind
 materialization and the live binding switch are exercised end to end through the
