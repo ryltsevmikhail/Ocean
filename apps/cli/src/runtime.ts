@@ -34,7 +34,8 @@ import {
   type RuntimeRecovery,
   type ToolJournalPort,
 } from '@runnets/application';
-import { openSqliteStore, ownSqliteRuntime, type EndpointProof } from '@runnets/store-sqlite';
+import { openSqliteStore, ownSqliteRuntime } from '@runnets/store-sqlite';
+import type { EndpointProof, ProfileReads } from '@runnets/store-sqlite';
 import {
   InMemoryCommandDedup,
   InMemoryCodingStore,
@@ -49,6 +50,7 @@ import {
 
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
+  openProfileReads?(): ProfileReads;
   openEndpointProof?(): EndpointProof;
   readonly ownerDecisions: OwnerDecisionStore;
   openRoomRuns?(): RoomRuntimeRuns;
@@ -73,6 +75,7 @@ export interface Runtime {
 export interface RuntimeOptions {
   readonly codingWorktreeDirectory?: string;
   readonly codingTools?: Pick<CodingTurnFactoryDeps, 'sandbox' | 'owner' | 'inspectSandbox'>;
+  readonly requireUnpublished?: boolean;
   readonly restoredAccess?: boolean;
   readonly clock?: Clock;
   readonly dbPath?: string | undefined;
@@ -154,7 +157,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   }
   if (existsSync(join(dirname(dbPath), 'restore-guard.json')) && !options.restoredAccess)
     throw new Error('restore_restricted');
-  const release = ownSqliteRuntime(dbPath);
+  const release = ownSqliteRuntime(dbPath, options.requireUnpublished);
   try {
     const store = openSqliteStore({ path: dbPath });
     const service = serviceOver(store.log, store.dedup, true, options.clock);
@@ -208,6 +211,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return {
       service,
       ownerDecisions: store.ownerDecisions,
+      openProfileReads: () => store.openProfileReads(codingDeps.ownerId),
       openEndpointProof: () => store.openEndpointProof(),
       openRoomRuns: () =>
         new RoomRuntimeRuns(

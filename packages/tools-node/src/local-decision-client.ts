@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import {
   isDecisionReply,
   isDecisionRef,
+  isLocalRunQuery,
+  type LocalRunQuery,
   isContinuation,
   isLocalRoomScope,
   isLocalRoomListQuery,
@@ -26,6 +28,7 @@ export interface LocalDecisionClient {
   getDecision(q: LocalDecisionRef): Promise<LocalDecision>;
   decisionPreview(q: LocalDecisionRef): Promise<string>;
   resolveDecision(q: LocalDecisionReply): Promise<LocalDecision>;
+  reviewRun(q: LocalRunQuery): Promise<LocalReviewSnapshot>;
   reviewRoom(q: LocalRoomScope): Promise<LocalReviewSnapshot>;
   continuationApplied(q: LocalDecisionRef): Promise<boolean>;
   requestContinuation(q: LocalContinuation): Promise<LocalDecision>;
@@ -113,37 +116,39 @@ export function localDecisionClient(
       const c = card(await send('reviews.continue', q), q);
       return c.kind === 'continue-text-only' ? c : invalid();
     },
-    async reviewRoom(input) {
-      const q = validatedParams(input, isLocalRoomScope);
-      let preview = '',
-        version: string | undefined,
-        length: number | undefined;
-      do {
-        const offset = preview.length,
-          row = await send('reviews.get', { ...q, offset, ...(version ? { version } : {}) });
-        if (
-          !localRuntimeRecord(row) ||
-          row['workspaceId'] !== q.workspaceId ||
-          row['roomId'] !== q.roomId ||
-          !bindingDigest(row['version']) ||
-          !localPosition(row['length']) ||
-          (length !== undefined && length !== row['length']) ||
-          (version !== undefined && version !== row['version'])
-        )
-          return invalid();
-        length = row['length'];
-        version = row['version'];
-        preview += chunk(row, offset, length);
-      } while (preview.length < length);
-      const s: unknown = JSON.parse(preview);
+    reviewRoom: async (input) => review(validatedParams(input, isLocalRoomScope)),
+    reviewRun: async (input) => review(validatedParams(input, isLocalRunQuery)),
+  };
+  async function review(q: LocalRoomScope | LocalRunQuery) {
+    let preview = '',
+      version: string | undefined,
+      length: number | undefined;
+    do {
+      const offset = preview.length,
+        row = await send('reviews.get', { ...q, offset, ...(version ? { version } : {}) });
       if (
-        !isReviewSnapshot(s) ||
-        s.workspaceId !== q.workspaceId ||
-        s.roomId !== q.roomId ||
-        s.version !== version
+        !localRuntimeRecord(row) ||
+        row['workspaceId'] !== q.workspaceId ||
+        row['roomId'] !== q.roomId ||
+        !bindingDigest(row['version']) ||
+        !localPosition(row['length']) ||
+        (length !== undefined && length !== row['length']) ||
+        (version !== undefined && version !== row['version'])
       )
         return invalid();
-      return s;
-    },
-  };
+      length = row['length'];
+      version = row['version'];
+      preview += chunk(row, offset, length);
+    } while (preview.length < length);
+    const s: unknown = JSON.parse(preview);
+    if (
+      !isReviewSnapshot(s) ||
+      s.workspaceId !== q.workspaceId ||
+      s.roomId !== q.roomId ||
+      ('runId' in q && s.runId !== q.runId) ||
+      s.version !== version
+    )
+      return invalid();
+    return s;
+  }
 }

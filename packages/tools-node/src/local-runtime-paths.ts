@@ -61,8 +61,17 @@ function assertTrustedAncestors(path: string): void {
   }
 }
 export function localRuntimePaths(profile: string): LocalRuntimePaths {
+  return checkedPaths(profile, false);
+}
+function checkedPaths(profile: string, allowMissing: boolean): LocalRuntimePaths {
   if (!isAbsolute(profile) || profile !== resolve(profile)) fail('insecure_permissions');
-  assertLocalPrivate(profile, 'directory');
+  if (allowMissing && !entryExists(profile)) {
+    let existing = dirname(profile);
+    while (!entryExists(existing)) existing = dirname(existing);
+    if (realpathSync(existing) !== existing || !lstatSync(existing).isDirectory())
+      fail('insecure_permissions');
+    assertTrustedAncestors(join(existing, 'prospective-profile'));
+  } else assertLocalPrivate(profile, 'directory');
   const profileId = createHash('sha256').update(profile).digest('hex');
   const fallback = '/tmp/ocean-' + process.getuid?.();
   let root = process.env['XDG_RUNTIME_DIR'] ?? fallback;
@@ -117,8 +126,11 @@ function entryExists(path: string): boolean {
     throw error;
   }
 }
-export function readLocalRuntimeDescriptor(profile: string): LocalRuntimeDescriptor {
-  const p = localRuntimePaths(profile);
+export function readLocalRuntimeDescriptor(
+  profile: string,
+  allowMissingProfile = false,
+): LocalRuntimeDescriptor {
+  const p = checkedPaths(profile, allowMissingProfile);
   for (const path of [p.root, p.directory]) {
     if (!entryExists(path)) fail('runtime_absent');
     assertLocalPrivate(path, 'directory');
@@ -131,6 +143,8 @@ export function readLocalRuntimeDescriptor(profile: string): LocalRuntimeDescrip
       dir.closeSync();
     }
   }
+  if (!entryExists(profile)) fail('profile_missing');
+  assertLocalPrivate(profile, 'directory');
   const before = assertLocalPrivate(p.descriptor, 'file');
   const fd = openSync(
     p.descriptor,

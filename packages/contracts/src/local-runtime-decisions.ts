@@ -75,8 +75,9 @@ export const isDecisionChunkQuery = (v: unknown): v is LocalDecisionRef & { offs
   keys(v, refKeys, ['offset']) && localPosition(v['offset']);
 export const isReviewChunkQuery = (
   v: unknown,
-): v is LocalRoomScope & { offset: number; version?: string } =>
-  keys(v, ['workspaceId', 'roomId'], ['offset', 'version']) &&
+): v is LocalRoomScope & { offset: number; version?: string; runId?: string } =>
+  keys(v, ['workspaceId', 'roomId'], ['offset', 'version', 'runId']) &&
+  (v['runId'] === undefined || localId(v['runId'])) &&
   localPosition(v['offset']) &&
   (v['version'] === undefined || bindingDigest(v['version']));
 export const isLocalRoomScope = (v: unknown): v is LocalRoomScope =>

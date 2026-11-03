@@ -18,7 +18,7 @@ function wireMessage({ body, ...m }: ConversationMessage) {
   return { ...m, bodyBase64: Buffer.from(body, 'utf8').toString('base64') };
 }
 /** Leave room for the maximum escaped request ID and response envelope. Stop before advancing past an omitted item. */
-function page<T>(rows: Iterable<T>) {
+export function wirePage<T>(rows: Iterable<T>) {
   let budget = LOCAL_RUNTIME_MAX_FRAME - 1024;
   const results: T[] = [];
   for (const row of rows) {
@@ -81,12 +81,14 @@ export class RuntimeQueries {
         case 'history.list':
           if (isLocalHistoryQuery(params))
             return {
-              result: page(messages(reads.history(params, params.after ?? 0, params.limit ?? 50))),
+              result: wirePage(
+                messages(reads.history(params, params.after ?? 0, params.limit ?? 50)),
+              ),
             };
           break;
         case 'runs.list':
           if (isLocalRoomListQuery(params))
-            return { result: page(reads.runs(params, params.after ?? '', params.limit ?? 50)) };
+            return { result: wirePage(reads.runs(params, params.after ?? '', params.limit ?? 50)) };
           break;
         case 'runs.get':
           if (isLocalRunQuery(params)) return { result: reads.run(params) };

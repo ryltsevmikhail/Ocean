@@ -1,3 +1,5 @@
+import { profileCommand } from './profile-commands.js';
+import { PROFILE_METHODS } from '@runnets/contracts';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { lstatSync, closeSync } from 'node:fs';
 import { recoverEndpoint, publishEndpoint } from './endpoint.js';
@@ -70,7 +72,9 @@ export async function startLocalRuntime(
     if (!proof) throw Error('durable_runtime_required');
     const endpoint = (layout = await recoverEndpoint(paths, proof, originalProfile));
     decisions = new RuntimeDecisions(runtime.ownerDecisions, runtime.reviews);
-    const panels = new CodingPanelQueries(runtime);
+    const reads = runtime.openProfileReads?.();
+    if (!reads) throw Error('durable_runtime_required');
+    const panels = new CodingPanelQueries(runtime, reads);
     const identity: LocalRuntimeIdentity = {
       protocol: 1,
       profileId: paths.profileId,
@@ -84,6 +88,7 @@ export async function startLocalRuntime(
         ...LOCAL_ROOM_METHODS,
         ...LOCAL_DECISION_METHODS,
         'coding.panel',
+        ...PROFILE_METHODS,
       ],
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
@@ -168,14 +173,21 @@ export async function startLocalRuntime(
       {
         descriptor,
         identity,
-        dispatch: (method, params, detached) =>
-          databaseClosed
-            ? { error: { code: 'runtime_draining' } }
-            : method === 'coding.panel'
-              ? panels.dispatch(params, detached)
-              : method.startsWith('decisions.') || method.startsWith('reviews.')
-                ? decisions.dispatch(method, params)
-                : turns.dispatch(method, params, detached),
+        dispatch: (method, params, detached) => {
+          if (databaseClosed) return { error: { code: 'runtime_draining' } };
+          if (
+            method === 'coding.panel' ||
+            method === 'coding.diff' ||
+            method === 'coding.show' ||
+            method === 'coding.inspect-apply'
+          )
+            return panels.dispatch(method, params, detached);
+          if (PROFILE_METHODS.some((m) => m === method))
+            return profileCommand(runtime.conversations, reads, method, params, state !== 'ready');
+          if (method.startsWith('decisions.') || method.startsWith('reviews.'))
+            return decisions.dispatch(method, params);
+          return turns.dispatch(method, params, detached);
+        },
         status: () => host.status(),
         stop: () => host.stop(),
       },

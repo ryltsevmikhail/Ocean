@@ -1,3 +1,6 @@
+import { routeProfileCommand } from './remote-command.js';
+import { privatePath } from './private-files.js';
+import { profileDirectory } from './profile.js';
 import { codingProgress } from './coding-progress.js';
 import { readFileSync, statSync } from 'node:fs';
 import { registeredCodingTools } from './coding-project-host.js';
@@ -43,8 +46,18 @@ export async function runOceanCommand(
     }
     if (args.bots.length > 1 && !(command === 'room' && positional[0] === 'group'))
       throw new Error('Repeated --bot is only valid for group creation');
+    if (process.env['RUNNE_DB'] !== undefined || process.env['RUNNE_MODE'] !== undefined)
+      throw Error('invalid_input');
+    // An insecure or missing doctor target has only static diagnostic evidence.
+    const diagnostic =
+      command === 'doctor' &&
+      (args.staticDoctor || !privatePath(profileDirectory(flags.get('profile')), true));
+    if (command !== 'tui' && !diagnostic) {
+      const remote = await routeProfileCommand(args, options.input ?? process.stdin, output, error);
+      if (remote !== null) return remote;
+    }
     if (['doctor', 'backup', 'restore'].includes(command)) {
-      const result = await runOperations(args);
+      const result = await runOperations(diagnostic ? { ...args, staticDoctor: true } : args);
       output.write(JSON.stringify({ version: 1, ok: true, data: result.data }) + '\n');
       return result.code;
     }
@@ -64,15 +77,14 @@ export async function runOceanCommand(
         output,
       });
     }
-    runtime = openOceanProfile(
-      flags.get('profile'),
-      command === 'init',
-      options.codingTools
+    runtime = openOceanProfile(flags.get('profile'), command === 'init', {
+      requireUnpublished: true,
+      ...(options.codingTools
         ? { codingTools: options.codingTools }
         : command === 'send' && flags.has('task')
           ? { codingTools: registeredCodingTools(flags.get('profile')) }
-          : {},
-    );
+          : {}),
+    });
     await runtime.ready;
     const requestId = flags.get('request-id') ?? randomUUID();
     const workspaceId = 'ws_ocean';
@@ -236,6 +248,8 @@ export async function runOceanCommand(
       );
     else error.write(terminalText(message) + '\n');
     return [
+      'maintenance_required',
+      'runtime_draining',
       'owner_busy',
       'room_busy',
       'runtime_absent',

@@ -44,8 +44,11 @@ export class RuntimeReviews {
     this.#service = service;
     this.#owner = owner;
   }
-  async read(scope: LocalRoomScope) {
-    const result = await this.#service.reviewRoom(scope.workspaceId, scope.roomId);
+  async read(scope: LocalRoomScope, runId?: string) {
+    const result =
+      runId === undefined
+        ? await this.#service.reviewRoom(scope.workspaceId, scope.roomId)
+        : await this.#service.review(scope.workspaceId, runId);
     if (!result.ok) throw Error(result.error.code);
     return { raw: result.value, view: project(scope, result.value) };
   }

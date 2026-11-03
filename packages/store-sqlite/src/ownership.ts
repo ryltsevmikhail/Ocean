@@ -1,3 +1,4 @@
+import { assertUnpublished } from './endpoint-proof.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { openDatabase, DEFAULT_BUSY_TIMEOUT_MS } from './schema.js';
@@ -13,6 +14,7 @@ export function acquireOwnership(
   db: DatabaseSync,
   owner: RuntimeOwner,
   isAlive: (pid: number) => boolean,
+  requireUnpublished = false,
 ): () => void {
   withImmediateTransaction(db, () => {
     db.exec(`CREATE TABLE IF NOT EXISTS runtime_owner_v1 (
@@ -27,6 +29,7 @@ export function acquireOwnership(
           { code: 'owner_busy' },
         );
     }
+    if (requireUnpublished) assertUnpublished(db);
     db.prepare(
       `INSERT INTO runtime_owner_v1 VALUES (1, ?, ?)
       ON CONFLICT(singleton) DO UPDATE SET owner=excluded.owner, pid=excluded.pid`,
@@ -38,18 +41,23 @@ export function acquireOwnership(
 }
 
 /** Claim this file-backed runtime before reconciliation; OS liveness is not process-stop evidence. */
-export function ownSqliteRuntime(path: string): () => void {
+export function ownSqliteRuntime(path: string, requireUnpublished = false): () => void {
   const db = openDatabase(path, DEFAULT_BUSY_TIMEOUT_MS);
   try {
-    const release = acquireOwnership(db, { id: randomUUID(), pid: process.pid }, (pid) => {
-      try {
-        process.kill(pid, 0);
-        return true;
-      } catch (error) {
-        // Permission errors and unexpected errors mean liveness cannot be disproved.
-        return !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
-      }
-    });
+    const release = acquireOwnership(
+      db,
+      { id: randomUUID(), pid: process.pid },
+      (pid) => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch (error) {
+          // Permission errors and unexpected errors mean liveness cannot be disproved.
+          return !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
+        }
+      },
+      requireUnpublished,
+    );
     let closed = false;
     return () => {
       if (closed) return;

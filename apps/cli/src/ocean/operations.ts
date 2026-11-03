@@ -19,9 +19,11 @@ export async function runOperations(
       ['runtime.sqlite', 'runtime.sqlite-wal', 'runtime.sqlite-shm', 'restore-guard.json'].every(
         (name) => !existsSync(join(profile, name)) || privatePath(join(profile, name), false),
       );
-    const database = permissions
-      ? inspectDatabase(join(profile, 'runtime.sqlite'))
-      : { status: 'unavailable' };
+    const database = args.staticDoctor
+      ? { status: 'not_inspected' }
+      : permissions
+        ? inspectDatabase(join(profile, 'runtime.sqlite'))
+        : { status: 'unavailable' };
     let lastBackup: unknown = null;
     if (permissions && privatePath(join(profile, 'last-backup.json'), false)) {
       try {
@@ -53,7 +55,7 @@ export async function runOperations(
     return {
       code:
         permissions &&
-        database.status === 'ok' &&
+        (database.status === 'ok' || database.status === 'not_inspected') &&
         platform &&
         node &&
         restorationState !== 'incomplete'

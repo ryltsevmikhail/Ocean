@@ -2,7 +2,7 @@
 
 Status: authenticated lifecycle, durable turn admission and scoped receipt/run
 reads, runtime observation, versioned explicit cancellation, durable coding decisions
-and room-scoped text-only review continuation are implemented. The standard room TUI uses the runtime. CLI routing and Desktop migration remain planned. See [implemented commands, methods and limits](../integration/local-runtime.md).
+and room-scoped text-only review continuation are implemented. The standard room TUI uses the runtime. Profile CLI routing is implemented. Desktop migration remains planned. See [implemented commands, methods and limits](../integration/local-runtime.md).
 Owner request on 2026-11-02 supersedes
 continuing the remaining coding-backup work as the immediate priority. Ocean 1.1
 stages 1–6 and reviewed stage-7 work through `5d032ae` remain implemented; their
@@ -34,8 +34,7 @@ layers, conversation model and recovery semantics rather than copying Rust APIs.
 - Coding approvals persist exact bindings, expire after 300000ms and atomically
   transition/consume. The shared host resolves an authenticated durable decision.
   The room TUI reads the complete server preview and submits the observed card version and binding.
-- Normal Ocean commands open the profile themselves. Existing ACP has its own
-  stdio lifecycle and must keep its advertised protocol and permissions.
+- Supported profile commands use the authenticated owner while it is active. Maintenance commands require offline ownership. ACP retains its separate stdio lifecycle and advertised protocol and permissions.
 
 ## Process and access boundary
 

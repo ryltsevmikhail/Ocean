@@ -16,7 +16,16 @@ import { createProviderFromEnv } from '../engine/provider.js';
 import { createRuntimeFromEnv } from '../runtime.js';
 
 export async function runAcp(): Promise<number> {
-  const runtime = createRuntimeFromEnv();
+  let runtime;
+  try {
+    runtime = createRuntimeFromEnv();
+  } catch (e) {
+    if (e instanceof Error && 'code' in e && e.code === 'owner_busy') {
+      process.stderr.write('owner_busy\n');
+      return 3;
+    }
+    throw e;
+  }
   try {
     const recovery = await runtime.ready;
     const peer = new JsonRpcPeer({ input: process.stdin, output: process.stdout });

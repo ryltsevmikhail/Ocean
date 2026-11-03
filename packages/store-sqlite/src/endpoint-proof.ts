@@ -23,3 +23,11 @@ export function openEndpointProof(db: DatabaseSync) {
   };
 }
 export type EndpointProof = ReturnType<typeof openEndpointProof>;
+/** A missing runtime directory does not retire a durable publication. Check under the ownership transaction. */
+export function assertUnpublished(db: DatabaseSync) {
+  if (
+    db.prepare("SELECT 1 FROM sqlite_master WHERE name='local_endpoint_v1'").get() &&
+    db.prepare('SELECT 1 FROM local_endpoint_v1 LIMIT 1').get()
+  )
+    throw Error('endpoint_exists');
+}

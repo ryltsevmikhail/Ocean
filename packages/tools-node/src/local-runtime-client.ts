@@ -1,3 +1,4 @@
+import { localProfileClient, type LocalProfileClient } from './local-profile-client.js';
 import { localPanelClient, type LocalPanelClient } from './local-panel-client.js';
 import { randomUUID } from 'node:crypto';
 import { connect, type Socket } from 'node:net';
@@ -23,7 +24,8 @@ import { readLocalRuntimeDescriptor } from './local-runtime-paths.js';
 import { LocalRuntimeFrames, writeLocalRuntimeFrame } from './local-runtime-framing.js';
 import { localRoomClient, validatedParams, type LocalRoomClient } from './local-room-client.js';
 import { localDecisionClient, type LocalDecisionClient } from './local-decision-client.js';
-export interface LocalRuntimeClient extends LocalRoomClient, LocalDecisionClient, LocalPanelClient {
+export interface LocalRuntimeClient
+  extends LocalProfileClient, LocalRoomClient, LocalDecisionClient, LocalPanelClient {
   readonly identity: LocalRuntimeIdentity;
   submit(request: LocalTurnRequest): Promise<LocalTurnReceipt>;
   getReceipt(query: LocalReceiptQuery): Promise<LocalTurnReceipt | null>;
@@ -95,10 +97,29 @@ export async function connectLocalRuntime(options: {
   readonly profile: string;
   readonly signal?: AbortSignal | undefined;
 }): Promise<LocalRuntimeClient> {
-  const descriptor = readLocalRuntimeDescriptor(options.profile);
+  return connectDescriptor(readLocalRuntimeDescriptor(options.profile), options.signal);
+}
+/** Only an absent local publication permits an offline path. A peer cannot return this sentinel. */
+export function connectPublishedRuntime(
+  profile: string,
+  signal?: AbortSignal,
+): Promise<LocalRuntimeClient> | null {
+  let descriptor;
+  try {
+    descriptor = readLocalRuntimeDescriptor(profile, true);
+  } catch (e) {
+    if (e instanceof Error && e.message === 'runtime_absent') return null;
+    throw e;
+  }
+  return connectDescriptor(descriptor, signal);
+}
+async function connectDescriptor(
+  descriptor: ReturnType<typeof readLocalRuntimeDescriptor>,
+  signal?: AbortSignal,
+): Promise<LocalRuntimeClient> {
   const socket = connect({
     path: descriptor.endpoint,
-    ...(options.signal ? { signal: options.signal } : {}),
+    ...(signal ? { signal } : {}),
   });
   const peer = new Peer(socket);
   try {
@@ -111,6 +132,7 @@ export async function connectLocalRuntime(options: {
       throw Error('identity_mismatch');
     return {
       identity,
+      ...localProfileClient(peer.request.bind(peer)),
       ...localPanelClient(peer.request.bind(peer)),
       ...localDecisionClient(peer.request.bind(peer)),
       ...localRoomClient(peer.request.bind(peer), identity),
@@ -146,7 +168,7 @@ export async function connectLocalRuntime(options: {
           value.instanceId !== identity.instanceId ||
           value.profileId !== identity.profileId ||
           !localRuntimeRecord(value) ||
-          !['ready', 'draining', 'stop_incomplete'].includes(String(value['state']))
+          !['ready', 'draining', 'stop_incomplete'].some((state) => state === value['state'])
         )
           throw Error('invalid_frame');
         return value as unknown as LocalRuntimeStatus;

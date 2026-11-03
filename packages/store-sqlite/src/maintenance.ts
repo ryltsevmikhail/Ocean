@@ -1,3 +1,4 @@
+import { assertUnpublished } from './endpoint-proof.js';
 import { ownerBusy, ownerAlive as alive } from './maintenance-owner.js';
 import { readCodingBackupInventory } from './coding-backup-inventory.js';
 import { snapshotFileHash } from './backup-file.js';
@@ -81,10 +82,12 @@ export function inspectDatabase(path: string): DatabaseInspection {
     if (![5, 6, 10, SCHEMA_VERSION].includes(schema(db))) return { status: 'unsupported_schema' };
     if (ownerBusy(db)) return { status: 'owner_busy' };
     db.exec('BEGIN');
+    assertUnpublished(db);
     const result = summary(db);
     db.exec('ROLLBACK');
     return { status: 'ok', summary: result };
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message === 'endpoint_exists') throw e;
     return { status: 'invalid_database' };
   } finally {
     db?.close();
@@ -126,8 +129,9 @@ async function snapshotOwned<T>(
     if (![5, 6, 10, SCHEMA_VERSION].includes(schema(db))) throw new Error('unsupported_schema');
     if (ownerBusy(db)) throw new Error('owner_busy');
     try {
-      release = acquireOwnership(db, { id: randomUUID(), pid: process.pid }, alive);
-    } catch {
+      release = acquireOwnership(db, { id: randomUUID(), pid: process.pid }, alive, true);
+    } catch (e) {
+      if (e instanceof Error && e.message === 'endpoint_exists') throw e;
       throw new Error('owner_busy');
     }
     const original = summary(db);

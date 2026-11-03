@@ -5,8 +5,7 @@ and the provider for shared room turns. Authenticated clients can submit a turn
 and reconnect to its persisted room history, run events and result. Explicit
 versioned cancellation is available to authenticated clients. The standard room TUI connects to this runtime. Desktop migration remains planned. The runtime also serves
 exact coding approvals and text-only room review decisions.
-Other CLI room commands still open the profile directly and report
-`owner_busy` while the shared runtime holds it. See the
+Profile commands connect to the published owner. The supported operations and maintenance refusals are listed below. See the
 [shared-runtime plan](../ocean/shared-runtime.md) for the migration sequence.
 
 After initializing an isolated profile, run:
@@ -54,9 +53,33 @@ Clients receive exit 4 for an incomplete stop. `owner_busy`, `runtime_absent`,
 `runtime_unreachable` and `endpoint_exists` use exit 3. Other invalid input or
 security refusals use exit 2, except inherited `restore_restricted` (exit 4).
 
+## Profile CLI while the owner is listening
+
+Use the same canonical profile and runtime directory in each terminal. The CLI authenticates before selecting a profile operation. A missing descriptor beside other entries, unreachable socket, incompatible identity/protocol, failed authentication or insecure paths refuse the command. Only a locally verified absent publication permits offline one-shot operation. The exclusive SQLite ownership transaction also checks for a surviving publication digest before taking ownership for offline recovery. Erasing the runtime directory after a crash cannot authorize a takeover. Ordinary runtime start uses its separate attested recovery procedure.
+
+| CLI command                                                                                            | Authenticated owner operation                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bot add/list`                                                                                         | `bots.create` binds the complete bot profile and request ID. `bots.list` pages by bot ID.                                                                                                                                                                                                   |
+| `room direct/group/list/members`                                                                       | `rooms.direct` and `rooms.group` bind stable bot IDs. Lists use `rooms.list`, `rooms.members` and bounded bot profiles.                                                                                                                                                                     |
+| `history ROOM`                                                                                         | `history.list` reads a sequence page in the requested room, default 50 entries.                                                                                                                                                                                                             |
+| `send ROOM --text TEXT [--task TASK] [--request-id ID]`                                                | `turns.submit` commits before acknowledgement. Only the owner supplies the execution provider.                                                                                                                                                                                              |
+| `run list/show/review`                                                                                 | The CLI uses room and run projections. Show returns the durable run snapshot. Review uses `reviews.get` with the exact run ID and returns the review version and scoped effects.                                                                                                            |
+| `run acknowledge RUN --text-only --review-version VERSION --reason REASON`                             | A terminal obtains the server's `reviews.continue` card, verifies its entire preview, shows escaped controls and asks for an explicit vote. Version, digest, expiry, room and run still bind the decision. `continuationApplied` reports whether the owner also committed the continuation. |
+| `coding show/diff/pending/inspect-apply`                                                               | `coding.show`, `coding.diff`, `coding.pending` and `coding.inspect-apply` provide read-only projections.                                                                                                                                                                                    |
+| `init`, `project add`, `coding start/review/apply/reconcile-apply`, `backup`, `restore`, full `doctor` | Exit 3 with `maintenance_required`. Stop the runtime explicitly to perform the offline operation.                                                                                                                                                                                           |
+| `doctor --static`                                                                                      | Checks platform and profile metadata without opening SQLite. Its database status is `not_inspected`.                                                                                                                                                                                        |
+
+Run IDs are resolved against committed room-run associations in the bound workspace. Add `--room ROOM` to narrow a run or coding query. Coding views derive the task's owner room and membership from durable task and application records. A mismatched room refuses a single-task or application inspection. The complete frozen `coding.diff` preview includes file modes, hashes, diff and registered test bindings. It writes no changeset artifact or capture receipt. Review and apply continue to require the separately captured immutable artifact. The active `coding.pending` projection labels its scope as `coding_applications` and includes `omittedPendingEffects`. This counts unresolved effects outside the named applications, including unattributable legacy claims. Their identities remain private. A full diagnostic is available with the authorized offline command. Reading a projection cannot clear a hold.
+
+Bot and room mutation parameters contain the workspace ID and a request ID, plus the bot profile, direct bot ID or group title and bot IDs respectively. Exact duplicates return their committed result during drain. Fresh mutations refuse `runtime_draining`. Lists page at up to 200 entries and may end a frame early. A client advances the cursor until it receives an empty page. The three single coding views accept `workspaceId, id`, an optional `roomId` and the same offset/version chunk sequence used by the coding panel. Each view binds the method, scope and complete digest to one client connection. Pending accepts `workspaceId`, optional `roomId`, and page parameters.
+
+Active send exits 0 immediately with the version-1 success envelope. Its data includes `requestId`, `messageId`, `turnId`, nullable `runId` and status `admitted` or `recorded`. An unaddressed group post has null turn and run IDs. The exit acknowledges durable acceptance. To inspect execution later, use `run show`, `run review` or `history`. Exact retries return the same receipt without redispatch. An interrupted CLI awaiting acknowledgement emits `receipt_unknown` with the request ID and exits 130 for SIGINT or 143 for SIGTERM. Losing the response to an outstanding submit exits 3 with the same guidance. Read the receipt, or retry the identical payload with **the same request ID**. The CLI never retries on its own. Signal and disconnect detach the client. Explicit version-bound `runs.cancel` remains separate. With verified absence, the legacy offline send waits and signals its own one-shot operation.
+
+ACP remains a separate stdio host. A competing ACP process using the same SQLite profile exits 3 with `owner_busy` on stderr before accepting requests. A separate profile keeps ACP 1 initialize, session, prompt, updates, permission and cancel behavior. ACP does not advertise shared-room methods.
+
 ## Room terminal
 
-Create the room using the offline CLI before starting the runtime. Keep the foreground owner running and open another terminal using the same profile and runtime directory.
+Create the room with the CLI before or after starting the runtime. Keep the foreground owner running and open another terminal using the same profile and runtime directory.
 
 ```sh
 pnpm ocean tui --profile /absolute/private/profile --room ROOM_ID
@@ -131,7 +154,7 @@ exceeds one 2MiB frame plus its newline. The Node client bounds pending requests
 transport timeouts (30 seconds for stop and the requested wait plus five seconds
 for observation). Clients authenticate with the private filesystem descriptor
 and its random capability. The bootstrap checks kernel peer credentials only
-while verifying its own new listening socket. Same-UID processes with access to those credentials are trusted.
+while verifying its own new listening socket. Same-UID processes with access to the private descriptor capability are trusted.
 
 ## Submitting and reconnecting
 
@@ -358,5 +381,5 @@ The persisted dispatch and effect counters both stay at one. The opt-in native
 coding test kills the listening owner after an approved sandbox write and
 before journal settlement, then reopens twice. Namespace tests exercise a real
 same-inode bind mount and a foreign UID. The room PTY suite covers physical
-hangup and SIGTERM. CLI routing, Desktop shared-runtime, asset-complete
+hangup and SIGTERM. Desktop shared-runtime, asset-complete
 backup/restore and installed/live Ocean 1.1 acceptance remain open.

@@ -20,6 +20,7 @@ import type { RuntimeReply } from './queries.js';
 const errors = new Set([
   'invalid_params',
   'unknown_decision',
+  'unknown_run',
   'review_unavailable',
   'review_conflict',
   'binding_conflict',
@@ -37,6 +38,7 @@ export class RuntimeDecisions {
   readonly owner: RuntimeOwnerDecisions;
   readonly reviews: RuntimeReviews;
   #draining = false;
+  readonly #inFlight = new Set<Promise<RuntimeReply>>();
   constructor(store: OwnerDecisionStore, reviews: ChatReviewService) {
     this.owner = new RuntimeOwnerDecisions(store, Date.now);
     this.reviews = new RuntimeReviews(reviews, this.owner);
@@ -79,7 +81,16 @@ export class RuntimeDecisions {
       },
     };
   }
-  async dispatch(method: string, p: Record<string, unknown>): Promise<RuntimeReply> {
+  dispatch(method: string, p: Record<string, unknown>): Promise<RuntimeReply> {
+    if (!['reviews.get', 'reviews.continue', 'decisions.resolve'].includes(method))
+      return this.#dispatch(method, p);
+    if (this.#draining) return Promise.resolve({ error: { code: 'runtime_draining' } });
+    const job = this.#dispatch(method, p);
+    this.#inFlight.add(job);
+    void job.finally(() => this.#inFlight.delete(job));
+    return job;
+  }
+  async #dispatch(method: string, p: Record<string, unknown>): Promise<RuntimeReply> {
     try {
       switch (method) {
         case 'decisions.list':
@@ -108,14 +119,13 @@ export class RuntimeDecisions {
           break;
         case 'decisions.resolve':
           if (isDecisionReply(p)) {
-            if (this.#draining) throw Error('runtime_draining');
             const card = await this.owner.resolve(p, p.bindingDigest, p.expectedVersion, p.choice);
             return { result: card };
           }
           break;
         case 'reviews.get':
           if (isReviewChunkQuery(p)) {
-            const { view } = await this.reviews.read(p);
+            const { view } = await this.reviews.read(p, p.runId);
             if (p.version !== undefined && view.version !== p.version)
               throw Error('review_conflict');
             const preview = JSON.stringify(view);
@@ -136,7 +146,6 @@ export class RuntimeDecisions {
           break;
         case 'reviews.continue':
           if (isContinuation(p)) {
-            if (this.#draining) throw Error('runtime_draining');
             return { result: await this.reviews.request(p) };
           }
           break;
@@ -152,8 +161,9 @@ export class RuntimeDecisions {
       };
     }
   }
-  drain() {
+  async drain() {
     this.#draining = true;
-    return Promise.all([this.reviews.drain(), this.owner.joinChecks()]);
+    await Promise.all([this.reviews.drain(), ...this.#inFlight, this.owner.joinChecks()]);
+    await this.reviews.drain();
   }
 }

@@ -30,7 +30,10 @@ export class ConversationService {
   }
 
   /** Bind a complete immutable request to its receipt before returning success. */
-  execute(command: ConversationCommand): ConversationResult<ConversationReply> {
+  execute(
+    command: ConversationCommand,
+    admission: 'admit' | 'existing_only' = 'admit',
+  ): ConversationResult<ConversationReply> {
     // Detach the only nested input before any adapter or identity callback can observe it.
     if (command.type === 'CreateGroupRoom') command = { ...command, botIds: [...command.botIds] };
     const binding = JSON.stringify(
@@ -47,6 +50,7 @@ export class ConversationService {
         return previous.binding === binding && previous.reply.kind !== 'review_request'
           ? ok(previous.reply)
           : conversationFailure('request_conflict');
+      if (admission === 'existing_only') return conversationFailure('admission_closed');
       const result = this.#decide(tx, command);
       if (result.ok) tx.putReceipt(command.requestId, { binding, reply: result.value });
       return result;

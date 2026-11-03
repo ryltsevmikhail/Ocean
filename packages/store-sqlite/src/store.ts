@@ -1,3 +1,4 @@
+import { profileReads, type ProfileReads } from './profile-reads.js';
 import { openEndpointProof, type EndpointProof } from './endpoint-proof.js';
 import { SqliteOwnerDecisions } from './owner-decisions.js';
 import { SqliteCodingApplyResolutionStore } from './coding-apply-resolution.js';
@@ -53,6 +54,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  openProfileReads(ownerId: string): ProfileReads;
   openEndpointProof(): EndpointProof;
   readonly ownerDecisions: OwnerDecisionStore;
   openRoomReads(now: () => number): RoomRunReadPort;
@@ -103,6 +105,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
   return {
+    openProfileReads: (ownerId) => profileReads(db, ownerId),
     openEndpointProof: () => openEndpointProof(db),
     ownerDecisions: new SqliteOwnerDecisions(db),
     openRoomReads: (now) => roomRuntimeReads(db, now),

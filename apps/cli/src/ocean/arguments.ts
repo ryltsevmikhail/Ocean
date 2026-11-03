@@ -3,6 +3,7 @@ export interface OceanArguments {
   readonly positional: readonly string[];
   readonly flags: ReadonlyMap<string, string>;
   readonly json: boolean;
+  readonly staticDoctor?: boolean;
   readonly textOnly: boolean;
   readonly bots: readonly string[];
 }
@@ -40,11 +41,17 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
   const flags = new Map<string, string>();
   const positional: string[] = [];
   let json = false;
-  let textOnly = false;
+  let textOnly = false,
+    staticDoctor = false;
   const bots: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined) continue;
+    if (token === '--static') {
+      if (staticDoctor) throw Error('invalid_input');
+      staticDoctor = true;
+      continue;
+    }
     if (token === '--text-only') {
       textOnly = true;
       continue;
@@ -70,7 +77,9 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
   if (flags.has('task') && !['send', 'tui'].includes(positional[0] ?? ''))
     throw new Error('--task requires send or tui');
   if (flags.has('task') && flags.get('task')!.trim() === '') throw new Error('Missing --task');
+  if (staticDoctor && positional[0] !== 'doctor') throw Error('invalid_input');
   return {
+    ...(staticDoctor ? { staticDoctor: true } : {}),
     command: positional[0] ?? '',
     positional: positional.slice(1),
     flags,
