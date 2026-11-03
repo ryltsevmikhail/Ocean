@@ -24,8 +24,9 @@ it.each(['unregistered', 'unexpected'])(
  import {startLocalRuntime} from './apps/cli/dist/local-runtime/host.js';
  import {connectLocalRuntime} from './packages/tools-node/dist/index.js';
  const [profile,roomId,phase]=process.argv.slice(1);
- let calls=0;const provider={id:'fixture',models:['fixture'],capabilities:{usage:true,streaming:true},async *stream(){calls++;throw Error('denied before dispatch');}};
+ let calls=0,qualificationCalls=0;const provider={id:'fixture',models:['fixture'],capabilities:{usage:true,streaming:true},async *stream(){calls++;throw Error('denied before dispatch');}};
  const host=await startLocalRuntime({profile,provider,...(phase==='unexpected'?{codingTools:{sandbox:async()=>{
+   qualificationCalls++;
    const db=openSqliteStore({path:profile+'/runtime.sqlite'});try{
    const t=db.conversations.atomic(tx=>tx.activeChatTurn(roomId));
    await db.tools.claim('probe','qualification',{taskRunId:t.taskRunId,attemptId:'probe'},'synthetic');}
@@ -38,18 +39,22 @@ it.each(['unregistered', 'unexpected'])(
  for(let i=0;i<100;i++){turn=await c.getRun({...scope,runId:receipt.runId});if(['failed','uncertain'].includes(turn.turnStatus))break;await new Promise(r=>setTimeout(r,10));}
  const same=await c.submit(q); const stop=await host.stop();c.close();
  const db=openSqliteStore({path:profile+'/runtime.sqlite'});const held=db.tools.inspectPending().length;db.close();
- console.log(JSON.stringify({held,calls,turn:turn.turnStatus,same:receipt.runId===same.runId,outcome:stop.outcome}));
+ console.log(JSON.stringify({held,calls,qualificationCalls,turn:turn.turnStatus,same:receipt.runId===same.runId,outcome:stop.outcome}));
  process.exit(0);
  `,
           f.directory,
           f.room,
           phase,
         ],
-        { env: { PATH: process.env['PATH'], XDG_RUNTIME_DIR: run }, timeout: 5000 },
+        {
+          env: { PATH: process.env['PATH'], HOME: process.env['HOME'], XDG_RUNTIME_DIR: run },
+          timeout: 5000,
+        },
       );
       expect(JSON.parse(stdout)).toEqual({
         held: phase === 'unexpected' ? 1 : 0,
         calls: 0,
+        qualificationCalls: phase === 'unexpected' ? 1 : 0,
         turn: phase === 'unregistered' ? 'failed' : 'uncertain',
         same: true,
         outcome: phase === 'unregistered' ? 'complete' : 'uncertain',
