@@ -129,9 +129,9 @@ coalesced requests on a rejected stream cannot execute. The server bounds connec
 requires hello within five seconds and drops observers whose pending output
 exceeds one 2MiB frame plus its newline. The Node client bounds pending requests to 128 with five-second
 transport timeouts (30 seconds for stop and the requested wait plus five seconds
-for observation). No peer-credential
-API is claimed: filesystem privacy plus the random capability provide the local
-boundary. Same-UID processes with access to those credentials are trusted.
+for observation). Clients authenticate with the private filesystem descriptor
+and its random capability. The bootstrap checks kernel peer credentials only
+while verifying its own new listening socket. Same-UID processes with access to those credentials are trusted.
 
 ## Submitting and reconnecting
 
@@ -303,8 +303,15 @@ a nonfollowing filesystem pin. A local probe reserves a unique abstract Unix
 socket address with embedded NULs and 32 random bytes. It connects through the
 pin. The listening FD itself accepts the connection. While the probe still
 holds the address, the bootstrap compares every byte of the kernel-reported
-peer address to the reserved address. A forwarding listener creates a separate
-kernel peer and fails this check. No proof payload is sent through the stream.
+peer address to the reserved address. Abstract names are scoped to a network
+namespace. A foreign process in another namespace can copy those bytes.
+The bootstrap also reads Linux `SO_PEERCRED` from both its connected probe and
+the socket accepted by its listener. It checks the exact native credential
+layout. Both kernel-reported PID, effective UID and effective GID tuples must
+match the still-running bootstrap, which created one listener and one probe in
+the same namespace. Linux translates peer IDs into the receiver's namespaces.
+These checks use the live socket FDs while the probe retains its address.
+No proof payload is sent through the stream.
 
 The bootstrap execs the host Node binary with the same listening FD and
 filesystem pin. Node adopts that FD with `server.listen({fd})` and transfers
@@ -316,9 +323,9 @@ timeouts. The bootstrap has a five-second alarm and the owner enforces a
 The helper receives no connection capability. Only the long-lived owner opens
 SQLite, authenticates clients and serves requests.
 
-The SQLite digest includes a format tag for the direct kernel binding check.
-A stale digest created by the earlier stream-challenge implementation cannot
-authorize retirement. Stop a running older owner cleanly before switching
+The SQLite digest includes a format tag for the two-direction credential check.
+Earlier digests based on a stream challenge or an abstract peer address alone
+cannot authorize retirement. Stop a running older owner cleanly before switching
 implementations. The public version-1 descriptor and client handshake are
 unchanged.
 

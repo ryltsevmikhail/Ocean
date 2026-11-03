@@ -2,7 +2,7 @@
 // directory (fd 4) and an empty application environment. No owner credential
 // is available before, during or after the kernel binding check.
 export const bindProgram = String.raw`
-import errno, os, signal, socket, sys
+import errno, os, signal, socket, struct, sys
 
 signal.alarm(5)
 os.umask(0o177)
@@ -30,6 +30,15 @@ with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
     with peer:
         if peer_address != address:
             sys.exit(2)
+        # Abstract addresses are exclusive only within a network namespace.
+        # This bootstrap created one listener and one connector in that namespace.
+        # Both kernel peer credentials must refer back to this still-live process.
+        ucred = struct.Struct('=iII')  # Linux pid_t, uid_t, gid_t in native byte order
+        expected = (os.getpid(), os.geteuid(), os.getegid())
+        for endpoint in (probe, peer):
+            raw = endpoint.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, ucred.size + 1)
+            if len(raw) != ucred.size or ucred.unpack(raw) != expected:
+                sys.exit(2)
 
 # exec inherits these exact open file descriptions. No pathname lookup or
 # second bind intervenes between verification and the Node IPC transfer.

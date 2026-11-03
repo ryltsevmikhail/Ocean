@@ -34,6 +34,11 @@ it.each([
   'short peer',
   'empty peer',
   'failed probe',
+  ...['probe', 'peer'].flatMap((side) =>
+    ['short', 'long', 'pid', 'uid', 'gid', 'unavailable'].map(
+      (fault) => side + ' credential ' + fault,
+    ),
+  ),
 ])(
   'preserves unproved names and disposes the bootstrap and listener on %s failure',
   async (mode) => {
@@ -84,6 +89,26 @@ it.each([
             'pin = os.open',
             `os.rename(path,${JSON.stringify(original)})\nos.rename(${JSON.stringify(other)},path)\npin = os.open`,
           );
+        if (mode.includes(' credential ')) {
+          const [side, , fault] = mode.split(' ');
+          const field = ['pid', 'uid', 'gid'].indexOf(fault!);
+          let change = `parts=list(struct.unpack('=iII',value)); parts[${field}] ^= 1; return struct.pack('=iII',*parts)`;
+          if (fault === 'short') change = 'return value[:-1]';
+          if (fault === 'long') change = 'return value + bytes(1)';
+          if (fault === 'unavailable') change = "raise OSError('SO_PEERCRED unavailable')";
+          return program.replace(
+            'signal.alarm(5)',
+            `import struct
+native_get = socket.socket.getsockopt
+def corrupt(self, level, option, *args):
+    value = native_get(self,level,option,*args)
+    if level == socket.SOL_SOCKET and option == socket.SO_PEERCRED and self is ${side}:
+        ${change}
+    return value
+socket.socket.getsockopt = corrupt
+signal.alarm(5)`,
+          );
+        }
         if (mode === 'failed probe')
           return program.replace('probe.connect(', 'probe.close()\n    probe.connect(');
         if (mode.endsWith(' peer')) {
@@ -102,11 +127,12 @@ it.each([
         await host.closed;
         return 'unexpectedly ready';
       });
-      const expected = mode.endsWith('interpreter')
-        ? 'endpoint_verification_unavailable'
-        : mode.endsWith(' peer') || mode === 'transparent relay'
-          ? 'endpoint_changed'
-          : /^endpoint_/;
+      const expected =
+        mode.endsWith('interpreter') || mode.endsWith('unavailable')
+          ? 'endpoint_verification_unavailable'
+          : mode.endsWith(' peer') || mode === 'transparent relay' || mode.includes(' credential ')
+            ? 'endpoint_changed'
+            : /^endpoint_/;
       await expect(startup).rejects.toThrow(expected);
       inject = undefined;
       replaceInterpreter = undefined;

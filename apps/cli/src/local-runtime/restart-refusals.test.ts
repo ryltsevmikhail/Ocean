@@ -249,11 +249,14 @@ it('preserves an in-place descriptor substitution between publication and activa
   expect(readFileSync(paths.descriptor, 'utf8')).toBe('foreign-publication');
 });
 
-it('refuses a matching legacy digest produced without the direct kernel binding check', async () => {
+it.each([
+  ['stream-challenge', ''],
+  ['direct-peer-v1', 'ocean-endpoint-direct-peer-v1\0'],
+] as const)('refuses the matching legacy %s digest', async (_version, tag) => {
   const { paths, profile } = await fixture();
-  // Reconstruct the original c518d4b publication format using only these synthetic files.
+  // Reconstruct each retired publication format from the exact synthetic files.
   const layout = new EndpointLayout(paths, profileKey(paths));
-  const legacy = createHash('sha256').update(layout.identity);
+  const legacy = createHash('sha256').update(tag).update(layout.identity);
   try {
     for (const name of ['runtime.sock', 'connection.json']) {
       const fd = layout.pin(name);

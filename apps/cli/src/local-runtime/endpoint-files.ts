@@ -127,10 +127,10 @@ export class EndpointLayout {
   /** Opaque bounded bytes from the verified regular inode; never parse a predecessor credential. */
   proof(socket: number, descriptor: number, expected?: Buffer): string {
     this.entries(['connection.json', 'runtime.sock']);
-    // Old projections could attest a forwarding listener. Only directly verified
-    // bindings may authorize predecessor retirement.
+    // Earlier binders could attest a foreign socket through a relay or a copied
+    // abstract address in another network namespace. Their proofs stay inert.
     const hash = createHash('sha256')
-      .update('ocean-endpoint-direct-peer-v1\0')
+      .update('ocean-endpoint-mutual-ucred-v1\0')
       .update(this.identity);
     for (const [name, fd] of [
       ['runtime.sock', socket],
