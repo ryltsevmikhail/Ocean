@@ -32,7 +32,10 @@ export function validateRebindResult(r: ProfileRebindRecord, result: ProfileRebi
     result.virtualHash !== p.plan.virtualHash ||
     (p.plan.desktop
       ? result.desktop?.profileId !== p.origin.profileId ||
-        result.desktop.root !== p.plan.desktop.root
+        result.desktop.root !== p.plan.desktop.root ||
+        p.plan.desktop.profileId !== p.origin.profileId ||
+        p.plan.desktop.epochId !== p.epochId ||
+        p.plan.desktop.identity !== null
       : result.desktop !== null)
   )
     throw Error('rebind_result_mismatch');

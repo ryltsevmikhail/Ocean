@@ -88,8 +88,12 @@ export async function inspectRebind(
     },
     desktop: after.catalog.desktop
       ? {
+          profileId: origin.profileId,
+          epochId,
           root: join(profile, 'desktop-' + epochId, 'tree'),
           archiveHash: after.catalog.desktop.hash,
+          // The materialized directory's inode identity is not knowable before the effect.
+          identity: null,
         }
       : null,
     evidenceWitness: after.witness,

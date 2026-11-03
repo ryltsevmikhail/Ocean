@@ -58,7 +58,18 @@ export interface ProfileRebindPlan {
   readonly virtualHash: string;
   readonly changesetHashes: readonly string[];
   readonly registration: ProfileRebindRegistration;
-  readonly desktop: { readonly root: string; readonly archiveHash: string } | null;
+  /**
+   * New-profile-owned Desktop storage planned for the epoch. `identity` is only
+   * knowable after materialization and is recorded by the durable binding; it is
+   * never taken from the archived original provenance.
+   */
+  readonly desktop: {
+    readonly profileId: string;
+    readonly epochId: string;
+    readonly root: string;
+    readonly archiveHash: string;
+    readonly identity: string | null;
+  } | null;
   readonly evidenceWitness: string;
   readonly inertAssets: readonly { readonly kind: string; readonly identity: string }[];
   readonly observations: readonly ProfileRebindComparison[];

@@ -8,13 +8,16 @@ import * as stores from '@runnets/store-sqlite';
 import * as adapters from '@runnets/tools-node';
 import { createRuntime } from '../runtime.js';
 import { backupProfile, restoreProfile } from '../ocean/snapshots.js';
-import { codingWorkflowFixture } from '../ocean/coding-workflow-fixture.js';
+import { codingDesktopFixture } from '../ocean/desktop-workflow-fixture.js';
 const phases = [
   'intent',
   'decision',
   'acquired',
   'preparing',
   'preparing-unsafe',
+  'preparing-git-admin',
+  'preparing-registration',
+  'prepared',
   'publishing',
   'published',
 ] as const;
@@ -24,9 +27,18 @@ const expected = {
   acquired: 'held',
   preparing: 'held',
   'preparing-unsafe': 'held',
+  'preparing-git-admin': 'held',
+  'preparing-registration': 'held',
+  prepared: 'held',
   publishing: 'held',
   published: 'ready',
 } as const;
+const halted = new Set([
+  'preparing',
+  'preparing-unsafe',
+  'preparing-git-admin',
+  'preparing-registration',
+]);
 function registry(root: string): { rows: number; roots: string[] } {
   const path = join(root, 'home', '.local/state/ocean-coordination/leases.sqlite');
   if (!fs.existsSync(path)) return { rows: 0, roots: [] };
@@ -44,7 +56,7 @@ it.each(phases)(
     const root = fs.mkdtempSync(join(tmpdir(), 'rebind-crash-'));
     fs.mkdirSync(join(root, 'home'), { mode: 0o700 });
     vi.stubEnv('HOME', join(root, 'home'));
-    const f = await codingWorkflowFixture('direct');
+    const f = await codingDesktopFixture();
     let child: ReturnType<typeof spawn> | undefined;
     try {
       const selected = join(root, 'selected');
@@ -57,26 +69,11 @@ it.each(phases)(
           GIT_TERMINAL_PROMPT: '0',
         },
       });
-      fs.writeFileSync(join(f.worktree, 'answer.txt'), 'frozen before crash\n');
-      f.runtime.close();
-      fs.chmodSync(join(f.directory, 'runtime.sqlite'), 0o600);
-      const inventory = stores.readCodingBackupInventory(join(f.directory, 'runtime.sqlite'));
-      fs.writeFileSync(
-        join(f.directory, 'coding-projects.json'),
-        JSON.stringify([
-          {
-            id: 'project',
-            root: f.project,
-            testPresets: inventory.tasks[0]!.policy.testPresets,
-            mounts: [],
-          },
-        ]),
-        { mode: 0o600 },
-      );
       const archive = join(root, 'archive');
       await backupProfile(f.directory, archive, {
         managedDirectory: join(f.directory, 'worktrees'),
       });
+      const archived = stores.readDesktopBackupInventory(join(f.directory, 'runtime.sqlite'));
       fs.rmSync(f.directory, { recursive: true });
       const profile = join(root, 'profile');
       restoreProfile(archive, profile);
@@ -112,15 +109,13 @@ it.each(phases)(
         child!.once('close', (code, signal) => resolve({ code, signal })),
       );
       await vi.waitFor(
-        () =>
-          expect(out, err).toBe(
-            (phase === 'preparing' || phase === 'preparing-unsafe' ? 'preparing' : phase) + '\n',
-          ),
+        () => expect(out, err).toBe((halted.has(phase) ? 'preparing' : phase) + '\n'),
         { timeout: 20000 },
       );
       child.kill('SIGKILL');
       expect((await exit).signal).toBe('SIGKILL');
-      let lastRevision = -1;
+      let lastRevision = -1,
+        preparedInode = -1;
       for (let attempt = 0; attempt < 2; attempt++) {
         const store = stores.openSqliteStore({ path: join(profile, 'runtime.sqlite') });
         try {
@@ -147,6 +142,27 @@ it.each(phases)(
               fs.readFileSync(join(record.preview.plan.managedDirectory, 'partial.txt'), 'utf8'),
             ).toBe('partial materialization\n');
           }
+          if (phase === 'prepared') {
+            // Materialized new-profile Desktop storage is retained, but no binding was published.
+            const planned = record.preview.plan.desktop!;
+            expect(fs.existsSync(planned.root)).toBe(true);
+            expect(planned.identity).toBeNull();
+            expect(fs.realpathSync(planned.root)).toBe(planned.root);
+            expect(fs.readdirSync(profile).filter((name) => name.startsWith('desktop-'))).toEqual([
+              'desktop-' + record.preview.epochId,
+            ]);
+            const inode = fs.statSync(planned.root).ino;
+            if (preparedInode >= 0) expect(inode).toBe(preparedInode);
+            preparedInode = inode;
+            const inventory = stores.readDesktopBackupInventory(join(profile, 'runtime.sqlite'));
+            expect(inventory.binding).toEqual(archived.binding);
+            expect(
+              inventory.operations.filter((operation) => operation.state === 'started'),
+            ).toEqual([expect.objectContaining({ id: expect.stringContaining('prepare:') })]);
+            expect(
+              inventory.operations.filter((operation) => operation.state === 'completed'),
+            ).toHaveLength(2);
+          }
         } finally {
           store.close();
         }
@@ -154,6 +170,9 @@ it.each(phases)(
           'acquired',
           'preparing',
           'preparing-unsafe',
+          'preparing-git-admin',
+          'preparing-registration',
+          'prepared',
           'publishing',
           'published',
         ].includes(phase)
@@ -209,9 +228,28 @@ it.each(phases)(
         expect(() => createRuntime({ dbPath: join(again, 'runtime.sqlite') })).toThrow(
           'restore_restricted',
         );
-      } else if (phase === 'preparing-unsafe') {
+      } else if (
+        ['preparing-unsafe', 'preparing-git-admin', 'preparing-registration'].includes(phase)
+      ) {
         await expect(backupProfile(profile, next)).rejects.toThrow('unsupported_rebind_output');
         expect(fs.existsSync(next)).toBe(false);
+        const owner = stores.openSqliteStore({ path: join(profile, 'runtime.sqlite') });
+        const plan = (() => {
+          try {
+            return owner.rebind.atomic((tx) => tx.record('crash-rebind'))!.preview.plan;
+          } finally {
+            owner.close();
+          }
+        })();
+        // Refusal never discards the unprovable partial evidence it refused to archive.
+        if (phase === 'preparing-unsafe')
+          expect(fs.readlinkSync(join(plan.managedDirectory, 'workspace'))).toBe('missing-slot');
+        if (phase === 'preparing-git-admin')
+          expect(fs.readFileSync(join(plan.gitAdministration, 'gitdir'), 'utf8')).toBe(
+            '/unowned/worktree/.git\n',
+          );
+        if (phase === 'preparing-registration')
+          expect(fs.readFileSync(join(profile, 'coding-projects.json'), 'utf8')).toBe('{"torn"');
       }
     } finally {
       child?.kill('SIGKILL');

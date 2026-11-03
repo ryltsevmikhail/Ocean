@@ -60,15 +60,28 @@ export class RestoredProfileFiles implements ProfileRebindFiles {
       fs.closeSync(root);
     }
     if (source.catalog.desktop) {
-      const binding = result.desktop;
+      const binding = result.desktop,
+        expected = preview.plan.desktop,
+        archived = source.catalog.desktop.inventory.binding;
       if (
         !binding ||
+        !expected ||
+        expected.profileId !== preview.origin.profileId ||
+        expected.epochId !== preview.epochId ||
+        expected.root !== join(this.profile, 'desktop-' + preview.epochId, 'tree') ||
+        expected.identity !== null ||
+        expected.archiveHash !== source.catalog.desktop.hash ||
+        binding.profileId !== preview.origin.profileId ||
+        binding.root !== expected.root ||
         binding.identity !== desktopRootIdentity(binding.root) ||
-        binding.originalRoot !== source.catalog.desktop.inventory.binding?.originalRoot ||
+        binding.originalRoot !== archived?.originalRoot ||
+        binding.identity === archived?.identity ||
         profileHash(scanAssetSource(binding.root, CODING_ASSET_LIMITS, 'desktop').manifest) !==
           profileHash(source.catalog.desktop.manifest)
       )
         throw Error('rebind_desktop_changed');
+    } else if (preview.plan.desktop !== null || result.desktop !== null) {
+      throw Error('rebind_desktop_changed');
     }
     if (join(this.profile, 'rebind-' + preview.epochId) !== preview.plan.assetDirectory)
       throw Error('invalid_rebind_identity');

@@ -89,7 +89,13 @@ function syntheticRecord(
         changesetHashes: [],
         registration: { id: 'rebind', root: projectRoot, testPresets: [], mounts: [] },
         desktop: options.desktop
-          ? { root: join(profile, 'desktop-' + epochId, 'tree'), archiveHash: 'a'.repeat(64) }
+          ? {
+              profileId: hash(profile),
+              epochId,
+              root: join(profile, 'desktop-' + epochId, 'tree'),
+              archiveHash: 'a'.repeat(64),
+              identity: null,
+            }
           : null,
         evidenceWitness: 'witness',
         inertAssets: [],
@@ -181,7 +187,7 @@ it('derives every intent selector from the durable plan and enforces consumed-st
   const ready = syntheticRecord(root, 'ready', { worktreeLease: true });
   expect(() => adapters.requireLineageOutput(ready, 'registration', true)).not.toThrow();
 });
-it('refuses dangling materialization links and torn registrations instead of omitting them', () => {
+it('refuses dangling materialization links and torn registrations without discarding their evidence', () => {
   const root = environment('lineage-shape-');
   const record = syntheticRecord(root, 'preparing', { worktreeLease: true });
   const profile = join(root, 'profile'),
@@ -189,9 +195,11 @@ it('refuses dangling materialization links and torn registrations instead of omi
   fs.mkdirSync(join(plan.managedDirectory, 'slot'), { recursive: true, mode: 0o700 });
   fs.symlinkSync('missing-slot', join(plan.managedDirectory, 'workspace'));
   expect(() => adapters.inspectLineageIntent(profile, record)).toThrow('unsupported_rebind_output');
+  expect(fs.readlinkSync(join(plan.managedDirectory, 'workspace'))).toBe('missing-slot');
   fs.unlinkSync(join(plan.managedDirectory, 'workspace'));
   fs.writeFileSync(join(profile, 'coding-projects.json'), '{"torn"', { mode: 0o600 });
   expect(() => adapters.inspectLineageIntent(profile, record)).toThrow('unsupported_rebind_output');
+  expect(fs.readFileSync(join(profile, 'coding-projects.json'), 'utf8')).toBe('{"torn"');
   fs.unlinkSync(join(profile, 'coding-projects.json'));
   fs.rmSync(plan.assetDirectory, { recursive: true });
   expect(
@@ -199,4 +207,31 @@ it('refuses dangling materialization links and torn registrations instead of omi
       .inspectLineageIntent(profile, syntheticRecord(root, 'preview'))
       .outputs.every((o) => o.presence === 'absent'),
   ).toBe(true);
+});
+it('refuses a substituted or unowned Git administration while archiving a matched partial one', () => {
+  const root = environment('lineage-git-');
+  const record = syntheticRecord(root, 'preparing', { worktreeLease: true });
+  const profile = join(root, 'profile'),
+    plan = record.preview.plan,
+    common = join(plan.worktree.gitCommonDir, 'worktrees');
+  fs.mkdirSync(common, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(plan.gitAdministration, { recursive: true, mode: 0o700 });
+  const backlink = join(plan.gitAdministration, 'gitdir');
+  fs.writeFileSync(backlink, '/foreign/worktree/.git\n', { mode: 0o644 });
+  expect(() => adapters.inspectLineageIntent(profile, record)).toThrow('unsupported_rebind_output');
+  expect(fs.readFileSync(backlink, 'utf8')).toBe('/foreign/worktree/.git\n');
+  fs.writeFileSync(backlink, join(plan.worktree.root, '.git') + '\n', { mode: 0o644 });
+  const planValues = adapters.inspectLineageIntent(profile, record);
+  expect(planValues.outputs.map((o) => o.presence)).toEqual([
+    'absent',
+    'captured',
+    'absent',
+    'absent',
+    'absent',
+  ]);
+  // A missing backlink is unowned evidence, never silently omitted.
+  fs.unlinkSync(backlink);
+  expect(() => adapters.inspectLineageIntent(profile, record)).toThrow('unsupported_rebind_output');
+  expect(fs.existsSync(plan.gitAdministration)).toBe(true);
+  fs.rmSync(plan.assetDirectory, { recursive: true, force: true });
 });

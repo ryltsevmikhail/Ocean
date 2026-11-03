@@ -262,6 +262,20 @@ exact ready epoch, older task identities cannot authorize, and old receipts,
 approvals, claims and request retries remain inert. Both original project history
 and archived changesets stay readable; only newly authorized work can execute.
 
+Desktop storage transition: the owner preview exposes the planned new-profile
+binding for the epoch as `profileId`, `epochId`, root
+`profile/desktop-<epoch>/tree`, the exact archived Desktop evidence hash and
+`identity: null`. The materialized directory's inode identity cannot exist before
+the effect, so publication fixes the real new-profile `identity` in the durable
+`desktop_assets_binding` row and verification requires it to equal
+`desktopRootIdentity(new root)` and to differ from the archived binding identity;
+the archived absolute `root`/`originalRoot` are inert provenance and are never
+opened as storage authority. Archived pre-ready operations remain exactly as
+recorded: a started preparation (including any retained alias evidence) stays
+`started`, is surfaced as an operation-scoped hold, and neither rebind nor
+storage rebinding promotes it to `completed` or retries it; a new call with that
+request id keeps returning `desktop_outcome_unknown`.
+
 Honest limits of this development source: a new selected project root is
 required, and the exact original project root/global lease is never reclaimed or
 released by rebind. A restored context without the 7.9 frozen-origin evidence
@@ -270,9 +284,19 @@ read/text-only and refuses rebind; restore again from an archive produced by thi
 code to gain the evidence. The live ready record's fresh Git administration and
 loose branch reference live under the selected project's `.git`, so a backup
 after the project is deleted refuses rather than omitting them. Desktop rebind
-materialization and live-binding capture are implemented but are not exercised by
-the recorded 7.9 synthetic qualification. A subsequent rebind can select a task
-through the bounded parent chain, but the recorded qualification only exercises
-one rebind generation plus inert restore of the activated profile. Pre-ready
-intent capture is exercised with actual SIGKILL-held partial output and with
-direct selector/refusal tests, not with every partial Git/registration shape.
+materialization and the live binding switch are exercised end to end through the
+maintenance host/SDK on a genuine source-deleted format-2 fixture with an
+enrolled binding, a completed preparation and a started operation, including two
+reopenings after an actual SIGKILL; the old absolute provenance path is replaced
+by a decoy and is never read. A later owner-confirmed rebind can select an
+archived task through the bounded parent chain: after a lineage backup, deletion
+of every previous source/archive, independent verification and restore, the
+second epoch/task materializes from the parent envelope while archived epochs,
+tasks and approvals stay inert. Pre-ready intent capture is exercised with actual
+SIGKILL-held partial materialization, a dangling workspace alias, a substituted
+Git administration/backlink and a torn registration, each of which refuses
+backup with its source evidence retained. A dedicated configurable-limit test on
+the same real session path proves stored, logical, metadata and entry ceilings
+are shared across the chain without deduplication, refuses before publication,
+retains a refused incomplete destination and shows the independent verifier
+rejects it.

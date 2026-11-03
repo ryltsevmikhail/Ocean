@@ -129,6 +129,18 @@ function shape(path: string, mode: LineageOutputMode): void {
   if (mode === 'directory' ? !stat.isDirectory() : !stat.isFile() || stat.nlink !== 1)
     throw Error('invalid_rebind_output');
 }
+/** An existing Git administration is only archivable when it still names this attempt's worktree. */
+function verifyGitAdministration(record: ProfileRebindRecord, path: string): void {
+  try {
+    if (
+      readPrivateFile(join(path, 'gitdir')).toString('utf8') !==
+      join(record.preview.plan.worktree.root, '.git') + '\n'
+    )
+      throw Error('unsupported_rebind_output');
+  } catch {
+    throw Error('unsupported_rebind_output');
+  }
+}
 /** Ready evidence must be complete. Consumed states may prove absence or capture safe partial bytes only. */
 export function requireLineageOutput(
   record: ProfileRebindRecord,
@@ -166,6 +178,7 @@ function captureOutput(
   requireLineageOutput(record, output.kind, exists);
   if (!exists) return { ...output, presence: 'absent' };
   shape(output.path, output.mode);
+  if (output.kind === 'git-administration') verifyGitAdministration(record, output.path);
   if (record.state === 'ready') verifyReadyOutput(record, output.kind, output.path);
   if (output.mode === 'file') {
     const file = readLineageFile(output.path, basename(output.path), 1048576);

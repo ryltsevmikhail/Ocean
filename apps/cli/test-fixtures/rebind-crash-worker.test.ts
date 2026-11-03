@@ -30,15 +30,34 @@ const files = {
     root: string,
   ) => real.diagnose(originValue, taskValue, root),
   prepare: async (record: Parameters<typeof real.prepare>[0]) => {
-    if (phase === 'preparing' || phase === 'preparing-unsafe') {
-      const plan = record.preview.plan;
+    const plan = record.preview.plan;
+    if (
+      ['preparing', 'preparing-unsafe', 'preparing-git-admin', 'preparing-registration'].includes(
+        phase,
+      )
+    ) {
       mkdirSync(plan.managedDirectory, { recursive: true, mode: 0o700 });
       if (phase === 'preparing')
         writeFileSync(join(plan.managedDirectory, 'partial.txt'), 'partial materialization\n', {
           mode: 0o600,
         });
-      else symlinkSync('missing-slot', join(plan.managedDirectory, 'workspace'));
+      else if (phase === 'preparing-unsafe')
+        symlinkSync('missing-slot', join(plan.managedDirectory, 'workspace'));
+      else if (phase === 'preparing-git-admin') {
+        // A substituted administration claims a foreign worktree; it cannot be archived as owned.
+        mkdirSync(join(plan.worktree.gitCommonDir, 'worktrees'), {
+          recursive: true,
+          mode: 0o700,
+        });
+        mkdirSync(plan.gitAdministration, { recursive: true, mode: 0o700 });
+        writeFileSync(join(plan.gitAdministration, 'gitdir'), '/unowned/worktree/.git\n');
+      } else writeFileSync(join(profile, 'coding-projects.json'), '{"torn"', { mode: 0o600 });
       halt('preparing');
+    }
+    if (phase === 'prepared') {
+      // Full materialization including Desktop storage is durable output before publication.
+      await real.prepare(record);
+      halt('prepared');
     }
     return real.prepare(record);
   },
