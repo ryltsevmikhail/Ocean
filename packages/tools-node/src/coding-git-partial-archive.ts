@@ -1,3 +1,4 @@
+import { verifyCodingGitPack } from './coding-git-verify.js';
 import * as fs from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import type { CodingPartialGitCapture } from './coding-git-partial.js';
@@ -236,6 +237,16 @@ function verifyArchive(
       pack.readUInt32BE(8) !== m['objectIds'].length
     )
       return fail();
+    verifyCodingGitPack(
+      {
+        baseCommit: m['baseCommit'],
+        objectFormat: m['objectFormat'] as 'sha1' | 'sha256',
+        objectIds: m['objectIds'] as string[],
+        objectBytes: Number(m['objectBytes']),
+        pack,
+      },
+      index,
+    );
     observer.verify();
     checkAssetPath(privateFd, path);
     return {

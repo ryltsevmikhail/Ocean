@@ -272,6 +272,15 @@ handle before and after copying. `verifyPartialCodingGitArchive` accepts an
 expected manifest hash, checks bounded metadata and every retained digest, and
 refuses missing/corrupt evidence. Independent tests import the pack and optional
 raw index into a fresh private Git repository after source paths disappear.
+Capture and independent archive verification also import the bounded pack into
+an isolated private Git repository with synthetic configuration. They compare
+actual packed object IDs, types and sizes with the manifest and prove the full
+base/history plus available raw-index stage, sparse-tree and REUC closure.
+SHA-1/SHA-256 and packed/delta objects are supported. Valid compressed bytes under
+a false loose-object pathname refuse before capture succeeds; archive failures
+retain the incomplete marker. Pack inflation and delta result sizes are bounded
+before native import. This verification never reads source configuration or
+writes source objects, refs or indexes.
 Tree quarantine preserves partial binary bytes, modes and inert pointer text.
 This is not profile restore, source rebind or authority revival.
 

@@ -1,12 +1,15 @@
+import { codingGitRoots } from './coding-git-roots.js';
+import { verifyCodingGitPack } from './coding-git-verify.js';
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assetDirectoryFlags, assetFdPath, checkAssetPath } from './coding-asset-io.js';
-import { unsupportedGitStorage } from './coding-git-storage.js';
+import { readGitDescriptor, unsupportedGitStorage } from './coding-git-storage.js';
 /** Pack only explicit base/index roots through sterile local Git and inherited descriptors. */
 export function packCodingGitObjects(baseCommit: string, objects: number, indexFd?: number) {
+  const index = indexFd === undefined ? null : readGitDescriptor(indexFd, 16777216);
   let scratch: string | undefined, scratchFd: number | undefined;
   const scratchEntries: string[] = [];
   let scratchRefs = false;
@@ -69,20 +72,8 @@ export function packCodingGitObjects(baseCommit: string, objects: number, indexF
         throw Error('coding_git_capture_failed');
       }
     };
-    const roots = new Set([baseCommit]);
-    let entryCount = 0;
-    for (const args of indexFd === undefined ? [] : [['--stage', '--sparse'], ['--resolve-undo']]) {
-      const output = git(['ls-files', ...args, '-z'], undefined, 16777216);
-      const records = output.toString('utf8').split('\0').filter(Boolean);
-      entryCount += records.length;
-      if (entryCount > 100000) return unsupportedGitStorage();
-      for (const record of records) {
-        const header = /^(100644|100755|120000|040000) ([a-f0-9]+) [0-3]\t/.exec(record);
-        if (!header || header[2]!.length !== baseCommit.length) return unsupportedGitStorage();
-        if (!/^0+$/.test(header[2]!)) roots.add(header[2]!);
-      }
-    }
-    const input = [...roots].join('\n') + '\n';
+    const roots = codingGitRoots(baseCommit, indexFd !== undefined, git);
+    const input = [...roots.keys()].join('\n') + '\n';
     const objectIds = git(['rev-list', '--objects', '--no-object-names', '--stdin'], input, 6500065)
       .toString('ascii')
       .trim()
@@ -137,6 +128,11 @@ export function packCodingGitObjects(baseCommit: string, objects: number, indexF
       new Set(objectIds).size !== objectIds.length
     )
       return unsupportedGitStorage();
+    try {
+      verifyCodingGitPack({ baseCommit, objectFormat, objectIds, objectBytes: bytes, pack }, index);
+    } catch {
+      throw Error('coding_git_capture_failed');
+    }
     return {
       format: 1 as const,
       baseCommit,
