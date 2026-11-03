@@ -59,8 +59,8 @@
   right: 1px;
   display: grid;
   place-items: center;
-  width: 23px;
-  height: 23px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--panel);
   padding: 0;
@@ -152,7 +152,8 @@
   padding: 12px;
 }
 .composer-box:focus-within {
-  border-color: #6488ac;
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 .composer-box .compose-line {
   border: 0;
@@ -163,7 +164,6 @@
 .composer-box #draft {
   min-height: 44px;
   max-height: 25vh;
-  outline: none;
 }
 .compose-tools,
 .compose-left {
@@ -189,6 +189,7 @@
   background: transparent;
   font-size: 24px;
   width: 32px;
+  height: 32px;
   padding: 0;
   color: var(--muted);
 }
