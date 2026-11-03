@@ -18,7 +18,12 @@ import type { CodingAccess, ProjectLease } from '@runnets/domain';
 import type { ConversationCommand, RuntimeRecovery } from '@runnets/application';
 import { SqliteProjectLeases } from '@runnets/tools-node';
 import { initialMath } from './coding-workflow-fixture.js';
-import { finishWorker, observedUnit, systemdEnv } from './coding-test-spawn-crash-cleanup.js';
+import {
+  finishWorker,
+  observedUnit,
+  running,
+  stopCgroup,
+} from './coding-test-spawn-crash-cleanup.js';
 import { createRuntime, type Runtime } from '../runtime.js';
 
 const token = 'oceanSpawn' + randomUUID().replaceAll('-', '');
@@ -27,17 +32,6 @@ const slowPreset = {
   program: '/toolchain/node',
   args: ['-e', `const ${token}=0;setTimeout(()=>{},6000);`],
   cwd: '.' as const,
-};
-const running = (): boolean => {
-  for (const entry of readdirSync('/proc')) {
-    if (!/^\d+$/.test(entry)) continue;
-    try {
-      if (readFileSync('/proc/' + entry + '/cmdline', 'utf8').includes(token)) return true;
-    } catch {
-      /* process exited while scanning */
-    }
-  }
-  return false;
 };
 async function reopen<T>(
   path: string,
@@ -199,7 +193,19 @@ async function spawnWorker(directory: string, room: string, phase: string) {
   }
   return { child, out: () => out, exit };
 }
-it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')(
+const nativeIt = it.runIf(
+  process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1',
+);
+// The clean signals systemd treats as a successful non-oneshot service exit.
+const cgroupStops = [
+  ['stopped', ['stop']],
+  ['hung up with SIGHUP', ['kill', '--signal=HUP']],
+  ['interrupted with SIGINT', ['kill', '--signal=INT']],
+  // SIGPIPE is ignored by default in Node; the main process is the only target
+  // that can expose a stop attempt silently becoming a normal exit.
+  ['broken with SIGPIPE', ['kill', '--kill-whom=main', '--signal=PIPE']],
+] as const;
+nativeIt(
   'keeps a killed runtime test claim uncertain and never passed',
   async () => {
     const f = await slowFixture();
@@ -208,10 +214,10 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
     try {
       const runtimeDeath = await spawnWorker(f.directory, f.room, 'runtime');
       try {
-        await vi.waitFor(() => expect(running()).toBe(true), { timeout: 30000 });
+        await vi.waitFor(() => expect(running(token)).toBe(true), { timeout: 30000 });
         runtimeDeath.child.kill('SIGKILL');
         expect(await runtimeDeath.exit).toEqual([null, 'SIGKILL']);
-        await vi.waitFor(() => expect(running()).toBe(false), { timeout: 30000 });
+        await vi.waitFor(() => expect(running(token)).toBe(false), { timeout: 30000 });
         for (let index = 0; index < 2; index++)
           await reopen(f.database, async (runtime, recovery) => {
             expect(recovery.effects).toMatchObject([{ tool: 'coding_test', outcome: 'uncertain' }]);
@@ -240,56 +246,54 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
   },
   120000,
 );
-it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')(
-  'records but never passes a preset whose supervised cgroup was stopped',
-  async () => {
-    const f = await slowFixture();
-    f.runtime.close();
-    chmodSync(f.database, 0o600);
-    try {
-      const cgroup = await spawnWorker(f.directory, f.room, 'cgroup');
-      let unit: string | undefined;
+for (const [label, args] of cgroupStops)
+  nativeIt(
+    `records but never passes a preset whose supervised cgroup was ${label}`,
+    async () => {
+      const f = await slowFixture();
+      f.runtime.close();
+      chmodSync(f.database, 0o600);
       try {
-        await vi.waitFor(() => expect(running()).toBe(true), { timeout: 30000 });
-        unit = observedUnit(cgroup.out());
-        expect(unit).toMatch(/^ocean-worker-[0-9a-f-]+\.service$/);
-        execFileSync('/usr/bin/systemctl', ['--user', 'stop', unit!], {
-          env: systemdEnv,
-          timeout: 10000,
-        });
-        await vi.waitFor(() => expect(cgroup.out()).toContain('done\n'), { timeout: 30000 });
-        expect(await cgroup.exit).toEqual([0, null]);
-        for (let index = 0; index < 2; index++)
-          await reopen(f.database, async (runtime) => {
-            const retained = runtime.codingEvidence!.list('task');
-            expect(retained).toHaveLength(1);
-            const test = retained[0]!;
-            expect(codingTestPassed(test)).toBe(false);
-            expect(test.beforeTreeHash).toBe(test.afterTreeHash);
-            // systemd reports the stop as a clean service exit; the supervisor's
-            // reserved SIGTERM status (75) is the child-invisible proof it was stopped.
-            expect(test.reason).toBe('exit');
-            expect(test.exitCode).toBe(75);
-            expect(test.cleanupConfirmed).toBe(true);
-            expect(await runtime.toolJournal!.pending()).toHaveLength(0);
-            const database = new DatabaseSync(f.database, { readOnly: true });
-            try {
-              expect(
-                database
-                  .prepare('SELECT outcome FROM tool_invocations_v2 WHERE tool=?')
-                  .get('coding_test'),
-              ).toMatchObject({ outcome: 'failed' });
-            } finally {
-              database.close();
-            }
-            expect(readFileSync(join(f.worktree, 'math.cjs'), 'utf8')).toBe(initialMath);
-          });
+        const cgroup = await spawnWorker(f.directory, f.room, 'cgroup');
+        let unit: string | undefined;
+        try {
+          await vi.waitFor(() => expect(running(token)).toBe(true), { timeout: 30000 });
+          unit = observedUnit(cgroup.out());
+          expect(unit).toMatch(/^ocean-worker-[0-9a-f-]+\.service$/);
+          stopCgroup(unit!, args);
+          await vi.waitFor(() => expect(cgroup.out()).toContain('done\n'), { timeout: 30000 });
+          expect(await cgroup.exit).toEqual([0, null]);
+          for (let index = 0; index < 2; index++)
+            await reopen(f.database, async (runtime) => {
+              const retained = runtime.codingEvidence!.list('task');
+              expect(retained).toHaveLength(1);
+              const test = retained[0]!;
+              expect(codingTestPassed(test)).toBe(false);
+              expect(test.beforeTreeHash).toBe(test.afterTreeHash);
+              // systemd reports every clean signal as a clean service exit; the
+              // supervisor's reserved status (75) is the proof it was stopped.
+              expect(test.reason).toBe('exit');
+              expect(test.exitCode).toBe(75);
+              expect(test.cleanupConfirmed).toBe(true);
+              expect(await runtime.toolJournal!.pending()).toHaveLength(0);
+              const database = new DatabaseSync(f.database, { readOnly: true });
+              try {
+                expect(
+                  database
+                    .prepare('SELECT outcome FROM tool_invocations_v2 WHERE tool=?')
+                    .get('coding_test'),
+                ).toMatchObject({ outcome: 'failed' });
+              } finally {
+                database.close();
+              }
+              expect(readFileSync(join(f.worktree, 'math.cjs'), 'utf8')).toBe(initialMath);
+            });
+        } finally {
+          await finishWorker(cgroup, unit ?? observedUnit(cgroup.out()));
+        }
       } finally {
-        await finishWorker(cgroup, unit ?? observedUnit(cgroup.out()));
+        f.close();
       }
-    } finally {
-      f.close();
-    }
-  },
-  120000,
-);
+    },
+    120000,
+  );

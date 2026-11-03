@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
 
 /** Host environment the sandbox supervisor itself uses for its transient user units. */
 export const systemdEnv = {
@@ -15,16 +16,34 @@ export function observedUnit(out: string): string | undefined {
   return line?.slice(5);
 }
 
+/** Run one exact external stop of the observed unit (whole cgroup unless args narrow it). */
+export function stopCgroup(unit: string, args: readonly string[]): void {
+  execFileSync('/usr/bin/systemctl', ['--user', ...args, unit], {
+    env: systemdEnv,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10000,
+  });
+}
+
 export function stopUnit(unit: string): void {
   try {
-    execFileSync('/usr/bin/systemctl', ['--user', 'stop', unit], {
-      env: systemdEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 10000,
-    });
+    stopCgroup(unit, ['stop']);
   } catch {
     /* Failure-path cleanup stays best-effort; a normal pass already stopped it. */
   }
+}
+
+/** Whether any host process still carries the unique preset token. */
+export function running(token: string): boolean {
+  for (const entry of readdirSync('/proc')) {
+    if (!/^\d+$/.test(entry)) continue;
+    try {
+      if (readFileSync('/proc/' + entry + '/cmdline', 'utf8').includes(token)) return true;
+    } catch {
+      /* process exited while scanning */
+    }
+  }
+  return false;
 }
 
 interface WorkerHandle {

@@ -182,10 +182,11 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   clearTimeout(timer);
   request.signal?.removeEventListener('abort', abort);
   await stop();
-  // The supervisor exits 75 when the host stopped its unit, and systemd maps that
-  // stop to a clean-looking status only when the main process died of SIGTERM
-  // without a handler. An admitted run with a plain exit-0 status therefore had
-  // its child exit on its own; no stdout token can be forged in this namespace.
+  // The supervisor exits 75 when the host stopped its unit with any clean signal
+  // (SIGHUP, SIGINT, SIGTERM or SIGPIPE), and systemd maps such a stop to a
+  // clean-looking status only when the main process died of that signal without a
+  // handler. An admitted run with a plain exit-0 status therefore had its child
+  // exit on its own; no stdout token can be forged in this namespace.
   if (exitCode === 0 && reason === 'exit' && !admitted) reason = 'unavailable';
   let cleanupConfirmed = false;
   if (observed.cgroup !== null) {

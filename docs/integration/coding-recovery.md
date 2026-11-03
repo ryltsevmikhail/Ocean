@@ -291,15 +291,23 @@ covered by the shared-runtime `effect` SIGKILL case and is cited, not duplicated
 
 The cgroup case exposed one genuine defect: systemd reports `SIGTERM` as a clean
 service exit, so `systemd-run --wait` returned exit 0 for an externally stopped
-unit and the runtime could record a killed preset as passed. The fix moves
-completion to a child-invisible channel in `sandbox-supervision.ts` and
+unit and the runtime could record a killed preset as passed. Review round 2 found
+the same defect for the other clean non-oneshot service signals, `SIGHUP`,
+`SIGINT` and `SIGPIPE` (which Node ignores by default). The fix moves completion
+to a child-invisible channel in `sandbox-supervision.ts` and
 `sandbox-launcher.ts`: the trusted host-side supervisor, outside the project PID
-namespace, exits with the reserved status 75 when the unit is stopped, and
+namespace, traps all four signals and exits with the reserved status 75, and
 `systemd-run --wait` propagates that non-zero status. Project code cannot signal
-or fake the supervisor, and completion no longer depends on a token embedded in
-the in-sandbox argv or on stdout bytes, so it cannot be forged and does not
-consume the retained-output limit. An admitted run whose supervisor exited 0
-without being stopped is the only shape recorded as passed; stopped or
-signal-terminated units are never passed and ordinary exit-0 runs still pass,
-including one that fills the retained-output cap exactly. This is a host-process
-qualification, not power-loss, installed artifact or Desktop GUI qualification.
+or fake the supervisor, and completion does not depend on a completion token
+embedded in the in-sandbox argv (the readiness handshake token cannot authorize
+completion) or on stdout bytes, so it cannot be forged and does not consume the
+retained-output limit. An admitted run whose supervisor exited 0
+without being stopped is the only shape recorded as passed; units stopped with
+`SIGTERM`, `SIGHUP`, `SIGINT` or `SIGPIPE` are never passed, and ordinary exit-0
+runs still pass, including one that fills the retained-output cap exactly. The
+remaining limitation is the documented exit-75 collision: a preset that itself
+exits 75 is indistinguishable from the reserved stop status and is likewise not
+passed. Native cgroup regressions cover `systemctl stop` (SIGTERM) and
+`systemctl kill` with `SIGHUP`, `SIGINT` and main-process `SIGPIPE` during a
+running registered preset. This is a host-process qualification, not power-loss,
+installed artifact or Desktop GUI qualification.

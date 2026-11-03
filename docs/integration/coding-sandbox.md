@@ -47,14 +47,20 @@ Production chat admission still requires stages 4–7.
   and cleanup. Only exact registered presets may use the backend.
 - Completion uses a child-invisible channel. The trusted host-side supervisor,
   which runs outside the project PID namespace, exits with the reserved status 75
-  when systemd stops the unit with `SIGTERM`; `systemd-run --wait` propagates
+  when systemd stops the unit with any external clean signal for non-oneshot
+  services — `SIGHUP`, `SIGINT`, `SIGTERM` or `SIGPIPE` (Node ignores `SIGPIPE`
+  by default, so the supervisor traps it too); `systemd-run --wait` propagates
   that non-zero status even though systemd otherwise reports such a stop as a
   clean service exit. Only an admitted run whose supervisor exited 0 without
   being stopped is recorded as passed, so a stopped or signal-terminated unit is
   never passed. Project code cannot signal or fake the supervisor status, no
   completion bytes are written to stdout (the retained-output cap is charged only
   for real output), and a preset that itself exits 75 is likewise not passed.
-  Ordinary exit-0 presets still retain untruncated output.
+  That exit-75 collision is the remaining limitation: the distinction between an
+  external stop and a preset's own status is lost, but a pass can never be
+  admitted. Signals systemd does not treat as clean (for example `SIGKILL` or
+  `SIGQUIT`) already yield a non-zero unit result and are never passed. Ordinary
+  exit-0 presets still retain untruncated output.
 
 ## Verification at transfer
 
