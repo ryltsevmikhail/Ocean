@@ -16,6 +16,7 @@ import { task as decodeTask, codingTransaction, participates } from './coding-st
 import { changesetStorage } from './changeset-storage.js';
 import { withImmediateTransaction } from './transaction.js';
 import { projectFinalizationHeld } from './coding-finalization-holds.js';
+import { codingClaimHolds } from './coding-finalization-claims.js';
 const columns = 'request_id,task_id,project_root,state,revision,binding_digest,payload';
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 /** Any active or finalized finalization for a task blocks a second operation. */
@@ -204,19 +205,7 @@ export function finalizationStore(
                 outcome: 'pending',
                 scope: 'task',
               });
-            for (const row of db
-              .prepare(
-                `SELECT c.invocation_key AS id FROM ocean_coding_approval_claims c
-              JOIN ocean_coding_approvals a ON a.id=c.approval_id
-              WHERE json_extract(a.payload,'$.binding.taskId')=?`,
-              )
-              .all(taskId))
-              holds.push({
-                id: String(row['id']),
-                kind: 'claim',
-                outcome: 'claimed',
-                scope: 'task',
-              });
+            holds.push(...codingClaimHolds(db, currentTask(taskId)));
             for (const row of db
               .prepare(
                 "SELECT id FROM ocean_coding_review_requests WHERE json_extract(payload,'$.binding.taskId')=? AND json_extract(payload,'$.status') IN ('requested','dispatching','uncertain')",
