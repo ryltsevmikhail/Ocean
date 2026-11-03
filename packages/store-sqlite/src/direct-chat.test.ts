@@ -235,6 +235,7 @@ it('requires an injected task factory and binds task identity into the durable c
         seen.push(turn.codingTaskId!);
         return {
           instructions: 'Task-scoped coding instructions',
+          cleanupConfirmed: true as const,
           definitions: [],
           execute: async () => ({ isError: true, output: 'unused' }),
         };

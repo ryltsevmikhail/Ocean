@@ -61,7 +61,6 @@ it('rejects command identity reuse with another task, actor, version or payload'
   for (const variant of variants) expect((await service.execute(variant)).ok).toBe(false);
   expect(await log.load(taskRunId('tr_other'))).toHaveLength(0);
 });
-
 it('rolls back events if the atomic receipt insert fails', async () => {
   const { db, log, service } = setup();
   db.exec(`CREATE TRIGGER reject_receipt BEFORE INSERT ON command_receipts
@@ -211,23 +210,27 @@ it('binds the decision to a request snapshot taken before asynchronous work', as
 });
 it('rejects a different cancellation binding before decoding the original command’s event data', async () => {
   const { db, service } = setup();
-  const created = await service.execute(command);
-  expect(created.ok).toBe(true);
-  const cancel: AnyCommand = {
-    commandId: 'room-cancel-same',
-    taskRunId: command.taskRunId,
-    expectedVersion: 1,
-    type: 'RequestCancel',
-    actor: { kind: 'user', id: 'owner' },
-    payload: { cause: 'room one' },
-  };
-  expect((await service.execute(cancel)).ok).toBe(true);
-  db.prepare(
-    "UPDATE command_receipts SET events='private undecodable event' WHERE command_id=?",
-  ).run(cancel.commandId);
-  await expect(
-    service.lookupCommand({ ...cancel, payload: { cause: 'room two' } }),
-  ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } });
+  try {
+    const created = await service.execute(command);
+    expect(created.ok).toBe(true);
+    const cancel: AnyCommand = {
+      commandId: 'room-cancel-same',
+      taskRunId: command.taskRunId,
+      expectedVersion: 1,
+      type: 'RequestCancel',
+      actor: { kind: 'user', id: 'owner' },
+      payload: { cause: 'room one' },
+    };
+    expect((await service.execute(cancel)).ok).toBe(true);
+    db.prepare(
+      "UPDATE command_receipts SET events='private undecodable event' WHERE command_id=?",
+    ).run(cancel.commandId);
+    await expect(
+      service.lookupCommand({ ...cancel, payload: { cause: 'room two' } }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } });
+  } finally {
+    db.close();
+  }
 });
 it('settles a cancelling active attempt once and keeps an actual budget overrun terminal without claiming cleanup', async () => {
   const { db, service, log } = setup();

@@ -20,6 +20,12 @@ export async function pages<T, K extends number | string>(
     after = next;
   }
 }
+export function readRoomRuns(room: string) {
+  return pages(
+    (after: string | undefined) => call({ op: 'runs', room, after }),
+    (r) => r.turnId,
+  );
+}
 export function useRoomFeed(preview: (roomId: string, message: Message) => void) {
   const history = ref<Message[]>([]),
     runs = ref<Run[]>([]),
@@ -51,10 +57,7 @@ export function useRoomFeed(preview: (roomId: string, message: Message) => void)
           (m) => m.seq,
           reset ? 0 : (history.value.at(-1)?.seq ?? 0),
         );
-        const snapshots = await pages(
-          (after: string | undefined) => call({ op: 'runs', room, after }),
-          (r) => r.runId,
-        );
+        const snapshots = await readRoomRuns(room);
         if (token !== epoch) return;
         if (reset) history.value = messages;
         else history.value = history.value.concat(messages);

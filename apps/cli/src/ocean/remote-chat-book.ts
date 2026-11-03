@@ -18,6 +18,7 @@ export class RemoteChatRunBook implements RunBookPort {
   readonly #taskId: string | undefined;
   #sync: Promise<void> = Promise.resolve();
   #first = true;
+  #resyncAt = 0;
   #confirmed: { prompt: string; receipt: LocalTurnReceipt } | null = null;
   #redraw: (selection?: ScreenEntry) => void = () => {};
   constructor(connection: RoomConnection, roomId: string, taskId?: string) {
@@ -110,8 +111,12 @@ export class RemoteChatRunBook implements RunBookPort {
         const observed = await this.#connection.withClient((c) =>
           c.observeRoom({ ...this.#view.scope, ...(cursor ? { cursor } : {}), waitMs: 750 }),
         );
-        if (observed.kind !== 'timeout' || this.#view.active || this.#confirmed || reset)
-          await this.#refresh(reset || observed.kind === 'resync');
+        const resync = Date.now() >= this.#resyncAt;
+        if (observed.kind !== 'timeout' || this.#view.active || this.#confirmed || reset || resync)
+          await this.#refresh(
+            reset || observed.kind === 'resync' || resync,
+            observed.kind !== 'timeout',
+          );
         cursor = observed.cursor;
         reset = false;
       } catch (e) {
@@ -130,10 +135,11 @@ export class RemoteChatRunBook implements RunBookPort {
       }
     }
   }
-  #refresh(reset: boolean) {
+  #refresh(reset: boolean, changed = true) {
     const sync = this.#sync.then(async () => {
       await this.#connection.withClient((c) => this.#view.refresh(c, reset));
-      await this.#decisions.refresh();
+      await this.#decisions.refresh(reset || changed);
+      if (reset) this.#resyncAt = Date.now() + 30000;
       this.#view.observationError('');
       if (this.#confirmed && this.#view.observed(this.#confirmed.receipt)) this.#confirmed = null;
       this.#redraw();

@@ -90,6 +90,7 @@ export const message = z.object({
   attachments: z.array(attachment).max(4).optional(),
 });
 export const run = z.object({
+  turnId: id,
   messageId: id,
   roomId: id,
   runId: id,

@@ -31,7 +31,7 @@ export async function damagedPreparation(page, f, userData, room, original, comm
   const retry = page.getByRole('button', { name: 'Повторить исходный запрос' });
   const feedback = page.locator('#feedback');
   const drop = join(f.root, 'requests.drop');
-  writeFileSync(drop, ''); // Also lose one receipt lookup, after the local retry failure.
+  writeFileSync(drop, ''); // A local failure must never try an identity-only receipt lookup.
   try {
     await retry.click();
     await page.waitForFunction(
@@ -43,7 +43,7 @@ export async function damagedPreparation(page, f, userData, room, original, comm
       'a local preparation error must retain the earlier unconfirmed submission',
     );
     assert.ok((await feedback.innerText()).includes(original));
-    assert.equal(existsSync(drop), false, 'the retry must read the scoped owner receipt');
+    assert.equal(existsSync(drop), true, 'local failure must not read an unbound owner receipt');
     // A rebound local record reports request_conflict before admission. It must
     // neither discard the pending UUID nor turn a lookup into changed-input success.
     writeFileSync(path, JSON.stringify({ ...record, to: 'review' }));
@@ -54,8 +54,8 @@ export async function damagedPreparation(page, f, userData, room, original, comm
     assert.ok((await feedback.innerText()).includes(original));
     assert.ok(existsSync(drop), 'a binding conflict must not consume an owner receipt');
     unlinkSync(drop);
-    // A missing receipt and blob also prevent preparation. Recover the original
-    // admission without the local bytes, then restore them for the reopen checks.
+    // With neither the prepared binding nor bytes, the draft must remain unresolved.
+    // Restoring the frozen prepared binding permits exact admission without the blob.
     unlinkSync(path);
     const blobPath = join(folder, record.ids[0], 'blob');
     const bytes = readFileSync(blobPath);
@@ -70,6 +70,11 @@ export async function damagedPreparation(page, f, userData, room, original, comm
       });
       assert.deepEqual(changedText.error, { code: 'request_conflict', sendStage: 'refused' });
       await retry.click();
+      await feedback.filter({ hasText: 'Не удалось открыть вложение.' }).waitFor();
+      assert.equal(await draft.isDisabled(), true);
+      assert.ok((await feedback.innerText()).includes(original));
+      writeFileSync(path, JSON.stringify(record));
+      await retry.click();
       await feedback
         .getByText('Принято · ' + committed.messageId + ' · ' + committed.runId)
         .waitFor();
@@ -80,7 +85,7 @@ export async function damagedPreparation(page, f, userData, room, original, comm
     writeFileSync(path, JSON.stringify(record));
   }
   console.log(
-    'Corrupt preparation and lost receipt read retained UUID; missing local bytes recovered the original scoped receipt; changed send refused',
+    'Corrupt or missing preparation retained UUID and draft; frozen binding recovered admission with missing blob; changed send refused',
   );
 }
 

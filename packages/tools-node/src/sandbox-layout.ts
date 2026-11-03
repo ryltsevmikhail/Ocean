@@ -3,6 +3,7 @@ import { join, relative as pathRelative } from 'node:path';
 import { ToolError } from '@runnets/application';
 import { validateMounts, type SandboxMount } from './sandbox-mounts.js';
 import { blockedName } from './backend.js';
+import { WORKER_SYSTEM_TREES } from './worker-system-paths.js';
 
 export const SANDBOX_NODE = '/toolchain/node';
 export const sandboxLimits = Object.freeze({
@@ -95,9 +96,7 @@ export function sandboxArgv(
     '--cap-drop',
     'ALL',
     '--clearenv',
-    '--ro-bind',
-    '/usr',
-    '/usr',
+    ...WORKER_SYSTEM_TREES.flatMap((path) => ['--ro-bind', path, path]),
     '--symlink',
     'usr/bin',
     '/bin',

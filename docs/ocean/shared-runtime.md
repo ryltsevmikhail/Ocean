@@ -44,13 +44,13 @@ stop/signal; `ocean runtime status --profile PATH --json` verifies the handshake
 management is supported; automatic spawning, bundled desktop lifecycle and
 system-wide service installation are outside this first delivery.
 
-Use a canonical private profile and a short Unix-socket path in an owned 0700
+Runtime endpoint directories under the worker-visible `/usr` tree are refused. Use a canonical private profile and a short Unix-socket path in an owned 0700
 runtime directory under XDG_RUNTIME_DIR, or a verified private fallback. The
 connection descriptor is 0600 and binds profile identity, protocol 1, runtime
 instance, endpoint and a random authentication capability. Socket is 0600.
 Check ownership/modes/nofollow/canonical bindings before connection/publication.
 Never follow/remove arbitrary stale paths or rely on PID alone for takeover.
-SQLite ownership is the authoritative single-owner guard. After recovery, ordinary
+SQLite ownership is the authoritative single-owner guard. Owner records bind boot and PID namespace before schema/recovery writes; unverifiable legacy or foreign-namespace records refuse takeover even when their numeric PID is absent locally. Stop older owners cleanly before an upgrade. After recovery, ordinary
 start may retire a dead predecessor's exact SQLite-attested files in the same
 private layout. It pins and checks the file and mount identities, requires a
 definitive refused connection, and rechecks the binding before retirement.

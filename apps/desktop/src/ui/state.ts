@@ -146,7 +146,7 @@ export function useDesktop() {
     };
 
     try {
-      const result = await submitDraft(command, original !== undefined);
+      const result = await submitDraft(command);
       admittedRun.value = result.runId;
       receipt.value = 'Принято · ' + result.messageId + ' · ' + (result.runId ?? 'recorded');
       unconfirmed.delete(r.id);

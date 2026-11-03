@@ -29,6 +29,7 @@ import { REVIEW_TABLES, migrateReviews } from './review-schema.js';
 import { readText } from './rows.js';
 
 import { migrateOwnerDecisions } from './owner-decisions.js';
+import { ownerBusy } from './maintenance-owner.js';
 export const SCHEMA_VERSION = 11;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
@@ -96,13 +97,17 @@ export function assertBusyTimeout(busyTimeoutMs: number): void {
  * The connection is closed again when the profile or the schema check fails, so
  * a caller never receives a half-initialized handle.
  */
-export function openDatabase(path: string, busyTimeoutMs: number): DatabaseSync {
+export function openDatabase(
+  path: string,
+  busyTimeoutMs: number,
+  requireOwnerAbsent = false,
+): DatabaseSync {
   assertBusyTimeout(busyTimeoutMs);
   const db = new DatabaseSync(path, { enableForeignKeyConstraints: true });
   try {
     db.exec('PRAGMA synchronous = FULL');
     db.exec('PRAGMA busy_timeout = ' + String(busyTimeoutMs));
-    initializeSchema(db);
+    initializeSchema(db, requireOwnerAbsent);
     applyDurabilityProfile(db, busyTimeoutMs);
     if (path !== ':memory:') assertWalMode(db);
     return db;
@@ -132,20 +137,26 @@ export function applyDurabilityProfile(db: DatabaseSync, busyTimeoutMs: number):
  * An existing database must carry the supported schema version and every table;
  * anything else is refused rather than silently overwritten.
  */
-export function initializeSchema(db: DatabaseSync): void {
+export function initializeSchema(db: DatabaseSync, requireOwnerAbsent = false): void {
   if (db.isTransaction) throw new Error('Schema initialization requires its own transaction');
   const foreignKeys = db.prepare('PRAGMA foreign_keys').get()?.['foreign_keys'] === 1;
   // Parent-table replacement is isolated in one transaction and checked before commit.
   if (foreignKeys) db.exec('PRAGMA foreign_keys=OFF');
   try {
-    initializeSchemaTransaction(db);
+    initializeSchemaTransaction(db, requireOwnerAbsent);
   } finally {
     if (foreignKeys) db.exec('PRAGMA foreign_keys=ON');
   }
 }
-function initializeSchemaTransaction(db: DatabaseSync): void {
+function initializeSchemaTransaction(db: DatabaseSync, requireOwnerAbsent: boolean): void {
   db.exec('BEGIN IMMEDIATE');
   try {
+    // Prospective execution ownership is checked inside the schema transaction before writes.
+    if (requireOwnerAbsent && ownerBusy(db))
+      throw Object.assign(
+        Error('Durable runtime is owned by a live or unverified process; refusing recovery'),
+        { code: 'owner_busy' },
+      );
     const existing = userTables(db);
     let previousVersion = 1;
     if (!existing.has('meta')) {

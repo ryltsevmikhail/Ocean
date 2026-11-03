@@ -27,9 +27,12 @@ function privateFile(path: string, directory: boolean): void {
     throw Error('Unsafe project lease registry');
 }
 export class SqliteProjectLeases implements ProjectLeasePort {
-  readonly #directory: string;
-  constructor(directory = defaultProjectLeaseDirectory()) {
-    this.#directory = directory;
+  readonly #configured: string | undefined;
+  constructor(directory?: string) {
+    this.#configured = directory;
+  }
+  get #directory(): string {
+    return this.#configured ?? defaultProjectLeaseDirectory();
   }
   #open(): DatabaseSync {
     mkdirSync(this.#directory, { recursive: true, mode: 0o700 });

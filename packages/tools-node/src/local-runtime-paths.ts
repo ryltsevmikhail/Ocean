@@ -15,6 +15,7 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { localRuntimeRecord, type LocalRuntimeDescriptor } from '@runnets/contracts';
+import { workerVisibleSystemPath } from './worker-system-paths.js';
 export interface LocalRuntimePaths {
   readonly profile: string;
   readonly profileId: string;
@@ -84,6 +85,7 @@ function checkedPaths(profile: string, allowMissing: boolean): LocalRuntimePaths
     if (existsSync(root)) assertLocalPrivate(root, 'directory');
   }
   const directory = join(root, 'ocean-' + profileId.slice(0, 24));
+  if (workerVisibleSystemPath(directory)) fail('worker_visible_endpoint');
   const endpoint = join(directory, 'runtime.sock');
   if (Buffer.byteLength(endpoint) > 103) fail('endpoint_path_too_long');
   return {

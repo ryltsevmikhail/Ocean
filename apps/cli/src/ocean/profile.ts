@@ -29,8 +29,8 @@ export function canonicalWorkspace(path: string): string {
 }
 
 export function profileDirectory(profile?: string): string {
-  const state = process.env['XDG_STATE_HOME'] ?? join(homedir(), '.local', 'state');
-  const directory = profile === undefined ? join(state, 'ocean') : profile;
+  const directory =
+    profile ?? join(process.env['XDG_STATE_HOME'] ?? join(homedir(), '.local', 'state'), 'ocean');
   if (!isAbsolute(directory)) throw new Error('invalid_input');
   return directory;
 }

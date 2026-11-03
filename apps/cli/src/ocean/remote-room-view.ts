@@ -42,6 +42,9 @@ export class RemoteRoomView {
   readonly scope: LocalRoomScope;
   readonly #members = new Map<string, LocalMemberSummary>();
   readonly #positions = new Map<string, number>();
+  readonly #byRun = new Map<string, ScreenEntry>();
+  readonly #active = new Set<string>();
+  #emptyDraft: ScreenEntry | undefined;
   #stream: StreamLine[] = [];
   #seq = 0;
   #roomNotice = '';
@@ -71,12 +74,10 @@ export class RemoteRoomView {
     this.providerId = room.kind === 'group' ? 'group' : (members[0]?.provider ?? null);
   }
   get active() {
-    return this.entries.some(
-      (e) => e.remote && ['accepted', 'dispatching', 'prepared'].includes(e.remote.turnStatus),
-    );
+    return this.#active.size > 0;
   }
   draft(): ScreenEntry {
-    const existing = this.entries.find((e) => e.taskRunId === null);
+    const existing = this.#emptyDraft;
     if (existing) return existing;
     const entry: ScreenEntry = {
       taskRunId: null,
@@ -86,6 +87,7 @@ export class RemoteRoomView {
       liveMode: null,
     };
     this.entries.push(entry);
+    this.#emptyDraft = entry;
     this.paint();
     return entry;
   }
@@ -103,13 +105,18 @@ export class RemoteRoomView {
   observed(receipt: LocalTurnReceipt) {
     return (
       this.#positions.has(receipt.messageId) &&
-      (!receipt.runId || this.entries.some((e) => e.remote?.runId === receipt.runId))
+      (!receipt.runId || this.#byRun.get(receipt.runId)?.remote !== undefined)
     );
   }
   confirm(receipt: LocalTurnReceipt) {
-    const entry = this.entries.find((e) => e.taskRunId === receipt.runId) ?? this.draft();
+    const entry = (receipt.runId && this.#byRun.get(receipt.runId)) || this.draft();
     entry.taskRunId = receipt.runId ? taskRunId(receipt.runId) : null;
     entry.receipt = receipt;
+    if (receipt.runId) {
+      this.#byRun.set(receipt.runId, entry);
+      this.#active.add(receipt.runId);
+      this.#emptyDraft = undefined;
+    }
     this.#receiptNotice =
       'Receipt ' +
       receipt.requestId +
@@ -142,10 +149,21 @@ export class RemoteRoomView {
       (m) => m.seq,
       reset ? 0 : this.#seq,
     );
-    const runs = await pages<LocalObservedRun, string>(
-      (after) => c.listRuns({ ...this.scope, ...afterPage(after) }),
-      (r) => r.turnId,
-    );
+    // New admissions have random IDs, so history growth requires a full run discovery.
+    // Between those scans only live runs can change without a new room message.
+    const runs =
+      reset || messages.some((m) => m.author === 'user')
+        ? await pages<LocalObservedRun, string>(
+            (after) => c.listRuns({ ...this.scope, ...afterPage(after) }),
+            (r) => r.turnId,
+          )
+        : await Promise.all(
+            [...this.#active].map(async (runId) => {
+              const run = await c.getRun({ ...this.scope, runId });
+              if (!run) throw Error('unknown_run');
+              return { ...run, pendingDecisionIds: run.pendingDecisionIds ?? [] };
+            }),
+          );
     if (reset) {
       this.#stream = [];
       this.#seq = 0;
@@ -168,10 +186,12 @@ export class RemoteRoomView {
     this.paint();
   }
   async #update(c: LocalRuntimeClient, r: LocalObservedRun, reset: boolean) {
-    let entry = this.entries.find((e) => e.taskRunId === r.runId);
+    let entry = this.#byRun.get(r.runId);
     if (!entry) {
       entry = this.draft();
       entry.taskRunId = taskRunId(r.runId);
+      this.#byRun.set(r.runId, entry);
+      this.#emptyDraft = undefined;
     }
     const after = reset ? 0 : (entry.events.at(-1)?.sequence ?? 0);
     if (r.version !== after || reset) {
@@ -183,6 +203,8 @@ export class RemoteRoomView {
       entry.events = [...(reset ? [] : entry.events), ...events];
     }
     entry.remote = r;
+    if (['accepted', 'dispatching', 'prepared'].includes(r.turnStatus)) this.#active.add(r.runId);
+    else this.#active.delete(r.runId);
     const bot = this.#members.get(r.performerId);
     if (bot) entry.performer = bot;
   }

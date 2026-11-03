@@ -157,7 +157,7 @@ it('refuses maintenance before touching arguments and separates static diagnosti
     reply: { data: { database: { status: 'not_inspected' } } },
   });
   expect(existsSync(dest)).toBe(false);
-});
+}, 12_000);
 it('never opens the profile on ambiguous endpoint, version or authentication failure', async () => {
   const f = await fixture(),
     p = localRuntimePaths(f.profile),

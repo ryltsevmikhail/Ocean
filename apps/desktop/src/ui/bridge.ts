@@ -36,21 +36,8 @@ export async function call<K extends Command['op']>(
   return data.data as z.infer<(typeof outputs)[K]>;
 }
 
-// Only an already-retained command can recover after local preparation fails.
-// New submissions and binding conflicts must go through binding-checked admission.
-export async function submitDraft(command: Extract<Command, { op: 'send' }>, retry: boolean) {
-  try {
-    return await call(command);
-  } catch (e) {
-    if (
-      !retry ||
-      !(e instanceof SendFailure) ||
-      e.stage !== 'preparation' ||
-      e.message === 'request_conflict'
-    )
-      throw e;
-    const receipt = await call({ op: 'receipt', room: command.room, requestId: command.requestId });
-    if (!receipt) throw e;
-    return receipt;
-  }
+// A receipt lookup proves identity only. Every automatic success must pass binding-checked
+// admission. AttachmentHost persists the exact prepared body before its first submission.
+export async function submitDraft(command: Extract<Command, { op: 'send' }>) {
+  return call(command);
 }

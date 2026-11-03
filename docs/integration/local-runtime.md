@@ -16,7 +16,7 @@ pnpm ocean runtime start --profile /absolute/private/profile --json
 
 Start stays in the foreground and emits a ready status only after exclusive
 SQLite ownership and existing conversation, coding-apply and effect-journal
-recovery succeed. Starting the Linux owner requires the system Python 3 interpreter at
+recovery succeed. The owner row binds its UUID and PID to Linux boot and PID-namespace identities. Before any schema write, recovery ownership checks the existing row inside the schema transaction; acquisition rechecks under its own immediate transaction. Only an owner from the same boot and PID namespace with definitively absent PID can be replaced. Legacy records, another namespace or boot, and unreadable evidence remain `owner_busy`, including maintenance inspection/backup and migration. Stop an older owner cleanly before upgrading. Unverifiable stale rows require separately qualified administrative recovery; there is no force-takeover command. Starting the Linux owner requires the system Python 3 interpreter at
 `/usr/bin/python3` for its socket bootstrap. Missing bootstrap support refuses
 startup with `endpoint_verification_unavailable`. The foreground host resolves its provider from its own environment.
 A synthetic or disabled provider can be injected by host composition. A
@@ -86,7 +86,7 @@ pnpm ocean tui --profile /absolute/private/profile --room ROOM_ID
 pnpm ocean tui --profile /absolute/private/profile --room ROOM_ID --task TASK_ID
 ```
 
-The header uses room members and the admitted performer. Enter submits a message. In a group, a leading `@handle` addresses one bot. Unaddressed posts have a message receipt and no run. The TUI immediately displays the confirmed message and admitted run IDs. Room reads continue separately. Until the corresponding history and run are observed, repeating the same input shows the retained receipt and Enter keeps a different message in the editor. Press Enter again after history updates to send that draft. A read error is displayed beside that receipt while the client retries observation. An idle terminal reauthenticates and resynchronizes after a runtime instance change. F2 selects a run, F3 shows scoped event names and sequence numbers, and F4 shows the run version, performer, result ID and pending decision IDs. The dialogue follows committed room history, including posts from other clients.
+The header uses room members and the admitted performer. Enter submits a message. In a group, a leading `@handle` addresses one bot. Unaddressed posts have a message receipt and no run. The TUI immediately displays the confirmed message and admitted run IDs. Room reads continue separately. Until the corresponding history and run are observed, repeating the same input shows the retained receipt and Enter keeps a different message in the editor. Press Enter again after history updates to send that draft. A read error is displayed beside that receipt while the client retries observation. An idle terminal reauthenticates and resynchronizes after a runtime instance change. F2 selects a run, F3 shows scoped event names and sequence numbers, and F4 shows the run version, performer, result ID and pending decision IDs. The dialogue follows committed room history, including posts from other clients. Active polling indexes entries by run ID and refreshes only active run snapshots and pending decision cards between full discovery passes. It caches confirmed continuation receipts. New user history, decision-change notices, explicit operations and resyncs discover changed projections; a full resync also runs at least every 30 seconds while the client is connected.
 
 `/quit`, EOF, terminal hangup and SIGTERM detach. Escape in the dialogue or Ctrl+C on a selected active run requests version-bound cancellation when the status row shows its complete run ID and bracketed version. Enlarge a compact or clipped terminal to reveal the binding. The receipt confirms the request. Run and turn state report eventual settlement. Escape in a panel closes it. Closing the client during an owner decision leaves the decision pending. The legacy standalone `tui` without `--room` retains its embedded execution lifecycle.
 
@@ -121,7 +121,7 @@ and `connection.json` (0600). The descriptor is published without replacement,
 after recovery and listening, and binds protocol 1, profile, instance, endpoint
 and a fresh 256-bit capability. It is private credential material: do not print,
 copy into transcripts, commit or expose it or the endpoint to model workers.
-All clients must use the same runtime-directory environment.
+All clients must use the same runtime-directory environment. Effective endpoint directories under `/usr` refuse `worker_visible_endpoint` before startup; this tree is shared with production coding workers. Normal private XDG paths and the short private `/tmp` fallback remain supported. Explicit profiles do not require HOME/passwd discovery for status or text-runtime startup. Default coding worktree and lease locations resolve only when those adapters are used.
 
 The public Node client is exported by `@runnets/tools-node`:
 
@@ -288,7 +288,7 @@ Terminal provider evidence and executor settlement determine the subsequent
 run state. A lost stream can leave the run cancelling and the turn uncertain,
 with no committed cleanup. Actual usage for the same active attempt still
 settles during cancellation. An overrun commits the budget terminal event and
-retains the cancellation cause. The effect and room uncertainty remain visible.
+retains the cancellation cause. The effect and room uncertainty remain visible. Cancellation during successful coding preparation waits for the preparation promise and its explicit cleanup evidence, then settles the existing cancellation before any provider attempt. An unknown qualification outcome keeps the turn uncertain and the room/drain held even when no tool claim exists. A typed pre-launch admission refusal remains distinguishable from work whose cleanup is unproven.
 
 ## Owner decisions and text-only continuation
 
@@ -411,6 +411,10 @@ takeover command. On clean stop, a replaced descriptor is preserved. A replaced
 socket or uncertain execution drain gives an incomplete stop and retains the
 owner. Identity checks and filesystem mutations share the existing trusted
 same-UID host boundary.
+
+## Source and process test presets
+
+`pnpm test` runs source tests without a prior workspace build. `pnpm test:process` builds the normal CLI/package entry points and then runs the separate process matrix. `pnpm check` includes both suites after typecheck and lint, so process coverage remains a required default contributor gate. `OCEAN_SANDBOX_NATIVE=1 pnpm test:process` also enables the native cases in that matrix; additional sandbox-native suites remain separately qualified. The cold production test preset remains `pnpm --config.verify-deps-before-run=false test --configLoader native`, with the existing 60-second, 2-GiB, 256-task and 32-KiB limits. Current resource qualification is recorded separately; passing host tests alone does not qualify that preset.
 
 ## Committed-source process qualification
 

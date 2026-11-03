@@ -3,6 +3,7 @@ import type { ChatTurn, CodingTask } from '@runnets/domain';
 import {
   CodingTurnTools,
   ToolError,
+  ChatPreparationRefusal,
   type CodingTaskService,
   type CodingTestEvidenceStore,
   type CodingStore,
@@ -18,11 +19,7 @@ import {
 } from '@runnets/tools-node';
 
 // Raised only by host admission checks before launching any sandbox or provider.
-export class CodingTurnRefusal extends ToolError {
-  constructor(message: string) {
-    super('coding_denied', message);
-  }
-}
+export class CodingTurnRefusal extends ChatPreparationRefusal {}
 
 export interface CodingTurnFactoryDeps {
   readonly store: CodingStore;
@@ -38,7 +35,7 @@ export interface CodingTurnFactoryDeps {
 /** Host composition only. Configuration is supplied by the owner, never model arguments. */
 export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
   return {
-    async forTurn(turn: ChatTurn, signal: AbortSignal): Promise<CodingTurnTools> {
+    async forTurn(turn: ChatTurn, signal: AbortSignal) {
       signal.throwIfAborted();
       if (!turn.codingTaskId) throw new CodingTurnRefusal('explicit task required');
       const access = {
@@ -82,30 +79,33 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
       });
       if (!authorized())
         throw new ToolError('coding_denied', 'task authority changed during qualification');
-      return new CodingTurnTools({
-        definitions: TOOL_DEFINITIONS,
-        presets: task.policy.testPresets,
-        approvals: deps.approvals,
-        owner: deps.owner(turn, signal),
-        journal: deps.journal,
-        taskRunId: turn.taskRunId,
-        nextId: () => randomUUID(),
-        admit: () => authorized(),
-        read: (call, signal) => session.read(call, signal),
-        prepare: async (id, call, context) => {
-          const operation = await session.prepare(id, call, context.attemptId);
-          return {
-            ...operation,
-            currentBinding: async () => {
-              if (!deps.inspectSandbox)
-                throw new ToolError('coding_denied', 'read-only sandbox inspection required');
-              if (JSON.stringify(await deps.inspectSandbox(task)) !== JSON.stringify(sandbox))
-                throw new ToolError('coding_denied', 'registration changed');
-              return operation.currentBinding();
-            },
-          };
-        },
-      });
+      return Object.assign(
+        new CodingTurnTools({
+          definitions: TOOL_DEFINITIONS,
+          presets: task.policy.testPresets,
+          approvals: deps.approvals,
+          owner: deps.owner(turn, signal),
+          journal: deps.journal,
+          taskRunId: turn.taskRunId,
+          nextId: () => randomUUID(),
+          admit: () => authorized(),
+          read: (call, signal) => session.read(call, signal),
+          prepare: async (id, call, context) => {
+            const operation = await session.prepare(id, call, context.attemptId);
+            return {
+              ...operation,
+              currentBinding: async () => {
+                if (!deps.inspectSandbox)
+                  throw new ToolError('coding_denied', 'read-only sandbox inspection required');
+                if (JSON.stringify(await deps.inspectSandbox(task)) !== JSON.stringify(sandbox))
+                  throw new ToolError('coding_denied', 'registration changed');
+                return operation.currentBinding();
+              },
+            };
+          },
+        }),
+        { cleanupConfirmed: true as const },
+      );
     },
   };
 }

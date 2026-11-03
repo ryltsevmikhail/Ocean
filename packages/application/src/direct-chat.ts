@@ -29,7 +29,8 @@ export type { ChatAdmissionReceipt, ReceiptQuery, RunQuery } from './chat-receip
 export type { ChatAdmissionMode, DirectChatRequest } from './direct-chat-admission.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
 import type { TurnUpdate } from './turn-update.js';
-import { executeStep } from './commands.js';
+import { cancelBeforeDispatch, ChatPreparationRefusal } from './chat-preparation.js';
+export { ChatPreparationRefusal } from './chat-preparation.js';
 import type { TurnInput } from './types.js';
 import { runTurn } from './turn.js';
 
@@ -42,7 +43,11 @@ export interface RecordedRoomMessage {
 export interface DirectChatDeps extends ConversationServiceDeps {
   readonly tasks: TaskRunService;
   readonly codingTools?: {
-    forTurn(turn: ChatTurn, signal: AbortSignal): Promise<NonNullable<TurnInput['tools']>>;
+    /** Successful preparation must join its workers and prove their cleanup before returning. */
+    forTurn(
+      turn: ChatTurn,
+      signal: AbortSignal,
+    ): Promise<NonNullable<TurnInput['tools']> & { readonly cleanupConfirmed: true }>;
   };
 }
 export interface SubmitDirectInput extends DirectChatRequest {
@@ -124,6 +129,14 @@ export class DirectChatService {
   ): Promise<ChatTurn> {
     const { tasks, store, clock } = this.#deps;
     const id = taskRunId(turn.taskRunId);
+    let preparationStarted = false,
+      preparationSettled = turn.codingTaskId === undefined;
+    const cancelled = async () => {
+      if (!(await cancelBeforeDispatch(tasks, turn, input.signal))) return null;
+      const next = { ...turn, status: 'cancelled' as const };
+      updateChat(store, turn, next);
+      return next;
+    };
     try {
       const created = await tasks.execute({
         type: 'CreateTaskRun',
@@ -141,31 +154,17 @@ export class DirectChatService {
         },
       });
       if (!created.ok) throw created.error;
-      if (input.signal.aborted) {
-        const cancel = await executeStep(
-          tasks,
-          id,
-          'RequestCancel',
-          { cause: 'client cancelled' },
-          created.value.version,
-        );
-        if (!cancel.ok) throw cancel.error;
-        const cleaned = await executeStep(
-          tasks,
-          id,
-          'CompleteCleanup',
-          { cleanup: 'completed' },
-          cancel.value.version,
-        );
-        if (!cleaned.ok) throw cleaned.error;
-        const next = { ...turn, status: 'cancelled' as const };
-        updateChat(store, turn, next);
-        return next;
-      }
+      const early = await cancelled();
+      if (early) return early;
+      preparationStarted = turn.codingTaskId !== undefined;
       const tools =
         turn.codingTaskId === undefined
           ? undefined
           : await this.#deps.codingTools!.forTurn(turn, input.signal);
+      if (tools && tools.cleanupConfirmed !== true) throw Error('preparation cleanup unknown');
+      preparationSettled = true;
+      const afterPreparation = await cancelled();
+      if (afterPreparation) return afterPreparation;
       const dispatched = { ...turn, status: 'dispatching' as const };
       updateChat(store, turn, dispatched);
       turn = dispatched;
@@ -204,11 +203,19 @@ export class DirectChatService {
       updateChat(store, turn, next);
       return next;
     } catch (error) {
+      if (preparationSettled && turn.status !== 'prepared') {
+        const beforeAttempt = await cancelled();
+        if (beforeAttempt) return beforeAttempt;
+      }
       // Prepared data is retained so local recovery can finish publication safely.
       if (turn.status !== 'prepared') {
         const next = {
           ...turn,
-          status: turn.status === 'accepted' ? ('failed' as const) : ('uncertain' as const),
+          status:
+            turn.status === 'accepted' &&
+            (!preparationStarted || error instanceof ChatPreparationRefusal)
+              ? ('failed' as const)
+              : ('uncertain' as const),
         };
         updateChat(store, turn, next);
       }

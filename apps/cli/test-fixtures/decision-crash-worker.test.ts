@@ -42,7 +42,7 @@ const provider: ProviderPort = {
   },
 };
 if (phase === 'expired') {
-  // Advance only this owner's decision clock, once both voters hold the unexpired card.
+  // Advance process-wide Date.now in this disposable owner after both voters read the card.
   const now = Date.now;
   Date.now = () => now() + (existsSync(join(profile, 'expired')) ? 300001 : 0);
 }

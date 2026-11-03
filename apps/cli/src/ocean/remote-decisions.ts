@@ -18,7 +18,9 @@ export function roomCommand(prompt: string) {
 }
 export class RemoteDecisions {
   #seen: LocalReviewSnapshot | null = null;
-  #cards: readonly LocalDecision[] = [];
+  readonly #cards = new Map<string, LocalDecision>();
+  readonly #pending = new Map<string, LocalDecision>();
+  readonly #applied = new Set<string>();
   #reading: Promise<void> = Promise.resolve();
   readonly panel: DecisionPanel;
   readonly #connection: RoomConnection;
@@ -37,25 +39,37 @@ export class RemoteDecisions {
       await this.refresh();
     });
   }
-  refresh() {
-    const reading = this.#reading.then(() => this.#readCards());
+  refresh(full = true) {
+    const reading = this.#reading.then(() => this.#readCards(full));
     this.#reading = reading.catch(() => {});
     return reading;
   }
-  async #readCards() {
+  async #readCards(full: boolean) {
     const cards = await this.#connection.withClient((c) =>
-      pages<LocalDecision, string>(
-        (after) =>
-          c.listDecisions({ ...this.#room.scope, ...(after ? { after } : {}), limit: 200 }),
-        (v) => v.decisionId,
-      ),
+      full
+        ? pages<LocalDecision, string>(
+            (after) =>
+              c.listDecisions({ ...this.#room.scope, ...(after ? { after } : {}), limit: 200 }),
+            (v) => v.decisionId,
+          )
+        : Promise.all([...this.#pending.values()].map((card) => c.getDecision(ref(card)))),
     );
-    this.#cards = cards;
-    const summaries: string[] = [];
+    let changed = full;
     for (const card of cards) {
+      if (JSON.stringify(this.#cards.get(card.decisionId)) !== JSON.stringify(card)) changed = true;
+      this.#cards.set(card.decisionId, card);
+      if (card.status === 'pending') this.#pending.set(card.decisionId, card);
+      else this.#pending.delete(card.decisionId);
+    }
+    if (!changed) return;
+    const summaries: string[] = [];
+    for (const card of this.#cards.values()) {
       let result = '';
       if (card.kind === 'continue-text-only' && card.status === 'allowed') {
-        const applied = await this.#connection.withClient((c) => c.continuationApplied(ref(card)));
+        const applied =
+          this.#applied.has(card.decisionId) ||
+          (await this.#connection.withClient((c) => c.continuationApplied(ref(card))));
+        if (applied) this.#applied.add(card.decisionId);
         result = applied
           ? ' · future text-only messages allowed; earlier outcome remains unknown'
           : ' · continuation application unconfirmed';
@@ -64,7 +78,7 @@ export class RemoteDecisions {
         `${card.kind} · ${card.status} v${card.version} · expires ${card.expiresAt}${result}\n/decision ${card.decisionId}`,
       );
     }
-    this.panel.refresh(cards);
+    this.panel.refresh([...this.#cards.values()]);
     this.#room.cards = summaries;
     this.#room.paint();
   }
@@ -99,7 +113,7 @@ export class RemoteDecisions {
     } else if (action === 'decision') {
       const id = prompt.slice('/decision '.length);
       await this.refresh();
-      card = this.#cards.find((c) => c.decisionId === id);
+      card = this.#cards.get(id);
       if (!card) throw Error('unknown_decision');
     } else return null;
     const exactRef = ref(card);

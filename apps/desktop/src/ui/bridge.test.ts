@@ -24,14 +24,11 @@ it('keeps a failed retry unresolved when its scoped receipt is absent', async ()
   request
     .mockResolvedValueOnce(unavailable)
     .mockResolvedValueOnce({ version: 1, ok: true, data: null });
-  await expect(submitDraft(command, true)).rejects.toMatchObject({
+  await expect(submitDraft(command)).rejects.toMatchObject({
     stage: 'preparation',
     message: 'attachment_unavailable',
   });
-  expect(request.mock.calls).toEqual([
-    [command],
-    [{ op: 'receipt', room: 'room_a', requestId: command.requestId }],
-  ]);
+  expect(request.mock.calls).toEqual([[command]]);
 });
 it.each(['preparation', 'refused'])(
   'never turns a %s binding conflict into a successful lookup',
@@ -42,7 +39,7 @@ it.each(['preparation', 'refused'])(
       ok: false,
       error: { code: 'request_conflict', sendStage },
     });
-    await expect(submitDraft(command, true)).rejects.toMatchObject({
+    await expect(submitDraft(command)).rejects.toMatchObject({
       stage: sendStage,
       message: 'request_conflict',
     });
@@ -52,7 +49,7 @@ it.each(['preparation', 'refused'])(
 it('reports first-attempt preparation failures without a receipt lookup', async () => {
   const request = channel();
   request.mockResolvedValueOnce(unavailable);
-  await expect(submitDraft(command, false)).rejects.toMatchObject({
+  await expect(submitDraft(command)).rejects.toMatchObject({
     stage: 'preparation',
     message: 'attachment_unavailable',
   });
@@ -63,12 +60,12 @@ it.each([{ text: '--help' }, { text: '-V' }, { attachments: ['invalid-file-id'] 
   'rejects an invalid send before IPC, including on an explicit retry (%j)',
   async (invalid) => {
     const request = channel();
-    for (const retry of [false, true]) {
-      await expect(submitDraft({ ...command, ...invalid }, retry)).rejects.toMatchObject({
+    for (const attempt of [1, 2]) {
+      await expect(submitDraft({ ...command, ...invalid })).rejects.toMatchObject({
         message: 'invalid_request',
         stage: 'validation',
       });
-      expect(request).not.toHaveBeenCalled();
+      expect(request, String(attempt)).not.toHaveBeenCalled();
     }
   },
 );
@@ -76,6 +73,6 @@ it('does not infer a local validation failure from an IPC rejection with the sam
   const request = channel();
   const ambiguous = Error('invalid_request');
   request.mockRejectedValueOnce(ambiguous);
-  await expect(submitDraft(command, false)).rejects.toBe(ambiguous);
+  await expect(submitDraft(command)).rejects.toBe(ambiguous);
   expect(request.mock.calls).toEqual([[command]]);
 });

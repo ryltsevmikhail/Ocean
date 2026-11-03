@@ -61,6 +61,7 @@ it.each(['fresh', 'retry', 'changed binding'])(
       codingTools: {
         async forTurn() {
           return {
+            cleanupConfirmed: true as const,
             definitions: [],
             execute: async () => {
               throw Error('unexpected tool execution');

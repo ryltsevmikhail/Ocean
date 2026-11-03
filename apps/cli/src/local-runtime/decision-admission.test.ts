@@ -35,7 +35,7 @@ it.each(['unregistered', 'unexpected'])(
  const q={...scope,taskId:'task',requestId:'refused',text:'try task'};
  const receipt=await c.submit(q);
  let turn;
- for(let i=0;i<100;i++){turn=await c.getRun({...scope,runId:receipt.runId});if(turn.turnStatus==='failed')break;await new Promise(r=>setTimeout(r,10));}
+ for(let i=0;i<100;i++){turn=await c.getRun({...scope,runId:receipt.runId});if(['failed','uncertain'].includes(turn.turnStatus))break;await new Promise(r=>setTimeout(r,10));}
  const same=await c.submit(q); const stop=await host.stop();c.close();
  const db=openSqliteStore({path:profile+'/runtime.sqlite'});const held=db.tools.inspectPending().length;db.close();
  console.log(JSON.stringify({held,calls,turn:turn.turnStatus,same:receipt.runId===same.runId,outcome:stop.outcome}));
@@ -50,7 +50,7 @@ it.each(['unregistered', 'unexpected'])(
       expect(JSON.parse(stdout)).toEqual({
         held: phase === 'unexpected' ? 1 : 0,
         calls: 0,
-        turn: 'failed',
+        turn: phase === 'unregistered' ? 'failed' : 'uncertain',
         same: true,
         outcome: phase === 'unregistered' ? 'complete' : 'uncertain',
       });
