@@ -28,7 +28,7 @@ export {
 export { type ProfileBackupLimits } from './profile-backup-session.js';
 export interface ProfileBackupCapture extends ProfileBackupAssets {
   verify(): void;
-  publish(finalCheck?: () => void, finalMetadataCheck?: () => void): void;
+  publish(finalCheck?: () => void, terminalProof?: () => void): void;
   close(): void;
 }
 export function profileBackupIdentity(catalog: ProfileBackupAssetCatalog) {
@@ -132,13 +132,14 @@ export async function captureProfileBackupAssets(
       return {
         ...assets,
         verify,
-        publish: (finalCheck?: () => void, finalMetadataCheck?: () => void) => {
+        publish: (finalCheck?: () => void, terminalProof?: () => void) => {
           verify();
           finalCheck?.();
           // The copied-database byte reader is also a consumer of the held graph.
           profileBackupSession.run(session, () => session.verify());
-          // Recheck its original identity without another body consumer after source proof.
-          finalMetadataCheck?.();
+          // The host supplies a sterile read-only original-byte proof, not another consumer.
+          terminalProof?.();
+          session.checkMetadata();
           output!.publish();
           published = true;
         },

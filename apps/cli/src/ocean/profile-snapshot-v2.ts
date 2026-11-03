@@ -64,7 +64,7 @@ export async function backupProfileV2(
         capture = await captureProfileBackupAssets(prepared!, join(to, 'assets'));
         return capture;
       },
-      ({ summary, assets }, verifyFrozen, checkFrozenMetadata) => {
+      ({ summary, assets }, verifyFrozen, verifyFrozenTerminal) => {
         syncFile(path);
         result = {
           format: 2,
@@ -79,7 +79,7 @@ export async function backupProfileV2(
         verifyProfileBackupOutput(output!, (manifest) => validateDatabase(path, manifest));
         assets.verify();
         return Promise.resolve(() => {
-          assets.publish(verifyFrozen, checkFrozenMetadata);
+          assets.publish(verifyFrozen, verifyFrozenTerminal);
           output!.publish();
         });
       },

@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
+import { verifyFrozenBackupBytes } from './backup-terminal.js';
 const identity = (s: fs.BigIntStats) =>
   [s.dev, s.ino, s.mode, s.uid, s.gid, s.nlink, s.size, s.mtimeNs, s.ctimeNs].join(':');
 const mount = (fd: number) =>
@@ -64,6 +65,14 @@ export function holdBackupObservation(path: string) {
       metadata,
       verify: () => {
         if (read() !== hash) throw Error('snapshot_mismatch');
+      },
+      verifyTerminal: () => {
+        metadata();
+        try {
+          verifyFrozenBackupBytes(fd, { bytes: Number(before.size), hash, state: original });
+        } finally {
+          metadata();
+        }
       },
       close: () => fs.closeSync(fd),
     };

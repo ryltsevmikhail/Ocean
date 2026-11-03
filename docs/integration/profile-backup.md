@@ -36,10 +36,15 @@ host creates output. Initial coding/Desktop inventories must equal those decoded
 from the copied database. Existing string destinations and three-argument callers
 remain supported. A retained original copied-database FD, identity, mount and
 hash remain checked through the finalizer; publication is deferred until its
-last authoritative check. Its final copied-database byte read precedes the final
-original-source session proof; the separately supplied copied-database metadata
-check then validates its original FD/path/mount identity without another body
-consumer before marker removal.
+last authoritative check. Its final host copied-database reader precedes the final
+original-source session proof. A terminal synchronous verifier then checks the
+original copied-DB bytes through the inherited read-only FD against the original
+hash/stat, with parent FD/current-path/mount checks around it. This helper uses
+only built-in fs/crypto, no package/preload/provider environment, source pathname
+or file writes; it cannot invoke host reader callbacks. No effect-capable or
+selected-body consumer follows that terminal proof before marker removal.
+This closes consumer-induced changes in either direction; it does not claim
+global filesystem atomicity against an arbitrary external writer after the check.
 
 `prepareProfileBackupAssets` returns an originating, single-use handle carrying
 the original source session. `captureProfileBackupAssets` also accepts the
@@ -139,6 +144,9 @@ files counts separately. Declared decode bounds are charged before expansion. Ac
 conservative: retained witnesses and source object storage can cause refusal
 below the nominal payload ceiling. Files stream in bounded buffers; one bounded
 Git pack/index and bounded catalogs/witnesses are processed at a time.
+The terminal copied-DB proof streams in 1 MiB buffers, permits 1 KiB of output and
+has a 30-second timeout with SIGKILL. Launch failure, nonzero/signal exit, timeout,
+unexpected output or byte mismatch refuses publication with both markers retained.
 
 Synthetic qualification covers source-deleted complete restore, frozen SQLite
 references, partial-create process deaths, actual Desktop SIGKILL and publication

@@ -1,11 +1,18 @@
 import { codingWorkflowFixture } from './coding-workflow-fixture.js';
 import * as fs from 'node:fs';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('node:fs', async (original) => {
   const actual = await original<typeof fs>();
-  return { ...actual, renameSync: vi.fn(actual.renameSync), readSync: vi.fn(actual.readSync) };
+  return {
+    ...actual,
+    openSync: vi.fn(actual.openSync),
+    renameSync: vi.fn(actual.renameSync),
+    readSync: vi.fn(actual.readSync),
+  };
 });
 import { verifyProfileBackupEnvelope } from '@runnets/tools-node';
 import { fullBackupFixture } from '../../test-fixtures/profile-backup.test.js';
@@ -14,6 +21,7 @@ import { backupProfile, restoreProfile } from './snapshots.js';
 const roots: string[] = [];
 afterEach(async () => {
   const actual = await vi.importActual<typeof fs>('node:fs');
+  vi.mocked(fs.openSync).mockImplementation(actual.openSync);
   vi.mocked(fs.renameSync).mockImplementation(actual.renameSync);
   vi.mocked(fs.readSync).mockImplementation(actual.readSync);
   vi.unstubAllEnvs();
@@ -142,6 +150,108 @@ it('rechecks the original copied SQLite metadata after final source verification
     expect(fs.existsSync(join(archive, 'assets', '.incomplete'))).toBe(true);
     expect(() => verifyProfileBackupEnvelope(archive)).toThrow();
   } finally {
+    f.close();
+  }
+});
+
+it('refuses pre-warmed mmap corruption of copied SQLite during the final source reader', async () => {
+  const { root, f } = await fixture(),
+    actual = await vi.importActual<typeof fs>('node:fs'),
+    archive = join(root, 'backup'),
+    copied = join(archive, 'runtime.sqlite'),
+    control = join(root, 'mmap-control');
+  actual.mkdirSync(control, { mode: 0o700 });
+  const wait = (name: string) => {
+    const until = Date.now() + 5000,
+      pause = new Int32Array(new SharedArrayBuffer(4));
+    while (!actual.existsSync(join(control, name)) && Date.now() < until)
+      Atomics.wait(pause, 0, 0, 1);
+    expect(actual.existsSync(join(control, name))).toBe(true);
+  };
+  const state = () => {
+    const s = actual.statSync(copied, { bigint: true });
+    return [s.ino, s.size, s.mtimeNs, s.ctimeNs];
+  };
+  let child: ReturnType<typeof spawn> | undefined,
+    exited: Promise<unknown[]> | undefined,
+    finalFrozen = false,
+    changed = false,
+    baseline: bigint[] | undefined;
+  try {
+    vi.mocked(fs.openSync).mockImplementation(((...args: Parameters<typeof fs.openSync>) => {
+      const fd = actual.openSync(...args);
+      if (
+        !child &&
+        String(args[0]) === copied &&
+        (new Error().stack ?? '').includes('holdBackupObservation')
+      ) {
+        child = spawn(
+          '/usr/bin/python3',
+          [
+            '-I',
+            '-S',
+            '-c',
+            `import mmap,sys,time,pathlib
+root=pathlib.Path(sys.argv[2])
+with open(sys.argv[1],'r+b') as f,mmap.mmap(f.fileno(),0,access=mmap.ACCESS_WRITE) as p:
+ p[0]=p[0]
+ (root/'ready').write_text('ready')
+ while not (root/'flip').exists() and not (root/'stop').exists():time.sleep(.001)
+ if (root/'flip').exists():
+  p[0]=p[0]^1
+  (root/'changed').write_text('changed')
+ while not (root/'stop').exists():time.sleep(.001)
+`,
+            copied,
+            control,
+          ],
+          {
+            env: Object.fromEntries(
+              [
+                'PATH',
+                'HOME',
+                'XDG_RUNTIME_DIR',
+                'XDG_CONFIG_HOME',
+                'XDG_DATA_HOME',
+                'XDG_STATE_HOME',
+                'XDG_CACHE_HOME',
+                'TMPDIR',
+              ].map((key) => [key, process.env[key]]),
+            ),
+          },
+        );
+        exited = once(child, 'close');
+        wait('ready');
+        baseline = state();
+      }
+      return fd;
+    }) as typeof fs.openSync);
+    vi.mocked(fs.readSync).mockImplementation(((...args: Parameters<typeof fs.readSync>) => {
+      const path = actual.realpathSync('/proc/self/fd/' + args[0]),
+        stack = new Error().stack ?? '';
+      if (path === copied && stack.includes('publish') && stack.includes('backup-observation'))
+        finalFrozen = true;
+      if (finalFrozen && !changed && path === join(f.directory, 'coding-projects.json')) {
+        actual.writeFileSync(join(control, 'flip'), '!');
+        wait('changed');
+        changed = true;
+        expect(state()).toEqual(baseline);
+      }
+      return actual.readSync(...args);
+    }) as typeof fs.readSync);
+    await expect(
+      backupProfile(f.directory, archive, { managedDirectory: join(f.directory, 'worktrees') }),
+    ).rejects.toThrow();
+    expect(child).toBeDefined();
+    expect(finalFrozen).toBe(true);
+    expect(changed).toBe(true);
+    expect(state()).toEqual(baseline);
+    expect(actual.existsSync(join(archive, '.incomplete'))).toBe(true);
+    expect(actual.existsSync(join(archive, 'assets', '.incomplete'))).toBe(true);
+    expect(() => verifyProfileBackupEnvelope(archive)).toThrow();
+  } finally {
+    actual.writeFileSync(join(control, 'stop'), '!');
+    if (exited) expect((await exited)[0]).toBe(0);
     f.close();
   }
 });

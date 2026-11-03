@@ -132,7 +132,7 @@ export type CodingSnapshotDestination =
 type SnapshotFinalizer<T> = (
   snapshot: CodingDatabaseSnapshot<T>,
   verifyFrozen: () => void,
-  checkFrozenMetadata: () => void,
+  verifyFrozenTerminal: () => void,
 ) => Promise<void | (() => void)>;
 /** Low-level capture port. The host must verify and publish its complete asset manifest separately. */
 export async function snapshotCodingDatabase<T>(
@@ -227,7 +227,7 @@ async function snapshotOwned<T>(
     if (readCodingBackupInventory(destination).hash !== inventory.hash)
       throw Error('snapshot_mismatch');
     const result = { summary: original, inventory, assets };
-    const publish = await finalize?.(result, frozen.verify, frozen.metadata);
+    const publish = await finalize?.(result, frozen.verify, frozen.verifyTerminal);
     frozen.verify();
     publish?.();
     return result;
