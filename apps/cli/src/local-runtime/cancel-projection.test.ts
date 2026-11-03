@@ -1,5 +1,5 @@
 import { randomUUID, randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -16,6 +16,7 @@ import {
   localRuntimePaths,
   prepareLocalRuntimePaths,
 } from '@runnets/tools-node';
+import { EndpointLayout, profileKey } from './endpoint-files.js';
 import { listenLocalRuntime } from './server.js';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import { RuntimeTurns } from './turns.js';
@@ -33,7 +34,16 @@ afterEach(async () => {
 it.each(['fresh', 'retry', 'changed binding'])(
   'classifies %s cancellation even when 201 pending decisions exceed the observation projection',
   async (mode) => {
-    const store = openSqliteStore({ path: ':memory:' });
+    const profile = mkdtempSync(join(tmpdir(), 'ocean-cancel-limit-'));
+    cleanup.push(() => rmSync(profile, { recursive: true, force: true }));
+    vi.stubEnv('XDG_RUNTIME_DIR', profile);
+    const paths = localRuntimePaths(profile);
+    prepareLocalRuntimePaths(paths);
+    const dbPath = join(profile, 'runtime.sqlite');
+    writeFileSync(dbPath, '', { mode: 0o600, flag: 'wx' });
+    const store = openSqliteStore({ path: dbPath });
+    const layout = new EndpointLayout(paths, profileKey(paths));
+    cleanup.push(() => layout.close());
     cleanup.push(() => store.close());
     const deps = {
       store: store.conversations,
@@ -81,11 +91,6 @@ it.each(['fresh', 'retry', 'changed binding'])(
         });
       },
     );
-    const profile = mkdtempSync(join(tmpdir(), 'ocean-cancel-limit-'));
-    cleanup.push(() => rmSync(profile, { recursive: true, force: true }));
-    vi.stubEnv('XDG_RUNTIME_DIR', profile);
-    const paths = localRuntimePaths(profile);
-    prepareLocalRuntimePaths(paths);
     const identity = {
       protocol: 1 as const,
       profileId: paths.profileId,
@@ -110,17 +115,22 @@ it.each(['fresh', 'retry', 'changed binding'])(
       endpoint: paths.endpoint,
       capability: randomBytes(32).toString('hex'),
     };
-    const transport = await listenLocalRuntime({
-      identity,
-      descriptor,
-      dispatch: host.dispatch.bind(host),
-      status: () => ({ ...identity, state: 'ready' }),
-      stop: async () => {
-        throw Error('unexpected runtime stop');
+    const transport = await listenLocalRuntime(
+      {
+        identity,
+        descriptor,
+        dispatch: host.dispatch.bind(host),
+        status: () => ({ ...identity, state: 'ready' }),
+        stop: async () => {
+          throw Error('unexpected runtime stop');
+        },
       },
-    });
+      layout,
+    );
+    cleanup.push(() => closeSync(transport.socketFd));
     cleanup.push(() => new Promise<void>((r) => transport.server.close(() => r())));
     writeFileSync(paths.descriptor, JSON.stringify(descriptor), { mode: 0o600, flag: 'wx' });
+    transport.activate();
     const client = await connectLocalRuntime({ profile });
     cleanup.push(() => client.close());
     const { workspaceId, roomId, requestId, text } = scope;

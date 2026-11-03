@@ -7,7 +7,8 @@ import {
   lstatSync,
   mkdirSync,
   openSync,
-  readFileSync,
+  opendirSync,
+  readSync,
   realpathSync,
   unlinkSync,
   type Stats,
@@ -31,12 +32,12 @@ export function assertLocalPrivate(path: string, kind: 'directory' | 'file' | 's
     s.isSymbolicLink() ||
     realpathSync(path) !== resolve(path) ||
     s.uid !== process.getuid?.() ||
-    (s.mode & 0o777) !== (kind === 'directory' ? 0o700 : 0o600) ||
+    (s.mode & 0o7777) !== (kind === 'directory' ? 0o700 : 0o600) ||
     !(kind === 'directory'
       ? s.isDirectory()
       : kind === 'file'
         ? s.isFile() && s.nlink === 1
-        : s.isSocket())
+        : s.isSocket() && s.nlink === 1)
   )
     fail('insecure_permissions');
   assertTrustedAncestors(path);
@@ -85,7 +86,7 @@ export function localRuntimePaths(profile: string): LocalRuntimePaths {
     descriptor: join(directory, 'connection.json'),
   };
 }
-export function prepareLocalRuntimePaths(paths: LocalRuntimePaths): void {
+export function prepareLocalRuntimeDirectory(paths: LocalRuntimePaths): void {
   for (const path of [paths.root, paths.directory]) {
     try {
       mkdirSync(path, { mode: 0o700 });
@@ -94,6 +95,9 @@ export function prepareLocalRuntimePaths(paths: LocalRuntimePaths): void {
     }
     assertLocalPrivate(path, 'directory');
   }
+}
+export function prepareLocalRuntimePaths(paths: LocalRuntimePaths): void {
+  prepareLocalRuntimeDirectory(paths);
   for (const path of [paths.descriptor, paths.endpoint]) {
     try {
       lstatSync(path);
@@ -119,19 +123,41 @@ export function readLocalRuntimeDescriptor(profile: string): LocalRuntimeDescrip
     if (!entryExists(path)) fail('runtime_absent');
     assertLocalPrivate(path, 'directory');
   }
-  if (!entryExists(p.descriptor))
-    fail(entryExists(p.endpoint) ? 'endpoint_exists' : 'runtime_absent');
+  if (!entryExists(p.descriptor)) {
+    const dir = opendirSync(p.directory);
+    try {
+      fail(dir.readSync() ? 'endpoint_exists' : 'runtime_absent');
+    } finally {
+      dir.closeSync();
+    }
+  }
   const before = assertLocalPrivate(p.descriptor, 'file');
-  const fd = openSync(p.descriptor, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const fd = openSync(
+    p.descriptor,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
   let value: unknown;
   try {
     const pinned = fstatSync(fd);
-    if (pinned.ino !== before.ino || pinned.dev !== before.dev || pinned.size > 4096)
+    if (
+      !pinned.isFile() ||
+      pinned.nlink !== 1 ||
+      pinned.uid !== before.uid ||
+      pinned.mode !== before.mode ||
+      pinned.ino !== before.ino ||
+      pinned.dev !== before.dev ||
+      pinned.size > 4096
+    )
       fail('insecure_permissions');
+    const bytes = Buffer.alloc(4097);
     try {
-      value = JSON.parse(readFileSync(fd, 'utf8')) as unknown;
+      const length = readSync(fd, bytes, 0, bytes.length, 0);
+      if (length !== pinned.size) fail('invalid_descriptor');
+      value = JSON.parse(bytes.toString('utf8', 0, length)) as unknown;
     } catch {
       fail('invalid_descriptor');
+    } finally {
+      bytes.fill(0);
     }
   } finally {
     closeSync(fd);

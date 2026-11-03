@@ -1,7 +1,9 @@
-// Real application owner without a listener. Halt at a named commit boundary for the parent SIGKILL.
+// Halt the real owner at a named commit boundary for the parent SIGKILL.
 import { writeSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ProviderPort } from '@runnets/application';
+import { startLocalRuntime } from '../dist/local-runtime/host.js';
+import { openSqliteStore } from '@runnets/store-sqlite';
+import type { ProviderPort, ToolJournalPort } from '@runnets/application';
 import { openOceanProfile } from '../dist/ocean/profile.js';
 import { registeredCodingTools } from '../dist/ocean/coding-project-host.js';
 import { RuntimeDecisions } from '../dist/local-runtime/decisions.js';
@@ -11,6 +13,43 @@ function halt(at: string) {
     writeSync(1, at + '\n');
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
   }
+}
+let round = 0;
+const provider: ProviderPort = {
+  id: 'fixture',
+  models: ['fixture'],
+  capabilities: { streaming: true, reasoning: false, usage: true, toolCalls: true },
+  async *stream() {
+    appendFileSync(join(profile, 'calls'), 'provider\n', { flush: true });
+    const call =
+      round++ === 0
+        ? { id: 'read', name: 'read_file', arguments: '{"path":"math.cjs"}' }
+        : {
+            id: 'write',
+            name: 'write_file',
+            arguments: '{"path":"math.cjs","content":"crash fixture"}',
+          };
+    yield { type: 'tool_call', call };
+    yield { type: 'usage', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
+    yield { type: 'completed', stopReason: 'tool_calls', rawStopReason: 'tool_calls' };
+  },
+};
+if (phase === 'effect') {
+  const store = openSqliteStore({ path: ':memory:' });
+  const journal = Object.getPrototypeOf(store.tools) as ToolJournalPort;
+  store.close();
+  const settle = journal.settle;
+  journal.settle = async function (...args) {
+    if (args[0].endsWith('_write')) {
+      appendFileSync(join(profile, 'effects'), 'write\n', { flush: true });
+      halt('effect');
+    }
+    return settle.apply(this, args);
+  };
+  const host = await startLocalRuntime({ profile, provider });
+  writeSync(1, 'ready\n');
+  await host.closed;
+  process.exit(0);
 }
 const r = openOceanProfile(profile, false, {
   codingTools: { ...registeredCodingTools(profile), owner: (t, s) => d.coding(t, s) },
@@ -45,35 +84,7 @@ approvals.consume = (...args) => {
   if (grant.ok) halt('claim');
   return grant;
 };
-const journal = r.toolJournal!,
-  settleEffect = journal.settle.bind(journal);
-journal.settle = async (...args) => {
-  if (args[0].endsWith('_write')) {
-    appendFileSync(join(profile, 'effects'), 'write\n', { flush: true });
-    halt('effect');
-  }
-  return settleEffect(...args);
-};
-let round = 0;
-const provider: ProviderPort = {
-  id: 'fixture',
-  models: ['fixture'],
-  capabilities: { streaming: true, reasoning: false, usage: true, toolCalls: true },
-  async *stream() {
-    appendFileSync(join(profile, 'calls'), 'provider\n', { flush: true });
-    const call =
-      round++ === 0
-        ? { id: 'read', name: 'read_file', arguments: '{"path":"math.cjs"}' }
-        : {
-            id: 'write',
-            name: 'write_file',
-            arguments: '{"path":"math.cjs","content":"crash fixture"}',
-          };
-    yield { type: 'tool_call', call };
-    yield { type: 'usage', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
-    yield { type: 'completed', stopReason: 'tool_calls', rawStopReason: 'tool_calls' };
-  },
-};
+
 try {
   await r.chat.send({
     workspaceId: 'ws_ocean',

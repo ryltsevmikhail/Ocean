@@ -20,3 +20,4 @@ export { SqliteCodingApprovalStore } from './coding-approval-storage.js';
 export { readCodingBackupInventory } from './coding-backup-inventory.js';
 export { snapshotCodingDatabase } from './maintenance.js';
 export type { CodingDatabaseSnapshot } from './maintenance.js';
+export type { EndpointProof } from './endpoint-proof.js';

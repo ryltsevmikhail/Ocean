@@ -51,8 +51,12 @@ connection descriptor is 0600 and binds profile identity, protocol 1, runtime
 instance, endpoint and a random authentication capability. Socket is 0600.
 Check ownership/modes/nofollow/canonical bindings before connection/publication.
 Never follow/remove arbitrary stale paths or rely on PID alone for takeover.
-Only remove an endpoint created and still owned by this process. SQLite ownership
-is the authoritative single-owner guard. Publish ready after successful recovery.
+SQLite ownership is the authoritative single-owner guard. After recovery, ordinary
+start may retire a dead predecessor's exact SQLite-attested files in the same
+private layout. It pins and checks the file and mount identities, requires a
+definitive refused connection, and rechecks the binding before retirement.
+Unattested or partial layouts refuse. Publish ready only after durable endpoint
+publication. See the [lifecycle and refusal states](../integration/local-runtime.md#safety-and-qualification-limits).
 
 Handshake authenticates the capability and exact profile/protocol before any
 profile data or mutation. Reject another profile, incompatible version, insecure

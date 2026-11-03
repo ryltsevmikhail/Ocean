@@ -61,7 +61,7 @@ Original protocol sketch (implemented names and parameters are recorded in [the 
 ## Task 2: Durable submit acknowledgement and runtime-owned turns
 
 Implementation and independent review completed through `a042e02`. Application and SQLite recovery are
-qualified separately from actual stale-endpoint restart, retained for Tasks 6/8.
+qualified here. Workpackage 6.1 separately exercises recovery after a listening host is killed.
 
 **Files:** application room-runtime modules and direct-chat.ts/admission/publication as required; host dispatch/owner; contracts receipts/runs; memory/SQLite tests.
 
@@ -75,7 +75,7 @@ qualified separately from actual stale-endpoint restart, retained for Tasks 6/8.
 
 ## Task 3: Run observation, reconnect and cancellation
 
-Implementation and independent review completed through `579d858`. The wire method `observe` supplies room or run snapshots and an opaque, scope- and instance-bound cursor. `history.list`, `runs.events` and `runs.result` supply committed data. Task 6/8 still owns killed-listener restart and real entry-point qualification.
+Implementation and independent review completed through `579d858`. The wire method `observe` supplies room or run snapshots and an opaque, scope- and instance-bound cursor. `history.list`, `runs.events` and `runs.result` supply committed data. Workpackage 6.1 exercises this cursor on a killed-listener restart. Task 8 retains the real multi-client release gates.
 
 **Files:** application room-runtime-runs; contracts snapshots/cursors; host dispatch/observation; client; process tests.
 
@@ -110,9 +110,12 @@ Task 5 covers the standard TUI decision presentation.
 - [x] RED PTY test launches standard `ocean tui --profile PATH --room ROOM`, submits input, captures admitted runId, closes terminal while provider is gated. A second process sees same running run and one final response/provider call1.
 - [x] Remove openOceanProfile/provider construction/runtime.close from room TUI path. Retain requestId+exact payload until receipt certainty; on reconnect observe original run rather than generating another identity. Distinguish UI quit/detach from explicit cancel key/action.
 - [x] Render pending decisions from runtime state and send id/version/binding decisions; reconnect refreshes resolved cards. Add a presentation regression for the full remote preview, visible control escapes, scrolling and card state after another client resolves it. Narrow TuiApp service port without fabricating a TaskRunService to satisfy options.
-- [x] GREEN existing room/group/history/coding panel/review tests and legacy terminal behavior. Required gates and implementation commit. Independent review follows the Task 5 report.
+- [x] GREEN existing room/group/history/coding panel/review tests and legacy terminal behavior. Required gates and implementation commit. Independent review completed through `494c178`.
 
 ## Task 6: CLI ownership routing, ACP and shutdown compatibility
+
+- [x] **6.1 lifecycle implementation.** Ordinary explicit start recovers an attested killed listener after authoritative SQLite recovery. Two independent clients see the original receipt and uncertain run through two crash and two clean restarts. The native coding test covers a killed listener after a sandbox write. Independent review follows the 6.1 report.
+- [ ] **6.2 CLI routing and ACP compatibility.** The parent task remains open until the following matrix and shutdown gates pass review.
 
 **Files:** ocean/command.ts, arguments, remote-command, operations/profile boundaries; acp compatibility tests; lifecycle recovery tests/docs.
 
@@ -143,8 +146,9 @@ Task 5 covers the standard TUI decision presentation.
 
 ## Execution state
 
-Tasks 1–4 passed independent review. Task 5 implements the standard room TUI migration and awaits independent review. CLI routing, Desktop migration,
-killed-listener restart and shared-runtime release acceptance remain open.
+Tasks 1–5 passed independent review through `494c178`. Workpackage 6.1 implements and tests
+killed-listener restart. Workpackage 6.2 CLI routing and ACP compatibility, parent Task 6,
+Desktop migration and shared-runtime release acceptance remain open.
 The existing Desktop UI was imported from `1c8d8c3`.
 Ocean1.1 previous checkpoint: `5d032ae`, 1032 passed/41 skipped, build/format and
 14 native tests recorded; these are previous coding recovery evidence, not proof

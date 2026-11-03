@@ -34,7 +34,7 @@ import {
   type RuntimeRecovery,
   type ToolJournalPort,
 } from '@runnets/application';
-import { openSqliteStore, ownSqliteRuntime } from '@runnets/store-sqlite';
+import { openSqliteStore, ownSqliteRuntime, type EndpointProof } from '@runnets/store-sqlite';
 import {
   InMemoryCommandDedup,
   InMemoryCodingStore,
@@ -49,6 +49,7 @@ import {
 
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
+  openEndpointProof?(): EndpointProof;
   readonly ownerDecisions: OwnerDecisionStore;
   openRoomRuns?(): RoomRuntimeRuns;
   readonly coding: CodingTaskService;
@@ -207,6 +208,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return {
       service,
       ownerDecisions: store.ownerDecisions,
+      openEndpointProof: () => store.openEndpointProof(),
       openRoomRuns: () =>
         new RoomRuntimeRuns(
           store.openRoomReads(() => deps.clock.now().getTime()),

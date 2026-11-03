@@ -1,16 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import {
-  closeSync,
-  fchmodSync,
-  fstatSync,
-  fsyncSync,
-  lstatSync,
-  linkSync,
-  openSync,
-  unlinkSync,
-  writeFileSync,
-  type Stats,
-} from 'node:fs';
+import { lstatSync, closeSync } from 'node:fs';
+import { recoverEndpoint, publishEndpoint } from './endpoint.js';
+import { profileKey, type EndpointLayout } from './endpoint-files.js';
 import { join } from 'node:path';
 import type { ProviderPort, RuntimeRecovery } from '@runnets/application';
 import { LOCAL_RUNTIME_MAX_WAIT_MS, LOCAL_ROOM_METHODS } from '@runnets/contracts';
@@ -19,12 +10,7 @@ import type {
   LocalRuntimeStatus,
   LocalRuntimeStop,
 } from '@runnets/contracts';
-import {
-  localRuntimePaths,
-  prepareLocalRuntimePaths,
-  ownsLocalRuntimePath,
-  unlinkOwnedLocalRuntimePath,
-} from '@runnets/tools-node';
+import { localRuntimePaths } from '@runnets/tools-node';
 import { CodingPanelQueries } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
@@ -66,6 +52,7 @@ export async function startLocalRuntime(
     throw Error('invalid_input');
   const paths = localRuntimePaths(options.profile);
   assertNotRestored(paths.profile);
+  const originalProfile = profileKey(paths);
   let decisions: RuntimeDecisions;
   const runtime = openOceanProfile(paths.profile, false, {
     codingTools: {
@@ -74,12 +61,14 @@ export async function startLocalRuntime(
     },
   });
   let transport: Awaited<ReturnType<typeof listenLocalRuntime>> | undefined;
-  let socketOwned: Stats | undefined;
-  let descriptorOwned: Stats | undefined;
+  let layout: EndpointLayout | undefined;
+  let publication: ReturnType<typeof publishEndpoint> | undefined;
   try {
-    // Refuse stale paths under ownership before recovery or publication; never guess a takeover.
     const recovery = await runtime.ready;
-    prepareLocalRuntimePaths(paths);
+    assertNotRestored(paths.profile);
+    const proof = runtime.openEndpointProof?.();
+    if (!proof) throw Error('durable_runtime_required');
+    const endpoint = (layout = await recoverEndpoint(paths, proof, originalProfile));
     decisions = new RuntimeDecisions(runtime.ownerDecisions, runtime.reviews);
     const panels = new CodingPanelQueries(runtime);
     const identity: LocalRuntimeIdentity = {
@@ -140,17 +129,25 @@ export async function startLocalRuntime(
               }, drainDeadlineMs)) !== 'settled'
             )
               throw Error('stop_incomplete');
-            // Node closes/unlinks a listening Unix path. Refuse closing a replaced path.
-            if (!socketOwned || !ownsLocalRuntimePath(paths.endpoint, socketOwned))
+            endpoint.check();
+            if (!transport || !publication || !endpoint.matches('runtime.sock', transport.socketFd))
               throw Error('endpoint_changed');
-            // Fallible endpoint cleanup must retain the database owner and listener on failure.
-            if (descriptorOwned) unlinkOwnedLocalRuntimePath(paths.descriptor, descriptorOwned);
+            if (endpoint.matches('connection.json', publication.fd)) {
+              if (endpoint.proof(transport.socketFd, publication.fd) !== publication.digest)
+                throw Error('endpoint_changed');
+              endpoint.unlink('connection.json', publication.fd);
+            }
+            endpoint.unlink('runtime.sock', transport.socketFd);
+            endpoint.sync();
+            proof.retire(publication.digest);
             turns.closeObservers();
             databaseClosed = true;
+            transport.server.close(() => resolveClosed());
             runtime.close();
-            // Stop accepting now; closed resolves once existing transports have drained.
-            transport!.server.close(() => resolveClosed());
-            for (const client of transport!.clients) {
+            closeSync(publication.fd);
+            closeSync(transport.socketFd);
+            endpoint.close();
+            for (const client of transport.clients) {
               const timer = setTimeout(() => client.destroy(), 100);
               timer.unref();
             }
@@ -167,52 +164,43 @@ export async function startLocalRuntime(
         return stopping;
       },
     };
-    transport = await listenLocalRuntime({
-      descriptor,
-      identity,
-      dispatch: (method, params, detached) =>
-        databaseClosed
-          ? { error: { code: 'runtime_draining' } }
-          : method === 'coding.panel'
-            ? panels.dispatch(params, detached)
-            : method.startsWith('decisions.') || method.startsWith('reviews.')
-              ? decisions.dispatch(method, params)
-              : turns.dispatch(method, params, detached),
-      status: () => host.status(),
-      stop: () => host.stop(),
-    });
-    socketOwned = lstatSync(paths.endpoint);
-    const temporary = join(paths.directory, '.connection-' + identity.instanceId);
-    const fd = openSync(temporary, 'wx', 0o600);
-    try {
-      fchmodSync(fd, 0o600);
-      const pinned = fstatSync(fd);
-      if (
-        !pinned.isFile() ||
-        pinned.nlink !== 1 ||
-        pinned.uid !== process.getuid?.() ||
-        (pinned.mode & 0o777) !== 0o600
-      )
-        throw Error('insecure_permissions');
-      writeFileSync(fd, JSON.stringify(descriptor) + '\n');
-      fsyncSync(fd);
-      linkSync(temporary, paths.descriptor);
-      descriptorOwned = fstatSync(fd);
-    } finally {
-      closeSync(fd);
-      unlinkSync(temporary);
-    }
-    const directoryFd = openSync(paths.directory, 'r');
-    try {
-      fsyncSync(directoryFd);
-    } finally {
-      closeSync(directoryFd);
-    }
+    transport = await listenLocalRuntime(
+      {
+        descriptor,
+        identity,
+        dispatch: (method, params, detached) =>
+          databaseClosed
+            ? { error: { code: 'runtime_draining' } }
+            : method === 'coding.panel'
+              ? panels.dispatch(params, detached)
+              : method.startsWith('decisions.') || method.startsWith('reviews.')
+                ? decisions.dispatch(method, params)
+                : turns.dispatch(method, params, detached),
+        status: () => host.status(),
+        stop: () => host.stop(),
+      },
+      endpoint,
+    );
+    assertNotRestored(paths.profile);
+    publication = publishEndpoint(endpoint, transport.socketFd, descriptor, proof);
+    transport.activate();
     return host;
   } catch (error) {
-    if (socketOwned && ownsLocalRuntimePath(paths.endpoint, socketOwned)) transport?.server.close();
-    if (descriptorOwned) unlinkOwnedLocalRuntimePath(paths.descriptor, descriptorOwned);
-    runtime.close();
+    try {
+      if (transport && layout) {
+        for (const client of transport.clients) client.destroy();
+        await new Promise<void>((resolve) => transport!.server.close(() => resolve()));
+        try {
+          if (layout.matches('runtime.sock', transport.socketFd))
+            layout.unlink('runtime.sock', transport.socketFd);
+        } finally {
+          closeSync(transport.socketFd);
+        }
+      }
+    } finally {
+      layout?.close();
+      runtime.close();
+    }
     throw error;
   }
 }

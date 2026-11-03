@@ -99,7 +99,7 @@ it.runIf(process.platform === 'linux')(
   15000,
 );
 it.runIf(process.platform === 'linux')(
-  'publishes readiness after uncertain-effect recovery and refuses unverifiable stale paths after SIGKILL',
+  'publishes readiness after uncertain-effect recovery and restarts the same profile after SIGKILL',
   async () => {
     const f = fixture();
     const runtime = openOceanProfile(f.profile, true);
@@ -128,10 +128,10 @@ it.runIf(process.platform === 'linux')(
     const status = f.launch(['status']);
     expect(await status.exit).toBe(3);
     expect(JSON.parse(status.output())).toMatchObject({ error: { code: 'runtime_unreachable' } });
-    const stale = f.launch(['start']);
-    expect(await stale.exit).toBe(3);
-    expect(JSON.parse(stale.output())).toMatchObject({ error: { code: 'endpoint_exists' } });
-    // Safe refusal is the Task-1 contract; crash/restart/reattach is explicitly still unqualified.
+    const restart = f.launch(['start']);
+    expect(await restart.ready()).toMatchObject({ data: { state: 'ready' } });
+    expect(await f.launch(['stop']).exit).toBe(0);
+    expect(await restart.exit).toBe(0);
   },
   15000,
 );
@@ -191,6 +191,29 @@ it.runIf(process.platform === 'linux')(
     expect(existsSync(socket)).toBe(true);
     expect(readFileSync(socket, 'utf8')).toBe('foreign');
     expect(owner.child.exitCode).toBeNull();
+  },
+  15000,
+);
+it.runIf(process.platform === 'linux')(
+  'only one simultaneous ordinary restart can retire a predecessor',
+  async () => {
+    const f = fixture();
+    await initialize(f.profile);
+    const first = f.launch(['start']);
+    await first.ready();
+    first.child.kill('SIGKILL');
+    await first.exit;
+    const a = f.launch(['start']),
+      b = f.launch(['start']);
+    const results = await Promise.all([a.ready(), b.ready()]);
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ data: expect.objectContaining({ state: 'ready' }) }),
+        expect.objectContaining({ error: expect.objectContaining({ code: 'owner_busy' }) }),
+      ]),
+    );
+    expect(await f.launch(['stop']).exit).toBe(0);
+    expect((await Promise.all([a.exit, b.exit])).sort()).toEqual([0, 3]);
   },
   15000,
 );

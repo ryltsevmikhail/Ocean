@@ -164,3 +164,10 @@ it('writes an exact 2MiB JSON frame plus its delimiter to a draining peer', asyn
     await new Promise<void>((r) => server.close(() => r()));
   }
 });
+it('refuses a partial publication directory containing only a staged descriptor', () => {
+  const { profile } = fixture();
+  const paths = localRuntimePaths(profile);
+  prepareLocalRuntimePaths(paths);
+  writeFileSync(join(paths.directory, '.connection-partial'), 'canary', { mode: 0o600 });
+  expect(() => readLocalRuntimeDescriptor(profile)).toThrow('endpoint_exists');
+});

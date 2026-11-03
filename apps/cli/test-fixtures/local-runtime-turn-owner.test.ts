@@ -2,6 +2,7 @@
 import { startLocalRuntime } from '../dist/local-runtime/host.js';
 import { appendFileSync, writeSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { openSqliteStore } from '@runnets/store-sqlite';
 import { once } from 'node:events';
 import type { ProviderPort } from '@runnets/application';
 const profile = process.argv[2]!;
@@ -32,6 +33,34 @@ const provider: ProviderPort = {
         },
         { once: true },
       );
+      if (process.argv[3] === 'claimed') {
+        // Synthetic external effect in the listening owner, behind a real durable one-use claim.
+        const path = profile + '/runtime.sqlite';
+        const db = new DatabaseSync(path, { readOnly: true });
+        let taskRunId: string;
+        let attemptId: string;
+        try {
+          const row = db
+            .prepare(
+              "SELECT aggregate_id,payload FROM events WHERE type='attempt.started' ORDER BY rowid DESC LIMIT 1",
+            )
+            .get()!;
+          taskRunId = String(row['aggregate_id']);
+          attemptId = JSON.parse(String(row['payload'])).attemptId;
+        } finally {
+          db.close();
+        }
+        const store = openSqliteStore({ path });
+        try {
+          if (
+            !(await store.tools.claim('effect', 'fixture', { taskRunId, attemptId }, 'synthetic'))
+          )
+            throw Error('duplicate effect');
+          appendFileSync(profile + '/effects', 'effect\n', { flush: true });
+        } finally {
+          store.close();
+        }
+      }
       const finish = once(process, 'message');
       yield { type: 'text_delta', text: 'native ' } as const;
       const [outcome] = await finish;

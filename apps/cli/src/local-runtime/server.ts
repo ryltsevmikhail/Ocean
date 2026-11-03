@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
-import { createServer, type Server, type Socket } from 'node:net';
-import { chmodSync } from 'node:fs';
+import { type Socket } from 'node:net';
+import type { EndpointLayout } from './endpoint-files.js';
+import { bindListener } from './listener.js';
 import {
   isLocalRuntimeRequest,
   type LocalRuntimeDescriptor,
@@ -18,11 +19,9 @@ export interface LifecycleOperations {
   stop(): Promise<LocalRuntimeStop>;
 }
 /** Authenticate before dispatch. The connection owns only its bounded pending responses. */
-export async function listenLocalRuntime(
-  operations: LifecycleOperations,
-): Promise<{ server: Server; clients: Set<Socket> }> {
+export async function listenLocalRuntime(operations: LifecycleOperations, layout: EndpointLayout) {
   const clients = new Set<Socket>();
-  const server = createServer((socket) => {
+  const { server, socketFd, activate } = await bindListener(layout, (socket) => {
     if (clients.size >= 64) {
       socket.destroy();
       return;
@@ -135,14 +134,5 @@ export async function listenLocalRuntime(
       clients.delete(socket);
     });
   });
-  await new Promise<void>((resolve, reject) => {
-    const error = (e: Error) => reject(e);
-    server.once('error', error);
-    server.listen(operations.descriptor.endpoint, () => {
-      server.off('error', error);
-      resolve();
-    });
-  });
-  chmodSync(operations.descriptor.endpoint, 0o600);
-  return { server, clients };
+  return { server, clients, socketFd, activate };
 }

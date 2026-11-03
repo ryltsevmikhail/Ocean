@@ -47,7 +47,43 @@ it
         out += b.toString();
       });
       try {
-        await vi.waitFor(() => expect(out, err).toBe(phase + '\n'), { timeout: 15000 });
+        if (phase === 'effect') {
+          await vi.waitFor(() => expect(out, err).toBe('ready\n'), { timeout: 5000 });
+          const client = await connectLocalRuntime({ profile: f.directory });
+          try {
+            const scope = { workspaceId: 'ws_ocean', roomId: f.room };
+            const { runId } = await client.submit({
+              ...scope,
+              requestId: 'crash',
+              taskId: 'task',
+              text: 'synthetic',
+            });
+            const card = await vi.waitFor(
+              async () => {
+                const pending = (await client.listDecisions(scope)).find(
+                  (c) => c.status === 'pending',
+                );
+                if (!pending) throw Error('waiting for native write');
+                return pending;
+              },
+              { timeout: 15000 },
+            );
+            await client.resolveDecision({
+              ...scope,
+              runId: runId!,
+              decisionId: card.decisionId,
+              expectedVersion: card.version,
+              bindingDigest: card.bindingDigest,
+              choice: 'allow-once',
+            });
+          } finally {
+            client.close();
+          }
+        }
+        await vi.waitFor(
+          () => expect(out, err).toBe((phase === 'effect' ? 'ready\n' : '') + phase + '\n'),
+          { timeout: 15000 },
+        );
       } finally {
         child.kill('SIGKILL');
         await exit;

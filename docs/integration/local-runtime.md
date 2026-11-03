@@ -61,7 +61,7 @@ pnpm ocean tui --profile /absolute/private/profile --room ROOM_ID
 pnpm ocean tui --profile /absolute/private/profile --room ROOM_ID --task TASK_ID
 ```
 
-The header uses room members and the admitted performer. Enter submits a message. In a group, a leading `@handle` addresses one bot. Unaddressed posts have a message receipt and no run. The TUI immediately displays the confirmed message and admitted run IDs. Room reads continue separately. Until the corresponding history and run are observed, repeating the same input shows the retained receipt and Enter keeps a different message in the editor. Press Enter again after history updates to send that draft. A read error is displayed beside that receipt while the client retries observation. An idle terminal reauthenticates and resynchronizes after a clean runtime restart. F2 selects a run, F3 shows scoped event names and sequence numbers, and F4 shows the run version, performer, result ID and pending decision IDs. The dialogue follows committed room history, including posts from other clients.
+The header uses room members and the admitted performer. Enter submits a message. In a group, a leading `@handle` addresses one bot. Unaddressed posts have a message receipt and no run. The TUI immediately displays the confirmed message and admitted run IDs. Room reads continue separately. Until the corresponding history and run are observed, repeating the same input shows the retained receipt and Enter keeps a different message in the editor. Press Enter again after history updates to send that draft. A read error is displayed beside that receipt while the client retries observation. An idle terminal reauthenticates and resynchronizes after a runtime instance change. F2 selects a run, F3 shows scoped event names and sequence numbers, and F4 shows the run version, performer, result ID and pending decision IDs. The dialogue follows committed room history, including posts from other clients.
 
 `/quit`, EOF, terminal hangup and SIGTERM detach. Escape in the dialogue or Ctrl+C on a selected active run requests version-bound cancellation when the status row shows its complete run ID and bracketed version. Enlarge a compact or clipped terminal to reveal the binding. The receipt confirms the request. Run and turn state report eventual settlement. Escape in a panel closes it. Closing the client during an owner decision leaves the decision pending. The legacy standalone `tui` without `--room` retains its embedded execution lifecycle.
 
@@ -280,26 +280,59 @@ or recovery.
 
 ## Safety and qualification limits
 
-Existing descriptor/socket entries, including stale, foreign and symlink paths,
-are never automatically removed or stolen. A clean stop removes only its pinned
-owned descriptor and socket; foreign descriptor replacement is preserved. Node
-closes and unlinks Unix listener paths, so a replaced socket causes incomplete
-stop and retains the owner. Ownership is checked immediately before close;
-concurrent same-UID filesystem mutation remains inside the trusted-process
-boundary.
+After SIGKILL of a ready listener, run the ordinary foreground start again with
+the same profile and runtime directory. Until then, status reports
+`runtime_unreachable`. Start first acquires the existing exclusive SQLite owner
+and completes application recovery. SQLite table `local_endpoint_v1` holds one
+SHA-256 digest of the last published binding. It covers the boot, mount namespace,
+canonical profile and endpoint directory, profile/database/root/directory
+identities, socket and descriptor identities and exact private descriptor bytes.
+SQLite stores only the digest. The runtime pins the two entries, verifies their
+types, ownership, permissions, mount IDs, identity and digest, and requires
+`ECONNREFUSED` from the pinned socket inode. It verifies the complete binding
+again after the asynchronous probe before retiring the prior names. The owner
+fsyncs the endpoint directory and clears the matching SQLite proof.
 
-SIGKILL leaves stale endpoint evidence: status reports unreachable and a new
-start refuses `endpoint_exists`. **Real crash restart and two-client reattachment
-are still an open lifecycle acceptance gate.** No manual deletion is counted as
-restart qualification. Safe predecessor reclamation or an explicit verified
-maintenance procedure must be delivered before that acceptance gate closes.
+The stable `runtime.sock` and descriptor layout preserve protocol-1 clients and
+the short path limit. On Linux a short-lived Node process binds the socket under
+a private umask relative to the inherited directory FD. Its only application
+message transfers the listener and inode identity over private IPC. It receives
+no application environment or connection capability. The owner pins the inode,
+acknowledges the handoff and waits for the binder to exit. The binder exits on
+parent disconnect or after five seconds. The owner enforces a 5.5-second helper
+deadline. A bounded pre-publication check verifies that connecting to the pinned
+inode reaches the received listener. The owner applies mode 0600 to the pinned
+inode. Closing its transferred listener cannot unlink a replacement socket.
+Only the long-lived owner opens SQLite, authenticates clients and serves requests.
 
-The Linux process suite exercises separate owner/status/stop processes, second
-owner refusal, recovery before ready, clean restart, SIGTERM, SIGKILL stale refusal,
-uncertain drain and foreign-socket preservation. Socket tests cover two clients,
-authentication/profile/version/instance binding, modes, symlinks, short fallback,
-fragmentation, oversized frames and foreign descriptor preservation. Separate owner and client processes use a gated synthetic provider
-and a persisted dispatch counter to verify detach, retry, single publication,
-provider failure and incomplete stop. Separate SIGKILL tests reopen the
-application database twice at admission and after an effect claim. These qualify
-local persistence and headless process behavior. The separate room PTY test covers the standard terminal entry point. Desktop shared-runtime, asset-complete backup/restore and installed/live Ocean 1.1 acceptance remain open.
+Start publishes a freshly generated descriptor using a synced exclusive
+temporary file and a no-replace hard link. It removes the temporary link,
+fsyncs the directory, commits the binding digest and rechecks it before service.
+Clients reconnect with a new handshake. An old instance cursor yields a
+`resync` snapshot. The persisted receipt, run, event positions and room hold
+survive. An interrupted external effect remains uncertain. Restarting leaves
+old approvals inert and provides no evidence of descendant termination.
+
+Automatic restart accepts an empty directory with no active proof, or the
+entire exact attested predecessor after recovery and a definitive refused
+connection. A live owner or listener, an older unregistered stale endpoint,
+missing or extra entries, changed content/permissions/UID, symlinks, special
+files, mount changes or a substituted directory refuse takeover. A crash
+during retirement, bind or link can leave a partial layout that refuses the next
+start. After durable publication the complete new layout is recoverable even
+if the foreground ready message was lost. A reboot or erased runtime directory
+with an outstanding proof requires separate maintenance. There is no force
+takeover command. On clean stop, a replaced descriptor is preserved. A replaced
+socket or uncertain execution drain gives an incomplete stop and retains the
+owner. Identity checks and filesystem mutations share the existing trusted
+same-UID host boundary.
+
+Linux process tests kill an actual listening owner after a synthetic durable
+claim, restart twice after SIGKILL and twice after clean stop, and verify that
+two independent authenticated clients see the same receipt and uncertain run.
+The persisted dispatch and effect counters both stay at one. The opt-in native
+coding test kills the listening owner after an approved sandbox write and
+before journal settlement, then reopens twice. Namespace tests exercise a real
+same-inode bind mount and a foreign UID. The room PTY suite covers physical
+hangup and SIGTERM. CLI routing, Desktop shared-runtime, asset-complete
+backup/restore and installed/live Ocean 1.1 acceptance remain open.

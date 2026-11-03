@@ -1,3 +1,4 @@
+import { openEndpointProof, type EndpointProof } from './endpoint-proof.js';
 import { SqliteOwnerDecisions } from './owner-decisions.js';
 import { SqliteCodingApplyResolutionStore } from './coding-apply-resolution.js';
 import type { CodingApplyResolutionStore } from '@runnets/application';
@@ -52,6 +53,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  openEndpointProof(): EndpointProof;
   readonly ownerDecisions: OwnerDecisionStore;
   openRoomReads(now: () => number): RoomRunReadPort;
   readonly coding: CodingStore;
@@ -101,6 +103,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
   return {
+    openEndpointProof: () => openEndpointProof(db),
     ownerDecisions: new SqliteOwnerDecisions(db),
     openRoomReads: (now) => roomRuntimeReads(db, now),
     coding: new SqliteCodingStore(db),
