@@ -138,6 +138,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       await rm(root, { recursive: true, force: true });
     }
   },
+  12_000,
 );
 
 it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] === '1')(

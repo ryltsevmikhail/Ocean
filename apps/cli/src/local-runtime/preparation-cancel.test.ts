@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import {
   ConversationService,
+  ChatPreparationRefusal,
   DirectChatService,
   RoomRuntimeRuns,
   TaskRunService,
@@ -10,9 +11,10 @@ import { openSqliteStore } from '@runnets/store-sqlite';
 import { rooms, gatedProvider } from '../../test-fixtures/local-runtime-admission.test.js';
 import { RuntimeTurns } from './turns.js';
 
-it.each([true, false])(
-  'settles preparation cancellation only with joined cleanup=%s',
-  async (known) => {
+it.each(['success', 'refusal', 'unknown'] as const)(
+  'settles preparation cancellation with %s evidence',
+  async (outcome) => {
+    const known = outcome !== 'unknown';
     const db = openSqliteStore({ path: ':memory:' });
     let release!: () => void,
       entered = false,
@@ -34,6 +36,9 @@ it.each([true, false])(
         async forTurn() {
           entered = true;
           await gate;
+          // This branch is a gated admission check that never launches preparation.
+          if (outcome === 'refusal')
+            throw new ChatPreparationRefusal('admission refused before launch');
           if (!known) throw Error('qualification cleanup unknown');
           return {
             definitions: [],

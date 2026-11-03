@@ -45,6 +45,7 @@ it.runIf(process.env['OCEAN_SANDBOX_NATIVE'] === '1').each(['pending', 'descenda
         {
           env: {
             PATH: process.env['PATH'],
+            HOME: process.env['HOME'],
             XDG_RUNTIME_DIR: run,
             DBUS_SESSION_BUS_ADDRESS: process.env['DBUS_SESSION_BUS_ADDRESS'],
           },

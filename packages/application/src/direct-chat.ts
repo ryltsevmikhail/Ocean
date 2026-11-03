@@ -203,6 +203,7 @@ export class DirectChatService {
       updateChat(store, turn, next);
       return next;
     } catch (error) {
+      if (error instanceof ChatPreparationRefusal) preparationSettled = true;
       if (preparationSettled && turn.status !== 'prepared') {
         const beforeAttempt = await cancelled();
         if (beforeAttempt) return beforeAttempt;

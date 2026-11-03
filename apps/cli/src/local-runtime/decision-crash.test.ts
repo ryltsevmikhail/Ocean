@@ -32,6 +32,7 @@ it
         {
           env: {
             PATH: process.env['PATH'],
+            HOME: process.env['HOME'],
             XDG_RUNTIME_DIR: runDir,
             DBUS_SESSION_BUS_ADDRESS: process.env['DBUS_SESSION_BUS_ADDRESS'],
           },

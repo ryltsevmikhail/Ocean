@@ -36,7 +36,7 @@ export interface CodingTurnFactoryDeps {
 export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
   return {
     async forTurn(turn: ChatTurn, signal: AbortSignal) {
-      signal.throwIfAborted();
+      if (signal.aborted) throw new CodingTurnRefusal('cancelled before coding preparation');
       if (!turn.codingTaskId) throw new CodingTurnRefusal('explicit task required');
       const access = {
         taskId: turn.codingTaskId,

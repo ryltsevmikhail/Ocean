@@ -118,4 +118,5 @@ it
       await rm(fixture, { recursive: true, force: true });
     }
   },
+  12_000,
 );

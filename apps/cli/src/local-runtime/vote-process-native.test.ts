@@ -18,6 +18,7 @@ it
     const run = mkdtempSync(join(tmpdir(), 'ocean-vote-'));
     const env = {
       PATH: process.env['PATH'],
+      HOME: process.env['HOME'],
       XDG_RUNTIME_DIR: run,
       DBUS_SESSION_BUS_ADDRESS: process.env['DBUS_SESSION_BUS_ADDRESS'],
     };
