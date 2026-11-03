@@ -1,3 +1,4 @@
+import { localDesktopClient, type LocalDesktopClient } from './local-desktop-client.js';
 import { localProfileClient, type LocalProfileClient } from './local-profile-client.js';
 import { localPanelClient, type LocalPanelClient } from './local-panel-client.js';
 import { randomUUID } from 'node:crypto';
@@ -25,7 +26,12 @@ import { LocalRuntimeFrames, writeLocalRuntimeFrame } from './local-runtime-fram
 import { localRoomClient, validatedParams, type LocalRoomClient } from './local-room-client.js';
 import { localDecisionClient, type LocalDecisionClient } from './local-decision-client.js';
 export interface LocalRuntimeClient
-  extends LocalProfileClient, LocalRoomClient, LocalDecisionClient, LocalPanelClient {
+  extends
+    LocalDesktopClient,
+    LocalProfileClient,
+    LocalRoomClient,
+    LocalDecisionClient,
+    LocalPanelClient {
   readonly identity: LocalRuntimeIdentity;
   submit(request: LocalTurnRequest): Promise<LocalTurnReceipt>;
   getReceipt(query: LocalReceiptQuery): Promise<LocalTurnReceipt | null>;
@@ -132,6 +138,7 @@ async function connectDescriptor(
       throw Error('identity_mismatch');
     return {
       identity,
+      ...localDesktopClient((method, params) => peer.request(method, params)),
       ...localProfileClient(peer.request.bind(peer)),
       ...localPanelClient(peer.request.bind(peer)),
       ...localDecisionClient(peer.request.bind(peer)),

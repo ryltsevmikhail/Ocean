@@ -8,7 +8,7 @@ accepted through correction `dc9e244` and acceptance `56bbef0`; capture still us
 the actual ownership-held frozen SQLite API, without ownership bypass.
 Workpackage 7.5 is accepted at `a6b3958`, including independent Git object
 identity/closure and compressed/inflated/reconstructed pack bounds. Workpackage
-7.6 adds the frozen configuration/dependency subgraph described below.
+7.6 is accepted at `ce482d5` and adds the frozen configuration/dependency subgraph described below. Workpackage 7.7 adds the [runtime-owned Desktop subgraph](desktop-assets.md), pending independent acceptance.
 Complete external-asset graph selection, format-2 publication and full profile restore
 are not implemented yet. User-facing
 backup still refuses external coding assets with coding_assets_unavailable.
@@ -671,9 +671,11 @@ No installed profile, key, provider or user coordination registry is used.
 
 Integrate the selected managed-worktree, partial Git, recovery and frozen
 configuration/dependency subgraphs with the complete bounded external graph.
-Imported Desktop per-profile attachment/preparation assets remain a mandatory
-OPEN selection gate: determine their trusted profile/path binding without arbitrary
-HOME traversal. They are not captured by 7.6. Distinguish
+The Desktop subgraph and trusted isolated legacy enrollment are implemented in
+7.7 development source (not part of accepted 7.6); independent acceptance and
+unified integration remain open. The receipt link/unlink alias interval still
+refuses capture and preserves source evidence. Full backup must support required
+partial states or truthfully refuse, never silently omit them. Distinguish
 planned-but-absent assets from lost ready assets. Resolve dependency/symlink
 relationships explicitly; never traverse arbitrary home/root paths as a shortcut.
 Preserve required data or refuse unsupported layouts without a false full-backup
@@ -685,3 +687,16 @@ Verify missing/corrupt/escaped assets as restore failures. Restored assets belon
 in a private quarantine with old approvals/authority inert until explicit owner
 rebind and effect reconciliation. Maintain old format-1 compatibility and verify
 the full installed Linux round trip before marking this gate complete.
+
+## Desktop attachment/preparation subgraph (7.7)
+
+The ownership-held callback now receives a second frozen Desktop inventory,
+independent of coding tasks. It includes trusted canonical root binding, exact
+message/send-request relationships, durable operation states and incomplete
+upload evidence. Runtime owns all new filesystem writers and isolates imported
+legacy sources through verified copy and a durable binding switch. The four
+public Desktop capture/archive/verify/materialize ports compose with this copied
+SQLite snapshot; they are not unified format 2. See [exact protocol and limits](desktop-assets.md).
+Bound Desktop assets and unenrolled legacy markers refuse new format-1 backup;
+old text-only format-1 restore compatibility and external-coding refusal remain.
+Full global budgets, complete restore/rebind and release/crash gates stay OPEN.

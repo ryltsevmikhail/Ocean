@@ -1,3 +1,4 @@
+import { DesktopAttachmentClient } from '@runnets/tools-node';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { connectLocalRuntime } from '@runnets/tools-node/local-runtime-client';
 import { dispatch } from './runtime-client.js';
@@ -56,7 +57,7 @@ async function open() {
   win.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) =>
     callback(false),
   );
-  let media: AttachmentHost | undefined;
+  const rooms = new Set<string>();
   const detached = new AbortController();
   let inflight = 0;
   ipcMain.handle('ocean:request', async (event, raw: unknown) => {
@@ -83,10 +84,10 @@ async function open() {
         },
       );
       try {
-        media ??= new AttachmentHost(
-          profileAssets(userData, profile, client.identity.profileId),
-          win,
-        );
+        profileAssets(userData, profile, client.identity.profileId);
+        const attachmentClient = new DesktopAttachmentClient(client);
+        await attachmentClient.enroll(userData);
+        const media = new AttachmentHost(attachmentClient, win, rooms);
         if (asset.success) return { version: 1, ok: true, data: await media.handle(asset.data) };
         if (!parsed.success) return failure('invalid_request');
         const c = parsed.data;

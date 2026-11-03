@@ -1,5 +1,7 @@
+import { desktopAssetPolicy } from './desktop-asset-policy.js';
 import type { BigIntStats } from 'node:fs';
 export type CodingAssetPolicy =
+  | 'desktop'
   | 'coding-dependency'
   | 'all'
   | 'coding-worktree'
@@ -12,6 +14,7 @@ export function checkAssetPolicy(
   before: BigIntStats,
   publicationCandidate = false,
 ): void {
+  if (policy === 'desktop') return desktopAssetPolicy(relative, before);
   if ((policy === 'coding-worktree' || policy === 'coding-dependency') && relative) {
     const parts = relative.split('/');
     if (

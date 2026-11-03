@@ -1,3 +1,5 @@
+import { desktopAssetStore } from './desktop-assets.js';
+import type { DesktopAssetStore } from '@runnets/application';
 import { profileReads, type ProfileReads } from './profile-reads.js';
 import { openEndpointProof, type EndpointProof } from './endpoint-proof.js';
 import { SqliteOwnerDecisions } from './owner-decisions.js';
@@ -54,6 +56,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  readonly desktopAssets: DesktopAssetStore;
   openProfileReads(ownerId: string): ProfileReads;
   openEndpointProof(): EndpointProof;
   readonly ownerDecisions: OwnerDecisionStore;
@@ -105,6 +108,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
   return {
+    desktopAssets: desktopAssetStore(db),
     openProfileReads: (ownerId) => profileReads(db, ownerId),
     openEndpointProof: () => openEndpointProof(db),
     ownerDecisions: new SqliteOwnerDecisions(db),

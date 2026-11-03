@@ -107,3 +107,26 @@ it.each(['before_begin', 'after_schema'])(
     }
   },
 );
+
+it('does not report a bound zero-coding Desktop profile as a SQLite-only backup', async () => {
+  const { root, path } = setup();
+  const db = new DatabaseSync(path);
+  db.prepare("INSERT INTO meta(key,value) VALUES('desktop_assets_binding',?)").run(
+    JSON.stringify({ root: '/inert/test/source' }),
+  );
+  db.close();
+  await expect(snapshotDatabase(path, join(root, 'copy.sqlite'))).rejects.toThrow(
+    'desktop_assets_unavailable',
+  );
+});
+it('refuses SQLite-only backup of an admitted enrollment with unknown filesystem outcome', async () => {
+  const { root, path } = setup();
+  const db = new DatabaseSync(path);
+  db.prepare(
+    "INSERT INTO ocean_desktop_operations VALUES('enrollment','/synthetic/userData','started',NULL)",
+  ).run();
+  db.close();
+  await expect(snapshotDatabase(path, join(root, 'unknown-copy.sqlite'))).rejects.toThrow(
+    'desktop_assets_unavailable',
+  );
+});

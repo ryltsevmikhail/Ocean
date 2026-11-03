@@ -457,3 +457,23 @@ The independent scoped re-review of `3056aa0..dc9e244` accepted all ten original
 Native evidence covers 71 cases in 28 files: 57 cases in 23 unchanged files at `5762e6b`, nine crash/vote/shutdown cases in three amended files and five compound cases in two amended files with content committed as `ddc371c`. The original broad run had 59 passes and 12 failures; passing reruns cover those failures without omissions. This is a passing-file/source union, not a single all-green run at the final revision. Earlier fixtures inheriting HOME may have written synthetic-project leases in the user coordination registry; final host qualification uses a private HOME, and coding-owner subprocesses preserve it.
 
 This accepts the first shared-runtime source delivery. Unverifiable legacy/cross-boot ownership remains refused, and installed upgrade/reboot administration needs separate qualification. Complete asset backup/restore, remaining Ocean 1.1 recovery, installed Linux artifacts and authorized live-provider RC acceptance remain open.
+
+## Desktop asset owner extension (7.7 development source)
+
+Protocol v1 advertises `desktop.assets`. Its exact validated operations are
+`enroll`, `begin`, `chunk`, `commit`, `read`, `prepare`, and `receipt`; native history
+receipt queries also bind the actual message ID. The shared
+`DesktopAttachmentClient` is used by Electron main and independent process tests.
+Frames retain the 2 MiB maximum; 256 KiB raw chunks compose files of at most
+10 MiB, with at most four files per preparation. Model workers never receive the
+credential or this host admission surface.
+
+The authoritative runtime journals intent and owns every filesystem publication.
+Imported roots are exact host-selected copy sources, never long-lived writer
+leases: verified bytes move into a new private canonical store and SQLite commits
+the binding. Unknown publication and migration remain unknown, and disconnected
+clients cannot continue filesystem work. Offline maintenance and runtime writers
+exclude one another through the existing authoritative SQLite ownership guard.
+New GUI/installed qualification, unified full-format-2 publication/restore and
+owner rebind remain open. See [Desktop asset capture](desktop-assets.md) for
+namespace, schema, bounded frozen evidence, immutable archive and refusal details.

@@ -40,3 +40,4 @@ export * from './coding-apply-resolution.js';
 export * from './coding-backup.js';
 export * from './coding-asset-manifest.js';
 export { validCodingBackupPolicy, validCodingBackupPresets } from './coding-backup-policy.js';
+export * from './desktop-assets.js';

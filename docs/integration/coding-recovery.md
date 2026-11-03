@@ -259,3 +259,15 @@ Qualify restored authority as inert, corrupted/missing assets as failures,
 installed Linux artifacts and legacy text-only compatibility. Native interactive
 terminal acceptance and an explicitly agreed live-provider access/request budget
 remain required. Previous live-provider permissions are exhausted.
+
+## Desktop publication evidence (7.7)
+
+Desktop upload commit, preparation and isolated legacy migration now record a
+durable owner intent before filesystem effects. A started outcome is unknown,
+never inferred from an existing file and never automatically repeated. The
+actual receipt link/unlink SIGKILL case retains two names and rejects retry;
+capture currently refuses that alias state without source repair. Private
+unlinked preparation temporaries and incomplete upload bytes are portable inert
+evidence. Quarantine does not grant approval, resend, enroll old paths or become
+a usable restored profile. See [Desktop capture](desktop-assets.md). Full-format-2
+restore/rebind and remaining crash intervals stay open.

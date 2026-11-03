@@ -1,3 +1,5 @@
+import { readDesktopBackupInventory } from './desktop-inventory.js';
+import type { DesktopAssetInventory } from '@runnets/domain';
 import { assertUnpublished } from './endpoint-proof.js';
 import { ownerBusy, ownerAlive as alive } from './maintenance-owner.js';
 import { readCodingBackupInventory } from './coding-backup-inventory.js';
@@ -6,7 +8,8 @@ import type { CodingBackupInventory } from '@runnets/domain';
 import { unresolvedEffectSql } from './tool-effect-resolution.js';
 /** Local, non-dispatching inspection and exclusive SQLite online backup. */
 import { backup, DatabaseSync } from 'node:sqlite';
-import { randomUUID } from 'node:crypto';
+import { dirname } from 'node:path';
+import { randomUUID, createHash } from 'node:crypto';
 import { existsSync, chmodSync, lstatSync } from 'node:fs';
 import { acquireOwnership } from './ownership.js';
 import { SCHEMA_VERSION } from './schema.js';
@@ -14,6 +17,7 @@ import { SCHEMA_VERSION } from './schema.js';
 export interface DatabaseSummary {
   readonly schema: number;
   readonly externalCodingAssets?: number;
+  readonly externalDesktopAssets?: number;
   readonly rooms: number;
   readonly messages: number;
   readonly positions: readonly { roomId: string; sequence: number }[];
@@ -41,11 +45,20 @@ function verify(db: DatabaseSync): void {
 }
 function summary(db: DatabaseSync): DatabaseSummary {
   verify(db);
+  const desktopAssets = Number(
+    count(db, "SELECT count(*) AS n FROM meta WHERE key='desktop_assets_binding'") > 0 ||
+      (schema(db) >= 12 &&
+        count(
+          db,
+          'SELECT (SELECT count(*) FROM ocean_desktop_operations)+(SELECT count(*) FROM ocean_desktop_uploads) AS n',
+        ) > 0),
+  );
   return {
     schema: schema(db),
     ...(schema(db) >= 7
       ? { externalCodingAssets: count(db, 'SELECT count(*) AS n FROM ocean_worktrees') }
       : {}),
+    ...(schema(db) >= 12 || desktopAssets ? { externalDesktopAssets: desktopAssets } : {}),
     rooms: count(db, 'SELECT count(*) AS n FROM ocean_rooms'),
     messages: count(db, 'SELECT count(*) AS n FROM ocean_messages'),
     positions: db
@@ -80,7 +93,8 @@ export function inspectDatabase(path: string): DatabaseInspection {
   try {
     db = new DatabaseSync(path, { readOnly: true });
     db.exec('BEGIN');
-    if (![5, 6, 10, SCHEMA_VERSION].includes(schema(db))) return { status: 'unsupported_schema' };
+    if (![5, 6, 10, 11, SCHEMA_VERSION].includes(schema(db)))
+      return { status: 'unsupported_schema' };
     if (ownerBusy(db)) return { status: 'owner_busy' };
     assertUnpublished(db);
     const result = summary(db);
@@ -109,7 +123,7 @@ export interface CodingDatabaseSnapshot<T> {
 export async function snapshotCodingDatabase<T>(
   path: string,
   destination: string,
-  capture: (inventory: CodingBackupInventory) => Promise<T>,
+  capture: (inventory: CodingBackupInventory, desktop: DesktopAssetInventory) => Promise<T>,
 ): Promise<CodingDatabaseSnapshot<T>> {
   const result = await snapshotOwned(path, destination, capture);
   if (!result.inventory) throw Error('invalid_coding_inventory');
@@ -118,7 +132,7 @@ export async function snapshotCodingDatabase<T>(
 async function snapshotOwned<T>(
   path: string,
   destination: string,
-  capture?: (inventory: CodingBackupInventory) => Promise<T>,
+  capture?: (inventory: CodingBackupInventory, desktop: DesktopAssetInventory) => Promise<T>,
 ): Promise<{ summary: DatabaseSummary; inventory?: CodingBackupInventory; assets?: T }> {
   if (!existsSync(path) || !lstatSync(path).isFile() || lstatSync(path).isSymbolicLink())
     throw new Error('profile_missing');
@@ -126,7 +140,7 @@ async function snapshotOwned<T>(
   const db = new DatabaseSync(path);
   let release: (() => void) | undefined;
   try {
-    if (![5, 6, 10, SCHEMA_VERSION].includes(schema(db))) throw new Error('unsupported_schema');
+    if (![5, 6, 10, 11, SCHEMA_VERSION].includes(schema(db))) throw new Error('unsupported_schema');
     if (ownerBusy(db)) throw new Error('owner_busy');
     try {
       release = acquireOwnership(db, { id: randomUUID(), pid: process.pid }, alive, true);
@@ -135,6 +149,26 @@ async function snapshotOwned<T>(
       throw new Error('owner_busy');
     }
     const original = summary(db);
+    const desktopBinding = db
+      .prepare("SELECT value FROM meta WHERE key='desktop_assets_binding'")
+      .get()?.['value'];
+    if (
+      desktopBinding &&
+      capture &&
+      (JSON.parse(String(desktopBinding)) as { profileId?: string }).profileId !==
+        createHash('sha256').update(dirname(path)).digest('hex')
+    )
+      throw Error('desktop_binding_mismatch');
+    if (original.externalDesktopAssets && !capture) throw Error('desktop_assets_unavailable');
+    if (
+      !desktopBinding &&
+      db
+        .prepare(
+          "SELECT 1 FROM ocean_messages WHERE author='user' AND instr(body,'[Ocean Desktop attachments v1]')>0 LIMIT 1",
+        )
+        .get()
+    )
+      throw Error('desktop_assets_unbound');
     if (original.externalCodingAssets && !capture) throw new Error('coding_assets_unavailable');
     await backup(db, destination);
     chmodSync(destination, 0o600);
@@ -149,7 +183,10 @@ async function snapshotOwned<T>(
     if (!capture) return { summary: original };
     const inventory = readCodingBackupInventory(destination),
       digest = snapshotFileHash(destination);
-    const assets = await capture(structuredClone(inventory));
+    const assets = await capture(
+      structuredClone(inventory),
+      readDesktopBackupInventory(destination),
+    );
     if (
       snapshotFileHash(destination) !== digest ||
       readCodingBackupInventory(destination).hash !== inventory.hash

@@ -70,3 +70,13 @@ export {
   verifyCodingDependencyArchive,
   restoreCodingDependencyTask,
 } from './coding-dependency-archive.js';
+export {
+  captureDesktopAssets,
+  archiveDesktopAssets,
+  verifyDesktopAssetArchive,
+  restoreDesktopAssets,
+  desktopRootIdentity,
+} from './desktop-assets.js';
+export type { DesktopAssetCapture, DesktopAssetCatalog } from './desktop-assets.js';
+export { desktopAssetFiles, desktopLegacyRoot } from './desktop-enrollment.js';
+export * from './local-desktop-client.js';

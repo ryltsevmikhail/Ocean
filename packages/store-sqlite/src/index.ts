@@ -22,3 +22,4 @@ export { snapshotCodingDatabase } from './maintenance.js';
 export type { CodingDatabaseSnapshot } from './maintenance.js';
 export type { EndpointProof } from './endpoint-proof.js';
 export type { ProfileReads } from './profile-reads.js';
+export { readDesktopBackupInventory } from './desktop-inventory.js';

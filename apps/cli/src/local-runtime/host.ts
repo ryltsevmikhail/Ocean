@@ -1,3 +1,4 @@
+import { runtimeDesktopAssets, desktopSubmitRefusal } from './desktop-assets.js';
 import { profileCommand } from './profile-commands.js';
 import { PROFILE_METHODS } from '@runnets/contracts';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -77,6 +78,8 @@ export async function startLocalRuntime(
     const reads = runtime.openProfileReads?.();
     if (!reads) throw Error('durable_runtime_required');
     const panels = new CodingPanelQueries(runtime, reads);
+    if (!runtime.desktopAssets) throw Error('durable_runtime_required');
+    const desktop = runtimeDesktopAssets(runtime.desktopAssets, paths.profile, paths.profileId);
     const identity: LocalRuntimeIdentity = {
       protocol: 1,
       profileId: paths.profileId,
@@ -85,6 +88,7 @@ export async function startLocalRuntime(
         'status',
         'stop',
         'turns.submit',
+        'desktop.assets',
         'receipts.get',
         'runs.get',
         ...LOCAL_ROOM_METHODS,
@@ -177,6 +181,11 @@ export async function startLocalRuntime(
         identity,
         dispatch: (method, params, detached) => {
           if (databaseClosed) return { error: { code: 'runtime_draining' } };
+          if (method === 'desktop.assets') return desktop(params, state !== 'ready');
+          if (method === 'turns.submit') {
+            const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
+            if (code) return { error: { code } };
+          }
           if (
             method === 'coding.panel' ||
             method === 'coding.diff' ||

@@ -65,6 +65,7 @@ export function captureAssetTreeAt(
   if (
     ![
       'all',
+      'desktop',
       'coding-dependency',
       'coding-worktree',
       'coding-recovery',

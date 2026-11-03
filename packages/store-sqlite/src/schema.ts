@@ -1,3 +1,4 @@
+import { migrateDesktopAssets } from './desktop-schema.js';
 import { CODING_APPLY_TABLES, migrateCodingApplications } from './coding-apply-schema.js';
 import { CODING_REVIEW_TABLES, migrateCodingReviews } from './coding-review-schema.js';
 import { CODING_APPROVAL_TABLES, migrateCodingApprovals } from './coding-approval-schema.js';
@@ -30,7 +31,7 @@ import { readText } from './rows.js';
 
 import { migrateOwnerDecisions } from './owner-decisions.js';
 import { ownerBusy } from './maintenance-owner.js';
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -225,6 +226,13 @@ function initializeSchemaTransaction(db: DatabaseSync, requireOwnerAbsent: boole
     if (previousVersion < 11) migrateOwnerDecisions(db);
     else if (!existing.has('ocean_owner_decisions'))
       throw Error('database schema is missing table ocean_owner_decisions');
+    if (previousVersion < 12) migrateDesktopAssets(db);
+    else if (
+      !existing.has('ocean_desktop_operations') ||
+      !existing.has('ocean_desktop_uploads') ||
+      !existing.has('ocean_desktop_adopted')
+    )
+      throw Error('database schema is missing Desktop tables');
     if (db.prepare('PRAGMA foreign_key_check').all().length !== 0)
       throw new Error('Schema foreign key check failed');
     db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(SCHEMA_VERSION));

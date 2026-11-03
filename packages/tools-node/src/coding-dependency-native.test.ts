@@ -41,6 +41,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
         'coding-asset-io',
         'coding-asset-scan',
         'coding-asset-policy',
+        'desktop-asset-policy',
         'coding-asset-selection',
         'coding-asset-source',
         'coding-asset-state',

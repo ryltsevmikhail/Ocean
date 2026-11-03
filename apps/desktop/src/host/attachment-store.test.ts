@@ -3,7 +3,7 @@ import { mkdtemp, readFile, stat, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { attachmentText } from './attachment-text.js';
-import { AttachmentStore } from './attachment-store.js';
+import { AttachmentStore } from '../../test-fixtures/legacy-attachment-store.test.js';
 import { decodeAttachments, encodeAttachments } from '../attachments.js';
 const roots: string[] = [];
 afterEach(async () => {

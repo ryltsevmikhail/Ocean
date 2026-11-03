@@ -1,7 +1,21 @@
+/** Frozen legacy writer fixture only; never imported by the Desktop host. */
 import { mkdir, mkdtemp, open, rename, readFile, copyFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { attachment, type Attachment, attachmentId } from '../attachments.js';
+import { z } from 'zod';
+const attachmentId = z.uuid();
+const attachment = z.object({
+  id: attachmentId,
+  name: z.string().min(1).max(180),
+  bytes: z
+    .int()
+    .nonnegative()
+    .max(10 * 1024 * 1024),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  kind: z.enum(['image', 'file']),
+  mime: z.string().max(100),
+});
+type Attachment = z.infer<typeof attachment>;
 
 const roomId = /^[a-zA-Z0-9_][a-zA-Z0-9_-]{0,127}$/;
 function directory(root: string, room: string, id?: string) {

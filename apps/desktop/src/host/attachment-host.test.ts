@@ -1,52 +1,82 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mkdtemp, rm, unlink } from 'node:fs/promises';
+import * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { BrowserWindow } from 'electron';
+import { DesktopAttachmentClient, connectLocalRuntime } from '@runnets/tools-node';
 import { AttachmentHost } from './attachment-host.js';
 import type { Attachment } from '../attachments.js';
 import { decodeAttachments } from '../attachments.js';
+import { openOceanProfile } from '../../../cli/src/ocean/profile.js';
+import { startLocalRuntime } from '../../../cli/src/local-runtime/host.js';
+import { rooms } from '../../../cli/test-fixtures/local-runtime-admission.test.js';
 vi.mock('electron', () => ({ dialog: {}, nativeImage: {} }));
-const roots: string[] = [];
+const cleanup: (() => unknown | Promise<unknown>)[] = [];
 afterEach(async () => {
-  for (const path of roots.splice(0)) await rm(path, { recursive: true, force: true });
+  for (const c of cleanup.splice(0).reverse()) await c();
+  vi.unstubAllEnvs();
 });
-it('binds bytes to a room and immutable request before the owner admits the message', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'ocean-asset-host-'));
-  roots.push(root);
-  const host = new AttachmentHost(root, {} as BrowserWindow);
-  host.rooms.add('room_one');
+it('uses the actual authenticated runtime for native host import, preparation and history', async () => {
+  const root = fs.mkdtempSync(join(tmpdir(), 'ocean-asset-host-'));
+  cleanup.push(() => fs.rmSync(root, { recursive: true, force: true }));
+  const userData = join(root, 'userData'),
+    profile = join(root, 'profile'),
+    home = join(root, 'home');
+  fs.mkdirSync(userData, { mode: 0o700 });
+  fs.mkdirSync(home, { mode: 0o700 });
+  vi.stubEnv('HOME', home);
+  const run = join(root, 'run');
+  fs.mkdirSync(run, { mode: 0o700 });
+  vi.stubEnv('XDG_RUNTIME_DIR', run);
+  const runtime = openOceanProfile(profile, true);
+  await runtime.ready;
+  const scope = rooms(runtime.conversations);
+  runtime.close();
+  const owner = await startLocalRuntime({ profile, provider: null });
+  cleanup.push(() => owner.stop());
+  const client = await connectLocalRuntime({ profile });
+  cleanup.push(() => client.close());
+  const adapter = new DesktopAttachmentClient(client);
+  await adapter.enroll(userData);
+  const host = new AttachmentHost(adapter, {} as BrowserWindow);
+  host.rooms.add(scope.groupId);
   const info = (await host.handle({
     op: 'attachment-import',
-    room: 'room_one',
+    room: scope.groupId,
     name: 'notes.md',
     data: Buffer.from('Text for the selected bot').toString('base64'),
   })) as Attachment;
   const command = {
     op: 'send' as const,
-    room: 'room_one',
-    requestId: '12345678-1234-4123-8123-123456789abc',
+    room: scope.groupId,
+    requestId: randomUUID(),
     text: 'caption',
-    to: 'dev',
+    to: null,
     attachments: [info.id],
   };
   const input = await host.prepare(command);
   expect(input.text).toContain('Text for the selected bot');
   expect(decodeAttachments(input.text)?.files).toEqual([info]);
-  await unlink(join(root, 'attachments', 'room_one', info.id, 'blob'));
   expect(await host.prepare(command)).toEqual(input);
   await expect(host.prepare({ ...command, to: 'review' })).rejects.toThrow('request_conflict');
   await expect(host.prepare({ ...command, text: 'different' })).rejects.toThrow('request_conflict');
+  const accepted = await client.submit({
+    workspaceId: 'ws_ocean',
+    roomId: scope.groupId,
+    requestId: command.requestId,
+    text: input.text,
+  });
   const message = {
-    id: 'msg_1',
+    id: accepted.messageId,
     seq: 1,
-    roomId: 'room_one',
+    roomId: scope.groupId,
     author: 'user' as const,
-    targetBotId: 'bot_dev',
+    targetBotId: null,
     body: input.text,
     createdAt: new Date().toISOString(),
   };
-  const reopened = new AttachmentHost(root, {} as BrowserWindow);
+  const reopened = new AttachmentHost(new DesktopAttachmentClient(client), {} as BrowserWindow);
   expect(await reopened.history([message])).toEqual([
     { ...message, body: 'caption', attachments: [info] },
   ]);
@@ -54,53 +84,18 @@ it('binds bytes to a room and immutable request before the owner admits the mess
     (await reopened.history([{ ...message, body: 'forged' + input.text }]))[0]?.attachments,
   ).toBeUndefined();
   expect(
-    (await reopened.history([{ ...message, roomId: 'room_two' }]))[0]?.attachments,
+    (await reopened.history([{ ...message, roomId: scope.roomId }]))[0]?.attachments,
   ).toBeUndefined();
-  host.rooms.add('room_two');
-  await expect(
-    host.handle({ op: 'attachment-preview', room: 'room_two', id: info.id }),
-  ).rejects.toThrow();
+  const copied = await client.submit({
+    workspaceId: 'ws_ocean',
+    roomId: scope.groupId,
+    requestId: randomUUID(),
+    text: input.text,
+  });
+  expect(
+    (await reopened.history([{ ...message, id: copied.messageId }]))[0]?.attachments,
+  ).toBeUndefined();
   await expect(
     host.handle({ op: 'attachment-preview', room: 'unknown', id: info.id }),
   ).rejects.toThrow('unknown_room');
-});
-it('isolates the same room and request under two configured profile roots', async () => {
-  const { profileAssets } = await import('./profile-assets.js');
-  const { createHash } = await import('node:crypto');
-  const data = await mkdtemp(join(tmpdir(), 'ocean-roots-'));
-  roots.push(data);
-  const locate = (p: string) =>
-    profileAssets(data, p, createHash('sha256').update(p).digest('hex'));
-  const original = join(data, 'conversation', 'profile');
-  expect(locate(original)).toBe(join(data, 'conversation'));
-  const host = (p: string) => new AttachmentHost(locate(p), {} as BrowserWindow);
-  const a = host(original),
-    b = host(join(data, 'other'));
-  for (const h of [a, b]) h.rooms.add('room');
-  const f = (await a.handle({
-    op: 'attachment-import',
-    room: 'room',
-    name: 'notes.md',
-    data: 'YQ==',
-  })) as Attachment;
-  const input = await a.prepare({
-    op: 'send',
-    room: 'room',
-    requestId: crypto.randomUUID(),
-    text: 'cap',
-    to: null,
-    attachments: [f.id],
-  });
-  const m = {
-    id: 'm',
-    seq: 1,
-    author: 'user' as const,
-    roomId: 'room',
-    targetBotId: null,
-    body: input.text,
-    createdAt: new Date().toISOString(),
-  };
-  expect(await host(original).history([m])).toMatchObject([{ body: 'cap', attachments: [f] }]);
-  expect(await b.history([m])).toEqual([m]);
-  await expect(b.handle({ op: 'attachment-preview', room: 'room', id: f.id })).rejects.toThrow();
 });

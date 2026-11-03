@@ -16,13 +16,24 @@ The sandboxed renderer sends validated room and attachment commands to Electron 
 
 A send displays the durable message/run receipt as soon as the owner acknowledges it. A group note has no run. The window follows scoped room/run watermarks, pages committed history and runs using the authoritative turn ID (which need not match the run ID), and displays read failures separately from admission. An uncertain acknowledgement in a living window retains the original UUID, recipient, text and attachment IDs for the explicit retry button. Every automatic recovery success passes the original prepared content through binding-checked admission. The locally persisted prepared body permits an exact retry even when attachment bytes disappear. Missing or corrupt preparation evidence keeps the original UUID and draft unresolved; an identity-only owner receipt cannot establish content agreement. A local or owner binding conflict keeps that same pending command, including across later preparation failures. A first-attempt refusal such as `context_limit` leaves the draft and recipient editable. Reopening the room reads the owner's committed history and runs. Closing the window detaches. The cancel button identifies a run and version and requests cancellation against that binding. The run projection reports the actual outcome. Room tasks show performer and pending decision IDs. Inspect and vote on the complete operation in the room TUI or the public client example.
 
-### Desktop-local attachments
+### Runtime-owned attachments
 
-File selection, paste and drop admit up to four files of 10 MiB each. The native host stores original bytes by room and file UUID, checks size and SHA-256 and writes a private room/request receipt before submitting transformed text. A new receipt retains the exact prepared payload for an identical retry. History decorates user bodies when the embedded request UUID, room and body digest match a local receipt. An identical copied envelope in the same room also matches. Images support preview and zoom, text supports excerpt previews and original bytes export through a save dialog. The provider receives bounded text excerpts and descriptions of the attachments.
+File selection, paste and drop retain four files of at most 10 MiB each. Electron
+main uses the authenticated `DesktopAttachmentClient` for chunked import, exact
+preparation and authorized reads. Runtime owns canonical blobs, metadata and
+request receipts. Native image/text previews and save dialogs remain in the host;
+exports use the exact bytes checked by the runtime/client digest path.
 
-The original default profile uses `<userData>/conversation/attachments`. An explicitly selected different profile uses `<userData>/conversation/profiles/<profileId>/attachments`, where `profileId` is the authenticated hash of the canonical profile path. Using a different userData directory or relocating the profile selects a different store. An independent client sees the committed text envelope. CLI profile backup excludes Desktop bytes and receipts. Retain the corresponding Desktop store separately. Asset-complete backup and restore remain open.
+The original default and alternate stores are explicit migration sources. The
+owner copies and verifies them into a new private profile store, then commits the
+binding; original directories stay untouched and cannot become authority again.
+Missing required data and unknown migration/preparation outcomes refuse. Relocating
+the profile or changing an enrolled userData does not silently select another
+store. See [Desktop ownership and capture](desktop-assets.md) for exact namespaces,
+protocol and supported/refused legacy states. CLI format-1 backup refuses bound
+Desktop assets; full format 2 and full restore remain open.
 
-### Linux qualification
+### Historical Linux GUI qualification (before 7.7)
 
 ```sh
 pnpm build
@@ -31,7 +42,7 @@ node apps/desktop/qa/smoke.mjs
 node apps/desktop/qa/entrypoint.mjs
 ```
 
-The Wayland drivers create private temporary userData, workspace, runtime directory and profile. The explicitly started owner uses a deterministic in-process HTTP replacement and a fixture-only key. The entrypoint driver launches the actual `pnpm --filter @ocean/desktop start` command twice. Only the disposable window enables a loopback debugging port. The driver drops a committed attachment-send acknowledgement, damages and removes the local attachment receipt while retaining the draft, then recovers the original admission from the restored frozen binding after local attachment bytes go missing, observes the same receipt from a separate SDK process and starts the standard room TUI in a PTY. It closes the window while generation waits, releases the provider and verifies one answer and one dispatch across clients and a reopened GUI. A separate GUI case fills room history, verifies a context refusal causes zero dispatches, then edits and submits a shorter turn. Transfer QA uses synthetic file inputs, paste/drop events and an intercepted save dialog, and compares the exported image and binary bytes. Physical OS clipboard, interactive file pickers, installed app and live providers require separate qualification.
+These historical results do not qualify the new runtime-owned asset layout. The scripts need separate requalification; no current installed or open Desktop was changed for 7.7. The Wayland drivers create private temporary userData, workspace, runtime directory and profile. The explicitly started owner uses a deterministic in-process HTTP replacement and a fixture-only key. The entrypoint driver launches the actual `pnpm --filter @ocean/desktop start` command twice. Only the disposable window enables a loopback debugging port. The driver drops a committed attachment-send acknowledgement, damages and removes the local attachment receipt while retaining the draft, then recovers the original admission from the restored frozen binding after local attachment bytes go missing, observes the same receipt from a separate SDK process and starts the standard room TUI in a PTY. It closes the window while generation waits, releases the provider and verifies one answer and one dispatch across clients and a reopened GUI. A separate GUI case fills room history, verifies a context refusal causes zero dispatches, then edits and submits a shorter turn. Transfer QA uses synthetic file inputs, paste/drop events and an intercepted save dialog, and compares the exported image and binary bytes. Physical OS clipboard, interactive file pickers, installed app and live providers require separate qualification.
 
 ## External RunneBot / ACP client
 

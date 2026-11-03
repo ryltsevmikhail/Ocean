@@ -1,3 +1,4 @@
+import type { DesktopAssetStore } from '@runnets/application';
 import { codingTurnFactory, type CodingTurnFactoryDeps } from './coding-turn-factory.js';
 import {
   GitCodingProject,
@@ -50,6 +51,7 @@ import {
 
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
 export interface Runtime {
+  readonly desktopAssets?: DesktopAssetStore;
   openProfileReads?(): ProfileReads;
   openEndpointProof?(): EndpointProof;
   readonly ownerDecisions: OwnerDecisionStore;
@@ -99,7 +101,6 @@ function serviceOver(
       : new SequentialIdGenerator(),
   });
 }
-
 /** Durable means a persistent database, durable tool claims, and exclusive recovery ownership. */
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const dbPath = options.dbPath?.trim() ?? '';
@@ -211,6 +212,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return {
       service,
       ownerDecisions: store.ownerDecisions,
+      desktopAssets: store.desktopAssets,
       openProfileReads: () => store.openProfileReads(codingDeps.ownerId),
       openEndpointProof: () => store.openEndpointProof(),
       openRoomRuns: () =>

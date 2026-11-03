@@ -169,7 +169,16 @@ not a claim of confirmed cancellation. SIGKILL recovery remains conservative.
 
 Ocean Desktop (`apps/desktop`, imported from `1c8d8c3`) connects through the public local runtime SDK from Electron main. The standard launch command is `OCEAN_DESKTOP_PROFILE=/absolute/private/profile pnpm --filter @ocean/desktop start`. The owner starts separately and owns every execution. Linux GUI qualification exercised a dropped acknowledgement, explicit retry, window close during generation, simultaneous room TUI, independent SDK observer and reopened history with one dispatch.
 
-The attachment store is Desktop-local. History decoration binds a room, embedded request UUID and exact body digest. The default imported profile retains its original store. Other canonical profiles have separate stores keyed by authenticated profile ID under the selected userData directory. Providers receive bounded text excerpts and descriptions. CLI profile backup excludes these bytes. See the [Desktop integration guide](../integration/desktop-client.md) for startup, paths and qualification limits.
+Desktop attachment/preparation publication is now runtime-owned in development
+source (7.7). The authenticated native host explicitly selects its userData; the
+runtime recomputes the legacy profile namespace, captures into a new private
+canonical profile store, verifies it and durably switches the binding. Original
+legacy roots remain inert. `desktop.assets` uses bounded chunks within the
+existing 2 MiB frame limit. Durable preparation binds room/request/body/recipient
+and send admission; unknown publication outcomes never auto-replay. Native
+preview/save stays in Electron main. See the [Desktop asset contract](../integration/desktop-assets.md)
+for exact paths, limits, snapshot ownership, refusal states and qualification.
+Public full-format-2 backup, full restore/rebind and new GUI qualification remain open.
 
 ## Acceptance
 
