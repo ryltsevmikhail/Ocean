@@ -23,6 +23,7 @@ function environment() {
   vi.stubEnv('XDG_DATA_HOME', join(root, 'userdata'));
   return root;
 }
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('independently verifies and restores coding, dependencies, configuration and Desktop from genuine frozen SQLite after every source disappears', async () => {
   const root = environment(),
     f = await fullBackupFixture(root, () => codingWorkflowFixture('direct'));
@@ -138,4 +139,4 @@ it('independently verifies and restores coding, dependencies, configuration and 
   } finally {
     f.close();
   }
-});
+}, 30_000);

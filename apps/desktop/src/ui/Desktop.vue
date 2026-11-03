@@ -4,12 +4,19 @@ import Avatar from './Avatar.vue';
 import Appearance from './Appearance.vue';
 import RoomDetails from './RoomDetails.vue';
 import Glyph from './Glyph.vue';
+import RuntimeWelcome from './RuntimeWelcome.vue';
 import RuntimeFeedback from './RuntimeFeedback.vue';
 import ProfilePanel from './ProfilePanel.vue';
 import RoomHistory from './RoomHistory.vue';
 import RoomComposer from './RoomComposer.vue';
 import { useDesktop } from './state.js';
 const {
+  runtimeReady,
+  loading,
+  sending,
+  feedbackError,
+  roomHandle,
+  sections,
   bots,
   rooms,
   room,
@@ -64,15 +71,6 @@ onBeforeUnmount(() => {
 const invalidHandle = computed(
   () => !!handle.value && !/^[a-z][a-z0-9_-]{0,31}$/.test(handle.value),
 );
-const sections = computed(() =>
-  [
-    { title: 'Групповые комнаты', items: rooms.value.filter((r) => r.kind === 'group') },
-    { title: 'Личные комнаты', items: rooms.value.filter((r) => r.kind === 'direct') },
-  ].filter((s) => s.items.length),
-);
-const roomHandle = computed(() =>
-  room.value?.kind === 'direct' ? label(room.value.botId) : undefined,
-);
 const profile = ref<InstanceType<typeof ProfilePanel>>();
 const manager = ref<HTMLDialogElement>();
 watch(
@@ -98,12 +96,11 @@ watch(
         >
           ×
         </button>
-
         <button
           class="round"
           aria-label="Создать комнату"
           title="Создать комнату"
-          :disabled="busy"
+          :disabled="busy || !runtimeReady"
           @click="
             dialog = 'room';
             selected = [];
@@ -136,7 +133,11 @@ watch(
         <p v-if="!rooms.length" class="muted">Здесь появятся ваши диалоги.</p>
       </nav>
       <footer>
-        <ProfilePanel ref="profile" :busy="busy" @bot="dialog = 'bot'" /><Appearance />
+        <ProfilePanel
+          ref="profile"
+          :busy="busy || !runtimeReady"
+          @bot="dialog = 'bot'"
+        /><Appearance />
       </footer>
     </aside>
     <main>
@@ -169,20 +170,19 @@ watch(
           </button>
         </div>
       </header>
-      <section v-if="!room" id="welcome">
-        <Avatar />
-        <small>ЛОКАЛЬНЫЙ ПРОФИЛЬ</small>
-        <h2>Начните с Ocean Team</h2>
-        <p>Обсудите задачу с dev, затем передайте результат review в той же комнате.</p>
-        <div class="form-actions">
-          <button :disabled="busy" @click="profile?.open()">Проверить профиль</button
-          ><button class="primary" :disabled="busy" @click="guard(team)">Создать Ocean Team</button>
-        </div>
-      </section>
+      <RuntimeWelcome
+        v-if="!room"
+        :busy="busy"
+        :ready="runtimeReady"
+        :loading="loading"
+        @refresh="guard(() => refresh())"
+        @profile="profile?.open()"
+        @team="guard(team)"
+      />
       <button
         v-else-if="!rooms.some((r) => r.kind === 'group' && r.title === 'Ocean Team')"
         class="team-link"
-        :disabled="busy"
+        :disabled="busy || !runtimeReady"
         @click="guard(team)"
       >
         Создать Ocean Team
@@ -195,16 +195,20 @@ watch(
         :label="label"
         :busy="busy"
         :history="history"
+        :read-error="readError"
+        @refresh="guard(() => read(room))"
       />
       <RuntimeFeedback
         :feedback="feedback"
         :receipt="receipt"
-        :read-error="readError"
+        :error="feedbackError"
+        @refresh="guard(() => refresh())"
         :run="shownRun"
         :label="label"
       />
       <RoomComposer
         :sent="sent"
+        :sending="sending"
         :room-id="room.id"
         :key="room.id"
         v-if="room"

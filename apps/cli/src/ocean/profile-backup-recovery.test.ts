@@ -13,6 +13,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('retains scoped completion versus unknown SQLite outcomes and ambiguous legacy publication aliases/conflict after all sources vanish', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'ocean-profile-recovery-'));
   roots.push(root);
@@ -125,4 +126,4 @@ it('retains scoped completion versus unknown SQLite outcomes and ambiguous legac
   } finally {
     f.close();
   }
-});
+}, 30_000);

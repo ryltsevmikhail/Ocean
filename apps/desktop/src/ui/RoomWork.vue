@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { turnText } from './runtime-text.js';
 import { ref } from 'vue';
 import type { Run } from '../protocol.js';
 import Glyph from './Glyph.vue';
@@ -37,7 +38,7 @@ const entries = [
       <details v-for="run in runs" :key="run.runId" class="info-card">
         <summary>
           <strong>{{ run.runId }}</strong
-          ><span>{{ run.turnStatus ?? run.taskStatus }}</span>
+          ><span>{{ turnText[run.turnStatus] }}</span>
         </summary>
         <dl class="runtime-facts">
           <dt>Состояние задачи</dt>

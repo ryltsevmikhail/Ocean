@@ -1,20 +1,32 @@
 <script setup lang="ts">
+import { runText } from './runtime-text.js';
 import type { Run } from '../protocol.js';
 defineProps<{
   feedback: string;
   receipt: string;
-  readError: string;
+  error: boolean;
   run: Run | undefined;
   label: (id: string) => string;
 }>();
+defineEmits<{ refresh: [] }>();
 </script>
 <template>
-  <div id="feedback" role="status">
-    {{ feedback }}
-    <div v-if="receipt">{{ receipt }}</div>
-    <div v-if="readError">{{ readError }}</div>
-    <div v-if="run">
-      {{ run.runId }} · {{ run.turnStatus }} · {{ label(run.performerId) }} [v{{ run.version }}]
+  <div id="feedback">
+    <div v-if="feedback && error" role="alert" class="runtime-error">
+      {{ feedback }} <button @click="$emit('refresh')">Обновить</button>
+    </div>
+    <div v-if="run?.turnStatus === 'failed'" role="alert" class="runtime-error">
+      {{ runText(run, label(run.performerId)) }}
+      <button @click="$emit('refresh')">Обновить</button>
+    </div>
+    <div role="status">
+      <p v-if="feedback && !error">{{ feedback }}</p>
+      <p v-if="receipt" :title="receipt">
+        {{ receipt.startsWith('Принято') ? 'Сообщение принято' : 'Квитанция не подтверждена' }}
+      </p>
+      <p v-if="run && run.turnStatus !== 'failed'" :title="run.runId + ' [v' + run.version + ']'">
+        {{ runText(run, label(run.performerId)) }}
+      </p>
     </div>
   </div>
 </template>

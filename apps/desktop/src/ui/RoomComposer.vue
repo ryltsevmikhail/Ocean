@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useComposerInput } from './composer-input.js';
 import Glyph from './Glyph.vue';
 import AttachmentCard from './AttachmentCard.vue';
 import { useAttachments } from './composer-attachments.js';
@@ -9,6 +10,7 @@ const props = defineProps<{
   group: boolean;
   members: Bot[];
   busy: boolean;
+  sending: boolean;
   active: Run | undefined;
   uncertain: boolean;
   sent: number;
@@ -24,13 +26,21 @@ watch(
     clear();
   },
 );
-function send() {
-  if (!props.busy && !importing.value)
+const sendDisabled = computed(
+  () =>
+    props.busy ||
+    importing.value ||
+    (!props.uncertain && !draft.value.trim() && !files.value.length),
+);
+const { field, send, keydown } = useComposerInput(
+  () => sendDisabled.value,
+  () => props.sent,
+  () =>
     emit(
       'send',
       files.value.map((f) => f.id),
-    );
-}
+    ),
+);
 function drop(event: DragEvent) {
   if (!props.busy && !props.uncertain) void add(Array.from(event.dataTransfer?.files ?? []));
 }
@@ -59,9 +69,13 @@ function paste(event: ClipboardEvent) {
       <div class="compose-line">
         <textarea
           id="draft"
+          :ref="(element) => (field = element as HTMLTextAreaElement | undefined)"
+          @keydown="keydown"
+          aria-describedby="composer-hint"
           v-model="draft"
           rows="1"
-          :disabled="busy || uncertain"
+          :readonly="busy || uncertain"
+          :aria-busy="busy"
           aria-label="Сообщение"
           :placeholder="recipient ? 'Сообщение для @' + recipient + '…' : 'Сообщение в комнату…'"
           maxlength="16384"
@@ -95,24 +109,29 @@ function paste(event: ClipboardEvent) {
             </select></label
           >
         </div>
+        <span v-if="sending" role="status">Отправляем…</span>
         <button
           v-if="active"
           :disabled="busy"
           type="button"
           @click="$emit('stop', active)"
-          :aria-label="'Запросить отмену ' + active.runId + ' [v' + active.version + ']'"
+          :aria-label="
+            'Остановить ответ @' +
+            (members.find((b) => b.id === active?.performerId)?.handle ?? 'участник')
+          "
         >
-          Запросить отмену {{ active.runId }} [v{{ active.version }}]</button
+          Остановить</button
         ><button
           class="send"
           :aria-label="uncertain ? 'Повторить исходный запрос' : 'Отправить'"
           :title="uncertain ? 'Повторить исходный запрос' : 'Отправить'"
-          :disabled="busy || importing || (!uncertain && !draft.trim() && !files.length)"
+          :disabled="sendDisabled"
         >
           <Glyph name="send" />
         </button>
       </div>
     </div>
+    <small id="composer-hint">Enter — отправить, Shift+Enter — новая строка</small>
     <small v-if="files.length" class="attachment-note"
       >Файлы сохраняются в комнате. Текст передаётся модели отрывками. Анализ изображений пока
       недоступен.</small
@@ -121,6 +140,6 @@ function paste(event: ClipboardEvent) {
       >Повторная отправка проверит тот же запрос с теми же вложениями и адресатом.</small
     >
     <small v-if="importing" role="status">Прикрепляем файлы…</small>
-    <p v-if="error" role="alert">{{ error }}</p>
+    <p v-if="error" role="alert" class="runtime-error">{{ error }}</p>
   </form>
 </template>

@@ -12,6 +12,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('retains exact raw index, stages, resolve-undo and base closure after every source is deleted', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'ocean-profile-index-'));
   roots.push(root);
@@ -64,4 +65,4 @@ it('retains exact raw index, stages, resolve-undo and base closure after every s
   } finally {
     f.close();
   }
-});
+}, 30_000);

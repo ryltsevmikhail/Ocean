@@ -12,6 +12,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('retains independently verifiable frozen origin after source deletion and mutable profile use', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'origin-'));
   roots.push(root);
@@ -111,4 +112,4 @@ it('retains independently verifiable frozen origin after source deletion and mut
   } finally {
     f.close();
   }
-});
+}, 30_000);

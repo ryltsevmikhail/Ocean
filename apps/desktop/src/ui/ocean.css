@@ -11,6 +11,8 @@
   --text: light-dark(#15202c, #eff4f8);
   --muted: light-dark(#535e69, #9caab6);
   --accent: #1766bc;
+  --danger: light-dark(#a52a24, #ffaaa0);
+  --focus: light-dark(#0b5cad, #5aa8ff);
   --rail-width: clamp(220px, 18.34vw, 264px);
   font:
     14px/1.5 Inter,
@@ -277,4 +279,13 @@ textarea {
   display: grid;
   place-items: center;
   flex: none;
+}
+
+.runtime-error,
+#welcome .runtime-error h2 {
+  color: var(--danger);
+}
+.runtime-error {
+  border-inline-start: 3px solid var(--danger);
+  padding: 8px 12px;
 }

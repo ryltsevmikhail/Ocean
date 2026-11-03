@@ -20,6 +20,7 @@ function environment() {
   vi.stubEnv('XDG_DATA_HOME', join(root, 'userdata'));
   return root;
 }
+// Whole native Git/SQLite recovery lifecycle; measured above the 5s unit-test default.
 it('backs up real frozen coding references and restores all evidence after source deletion', async () => {
   const root = environment(),
     f = await codingWorkflowFixture('direct');
@@ -96,7 +97,7 @@ it('backs up real frozen coding references and restores all evidence after sourc
   } finally {
     f.close();
   }
-});
+}, 30_000);
 it('keeps the original copied SQLite identity through the ownership-held finalizer', async () => {
   const root = environment(),
     f = await codingWorkflowFixture('direct');
