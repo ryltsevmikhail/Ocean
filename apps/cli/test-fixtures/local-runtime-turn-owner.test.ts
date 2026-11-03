@@ -4,14 +4,26 @@ import { appendFileSync, writeSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import { once } from 'node:events';
-import type { ProviderPort } from '@runnets/application';
+import { TaskRunService, type ProviderPort } from '@runnets/application';
 const profile = process.argv[2]!;
+const scenario = process.argv[3];
+const calls = profile + (scenario === 'successor' ? '/successor.calls' : '/calls');
+appendFileSync(calls, '');
+if (scenario === 'gap') {
+  const execute = TaskRunService.prototype.execute;
+  TaskRunService.prototype.execute = async function (command) {
+    // Keep the listener responsive at the first aggregate write, after committed chat admission.
+    if (command.type === 'CreateTaskRun') await once(process, 'message');
+    return execute.call(this, command);
+  };
+}
 const provider: ProviderPort = {
   id: 'test',
   models: ['test'],
   capabilities: { streaming: true, usage: true, reasoning: false },
   stream(request) {
-    appendFileSync(profile + '/calls', 'dispatch\n', { flush: true });
+    appendFileSync(calls, 'dispatch\n', { flush: true });
+    if (scenario === 'successor') throw Error('unexpected successor provider dispatch');
     return (async function* () {
       request.signal!.addEventListener(
         'abort',

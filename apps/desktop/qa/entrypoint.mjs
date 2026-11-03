@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import console from 'node:console';
 import { chromium } from 'playwright-core';
 import { fixture, windowEnv } from './owner.mjs';
+import { closePage } from './window-close.mjs';
 import { damagedPreparation } from './send-recovery.mjs';
 
 const f = await fixture(),
@@ -60,12 +61,9 @@ async function launch() {
   const browser = await chromium.connectOverCDP('http://127.0.0.1:' + Number(port));
   const page =
     browser.contexts()[0].pages()[0] ?? (await browser.contexts()[0].waitForEvent('page'));
-  const { promise: done, resolve } = Promise.withResolvers();
-  page.once('close', resolve);
   page.setDefaultTimeout(10000);
   async function close() {
-    await page.evaluate(() => globalThis.close()).catch(() => {});
-    await done;
+    await closePage(page);
     await wait(() => proc.exitCode !== null);
     assert.equal(await closed, 0);
     gui = undefined;
@@ -216,10 +214,13 @@ try {
     count,
   );
 } finally {
-  if (gui && gui.proc.exitCode === null) {
-    process.kill(-gui.proc.pid, 'SIGKILL');
-    await gui.closed;
+  try {
+    if (gui && gui.proc.exitCode === null && gui.proc.signalCode === null) {
+      process.kill(-gui.proc.pid, 'SIGKILL');
+      await gui.closed;
+    }
+  } finally {
+    tui?.kill();
+    await f.close();
   }
-  tui?.kill();
-  await f.close();
 }

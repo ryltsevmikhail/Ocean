@@ -1,7 +1,8 @@
 // Halt the real owner at a named commit boundary for the parent SIGKILL.
-import { writeSync, appendFileSync } from 'node:fs';
+import { writeSync, appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { startLocalRuntime } from '../dist/local-runtime/host.js';
+import { WorkspaceTools } from '@runnets/tools-node';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import type { ProviderPort, ToolJournalPort } from '@runnets/application';
 import { openOceanProfile } from '../dist/ocean/profile.js';
@@ -21,6 +22,12 @@ const provider: ProviderPort = {
   capabilities: { streaming: true, reasoning: false, usage: true, toolCalls: true },
   async *stream() {
     appendFileSync(join(profile, 'calls'), 'provider\n', { flush: true });
+    if (round >= 2 && (phase === 'vote' || phase === 'expired')) {
+      yield { type: 'text_delta', text: 'finished' };
+      yield { type: 'usage', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
+      yield { type: 'completed', stopReason: 'stop', rawStopReason: 'stop' };
+      return;
+    }
     const call =
       round++ === 0
         ? { id: 'read', name: 'read_file', arguments: '{"path":"math.cjs"}' }
@@ -34,6 +41,25 @@ const provider: ProviderPort = {
     yield { type: 'completed', stopReason: 'tool_calls', rawStopReason: 'tool_calls' };
   },
 };
+if (phase === 'expired') {
+  // Advance only this owner's decision clock, once both voters hold the unexpired card.
+  const now = Date.now;
+  Date.now = () => now() + (existsSync(join(profile, 'expired')) ? 300001 : 0);
+}
+if (phase === 'vote' || phase === 'expired') {
+  const prepare = WorkspaceTools.prototype.prepare;
+  WorkspaceTools.prototype.prepare = async function (call) {
+    const prepared = await prepare.call(this, call);
+    if (prepared.kind !== 'edit') return prepared;
+    return {
+      ...prepared,
+      execute(signal) {
+        appendFileSync(join(profile, 'effects'), 'write\n', { flush: true });
+        return prepared.execute(signal);
+      },
+    };
+  };
+}
 if (phase === 'effect') {
   const store = openSqliteStore({ path: ':memory:' });
   const journal = Object.getPrototypeOf(store.tools) as ToolJournalPort;
@@ -46,6 +72,8 @@ if (phase === 'effect') {
     }
     return settle.apply(this, args);
   };
+}
+if (['effect', 'vote', 'expired'].includes(phase)) {
   const host = await startLocalRuntime({ profile, provider });
   writeSync(1, 'ready\n');
   await host.closed;

@@ -48,6 +48,13 @@ it.runIf(process.platform === 'linux').each(['sigterm', 'hangup'])(
         taskStatus: 'running',
       });
       const runRef = { ...scope, runId };
+      const snapshot = await peer('getRun', runRef);
+      const receipt = await peer('getReceipt', { ...scope, requestId: snapshot.requestId });
+      expect(receipt).toMatchObject({
+        runId,
+        messageId: snapshot.messageId,
+        turnId: snapshot.turnId,
+      });
       expect(
         (await peer('listEvents', runRef)).map((event: { type: string }) => event.type),
       ).not.toContain('task_run.cancelling');
@@ -55,7 +62,7 @@ it.runIf(process.platform === 'linux').each(['sigterm', 'hangup'])(
       host.send('success');
       await vi.waitFor(async () =>
         expect(await peer('history', scope)).toMatchObject([
-          { body: 'from the terminal' },
+          { id: receipt.messageId, body: 'from the terminal' },
           { body: 'native fixture answer' },
         ]),
       );
@@ -68,7 +75,8 @@ it.runIf(process.platform === 'linux').each(['sigterm', 'hangup'])(
       expect(await peer('stop', {})).toMatchObject({ outcome: 'complete' });
       console.info(
         'PTY admitted and reattached',
-        runId,
+        close,
+        JSON.stringify(receipt),
         result.id,
         'one committed answer, provider dispatches 1',
       );
