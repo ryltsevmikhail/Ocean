@@ -42,7 +42,7 @@ export class ModelConnectionMutations<T> {
   ): T {
     const replay = this.#replay(request);
     if (replay !== null) return replay;
-    const current = this.#read(request);
+    const current = this.#read(request, key !== undefined);
     if (current?.requestId === request.requestId && current.intent === 'pending')
       return this.#resume(current, request, key);
     this.#revision(current, request.expected);
@@ -57,7 +57,6 @@ export class ModelConnectionMutations<T> {
         .some((m) => m.modelId === descriptor.defaultModelId)
     )
       throw Error('provider_invalid_model');
-    if (current?.intent === 'pending' && key === undefined) throw Error('provider_unverified');
     if (descriptor.auth === 'none' && (descriptor.kind !== 'local' || key !== undefined))
       throw Error('invalid_params');
     const oldRef = current?.secretRef ?? null;
@@ -132,7 +131,7 @@ export class ModelConnectionMutations<T> {
     this.assertWritable();
     return this.receipts.replay(request.requestId, request.binding);
   }
-  #read(request: ModelMutationRequest): ModelConnectionRecord | null {
+  #read(request: ModelMutationRequest, explicitKeyRepair = false): ModelConnectionRecord | null {
     const store = this.state.options.store;
     const current = store.read(request.connectionId);
     if (
@@ -147,6 +146,15 @@ export class ModelConnectionMutations<T> {
       throw Error('provider_unverified');
     if (current?.requestId === request.requestId && current.binding !== request.binding)
       throw Error('request_conflict');
+    // Only its original owner may finish the recorded private effect. Supersession
+    // cannot discard previousRef/nextRef while either may still exist on disk.
+    // Old rows without that evidence allow only a new explicit-key set repair.
+    if (
+      current?.intent === 'pending' &&
+      current.requestId !== request.requestId &&
+      !(explicitKeyRepair && current.pendingSecretChange === null)
+    )
+      throw Error('provider_unverified');
     return current;
   }
   #revision(current: ModelConnectionRecord | null, expected: number | null | undefined): void {
