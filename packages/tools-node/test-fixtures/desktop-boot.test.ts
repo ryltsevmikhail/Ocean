@@ -1,6 +1,17 @@
 import * as fs from 'node:fs';
 import * as cp from 'node:child_process';
 import { vi } from 'vitest';
+export async function simulateDesktopFilesystem(type: number): Promise<void> {
+  const actual = await vi.importActual<typeof fs>('node:fs');
+  vi.mocked(fs.statfsSync).mockImplementation((path, options) => {
+    const stat = actual.statfsSync(path, options);
+    stat.type = typeof stat.type === 'bigint' ? BigInt(type) : type;
+    return stat;
+  });
+}
+export function desktopHelperResult(stdout: string): cp.SpawnSyncReturns<string> {
+  return { pid: 0, output: [null, stdout, ''], status: 0, signal: null, stdout, stderr: '' };
+}
 /** Synthetic host observations only; real files, SQLite and all publication paths stay in use. */
 export async function desktopBootSimulation() {
   const actual = await vi.importActual<typeof fs>('node:fs');
@@ -16,27 +27,24 @@ export async function desktopBootSimulation() {
       return false;
     }
   };
-  vi.mocked(fs.statfsSync).mockImplementation((() => ({
-    type: 0x9123683e,
-  })) as typeof fs.statfsSync);
-  vi.mocked(cp.spawnSync).mockImplementation(((program, args, options) => {
+  await simulateDesktopFilesystem(0x9123683e);
+  vi.mocked(cp.spawnSync).mockImplementation((program, args, options) => {
     if (program !== '/usr/bin/python3' || args?.[0] !== '-I')
       return child.spawnSync(program, args, options);
-    const fd = (options.stdio as number[])[3]!;
+    const fd = Array.isArray(options?.stdio) ? options.stdio[3] : undefined;
+    if (typeof fd !== 'number' || options?.encoding !== 'utf8')
+      throw Error('invalid_desktop_helper_fixture');
     const stat = actual.fstatSync(fd, { bigint: true });
-    return {
-      status: 0,
-      signal: null,
-      stdout: JSON.stringify({
+    return desktopHelperResult(
+      JSON.stringify({
         filesystem: '1'.repeat(32),
         subvolume: '2'.repeat(32),
         subvolumeId: '257',
         type: 77,
         handle: stat.ino.toString(16).padStart(40, '0'),
       }),
-      stderr: '',
-    };
-  }) as typeof cp.spawnSync);
+    );
+  });
   for (const key of ['fstatSync', 'lstatSync', 'statSync'] as const)
     vi.mocked(fs[key]).mockImplementation(((...args: unknown[]) => {
       const stat = Reflect.apply(actual[key], actual, args) as fs.BigIntStats | undefined;

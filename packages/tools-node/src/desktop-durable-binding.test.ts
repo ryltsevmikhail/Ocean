@@ -26,6 +26,10 @@ import {
 } from './desktop-assets.js';
 import { desktopRead, readDesktopPreparation } from './desktop-file-store.js';
 import {
+  desktopHelperResult,
+  simulateDesktopFilesystem,
+} from '../test-fixtures/desktop-boot.test.js';
+import {
   imageAuthorityFixture,
   cleanupImageAuthorityRoots,
   persistMessage,
@@ -59,15 +63,8 @@ afterEach(async () => {
 });
 async function fixture() {
   const actual = await vi.importActual<typeof fs>('node:fs');
-  vi.mocked(fs.statfsSync).mockImplementation((() => ({
-    type: 0x9123683e,
-  })) as typeof fs.statfsSync);
-  vi.mocked(cp.spawnSync).mockImplementation((() => ({
-    status: 0,
-    signal: null,
-    stdout: JSON.stringify(anchor),
-    stderr: '',
-  })) as typeof cp.spawnSync);
+  await simulateDesktopFilesystem(0x9123683e);
+  vi.mocked(cp.spawnSync).mockReturnValue(desktopHelperResult(JSON.stringify(anchor)));
   const f = imageAuthorityFixture();
   close.push(f.close);
   const info = f.importImage();
@@ -144,12 +141,7 @@ it.each(['filesystem', 'subvolume', 'subvolumeId', 'type', 'handle'] as const)(
       ...anchor,
       [key]: key === 'type' ? 78 : key === 'subvolumeId' ? '258' : 'f'.repeat(anchor[key].length),
     };
-    vi.mocked(cp.spawnSync).mockImplementation((() => ({
-      status: 0,
-      signal: null,
-      stdout: JSON.stringify(changed),
-      stderr: '',
-    })) as typeof cp.spawnSync);
+    vi.mocked(cp.spawnSync).mockReturnValue(desktopHelperResult(JSON.stringify(changed)));
     let reads = 0;
     vi.mocked(fs.readSync).mockImplementation(((...args: Parameters<typeof fs.readSync>) => {
       reads++;
@@ -201,9 +193,7 @@ it.each(['uid', 'gid', 'mode'] as const)(
 it('keeps unsupported filesystems in exact legacy mode and refuses later drift', async () => {
   const { f } = await fixture();
   const { desktopBindingIdentity } = await import('./desktop-root.js');
-  vi.mocked(fs.statfsSync).mockImplementation((() => ({
-    type: 0x1021994,
-  })) as typeof fs.statfsSync);
+  await simulateDesktopFilesystem(0x1021994);
   const binding = { ...f.binding(), identity: desktopBindingIdentity(f.binding().root) };
   expect(binding.identity).toMatch(/^\d+(?::\d+){5}$/);
   await drift(true, true);
@@ -213,17 +203,15 @@ it('keeps unsupported filesystems in exact legacy mode and refuses later drift',
 });
 it('never downgrades an anchored binding when its filesystem becomes unsupported', async () => {
   const { f, info } = await fixture();
-  vi.mocked(fs.statfsSync).mockImplementation((() => ({
-    type: 0x1021994,
-  })) as typeof fs.statfsSync);
+  await simulateDesktopFilesystem(0x1021994);
   expect(() => desktopRead(f.binding(), f.roomId, info.id)).toThrow('desktop_binding_mismatch');
 });
 it('rechecks the full root witness after the helper before reading child bodies', async () => {
   const { f, info, actual } = await fixture();
-  vi.mocked(cp.spawnSync).mockImplementation((() => {
+  vi.mocked(cp.spawnSync).mockImplementation(() => {
     actual.writeFileSync(join(f.binding().root, 'changed'), 'synthetic', { mode: 0o600 });
-    return { status: 0, signal: null, stdout: JSON.stringify(anchor), stderr: '' };
-  }) as typeof cp.spawnSync);
+    return desktopHelperResult(JSON.stringify(anchor));
+  });
   let reads = 0;
   vi.mocked(fs.readSync).mockImplementation(((...args: Parameters<typeof fs.readSync>) => {
     reads++;

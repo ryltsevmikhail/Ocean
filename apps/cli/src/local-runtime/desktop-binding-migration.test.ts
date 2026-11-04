@@ -20,7 +20,10 @@ vi.mock('node:child_process', async (original) => {
   const a = await original<typeof cp>();
   return { ...a, spawnSync: vi.fn(a.spawnSync) };
 });
-import { desktopBootSimulation } from '../../../../packages/tools-node/test-fixtures/desktop-boot.test.js';
+import {
+  desktopBootSimulation,
+  simulateDesktopFilesystem,
+} from '../../../../packages/tools-node/test-fixtures/desktop-boot.test.js';
 import { DesktopAssetService } from '@runnets/application';
 import { openSqliteStore, readDesktopBackupInventory } from '@runnets/store-sqlite';
 import { desktopAssetFiles, desktopRootIdentity } from '@runnets/tools-node';
@@ -137,9 +140,7 @@ it.each([15, 16, 17, 18])(
     if (version < 16) db.exec('DROP TABLE ocean_broadcast_batches');
     db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(version));
     db.close();
-    vi.mocked(fs.statfsSync).mockImplementation((() => ({
-      type: 0x1021994,
-    })) as typeof fs.statfsSync);
+    await simulateDesktopFilesystem(0x1021994);
     const archive = join(f.root, 'old-archive');
     const manifest = await backupProfile(f.profile, archive);
     expect(manifest.summary.schema).toBe(version);
