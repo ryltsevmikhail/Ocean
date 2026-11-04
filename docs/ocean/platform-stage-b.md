@@ -395,3 +395,50 @@ check останавливается на сохранённых исходни�
 владельцем — отдельный контракт, а живые запросы OpenAI/Anthropic отложены
 пользователем. Эти адаптерные проверки не использовали настоящие ключи и
 не обновляли установленный RC2.
+
+## B9: адаптер Anthropic Messages
+
+На `d42481c` добавлен `@runnets/provider-anthropic`: прямой Messages API,
+модель `claude-haiku-5-5`, версия API `2026-10-21`, только канонический
+`https://api.anthropic.com` и сохранённый workspace-scoped ключ.
+Thinking отключён; неподдерживаемая история thinking явно отклоняется.
+Выбор workspace для unscoped ключей пока не реализован.
+
+Поток проверяет типы событий, блоки, корреляцию инструментов и терминальный
+message_stop. Неизвестные именованные события отклоняются; ping и транспортные
+SSE-поля поддержаны. Промежуточный расход не выдаётся за окончательный;
+подтверждённые финальные метрики сохраняются даже при потере завершающего
+события. Завершение и доступность расхода учитываются отдельно.
+
+Регрессия через настоящий движок проверяет два запроса, один эффект
+инструмента и передачу его результата обратно модели. Это тест с внедрённым
+HTTP и журналом в памяти, без внешнего аккаунта. Редиректы не пересылают
+историю и ключ. Явный maxTokens в 1..128000 сохраняется; отсутствие выбирает
+4096, но это не производственный бюджет движка.
+
+Независимое ревью: 0 Critical, 0 Important, 1 Minor. Публичный конструктор
+пока принимает таймаут выше диапазона нативного таймера; исправление и
+пограничный тест включены в задачу 13. Обычный runtime использует допустимый
+таймаут по умолчанию.
+
+Финальные результаты: 284 целевых теста, 11 межпроцессных тестов и проверка
+собранного реестра адаптеров прошли. Строгая компиляция изменённых тестов,
+lint и build — exit 0. Root check — exit 1: 2971 passed, 3 сохранённых
+регрессии каталога плагинов, 44 skipped. Format — exit 1 только на двух
+защищённых файлах каталога. Отдельные 63 диагностики полной проверки тестовых
+типов совпадают с базой задачи; их устранение остаётся в задаче 17.
+
+```sh
+pnpm exec vitest run --config vitest.source.config.ts packages/provider-anthropic packages/provider-core packages/provider-openai apps/cli/src/local-runtime/provider-anthropic-activation.test.ts apps/cli/src/local-runtime/provider-openai-activation.test.ts apps/cli/src/local-runtime/provider-activation-factory.test.ts apps/cli/src/local-runtime/provider-anthropic-engine.test.ts
+pnpm check
+pnpm build
+pnpm format:check
+pnpm exec vitest run --config vitest.process.config.ts apps/cli/src/local-runtime/own-engine-process.test.ts apps/cli/src/local-runtime/lost-receipt-process.test.ts apps/cli/src/local-runtime/restart-process.test.ts apps/cli/src/local-runtime/broadcast-process.test.ts
+```
+
+Команды выполнялись из корня с одноразовыми HOME/XDG/TMPDIR. Межпроцессные
+тесты выполнены отдельно после build, поскольку root check не дошёл до них.
+Живую приёмку OpenAI и Anthropic пользователь отложил. Реальная совместимость
+аккаунта, стоимость, vision/tools у сервиса, чистая установленная сборка,
+GUI и native поведение этими результатами не подтверждены. RC2 и реальные
+профили не менялись.
