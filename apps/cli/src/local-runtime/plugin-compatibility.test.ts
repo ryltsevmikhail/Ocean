@@ -17,5 +17,5 @@ it('keeps full current identity distinct from the negotiated RC2 identity', () =
   const legacy = clientIdentity(identity, false);
   expect(rc2Accepts(legacy)).toBe(true);
   expect(legacy.capabilities.some((c) => c.startsWith('plugin.'))).toBe(false);
-  expect(clientIdentity(identity, true)).toEqual(identity);
+  expect(clientIdentity(identity, true, true)).toEqual(identity);
 });

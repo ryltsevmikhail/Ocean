@@ -1,15 +1,18 @@
+import { modelSettingsHost } from './model-settings-host.js';
 /**
  * Host composition for provider settings.
  *
  * The CLI host owns credential resolution: it builds immutable DeepSeek
  * activations from a saved key or the environment, binds the bounded model
  * probe to the private credential store, and exposes one dispatch module over
- * the authenticated local-runtime socket. Keys never reach the wire.
+ * the authenticated local-runtime socket. Keys enter only authenticated owner requests; responses stay keyless.
  */
 
 import { createHash, randomUUID } from 'node:crypto';
 import {
   ProviderConnectionService,
+  type ConversationStore,
+  type TaskRunService,
   ProviderActivationService,
   injectedProviderActivation,
   type ProviderActivationPort,
@@ -111,9 +114,19 @@ export class ProviderSettings {
   ): RuntimeReply | Promise<RuntimeReply> {
     switch (method) {
       case 'provider.status':
-        return isLocalProviderQuery(params)
-          ? { result: this.#service.status() }
-          : { error: { code: 'invalid_params' } };
+        if (!isLocalProviderQuery(params)) return { error: { code: 'invalid_params' } };
+        try {
+          return { result: this.#service.status() };
+        } catch (error) {
+          return {
+            error: {
+              code:
+                error instanceof Error && error.message === 'provider_unverified'
+                  ? 'provider_unverified'
+                  : 'runtime_failure',
+            },
+          };
+        }
       case 'provider.check':
         if (!isLocalProviderQuery(params)) return { error: { code: 'invalid_params' } };
         return this.#supervise(() => this.#service.check(detached));
@@ -178,37 +191,52 @@ export interface ProviderHostInput {
 export function providerHostSettings(input: ProviderHostInput): {
   readonly settings: ProviderSettings;
   readonly resolver: ProviderActivationPort;
+  readonly modelSettings: (
+    store: ConversationStore,
+    tasks: TaskRunService,
+  ) => ReturnType<typeof modelSettingsHost>;
 } {
   const secrets =
     input.secretStore ??
     createProviderSecretStore(input.credentialDir ?? providerCredentialDirectory(input.profile));
-  const service = new ProviderConnectionService({
-    store: input.store,
+  const connections = input.store.connections;
+  const factory = createProviderActivationFactory({
+    env: input.env,
+    ...(input.httpClient === undefined ? {} : { httpClient: input.httpClient }),
+  });
+  const shared = {
     secrets,
-    credentials: createProviderCredentials({
-      env: input.env,
-      ...(input.httpClient === undefined ? {} : { httpClient: input.httpClient }),
-    }),
+    factory,
     clock: { now: () => new Date(input.now?.() ?? Date.now()) },
     nextId: () => randomUUID().replaceAll('-', ''),
-    sha256: (text) => createHash('sha256').update(text).digest('hex'),
+    sha256: (text: string) => createHash('sha256').update(text).digest('hex'),
     restored: input.restored,
     injected: input.injected,
     disabled: input.disabled,
     mutationsAllowed: input.mutationsAllowed,
+  };
+  const service = new ProviderConnectionService({
+    store: input.store,
+    credentials: createProviderCredentials({
+      env: input.env,
+      ...(input.httpClient === undefined ? {} : { httpClient: input.httpClient }),
+    }),
+    ...shared,
   });
   const resolver =
     input.injected !== null || input.disabled
       ? injectedProviderActivation(input.disabled ? null : input.injected)
       : new ProviderActivationService({
-          connections: input.store.connections,
+          connections,
           secrets,
-          factory: createProviderActivationFactory({
-            env: input.env,
-            ...(input.httpClient === undefined ? {} : { httpClient: input.httpClient }),
-          }),
+          factory,
           restored: input.restored,
           disabled: input.disabled,
         });
-  return { settings: new ProviderSettings(service), resolver };
+  return {
+    settings: new ProviderSettings(service),
+    resolver,
+    modelSettings: (store, tasks) =>
+      modelSettingsHost({ ...shared, store: connections }, store, tasks),
+  };
 }

@@ -1,3 +1,4 @@
+import { LEGACY_WIRE_CONTEXT, type RuntimeWireContext } from './client-compatibility.js';
 import { CodingTurnRefusal } from '../coding-turn-factory.js';
 import type {
   DirectChatService,
@@ -40,6 +41,7 @@ export class RuntimeTurns {
     method: string,
     params: Record<string, unknown>,
     detached: AbortSignal,
+    context: RuntimeWireContext = LEGACY_WIRE_CONTEXT,
   ): RuntimeReply | Promise<RuntimeReply> {
     switch (method) {
       case 'turns.submit': {
@@ -100,6 +102,7 @@ export class RuntimeTurns {
           typeof params['runId'] === 'string'
             ? (this.#jobs.get(params['runId'])?.controller ?? this.#external?.(params['runId']))
             : undefined,
+          context,
         );
     }
   }

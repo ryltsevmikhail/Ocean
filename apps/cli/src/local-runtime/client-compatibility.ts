@@ -1,4 +1,8 @@
-import { LOCAL_PLUGIN_SESSION_AUTHORITY, type LocalRuntimeIdentity } from '@runnets/contracts';
+import {
+  LOCAL_MODEL_CONNECTIONS,
+  LOCAL_PLUGIN_SESSION_AUTHORITY,
+  type LocalRuntimeIdentity,
+} from '@runnets/contracts';
 
 /** Hello features describe wire support only; they never grant bot or tool authority. */
 export function clientFeatures(params: Record<string, unknown>): readonly string[] | null {
@@ -12,10 +16,21 @@ export function clientFeatures(params: Record<string, unknown>): readonly string
 }
 
 /** RC2 accepts at most 64 capabilities and cannot use the session-authority plugin API. */
-export function clientIdentity<T extends LocalRuntimeIdentity>(identity: T, plugins: boolean): T {
-  return plugins
-    ? identity
-    : { ...identity, capabilities: identity.capabilities.filter((c) => !c.startsWith('plugin.')) };
+export interface RuntimeWireContext {
+  readonly models: boolean;
+}
+export const LEGACY_WIRE_CONTEXT: RuntimeWireContext = Object.freeze({ models: false });
+export function clientIdentity<T extends LocalRuntimeIdentity>(
+  identity: T,
+  plugins: boolean,
+  models = false,
+): T {
+  return {
+    ...identity,
+    capabilities: identity.capabilities.filter(
+      (c) => (plugins || !c.startsWith('plugin.')) && (models || c !== LOCAL_MODEL_CONNECTIONS),
+    ),
+  };
 }
 export function supportsPlugins(features: readonly string[]): boolean {
   return features.includes(LOCAL_PLUGIN_SESSION_AUTHORITY);

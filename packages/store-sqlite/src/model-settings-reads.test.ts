@@ -11,9 +11,15 @@ import {
   TaskRunService,
   unconfiguredModelConnection,
 } from '@runnets/application';
-import { unlimitedBudget } from '@runnets/domain';
-import { activation, setup } from '../../application/test-fixtures/model-turn.js';
-import { runTurn } from '@runnets/application';
+import { unlimitedBudget, taskRunId, conversationId, workspaceId } from '@runnets/domain';
+import { SequentialIdGenerator } from '@runnets/store';
+import {
+  activation,
+  provider,
+  usage,
+  terminal,
+} from '../../application/test-fixtures/model-turn.js';
+import { runTurn, executeStep } from '@runnets/application';
 import { openSqliteStore } from './index.js';
 const close: (() => void)[] = [];
 afterEach(() => {
@@ -93,7 +99,33 @@ it('reopens exact same-vendor bindings and policy revision while frozen executio
   expect(
     policy.set({ ...scope, requestId: 'policy', expectedRevision: 1, cloudTransfer: 'allow' }).ok,
   ).toBe(true);
-  const input = await setup(undefined, unlimitedBudget(), db.log);
+  const service = new TaskRunService({ log: db.log, clock, ids: new SequentialIdGenerator() });
+  const runId = taskRunId('tr_model_turn');
+  const created = await executeStep(
+    service,
+    runId,
+    'CreateTaskRun',
+    {
+      conversationId: conversationId('cv_' + scope.roomId),
+      workspaceId: workspaceId('ws_' + scope.workspaceId),
+      parentTaskRunId: null,
+      model: 'scripted',
+      policyId: 'pl_model_turn',
+      budget: unlimitedBudget(),
+    },
+    0,
+  );
+  if (!created.ok) throw created.error;
+  const input = {
+    service,
+    taskRunId: runId,
+    clock,
+    provider: provider([usage, terminal]),
+    model: 'scripted',
+    messages: [],
+    signal: new AbortController().signal,
+    emit: () => {},
+  };
   const snapshot = {
     ...activation(),
     identity: {

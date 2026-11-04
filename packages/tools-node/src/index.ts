@@ -169,3 +169,8 @@ export { localPluginClient, type LocalPluginClient } from './local-plugin-client
 export { desktopBindingIdentity, desktopBindingMatches } from './desktop-root.js';
 export { desktopIdentityMode } from './desktop-identity.js';
 export { prepareDesktopBindingUpgrade } from './desktop-binding-upgrade.js';
+
+export {
+  localModelConnectionsClient,
+  type LocalModelConnectionsClient,
+} from './local-model-connections-client.js';

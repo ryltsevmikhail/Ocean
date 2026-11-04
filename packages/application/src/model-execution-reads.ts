@@ -2,6 +2,7 @@ import {
   ABSENT,
   evolve,
   taskRunId,
+  workspaceId,
   type EventEnvelope,
   type ModelCompletionEvidence,
   type ModelExecutionIdentity,
@@ -154,7 +155,8 @@ function materialize(stream: readonly EventEnvelope[], query: RunQuery): ModelEx
       throw Error();
     // evolve invokes the existing strict model start/settlement validators.
     state = evolve(state, event as TaskRunEvent);
-    if (state.status === 'absent' || state.workspaceId !== query.workspaceId) throw Error();
+    if (state.status === 'absent' || state.workspaceId !== workspaceId('ws_' + query.workspaceId))
+      throw Error();
     const execution = state.modelExecution;
     if (execution === null) continue;
     if (event.type === 'attempt.model_request_started') {

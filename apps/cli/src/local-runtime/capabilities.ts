@@ -1,4 +1,5 @@
 import {
+  LOCAL_MODEL_CONNECTIONS,
   LOCAL_DECISION_METHODS,
   LOCAL_FINALIZATION_METHODS,
   LOCAL_PLUGIN_METHODS,
@@ -30,6 +31,7 @@ export function runtimeCapabilities(restore: boolean): readonly string[] {
     ...(restore ? LOCAL_PROVIDER_READ_METHODS : LOCAL_PROVIDER_METHODS),
     ...(restore ? LOCAL_PLUGIN_READ_METHODS : LOCAL_PLUGIN_METHODS),
     LOCAL_PLUGIN_SESSION_AUTHORITY,
+    LOCAL_MODEL_CONNECTIONS,
     ...(restore ? LOCAL_BROADCAST_READ_METHODS : LOCAL_BROADCAST_METHODS),
     ...(restore ? [] : LOCAL_FINALIZATION_METHODS),
     ...(restore ? ['restore.maintenance'] : []),

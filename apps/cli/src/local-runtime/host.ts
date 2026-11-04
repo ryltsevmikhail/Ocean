@@ -4,6 +4,7 @@ import {
   desktopImageResolver,
 } from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
+import { LOCAL_MODEL_METHODS } from '@runnets/contracts';
 import { LOCAL_RESTORE_METHODS } from '@runnets/contracts';
 import { profileCommand } from './profile-commands.js';
 import { PROFILE_METHODS } from '@runnets/contracts';
@@ -93,7 +94,7 @@ export async function startLocalRuntime(
       throw Error('durable_runtime_required');
     const restored = options.restore === true || runtime.restored === true;
     // Saved/environment credentials and plugin state are resolved by the runtime, never by a client.
-    const { provider, plugins } = settingsHosts({
+    const { provider, plugins, models } = settingsHosts({
       profile: paths.profile,
       runtime,
       env: process.env,
@@ -183,6 +184,7 @@ export async function startLocalRuntime(
                 restoration,
                 finalization,
                 provider.settings,
+                models,
                 plugins,
               ],
               drainDeadlineMs,
@@ -227,7 +229,7 @@ export async function startLocalRuntime(
       {
         descriptor,
         identity,
-        dispatch: (method, params, detached) => {
+        dispatch: (method, params, detached, context) => {
           if (databaseClosed) return { error: { code: 'runtime_draining' } };
           if (LOCAL_RESTORE_METHODS.some((m) => m === method))
             return restoration.dispatch(method, params);
@@ -235,6 +237,8 @@ export async function startLocalRuntime(
             return { error: { code: 'restore_restricted' } };
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
             return finalization.dispatch(method, params);
+          if (LOCAL_MODEL_METHODS.some((m) => m === method))
+            return models.dispatch(method, params, detached);
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
             return provider.settings.dispatch(method, params, detached);
           if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
@@ -262,7 +266,7 @@ export async function startLocalRuntime(
             return profileCommand(runtime.conversations, reads, method, params, state !== 'ready');
           if (method.startsWith('decisions.') || method.startsWith('reviews.'))
             return decisions.dispatch(method, params);
-          return turns.dispatch(method, params, detached);
+          return turns.dispatch(method, params, detached, context);
         },
         status: () => host.status(),
         stop: () => host.stop(),

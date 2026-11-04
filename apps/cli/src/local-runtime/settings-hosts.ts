@@ -14,7 +14,10 @@ import type { Runtime } from '../runtime.js';
 
 export interface SettingsHostsInput {
   readonly profile: string;
-  readonly runtime: Pick<Runtime, 'providerConnections' | 'plugins' | 'pluginRuntime'>;
+  readonly runtime: Pick<
+    Runtime,
+    'providerConnections' | 'plugins' | 'pluginRuntime' | 'conversationStore' | 'service'
+  >;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly now: (() => number) | undefined;
   readonly restored: boolean;
@@ -51,5 +54,7 @@ export function settingsHosts(input: SettingsHostsInput) {
     access: pluginRuntime.services.access,
     operations: pluginRuntime.operations,
   });
-  return { provider, plugins };
+  if (!input.runtime.conversationStore) throw Error('durable_runtime_required');
+  const models = provider.modelSettings(input.runtime.conversationStore, input.runtime.service);
+  return { provider, plugins, models };
 }

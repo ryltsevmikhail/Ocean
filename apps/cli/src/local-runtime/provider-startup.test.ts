@@ -32,7 +32,7 @@ it('starts and serves a saved canonical connection independently of legacy facad
     const read = vi.spyOn(secrets, 'read');
     started = await startProviderHost(profile, { baseUrl: vendor.url, secretStore: secrets });
     expect(read).not.toHaveBeenCalled();
-    await expect(started.client.providerStatus()).rejects.toThrow('runtime_failure');
+    await expect(started.client.providerStatus()).rejects.toThrow('provider_unverified');
     const legacy = providerHostSettings({
       store: db.providerConnections,
       profile: profile.profile,
@@ -43,9 +43,9 @@ it('starts and serves a saved canonical connection independently of legacy facad
       mutationsAllowed: true,
       secretStore: secrets,
     });
-    expect(() =>
-      legacy.settings.dispatch('provider.status', {}, new AbortController().signal),
-    ).toThrow('provider_unverified');
+    expect(legacy.settings.dispatch('provider.status', {}, new AbortController().signal)).toEqual({
+      error: { code: 'provider_unverified' },
+    });
     const request = {
       workspaceId: 'ws_ocean',
       roomId: profile.roomId,

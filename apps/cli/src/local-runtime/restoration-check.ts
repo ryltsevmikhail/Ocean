@@ -35,6 +35,7 @@ const MAINTENANCE_READS = new Set(
   decisions.list decisions.get decisions.preview decisions.resolve provider.status
   plugin.catalog plugin.inspect plugin.connections plugin.access-list
   plugin.operations-list plugin.operation-show
+  modelConnections.list bots.listBound runs.modelExecution rooms.getModelPolicy
   broadcasts.get broadcasts.list`.split(/\s+/),
 );
 export function maintenanceRead(method: string): boolean {

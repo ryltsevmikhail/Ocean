@@ -1,9 +1,8 @@
 /**
  * Local-runtime provider settings contract.
  *
- * The owner API carries metadata only: provider, source, state, selected model,
- * revision and a bounded check result. A credential never crosses this wire in
- * either direction and no response may contain a key or a key fragment.
+ * Owner requests may carry a key through authenticated private IPC. Responses
+ * carry metadata only and never contain a key or a key fragment.
  */
 
 import { localRuntimeRecord } from './local-runtime.js';

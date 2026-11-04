@@ -1,3 +1,7 @@
+import {
+  localModelConnectionsClient,
+  type LocalModelConnectionsClient,
+} from './local-model-connections-client.js';
 import { localDesktopClient, type LocalDesktopClient } from './local-desktop-client.js';
 import { localRestoreClient, type LocalRestoreClient } from './local-restore-client.js';
 import { localProfileClient, type LocalProfileClient } from './local-profile-client.js';
@@ -11,6 +15,7 @@ import { connect, type Socket } from 'node:net';
 import {
   LOCAL_RUNTIME_MAX_WAIT_MS,
   LOCAL_PLUGIN_SESSION_AUTHORITY,
+  LOCAL_MODEL_CONNECTIONS,
   isLocalRuntimeIdentity,
   isLocalReceiptQuery,
   isLocalRunQuery,
@@ -36,6 +41,7 @@ import { localBroadcastClient, type LocalBroadcastClient } from './local-broadca
 import { localPluginClient, type LocalPluginClient } from './local-plugin-client.js';
 export interface LocalRuntimeClient
   extends
+    LocalModelConnectionsClient,
     LocalRestoreClient,
     LocalDesktopClient,
     LocalProfileClient,
@@ -145,7 +151,7 @@ async function connectDescriptor(
   try {
     const identity = await peer.request('hello', {
       ...descriptor,
-      clientFeatures: [LOCAL_PLUGIN_SESSION_AUTHORITY],
+      clientFeatures: [LOCAL_PLUGIN_SESSION_AUTHORITY, LOCAL_MODEL_CONNECTIONS],
     });
     if (
       !isLocalRuntimeIdentity(identity) ||
@@ -160,6 +166,7 @@ async function connectDescriptor(
       throw Error('plugin_runtime_upgrade_required');
     return {
       identity,
+      ...localModelConnectionsClient(peer.request.bind(peer), identity),
       ...localRestoreClient(peer.request.bind(peer)),
       ...localDesktopClient((method, params) => peer.request(method, params)),
       ...localProfileClient(peer.request.bind(peer)),

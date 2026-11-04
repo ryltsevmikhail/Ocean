@@ -1,3 +1,4 @@
+import { InMemoryConversationStore } from '@runnets/store';
 import { expect, it, vi } from 'vitest';
 import type { EventEnvelope } from '@runnets/domain';
 import * as app from './index.js';
@@ -6,18 +7,39 @@ import { setup, terminal, usage } from '../test-fixtures/model-turn.js';
 import { runTurn } from './turn.js';
 
 async function fixture() {
-  const f = policyFixture();
+  const original = policyFixture();
+  const store = new InMemoryConversationStore();
+  for (const row of original.connections.list())
+    store.put(row, store.read(row.connectionId)?.revision ?? null);
+  const f = {
+    ...original,
+    store,
+    room: { ...original.room, workspaceId: 'work' },
+    bot: { ...original.bot, workspaceId: 'work' },
+    service: new app.BotModelBindingService({
+      store,
+      connections: store,
+      factory: original.factory,
+      nextId: () => 'unused',
+    }),
+  };
+  // The real producer brands ws_<workspace>; its suffix must have at least three chars.
+  store.atomic((tx) => {
+    tx.putWorkspace({ id: 'work', root: '/project' });
+    tx.putBot(f.bot);
+    tx.putRoom(f.room);
+  });
   const input = await setup([usage, terminal]);
   await runTurn(input);
   const stream = (await input.service.events(input.taskRunId)).map((event) =>
     event.type === 'task_run.created'
-      ? { ...event, payload: { ...(event.payload as object), workspaceId: 'w' } }
+      ? { ...event, payload: { ...(event.payload as object), workspaceId: 'ws_work' } }
       : event,
   );
   f.store.atomic((tx) =>
     tx.putChatTurn({
       id: 'turn',
-      workspaceId: 'w',
+      workspaceId: 'work',
       roomId: f.room.id,
       requestId: 'request',
       taskRunId: input.taskRunId,
@@ -38,7 +60,7 @@ async function fixture() {
     stream,
     events,
     reads,
-    query: { workspaceId: 'w', roomId: f.room.id, runId: input.taskRunId },
+    query: { workspaceId: 'work', roomId: f.room.id, runId: input.taskRunId },
   };
 }
 const zero = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -187,7 +209,7 @@ it('returns frozen admitted connection identity and closed evidence after curren
     }),
   );
   f.service.set({
-    workspaceId: 'w',
+    workspaceId: 'work',
     requestId: 'new-binding',
     botId: f.bot.id,
     expectedProfileVersion: 1,
@@ -250,3 +272,19 @@ it('labels a legacy usage prefix without claiming whole-run billing completeness
     requestCounts: { actual: 1 },
   });
 });
+
+it.each(['work', 'ws_ws_work', 'ws_foreign', ['ws_work'], { id: 'ws_work' }])(
+  'refuses a journal outside the exact host workspace mapping: %j',
+  async (workspaceId) => {
+    const f = await fixture();
+    f.events.mockResolvedValue(
+      f.stream.map((event) =>
+        event.type === 'task_run.created'
+          ? { ...event, payload: { ...(event.payload as object), workspaceId } }
+          : event,
+      ),
+    );
+    await expect(f.reads.get(f.query)).rejects.toThrow('model_execution_unavailable');
+    expect(f.events).toHaveBeenCalledTimes(1);
+  },
+);

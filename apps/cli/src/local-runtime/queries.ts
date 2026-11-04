@@ -1,3 +1,4 @@
+import { LEGACY_WIRE_CONTEXT, type RuntimeWireContext } from './client-compatibility.js';
 import type { RoomRuntimeRuns } from '@runnets/application';
 import type { ConversationMessage } from '@runnets/domain';
 import {
@@ -64,6 +65,7 @@ export class RuntimeQueries {
     params: Record<string, unknown>,
     detached: AbortSignal,
     controller?: AbortController,
+    context: RuntimeWireContext = LEGACY_WIRE_CONTEXT,
   ): RuntimeReply | Promise<RuntimeReply> {
     const reads = this.#service.reads;
     try {
@@ -113,7 +115,17 @@ export class RuntimeQueries {
                 workspaceId: params.workspaceId,
                 roomId: params.roomId,
                 runId: params.runId,
-                events: reads.events(params, params.after ?? 0, params.limit ?? 50),
+                events: reads.events(params, params.after ?? 0, params.limit ?? 50).map((event) =>
+                  !context.models &&
+                  (event.type === 'attempt.model_request_started' ||
+                    event.type === 'attempt.model_request_settled')
+                    ? {
+                        sequence: event.sequence,
+                        type: 'redacted' as const,
+                        sensitivity: 'restricted' as const,
+                      }
+                    : event,
+                ),
               },
             };
           break;

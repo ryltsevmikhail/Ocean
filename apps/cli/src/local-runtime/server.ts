@@ -2,9 +2,16 @@ import { timingSafeEqual } from 'node:crypto';
 import { type Socket } from 'node:net';
 import type { EndpointLayout } from './endpoint-files.js';
 import { bindListener } from './listener.js';
-import { clientFeatures, clientIdentity, supportsPlugins } from './client-compatibility.js';
+import {
+  clientFeatures,
+  clientIdentity,
+  supportsPlugins,
+  type RuntimeWireContext,
+} from './client-compatibility.js';
 import {
   isLocalRuntimeRequest,
+  LOCAL_MODEL_METHODS,
+  LOCAL_MODEL_CONNECTIONS,
   type LocalRuntimeDescriptor,
   type LocalRuntimeIdentity,
   type LocalRuntimeStatus,
@@ -31,6 +38,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
     const detached = new AbortController();
     let authenticated = false;
     let plugins = false;
+    let context: RuntimeWireContext = Object.freeze({ models: false });
     let stopping = false;
     let pending = 0;
     const handshakeTimeout = setTimeout(() => socket.destroy(), 5000);
@@ -72,11 +80,12 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
           return;
         }
         plugins = supportsPlugins(features);
+        context = Object.freeze({ models: features.includes(LOCAL_MODEL_CONNECTIONS) });
         authenticated = true;
         clearTimeout(handshakeTimeout);
         writeLocalRuntimeFrame(socket, {
           id,
-          result: clientIdentity(operations.identity, plugins),
+          result: clientIdentity(operations.identity, plugins, context.models),
         });
         return;
       }
@@ -93,7 +102,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
       if (method === 'status') {
         writeLocalRuntimeFrame(socket, {
           id,
-          result: clientIdentity(operations.status(), plugins),
+          result: clientIdentity(operations.status(), plugins, context.models),
         });
         return;
       }
@@ -115,12 +124,16 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
         reject('plugin_runtime_upgrade_required');
         return;
       }
+      if (LOCAL_MODEL_METHODS.some((m) => m === method) && !context.models) {
+        reject('model_runtime_upgrade_required');
+        return;
+      }
       if (pending >= 128) {
         socket.destroy();
         return false;
       }
       try {
-        const reply = operations.dispatch(method, params, detached.signal);
+        const reply = operations.dispatch(method, params, detached.signal, context);
         if (reply instanceof Promise) {
           pending++;
           void reply

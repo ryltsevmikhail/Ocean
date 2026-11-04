@@ -60,10 +60,15 @@ it.each([
       if (accepted) {
         const peer = await connected;
         expect(peer).not.toBeNull();
+        await expect(peer?.listModelConnections()).rejects.toThrow(
+          'model_runtime_upgrade_required',
+        );
         peer?.close();
       } else await expect(connected).rejects.toThrow('plugin_runtime_upgrade_required');
       expect(methods).toEqual(['hello']);
-      expect(hellos).toEqual([{ ...descriptor, clientFeatures: ['plugin.session-authority-v1'] }]);
+      expect(hellos).toEqual([
+        { ...descriptor, clientFeatures: ['plugin.session-authority-v1', 'model.connections-v1'] },
+      ]);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       rmSync(paths.directory, { recursive: true, force: true });

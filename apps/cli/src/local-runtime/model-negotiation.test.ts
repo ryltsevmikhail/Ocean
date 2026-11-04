@@ -1,0 +1,30 @@
+import { expect, it } from 'vitest';
+import {
+  LOCAL_MODEL_CONNECTIONS,
+  LOCAL_PLUGIN_SESSION_AUTHORITY,
+  isLocalRuntimeIdentity,
+} from '@runnets/contracts';
+import { runtimeCapabilities } from './capabilities.js';
+import { clientIdentity } from './client-compatibility.js';
+import { isLocalRuntimeIdentity as rc2 } from '../../test-fixtures/rc2-runtime-contract.js';
+const identity = {
+  protocol: 1 as const,
+  profileId: 'a'.repeat(64),
+  instanceId: 'a'.repeat(36),
+  capabilities: runtimeCapabilities(false),
+};
+it('projects independent RC2/A3/model capability identities without shared negotiation state', () => {
+  expect(identity.capabilities).toHaveLength(66);
+  for (let i = 0; i < 3; i++) {
+    const a3 = clientIdentity(identity, true, false);
+    expect(a3.capabilities).toHaveLength(65);
+    expect(a3.capabilities).toContain(LOCAL_PLUGIN_SESSION_AUTHORITY);
+    expect(a3.capabilities).not.toContain(LOCAL_MODEL_CONNECTIONS);
+    const old = clientIdentity(identity, false, false);
+    expect(rc2(old)).toBe(true);
+    expect(old.capabilities).toHaveLength(45);
+    const current = clientIdentity(identity, true, true);
+    expect(isLocalRuntimeIdentity(current)).toBe(true);
+    expect(current.capabilities).toContain(LOCAL_MODEL_CONNECTIONS);
+  }
+});
