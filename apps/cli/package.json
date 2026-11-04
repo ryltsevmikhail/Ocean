@@ -11,6 +11,7 @@
     "@runnets/application": "workspace:*",
     "@runnets/contracts": "workspace:*",
     "@runnets/domain": "workspace:*",
+    "@runnets/integrations-executor": "workspace:*",
     "@runnets/provider-core": "workspace:*",
     "@runnets/provider-deepseek": "workspace:*",
     "@runnets/store": "workspace:*",

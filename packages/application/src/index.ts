@@ -72,3 +72,7 @@ export * from './plugin-catalog.js';
 export * from './plugin-connections.js';
 export * from './plugin-access.js';
 export * from './plugin-admission.js';
+export * from './plugin-operation-ports.js';
+export * from './plugin-operations.js';
+export * from './plugin-turn-tools.js';
+export * from './plugin-adapter-identity.js';

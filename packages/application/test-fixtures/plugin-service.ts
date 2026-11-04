@@ -11,6 +11,8 @@ import { PluginCatalogService } from '../src/plugin-catalog.js';
 import { PluginConnectionService } from '../src/plugin-connections.js';
 import { PluginAccessService } from '../src/plugin-access.js';
 import { PluginCallAdmissionService } from '../src/plugin-admission.js';
+import { PluginToolService } from '../src/plugin-turn-tools.js';
+import { PluginOperationsService } from '../src/plugin-operations.js';
 import { pluginToolsDigest } from '../src/plugin-json.js';
 import type {
   ServicePluginCatalog,
@@ -116,8 +118,23 @@ export function serviceFixture(
       transport,
       credentials: state.credentials,
       adapter,
+      now: () => time.now,
+      sha256,
     });
-    return { catalogService, connections, access, admission };
+    const tools = new PluginToolService({
+      grants: state.access,
+      connections: state.connections,
+      admission,
+    });
+    const operations = new PluginOperationsService({
+      store: state.operations,
+      clock: context.clock,
+      ...(options.mutationsAllowed === undefined
+        ? {}
+        : { mutationsAllowed: options.mutationsAllowed }),
+      ...(options.restored === undefined ? {} : { restored: options.restored }),
+    });
+    return { catalogService, connections, access, admission, tools, operations };
   };
   const services = build();
   const fixture = {
@@ -129,6 +146,8 @@ export function serviceFixture(
         connections: after.connections,
         access: after.access,
         admission: after.admission,
+        tools: after.tools,
+        operations: after.operations,
         transport,
         state,
       };
@@ -148,6 +167,12 @@ export function serviceFixture(
     },
     get admission() {
       return services.admission;
+    },
+    get tools() {
+      return services.tools;
+    },
+    get operations() {
+      return services.operations;
     },
     /** Simulate a runtime restart: same durable rows, fresh services. */
     restart(next: { adapter?: PluginAdapterIdentity } = {}) {

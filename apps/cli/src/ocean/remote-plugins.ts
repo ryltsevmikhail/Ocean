@@ -9,6 +9,7 @@
  */
 
 import type { LocalRuntimeClient } from '@runnets/tools-node';
+import { remotePluginOperationsCommand } from './remote-plugin-operations.js';
 
 interface PluginScope {
   readonly workspaceId: string;
@@ -24,7 +25,8 @@ const USAGE = [
   '/plugin connect NAME CREDENTIAL_ENV, /plugin connections,',
   '/plugin consent ID GEN, /plugin discover ID GEN, /plugin disconnect ID,',
   '/plugin grants, /plugin grant CONNECTION BOT REPOSITORY TOOL[,TOOL] (ack)',
-  '/plugin revoke GRANT.',
+  '/plugin revoke GRANT, /plugin operations [STATE], /plugin operation ID,',
+  '/plugin acknowledge ID REVISION [reason].',
 ].join(' ');
 
 function words(prompt: string): readonly string[] {
@@ -51,6 +53,14 @@ export class RemotePlugins {
   async #run(action: string, rest: readonly string[]): Promise<string> {
     const withClient = <T>(work: (client: LocalRuntimeClient) => Promise<T>) =>
       this.#connection.withClient(work);
+    const operations = await remotePluginOperationsCommand(
+      action,
+      rest,
+      withClient,
+      this.#scope.roomId,
+      USAGE,
+    );
+    if (operations !== null) return operations;
     if (action === 'status' || action === '') {
       return withClient(async (client) => {
         const [catalog, connections, grants] = await Promise.all([

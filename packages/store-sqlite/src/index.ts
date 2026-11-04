@@ -40,7 +40,9 @@ export { SqlitePluginCatalog } from './plugin-catalog-storage.js';
 export { SqlitePluginConnections } from './plugin-connection-storage.js';
 export { SqlitePluginAccess } from './plugin-access-storage.js';
 export { SqlitePluginAdmission } from './plugin-admission-storage.js';
+export { SqlitePluginOperations } from './plugin-operations-storage.js';
 export { PLUGIN_TABLES, migratePlugins } from './plugin-schema.js';
+export { PLUGIN_OPERATION_TABLES, migratePluginOperations } from './plugin-operation-schema.js';
 export {
   readPluginBackupInventory,
   readMaintenancePluginInventory,

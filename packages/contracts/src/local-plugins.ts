@@ -23,6 +23,9 @@ export const LOCAL_PLUGIN_METHODS = [
   'plugin.access-preview',
   'plugin.access-grant',
   'plugin.access-revoke',
+  'plugin.operations-list',
+  'plugin.operation-show',
+  'plugin.operation-acknowledge',
 ] as const;
 /** Reads a restore-mode maintenance host can still serve; every mutation stays refused. */
 export const LOCAL_PLUGIN_READ_METHODS = [
@@ -30,6 +33,8 @@ export const LOCAL_PLUGIN_READ_METHODS = [
   'plugin.inspect',
   'plugin.connections',
   'plugin.access-list',
+  'plugin.operations-list',
+  'plugin.operation-show',
 ] as const;
 
 export type LocalPluginInstallState = 'installing' | 'installed' | 'interrupted' | 'corrupt';
@@ -189,4 +194,56 @@ export interface LocalPluginGrantFilter {
 }
 export interface LocalPluginRevokeRequest {
   readonly grantId: string;
+}
+
+/** Durable operation states exposed to the owner; no secret or vendor payload. */
+export type LocalPluginOperationState =
+  'started' | 'observed' | 'failed' | 'not_started' | 'uncertain' | 'acknowledged';
+
+export interface LocalPluginOperationView {
+  readonly id: string;
+  readonly workspaceId: string;
+  readonly roomId: string;
+  readonly botId: string;
+  readonly pluginId: string;
+  readonly connectionId: string;
+  readonly connectionGeneration: number;
+  /** Immutable endpoint binding recorded at admission. */
+  readonly endpoint: string;
+  readonly tool: string;
+  readonly repository: string;
+  readonly schemaDigest: string;
+  readonly argumentsDigest: string;
+  /** Bounded canonical arguments; never a credential value. */
+  readonly arguments: string;
+  readonly state: LocalPluginOperationState;
+  readonly outcomeCode: string | null;
+  readonly detail: string | null;
+  /** Bounded model-visible result summary. */
+  readonly resultSummary: string | null;
+  readonly resultBytes: number | null;
+  readonly truncated: boolean;
+  readonly revision: number;
+  readonly createdAt: string;
+  readonly settledAt: string | null;
+  readonly acknowledgedAt: string | null;
+  readonly acknowledgedReason: string | null;
+}
+
+export interface LocalPluginOperationListQuery {
+  readonly workspaceId?: string;
+  readonly roomId?: string;
+  readonly botId?: string;
+  readonly state?: LocalPluginOperationState;
+  readonly limit?: number;
+}
+
+export interface LocalPluginOperationQuery {
+  readonly operationId: string;
+}
+
+export interface LocalPluginOperationAcknowledgeRequest {
+  readonly operationId: string;
+  readonly expectedRevision: number;
+  readonly reason?: string;
 }

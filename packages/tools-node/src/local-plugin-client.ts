@@ -26,6 +26,11 @@ import {
   isLocalPluginInspectQuery,
   isLocalPluginInstallRequest,
   isLocalPluginInstalledView,
+  isLocalPluginOperationAcknowledgeRequest,
+  isLocalPluginOperationListQuery,
+  isLocalPluginOperationQuery,
+  isLocalPluginOperationView,
+  isLocalPluginOperations,
   isLocalPluginRevokeRequest,
   type LocalPluginCatalogQuery,
   type LocalPluginCatalogView,
@@ -44,6 +49,10 @@ import {
   type LocalPluginInspectQuery,
   type LocalPluginInstallRequest,
   type LocalPluginInstalledView,
+  type LocalPluginOperationAcknowledgeRequest,
+  type LocalPluginOperationListQuery,
+  type LocalPluginOperationQuery,
+  type LocalPluginOperationView,
   type LocalPluginRevokeRequest,
 } from '@runnets/contracts';
 import { validatedParams } from './local-room-client.js';
@@ -105,6 +114,13 @@ export interface LocalPluginClient {
   pluginAccessPreview(request: LocalPluginGrantRequest): Promise<LocalPluginGrantPreview>;
   pluginAccessGrant(request: LocalPluginGrantRequest): Promise<LocalPluginGrantView>;
   pluginAccessRevoke(request: LocalPluginRevokeRequest): Promise<LocalPluginGrantView>;
+  pluginOperationsList(
+    query?: LocalPluginOperationListQuery,
+  ): Promise<readonly LocalPluginOperationView[]>;
+  pluginOperationShow(query: LocalPluginOperationQuery): Promise<LocalPluginOperationView>;
+  pluginOperationAcknowledge(
+    request: LocalPluginOperationAcknowledgeRequest,
+  ): Promise<LocalPluginOperationView>;
 }
 
 export function localPluginClient(send: Send): LocalPluginClient {
@@ -208,6 +224,30 @@ export function localPluginClient(send: Send): LocalPluginClient {
       return grantView(
         await send('plugin.access-revoke', validatedParams(request, isLocalPluginRevokeRequest)),
       );
+    },
+    async pluginOperationsList(query = {}) {
+      const value = await send(
+        'plugin.operations-list',
+        validatedParams(query, isLocalPluginOperationListQuery),
+      );
+      if (!isLocalPluginOperations(value)) throw Error('invalid_frame');
+      return value;
+    },
+    async pluginOperationShow(query) {
+      const value = await send(
+        'plugin.operation-show',
+        validatedParams(query, isLocalPluginOperationQuery),
+      );
+      if (!isLocalPluginOperationView(value)) throw Error('invalid_frame');
+      return value;
+    },
+    async pluginOperationAcknowledge(request) {
+      const value = await send(
+        'plugin.operation-acknowledge',
+        validatedParams(request, isLocalPluginOperationAcknowledgeRequest),
+      );
+      if (!isLocalPluginOperationView(value)) throw Error('invalid_frame');
+      return value;
     },
   };
 }

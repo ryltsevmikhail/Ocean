@@ -24,11 +24,13 @@ import { SqlitePluginCatalog } from './plugin-catalog-storage.js';
 import { SqlitePluginConnections } from './plugin-connection-storage.js';
 import { SqlitePluginAccess } from './plugin-access-storage.js';
 import { SqlitePluginAdmission } from './plugin-admission-storage.js';
+import { SqlitePluginOperations } from './plugin-operations-storage.js';
 import type {
   PluginAccessStorePort,
   PluginAdmissionStorePort,
   PluginCatalogStorePort,
   PluginConnectionStorePort,
+  PluginOperationStorePort,
 } from '@runnets/application';
 import type { CodingFinalizationStore, ProviderConnectionStorePort } from '@runnets/application';
 /**
@@ -78,6 +80,7 @@ export interface SqliteStore {
   readonly pluginConnections: PluginConnectionStorePort;
   readonly pluginAccess: PluginAccessStorePort;
   readonly pluginAdmission: PluginAdmissionStorePort;
+  readonly pluginOperations: PluginOperationStorePort;
   readonly restoration: RestoreOriginStore;
   readonly rebind: ProfileRebindStore;
   readonly desktopAssets: DesktopAssetStore;
@@ -139,6 +142,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
     pluginConnections: new SqlitePluginConnections(db),
     pluginAccess: new SqlitePluginAccess(db),
     pluginAdmission: new SqlitePluginAdmission(db),
+    pluginOperations: new SqlitePluginOperations(db),
     restoration: restoreOriginStore(db),
     rebind: profileRebindStore(db, tools),
     desktopAssets: desktopAssetStore(db),

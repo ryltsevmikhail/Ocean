@@ -5,7 +5,11 @@ import {
   type ChatAdmissionMode,
 } from './direct-chat-admission.js';
 import { recoverChats } from './direct-chat-publication.js';
-import { executeChatTurn, type ChatCodingTools } from './chat-turn-execution.js';
+import {
+  executeChatTurn,
+  type ChatCodingTools,
+  type GrantedPluginTools,
+} from './chat-turn-execution.js';
 import type { ConversationServiceDeps } from './conversations.js';
 import type { TaskRunService } from './service.js';
 import {
@@ -33,6 +37,10 @@ export interface DirectChatDeps extends ConversationServiceDeps {
   readonly codingTools?: {
     /** Successful preparation must join its workers and prove their cleanup before returning. */
     forTurn(turn: ChatTurn, signal: AbortSignal): Promise<ChatCodingTools>;
+  };
+  /** Task-independent granted plugin tools; absent means plugin-disabled behavior. */
+  readonly grantedTools?: {
+    forTurn(turn: ChatTurn, signal: AbortSignal): Promise<GrantedPluginTools | null>;
   };
 }
 export interface SubmitDirectInput extends DirectChatRequest {
@@ -118,6 +126,7 @@ export class DirectChatService {
         store: this.#deps.store,
         clock: this.#deps.clock,
         ...(this.#deps.codingTools === undefined ? {} : { codingTools: this.#deps.codingTools }),
+        ...(this.#deps.grantedTools === undefined ? {} : { grantedTools: this.#deps.grantedTools }),
       },
       {
         turn,

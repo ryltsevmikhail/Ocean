@@ -77,10 +77,10 @@ function snapshot(path: string): {
 describe('plugin migration 17', () => {
   it('creates every authoritative plugin table at the current schema version', () => {
     const db = memory();
-    expect(SCHEMA_VERSION).toBe(17);
+    expect(SCHEMA_VERSION).toBe(18);
     expect(tables(db)).toEqual(expect.arrayContaining([...PLUGIN_TABLES]));
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '17',
+      '18',
     );
     expect(Number(db.prepare('SELECT count(*) AS n FROM ocean_plugin_grants').get()?.['n'])).toBe(
       0,
@@ -103,7 +103,7 @@ describe('plugin migration 17', () => {
     expect(tables(migrated)).toEqual(expect.arrayContaining([...PLUGIN_TABLES]));
     expect(
       migrated.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('17');
+    ).toBe('18');
     expect(
       Number(migrated.prepare('SELECT count(*) AS n FROM ocean_plugin_grants').get()?.['n']),
     ).toBe(0);
@@ -122,7 +122,7 @@ describe('plugin migration 17', () => {
     const reopened = open(path);
     expect(
       reopened.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('17');
+    ).toBe('18');
   });
 
   it('rolls a failed migration back and lets the operator reopen after repair', () => {

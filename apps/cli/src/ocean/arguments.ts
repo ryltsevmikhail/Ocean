@@ -57,6 +57,8 @@ const valueFlags = new Set([
   'generation',
   'search',
   'version',
+  'operation',
+  'state',
 ]);
 /** Parse once, rejecting ambiguous flags and duplicate options before accessing a profile. */
 export function oceanArguments(argv: readonly string[]): OceanArguments {

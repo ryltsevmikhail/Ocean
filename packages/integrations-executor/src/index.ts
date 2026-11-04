@@ -12,6 +12,14 @@ export type {
   ExecutorTransportStatus,
 } from './transport.js';
 export { PINNED_IDENTITIES } from './pinned-identity.js';
+export type {
+  ExecutorConnectionProvisioner,
+  ExecutorMcpProvision,
+  ExecutorOpenApiProvision,
+  ExecutorProvision,
+  ExecutorProvisionAuthTemplate,
+  ExecutorProvisionConnection,
+} from './provision-types.js';
 export {
   ExecutorPluginSetup,
   ExecutorSetupError,

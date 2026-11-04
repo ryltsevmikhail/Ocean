@@ -35,6 +35,8 @@ import { RuntimeBroadcasts } from './broadcast.js';
 import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
 import { settingsHosts } from './settings-hosts.js';
+import { hostPluginTransport } from '../plugin-transport.js';
+import type { PluginConnectionStorePort, ServicePluginTransportPort } from '@runnets/application';
 import type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
 export type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
 
@@ -55,7 +57,20 @@ export async function startLocalRuntime(
   const originalProfile = profileKey(paths);
   let decisions: RuntimeDecisions;
   let images: ImageAssetResolverPort | undefined;
+  let pluginConnections: PluginConnectionStorePort | undefined;
+  const pluginEnv = options.pluginEnv ?? process.env;
+  const pluginTransport: ServicePluginTransportPort = await hostPluginTransport({
+    transport: options.pluginTransport,
+    env: pluginEnv,
+    connections: () => pluginConnections,
+    ...(options.pluginEndpointOverride === undefined
+      ? {}
+      : { endpointOverride: options.pluginEndpointOverride }),
+  });
   const runtime = openOceanProfile(paths.profile, false, {
+    pluginTransport,
+    pluginEnv,
+    pluginMutationsAllowed: options.restore !== true,
     // This host alone validates and retires a surviving publication before serving.
     requireUnpublished: false,
     imageResolver: (store) =>
@@ -100,8 +115,8 @@ export async function startLocalRuntime(
       providerSecretStore: options.providerSecretStore,
       credentialDir: options.credentialDir,
       providerBaseUrl: options.providerBaseUrl,
-      pluginTransport: options.pluginTransport,
     });
+    pluginConnections = runtime.plugins?.connections;
     const finalization = new RuntimeFinalization(
       runtime.finalization,
       decisions.owner,
@@ -135,6 +150,9 @@ export async function startLocalRuntime(
         tasks: runtime.service,
         store: runtime.conversationStore,
         clock: systemClock,
+        ...(runtime.pluginRuntime?.tools === null || runtime.pluginRuntime?.tools === undefined
+          ? {}
+          : { grantedTools: runtime.pluginRuntime.tools }),
       },
       clock: systemClock,
       provider: provider.activation,
@@ -180,6 +198,7 @@ export async function startLocalRuntime(
             endpoint.unlink('runtime.sock', transport.socketFd);
             endpoint.sync();
             proof.retire(publication.digest);
+            await runtime.pluginRuntime?.shutdown();
             turns.closeObservers();
             databaseClosed = true;
             transport.server.close(() => resolveClosed());
@@ -219,9 +238,8 @@ export async function startLocalRuntime(
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
             return provider.settings.dispatch(method, params, detached);
           if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
-          if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
-            return broadcasts.dispatch(method, params, detached);
-          if (method === 'desktop.assets') return desktop(params, state !== 'ready');
+          // Prepared-attachment admission runs before any submit dispatch, including
+          // the broadcast runner: a mismatched marker must never commit a message.
           if (method === 'turns.submit' || method === 'broadcasts.submit') {
             const code = desktopSubmitRefusal(
               runtime.desktopAssets!,
@@ -230,6 +248,9 @@ export async function startLocalRuntime(
             );
             if (code) return { error: { code } };
           }
+          if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
+            return broadcasts.dispatch(method, params, detached);
+          if (method === 'desktop.assets') return desktop(params, state !== 'ready');
           if (
             method === 'coding.panel' ||
             method === 'coding.diff' ||

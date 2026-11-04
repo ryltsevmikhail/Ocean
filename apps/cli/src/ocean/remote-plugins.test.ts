@@ -47,8 +47,35 @@ const connection = {
 const explanation =
   'Everyone in the group chat "Team" (3 participants) including every bot in it will see this answer.';
 
+const operation = {
+  id: 'op_1',
+  workspaceId: 'ws_ocean',
+  roomId: 'room_1',
+  botId: 'bot_dev',
+  pluginId: 'github',
+  connectionId: 'conn_work',
+  connectionGeneration: 2,
+  endpoint: 'https://api.githubcopilot.com/mcp/',
+  tool: 'list_issues',
+  repository: 'team/api',
+  schemaDigest: 'b'.repeat(64),
+  argumentsDigest: 'c'.repeat(64),
+  arguments: '{"owner":"team","repo":"api"}',
+  state: 'uncertain' as const,
+  outcomeCode: 'transport_failure',
+  detail: 'connection lost after dispatch',
+  resultSummary: null,
+  resultBytes: null,
+  truncated: false,
+  revision: 2,
+  createdAt: '2026-11-04T00:00:00.000Z',
+  settledAt: '2026-11-04T00:00:00.000Z',
+  acknowledgedAt: null,
+  acknowledgedReason: null,
+};
+
 function harness() {
-  const calls = { grant: [] as unknown[], revoke: 0, discover: 0, consent: 0 };
+  const calls = { grant: [] as unknown[], revoke: 0, discover: 0, consent: 0, acknowledged: 0 };
   const client = {
     async pluginCatalog() {
       return [catalogEntry];
@@ -120,6 +147,16 @@ function harness() {
       calls.discover++;
       return { connection, revokedGrants: 0, authorityChanged: false };
     },
+    async pluginOperationsList() {
+      return [operation];
+    },
+    async pluginOperationShow() {
+      return operation;
+    },
+    async pluginOperationAcknowledge() {
+      calls.acknowledged += 1;
+      return { ...operation, state: 'acknowledged' as const, revision: 3 };
+    },
   } as unknown as LocalRuntimeClient;
   const connectionLike = {
     withClient: async <T>(work: (client: LocalRuntimeClient) => Promise<T>) => work(client),
@@ -177,5 +214,29 @@ describe('room TUI /plugin commands', () => {
     const result = await plugins.handle('/plugin discover conn_work 2');
     expect(result).toContain('Discovered 2 tools');
     expect(calls.discover).toBe(1);
+  });
+});
+
+describe('room TUI /plugin operation journal', () => {
+  it('lists and shows the durable operation journal', async () => {
+    const { plugins } = harness();
+    const list = await plugins.handle('/plugin operations');
+    expect(list).toContain('op_1');
+    expect(list).toContain('uncertain');
+    expect(list).toContain('list_issues');
+    const show = await plugins.handle('/plugin operation op_1');
+    expect(show).toContain('operation op_1 uncertain');
+    expect(show).toContain('transport_failure');
+    expect(show).toContain('https://api.githubcopilot.com/mcp/');
+  });
+
+  it('acknowledges an uncertain operation only with an explicit revision', async () => {
+    const { plugins, calls } = harness();
+    expect(await plugins.handle('/plugin acknowledge op_1')).toContain('/plugin operations');
+    expect(calls.acknowledged).toBe(0);
+    const ack = await plugins.handle('/plugin acknowledge op_1 2 checked by hand');
+    expect(ack).toContain('Acknowledged op_1');
+    expect(ack).toContain('not retried');
+    expect(calls.acknowledged).toBe(1);
   });
 });

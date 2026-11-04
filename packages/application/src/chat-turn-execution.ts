@@ -24,6 +24,7 @@ import { publishChat } from './direct-chat-publication.js';
 import { runTurn } from './turn.js';
 import type { TurnUpdate } from './turn-update.js';
 import type { TurnInput } from './types.js';
+import type { GrantedPluginTools, GrantedToolSource } from './plugin-turn-tools.js';
 
 export type ChatCodingTools = NonNullable<TurnInput['tools']> & { readonly cleanupConfirmed: true };
 export interface ChatTurnExecutionDeps {
@@ -32,7 +33,16 @@ export interface ChatTurnExecutionDeps {
   readonly clock: Clock;
   /** Absent for broadcast children: those never receive coding authority. */
   readonly codingTools?: { forTurn(turn: ChatTurn, signal: AbortSignal): Promise<ChatCodingTools> };
+  /**
+   * Task-independent granted plugin tools for normal (non-coding) room turns.
+   * Broadcast children pass their own instance, so a child only ever sees its
+   * own bot's grants.
+   */
+  readonly grantedTools?: {
+    forTurn(turn: ChatTurn, signal: AbortSignal): Promise<GrantedPluginTools | null>;
+  };
 }
+export type { GrantedPluginTools, GrantedToolSource };
 export interface ChatTurnExecutionInput {
   readonly turn: ChatTurn;
   readonly messages: readonly ChatMessage[];
@@ -77,7 +87,7 @@ export async function executeChatTurn(
     preparationStarted = turn.codingTaskId !== undefined;
     const tools =
       turn.codingTaskId === undefined
-        ? undefined
+        ? ((await deps.grantedTools?.forTurn(turn, input.signal)) ?? undefined)
         : await deps.codingTools!.forTurn(turn, input.signal);
     if (tools && tools.cleanupConfirmed !== true) throw Error('preparation cleanup unknown');
     preparationSettled = true;

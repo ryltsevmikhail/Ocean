@@ -26,7 +26,7 @@ import { SCHEMA_VERSION } from './schema.js';
  * Must stay one step wide: bumping `SCHEMA_VERSION` adds the previous release (14
  * for RC1) so the update path can still doctor, back up and restore it.
  */
-const MAINTAINABLE_SCHEMAS = [5, 6, 10, 11, 12, 13, 14, 16, SCHEMA_VERSION];
+const MAINTAINABLE_SCHEMAS = [5, 6, 10, 11, 12, 13, 14, 16, 17, SCHEMA_VERSION];
 
 export interface DatabaseSummary {
   readonly schema: number;

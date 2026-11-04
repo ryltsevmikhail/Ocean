@@ -7,6 +7,8 @@ import type {
   PluginCredentialReferencePort,
   PluginGrantScopeFacts,
 } from '../src/plugin-ports.js';
+import type { PluginOperationStorePort } from '../src/plugin-operation-ports.js';
+import type { PluginOperationRecord } from '@runnets/domain';
 import { clone, revokeGrantsFor, type PluginFakeMaps } from './plugin-fake-state.js';
 
 export interface FakeAccessStore extends PluginAccessStorePort {
@@ -118,8 +120,20 @@ export function fakeAdmissionStore(maps: PluginFakeMaps): PluginAdmissionStorePo
         },
         claim(id, tool, _context, fingerprint) {
           if (maps.claims.has(id)) return false;
+          // Mirror SqliteToolJournal.claimNow: any unresolved claim holds new claims.
+          for (const [claimed, outcome] of maps.settled)
+            if (
+              !['completed', 'failed', 'not_started'].includes(outcome) &&
+              !maps.resolved.has(claimed)
+            )
+              return false;
+          for (const claimed of maps.claims.keys()) if (!maps.settled.has(claimed)) return false;
           maps.claims.set(id, tool + ':' + fingerprint);
           return true;
+        },
+        beginOperation(record) {
+          if (maps.operations.has(record.id)) throw Error('operation_exists');
+          maps.operations.set(record.id, clone(record));
         },
       });
     },
@@ -128,7 +142,89 @@ export function fakeAdmissionStore(maps: PluginFakeMaps): PluginAdmissionStorePo
         throw Error('tool claim is missing or already settled');
       maps.settled.set(id, outcome);
     },
+    settleOperation(id, settlement, journalOutcome) {
+      const operation = maps.operations.get(id);
+      if (operation === undefined || operation.state !== 'started')
+        throw Error('plugin operation is missing or already settled');
+      if (!maps.claims.has(id) || maps.settled.has(id))
+        throw Error('tool claim is missing or already settled');
+      maps.settled.set(id, journalOutcome);
+      maps.operations.set(id, {
+        ...operation,
+        state: settlement.state,
+        outcomeCode: settlement.outcomeCode,
+        detail: settlement.detail,
+        resultSummary: settlement.resultSummary,
+        resultBytes: settlement.resultBytes,
+        truncated: settlement.truncated,
+        settledAt: settlement.settledAt,
+        revision: operation.revision + 1,
+      });
+    },
   };
+}
+
+/** In-memory operation journal mirroring the SQLite adapter's semantics. */
+export function fakeOperationStore(maps: PluginFakeMaps): PluginOperationStorePort {
+  return {
+    list: (filter = {}) =>
+      [...maps.operations.values()]
+        .filter(
+          (operation) =>
+            (filter.workspaceId === undefined || operation.workspaceId === filter.workspaceId) &&
+            (filter.roomId === undefined || operation.roomId === filter.roomId) &&
+            (filter.botId === undefined || operation.botId === filter.botId) &&
+            (filter.state === undefined || operation.state === filter.state),
+        )
+        .slice(0, filter.limit ?? 50)
+        .map(clone),
+    get: (id) => {
+      const row = maps.operations.get(id);
+      return row === undefined ? null : clone(row);
+    },
+    open: () =>
+      [...maps.operations.values()]
+        .filter((operation) => operation.state === 'started' || operation.state === 'uncertain')
+        .map(clone),
+    recoverStarted(at) {
+      let lowered = 0;
+      for (const [id, operation] of maps.operations) {
+        if (operation.state !== 'started') continue;
+        maps.operations.set(id, {
+          ...operation,
+          state: 'uncertain',
+          outcomeCode: 'interrupted',
+          detail: 'runtime restarted before the operation settled',
+          settledAt: at,
+          revision: operation.revision + 1,
+        });
+        const claimed = maps.claims.has(id);
+        if (claimed && !maps.settled.has(id)) maps.settled.set(id, 'uncertain');
+        lowered += 1;
+      }
+      return lowered;
+    },
+    acknowledge(input) {
+      const operation = maps.operations.get(input.operationId);
+      if (operation === undefined) throw refuse('operation_unknown');
+      if (operation.state !== 'uncertain') throw refuse('operation_not_uncertain');
+      if (operation.revision !== input.expectedRevision) throw refuse('operation_conflict');
+      const next: PluginOperationRecord = {
+        ...operation,
+        state: 'acknowledged',
+        acknowledgedAt: input.at,
+        acknowledgedReason: input.reason.length === 0 ? null : input.reason,
+        revision: operation.revision + 1,
+      };
+      maps.operations.set(next.id, next);
+      maps.resolved.add(next.id);
+      return clone(next);
+    },
+  };
+}
+
+function refuse(code: string): Error {
+  return Object.assign(Error('plugin operation refused: ' + code), { code });
 }
 
 export function fakeCredentials(present = 'OCEAN_TEST_PRESENT'): PluginCredentialReferencePort {

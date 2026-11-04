@@ -132,7 +132,9 @@ it('the installed bundle qualifies through the packaged proof, disabled by defau
   const layout = installedLayout();
   const result = runProbe(layout.entry);
   expect(result.exports).toEqual([
+    'ExecutorPluginSetup',
     'ExecutorServicePluginTransport',
+    'ExecutorSetupError',
     'ExecutorTransportOpenError',
     'PINNED_IDENTITIES',
   ]);

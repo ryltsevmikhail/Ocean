@@ -9,12 +9,12 @@
 
 import type { ProviderHostInput } from './provider-settings.js';
 import { providerHostSettings } from './provider-settings.js';
-import { runtimePluginsHost, type RuntimePluginHostOptions } from './plugins.js';
+import { RuntimePlugins } from './plugins.js';
 import type { Runtime } from '../runtime.js';
 
 export interface SettingsHostsInput {
   readonly profile: string;
-  readonly runtime: Pick<Runtime, 'providerConnections' | 'plugins'>;
+  readonly runtime: Pick<Runtime, 'providerConnections' | 'plugins' | 'pluginRuntime'>;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly now: (() => number) | undefined;
   readonly restored: boolean;
@@ -24,7 +24,6 @@ export interface SettingsHostsInput {
   readonly providerSecretStore?: ProviderHostInput['secretStore'] | undefined;
   readonly credentialDir?: string | undefined;
   readonly providerBaseUrl?: string | undefined;
-  readonly pluginTransport?: RuntimePluginHostOptions['transport'] | undefined;
 }
 
 /** Compose the provider activation getter and the plugin owner API. */
@@ -44,13 +43,13 @@ export function settingsHosts(input: SettingsHostsInput) {
     ...(input.credentialDir === undefined ? {} : { credentialDir: input.credentialDir }),
     ...(input.providerBaseUrl === undefined ? {} : { baseUrl: input.providerBaseUrl }),
   });
-  const plugins = runtimePluginsHost({
-    profile: input.profile,
-    stores: input.runtime.plugins,
-    restored: input.restored,
-    mutationsAllowed: input.restore !== true && !input.restored,
-    ...(input.pluginTransport === undefined ? {} : { transport: input.pluginTransport }),
-    ...(input.now === undefined ? {} : { now: input.now }),
+  const pluginRuntime = input.runtime.pluginRuntime;
+  if (pluginRuntime === undefined) throw Error('durable_runtime_required');
+  const plugins = new RuntimePlugins({
+    catalog: pluginRuntime.services.catalog,
+    connections: pluginRuntime.services.connections,
+    access: pluginRuntime.services.access,
+    operations: pluginRuntime.operations,
   });
   return { provider, plugins };
 }
