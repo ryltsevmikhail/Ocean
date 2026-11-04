@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`; остальные задачи B–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`; остальные задачи B–H пока запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -153,7 +153,7 @@ A принят. B детализирован ниже; C–F — отдельн�
 ## B. Облачные и локальные модели — подробный контракт
 
 В B приняты хранение/миграция (задача 4, `6633439`) и настройки/ключи
-(задача 5, `ca25fa6`);
+(задача 5, `ca25fa6`), а также привязки ботов (задача 6, `14a4931`);
 [доказательства и ограничения](../../ocean/platform-stage-b.md). Остальные задачи
 ещё не реализованы. Ниже 14 последовательных задач (4–17), с сохранением
 принятого этапа A. Это детализация уже утверждённого направления; C–F ещё
@@ -275,11 +275,11 @@ Each task's numbered steps are red test → run → minimal implementation → g
 **Files:** Create `packages/application/src/{bot-model-binding,bot-model-binding.test}.ts`; modify conversation-ports.ts; store/src/conversations.ts; store-sqlite/model-binding-storage.ts and conversations.ts.
 **Interfaces:** Consumes Tasks 4/5. Produces `BotModelBindingService.set({workspaceId,botId,requestId,expectedProfileVersion,binding}):ConversationResult<BoundBot>` and `.create({workspaceId,requestId,handle,name,role,binding}):ConversationResult<BoundBot>`; add replaceBot(bot,expectedProfileVersion) transaction method. Inject read-only connection lookup; no probing or credential activation during profile edits.
 
-- [ ] Test same request replay, changed payload conflict, stale version refusal, model validation, two bots sharing one connection with different models, and no sibling changes. Assert old CreateBot receipts remain old Bot shape; new binding receipt stores BoundBot without modifying historic receipts.
-- [ ] Run `pnpm exec vitest run --config vitest.source.config.ts packages/application/src/bot-model-binding.test.ts` and confirm red.
-- [ ] Implement binding+Bot projection+receipt in one transaction. New creation overrides the temporary legacy binding before commit. Set increments profileVersion, sets Bot.provider/model from selected connection/binding and preserves other fields; reject unknown connection/model, but allow owner configuration of a disconnected known connection without making it executable.
-- [ ] Verify `provider.set` changes only status default, then explicit rebind changes exactly one bot; legacy CreateBot keeps its explicit model. Replay old room/turn snapshots unchanged after rebind.
-- [ ] Run new tests and existing `packages/store-sqlite/src/conversations.test.ts`, `pnpm build`; commit Task 6. No new RPC is exposed yet.
+- [x] Test same request replay, changed payload conflict, stale version refusal, model validation, two bots sharing one connection with different models, and no sibling changes. Assert old CreateBot receipts remain old Bot shape; new binding receipt stores BoundBot without modifying historic receipts.
+- [x] Run `pnpm exec vitest run --config vitest.source.config.ts packages/application/src/bot-model-binding.test.ts` and confirm red.
+- [x] Implement binding+Bot projection+receipt in one transaction. New creation overrides the temporary legacy binding before commit. Set increments profileVersion, sets Bot.provider/model from selected connection/binding and preserves other fields; reject unknown connection/model, but allow owner configuration of a disconnected known connection without making it executable.
+- [x] Verify `provider.set` changes only status default, then explicit rebind changes exactly one bot; legacy CreateBot keeps its explicit model. Replay old room/turn snapshots unchanged after rebind.
+- [x] Run new tests and existing `packages/store-sqlite/src/conversations.test.ts`, `pnpm build`; commit Task 6. No new RPC is exposed yet.
 
 ### Task 7: Distinguish fresh journal commits from receipt replay
 
@@ -296,6 +296,16 @@ Each task's numbered steps are red test → run → minimal implementation → g
 
 **Files:** Create `packages/domain/src/{model-dispatch,model-dispatch-decide,model-dispatch-evolve,model-dispatch.test}.ts`; modify domain/{commands,events,state,decide,evolve,index}.ts. Create application/model-activation-types.ts for application-only provider pairing; re-export domain shapes from application/provider.ts/index.ts.
 **Interfaces:** Produces exact snapshot/usage/completion/payload/state types and StartModelRequest/SettleModelRequest commands defined above. Domain helpers are `decideModelDispatch(state,command):Result<readonly TaskRunEventDraft[]>` and `evolveModelDispatch(state,event):TaskRunState`; event status transitions are null (hold current lifecycle state).
+
+**Preflight decisions (planned, not implemented):**
+
+- Unknown settlement from running appends existing `task_run.reconciling` atomically after settlement/accounting; cancelling/reconciling retain their state. The new model events keep null status transitions. Unknown over-budget usage never appends exhaustion.
+- Existing `usage_recorded` alone debits exact tokens and updates model knownTokens. Settlement updates estimated/unavailable evidence; first Start seeds knownTokens from the existing budget ledger. Event-prefix replay must not double-charge.
+- The unresolved-request guard covers Complete/Fail/Retry/completed cleanup/ResolveReconcile and terminal alternatives ExhaustBudget/DenyPolicy/FailReconcile. Also block Wait/BeginCheckpoint/StartAttempt, which could prevent settlement or replace its owning attempt. Resume/CommitCheckpoint may restore a settlable state. Preserve old replay/source tables and explicitly forced cleanup evidence.
+- A terminal result missing expected reported usage is recorded, then must fail: Complete/another Start/Retry refuse. Fail and confirmed cleanup remain possible. not_sent/rejected are known nonexecuting outcomes, not successful Complete; an explicit retry can obey remaining frozen bounds. Finite exact-token dispatch requires reported usage and positive remaining capacity including reservations.
+- New commands strictly validate safe integers, real UTC calendar timestamps, complete structural activation equality and detached nested data. `connectionRevision >= 0` permits the existing eligible legacy environment placeholder; `botProfileVersion >= 1`. Requests are bounded to 1..64, turn timeout to 600000 ms, request timeout to positive safe integers <=600000 ms. Validate admitted/start/deadline order and previous finish order; accept late settlement evidence.
+- TaskRun cannot infer legacy admission from modelExecution:null. Task10 enforces persisted activation for production continuation; explicit host compatibility remains. No era flag, new table or changed checkpoint format. Preserve exact stop-reason vocabulary: terminal/unknown reason differs from unknown completion.
+- Task9 must not append a duplicate BeginReconcile after atomic unknown settlement. Split validation/guards/usage/evolution helpers along these responsibilities to retain the 300-line cap.
 
 - [ ] Write state-table tests for first/second start, ordinal gap, changed activation, expired deadline, wrong attempt, double settle, finite budget, cancel-before/after start, unknown completion guards and forced versus completed cleanup. Assert `expect(actualEvents.map(e=>e.type)).toEqual(['attempt.model_request_settled','attempt.usage_recorded'])` for known in-budget actual usage.
 - [ ] Run `pnpm exec vitest run --config vitest.source.config.ts packages/domain/src/model-dispatch.test.ts packages/domain/src/usage.test.ts` and confirm new assertions red.
@@ -374,6 +384,7 @@ Each task's numbered steps are red test → run → minimal implementation → g
 - [ ] Before editing transport, verify accepted A3 `1a99fcb`: hello.clientFeatures allows at most 16 strings of length 1..64; current marker is plugin.session-authority-v1; legacy sockets receive filtered plugin.* hello/status capabilities and plugin.* is blocked before dispatch. Preserve this per-socket behavior. Do not grow frozen RC2 hello/status beyond 64 or add every B method as a legacy capability; controller verified the frozen RC2 validator against cfa8490 apart from its first comment.
 - [ ] Create strict validator/old-client regression tests, including one host with concurrent legacy/current/B sockets, alternating status/plugin/B operations to prove negotiation cannot leak across sockets; run `pnpm exec vitest run --config vitest.source.config.ts packages/contracts/src/local-model-connections.test.ts packages/tools-node/src/local-model-connections-client.test.ts` red.
 - [ ] Implement new negotiation gate before dispatch and bounded DTOs. Legacy provider.* response/request validators remain exact; translate default connection only. New methods absent feature → explicit unsupported; new client against old host disables these controls. Filter internal model-dispatch events from legacy wire projections rather than sending unrecognized new DTO fields.
+- [ ] Compose BotModelBindingService metadata lookup over the same canonical profile transaction/draft as ConversationStore; no separate database snapshot or mutable catalog authority. Verify through the built runtime entry point.
 - [ ] Before exposing settings, define owner-visible pending recovery: retain the exact request identity/payload needed for retry across disconnects, disclose when the key must be supplied again, and never treat a fresh requestId as permission to discard pending cleanup. Legacy missing intent needs explicit repair, not invented history.
 - [ ] Close Task5 review minor: unknown connection disconnect/remove must return `connection_not_found`, not `revision_conflict`; pin both cases before exposing the new RPC error contract.
 - [ ] Run green plus local-provider.test.ts and final A3 compatibility tests; `pnpm build`; commit Task 15. Process compatibility tests use built normal entry points and process config, not source alias imports.
