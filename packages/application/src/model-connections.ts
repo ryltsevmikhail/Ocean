@@ -68,7 +68,29 @@ export class ModelConnectionService {
     // Descriptor validation has no factory/store/secret effects and never changes a replay snapshot.
     validateModelSet(input);
     return this.#mutations.set(
-      { connectionId, requestId, expected, binding },
+      {
+        connectionId,
+        requestId,
+        expected,
+        binding,
+        pendingRequest: {
+          version: 1,
+          operation: {
+            method: 'modelConnections.set',
+            input: {
+              connectionId,
+              requestId,
+              expectedRevision: expected,
+              providerId: input.providerId,
+              kind: input.kind,
+              endpoint: input.endpoint,
+              auth: input.auth,
+              defaultModelId: input.defaultModelId,
+            },
+            keyWasSupplied: key !== undefined,
+          },
+        },
+      },
       {
         connectionId,
         providerId: input.providerId,
@@ -96,6 +118,25 @@ export class ModelConnectionService {
       connectionId,
       expected,
     ]);
-    return this.#mutations.revise({ connectionId, requestId, expected, binding }, action);
+    return this.#mutations.revise(
+      {
+        connectionId,
+        requestId,
+        expected,
+        binding,
+        ...(action === 'remove'
+          ? {
+              pendingRequest: {
+                version: 1 as const,
+                operation: {
+                  method: 'modelConnections.removeSavedKey' as const,
+                  input: { connectionId, requestId, expectedRevision: expected },
+                },
+              },
+            }
+          : {}),
+      },
+      action,
+    );
   }
 }

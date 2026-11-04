@@ -79,7 +79,7 @@ function snapshot(path: string): {
 describe('plugin migration 17', () => {
   it('creates every authoritative plugin table at the current schema version', () => {
     const db = memory();
-    expect(SCHEMA_VERSION).toBe(22);
+    expect(SCHEMA_VERSION).toBe(23);
     expect(tables(db)).toEqual(expect.arrayContaining([...PLUGIN_TABLES]));
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
       String(SCHEMA_VERSION),

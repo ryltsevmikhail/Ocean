@@ -16,6 +16,14 @@ import {
   bindingTransferIdentity,
 } from './room-model-policy-classification.js';
 
+export interface GetRoomModelPolicyInput {
+  readonly workspaceId: string;
+  readonly roomId: string;
+}
+export interface RoomModelPolicySnapshot extends GetRoomModelPolicyInput {
+  readonly version: 1;
+  readonly policy: RoomModelPolicy;
+}
 export interface SetRoomModelPolicyInput {
   readonly workspaceId: string;
   readonly roomId: string;
@@ -62,6 +70,30 @@ export class RoomModelPolicyService {
   readonly #deps: RoomModelPolicyDeps;
   constructor(deps: RoomModelPolicyDeps) {
     this.#deps = deps;
+  }
+  get(input: GetRoomModelPolicyInput): ConversationResult<RoomModelPolicySnapshot> {
+    if (![input.workspaceId, input.roomId].every((id) => validConversationText(id, 128)))
+      return conversationFailure('invalid_input');
+    return this.#deps.store.atomic((tx) => {
+      if (tx.workspace()?.id !== input.workspaceId)
+        return conversationFailure('workspace_conflict');
+      const room = tx.room(input.roomId);
+      if (room === null) return conversationFailure('unknown_room');
+      if (room.workspaceId !== input.workspaceId) return conversationFailure('workspace_conflict');
+      const policy = tx.roomModelPolicy(room.id);
+      if (!validRoomModelPolicy(policy) || policy.roomId !== room.id)
+        return conversationFailure('model_policy_unavailable');
+      return ok({
+        version: 1,
+        workspaceId: input.workspaceId,
+        roomId: room.id,
+        policy: {
+          roomId: policy.roomId,
+          revision: policy.revision,
+          cloudTransfer: policy.cloudTransfer,
+        },
+      });
+    });
   }
   set(input: SetRoomModelPolicyInput): ConversationResult<RoomModelPolicy> {
     if (

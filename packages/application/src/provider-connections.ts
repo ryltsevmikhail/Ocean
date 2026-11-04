@@ -130,7 +130,20 @@ export class ProviderConnectionService {
     const model = validModel(input.model, this.options.credentials.models);
     const record = this.#record();
     return this.#mutations.set(
-      { connectionId: this.#id, requestId, binding, expected: undefined },
+      {
+        connectionId: this.#id,
+        requestId,
+        binding,
+        expected: undefined,
+        pendingRequest: {
+          version: 1,
+          operation: {
+            method: 'provider.set',
+            input: { requestId, model },
+            keyWasSupplied: key !== undefined,
+          },
+        },
+      },
       {
         connectionId: this.#id,
         providerId: record.providerId,
@@ -159,7 +172,23 @@ export class ProviderConnectionService {
       revision,
     ]);
     return this.#mutations.revise(
-      { connectionId: this.#id, requestId, binding, expected: revision },
+      {
+        connectionId: this.#id,
+        requestId,
+        binding,
+        expected: revision,
+        ...(action === 'remove'
+          ? {
+              pendingRequest: {
+                version: 1 as const,
+                operation: {
+                  method: 'provider.removeSavedKey' as const,
+                  input: { requestId, expectedRevision: revision },
+                },
+              },
+            }
+          : {}),
+      },
       action,
     );
   }

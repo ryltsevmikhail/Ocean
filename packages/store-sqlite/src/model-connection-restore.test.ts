@@ -64,6 +64,28 @@ function setup() {
       ...active,
       connectionId: 'another',
       intent: 'pending',
+      defaultModelId: 'model',
+      endpoint: 'https://api.deepseek.com',
+      secretRef: 'next-ref',
+      requestId: 'pending',
+      binding: 'private-binding',
+      pendingRequest: {
+        version: 1,
+        operation: {
+          method: 'modelConnections.set',
+          input: {
+            connectionId: 'another',
+            requestId: 'pending',
+            expectedRevision: null,
+            providerId: 'deepseek',
+            kind: 'cloud',
+            auth: 'api_key',
+            endpoint: 'https://api.deepseek.com',
+            defaultModelId: 'model',
+          },
+          keyWasSupplied: true,
+        },
+      },
       pendingSecretChange: { action: 'replace', previousRef: 'old-ref', nextRef: 'next-ref' },
     },
     null,
@@ -92,4 +114,26 @@ it('rolls back origin and all connection flag resets if any metadata update fail
   db.exec('DROP TRIGGER reject_flag');
   restoration.install(origin);
   expect(connections.list().every((row) => !row.configuredAfterRestore)).toBe(true);
+});
+
+it('keeps recovered envelopes inert through restore and preserves historical receipt bytes exactly', () => {
+  const { db, connections, restoration } = setup();
+  const { pendingRequest: _missing, ...old } = unconfiguredModelConnection('deepseek');
+  const bytes = ' ' + JSON.stringify(old, null, 2) + '\n';
+  db.prepare('INSERT INTO ocean_model_connection_receipts VALUES(?,?,?,?)').run(
+    'historical',
+    old.connectionId,
+    'binding',
+    bytes,
+  );
+  const pending = connections.read('another')!;
+  restoration.install(origin);
+  expect(connections.read('another')).toEqual({ ...pending, configuredAfterRestore: false });
+  expect(connections.read('another')?.intent).toBe('pending');
+  expect(
+    db
+      .prepare("SELECT result FROM ocean_model_connection_receipts WHERE request_id='historical'")
+      .get()?.['result'],
+  ).toBe(bytes);
+  expect(connections.receipt('historical')?.result.pendingRequest).toBeNull();
 });

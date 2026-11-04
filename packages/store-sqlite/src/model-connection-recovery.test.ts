@@ -179,3 +179,39 @@ it.each([false, true])(
     expect(f.calls).toEqual([]);
   },
 );
+
+import { ModelConnectionService, ModelConnectionMetadataService } from '@runnets/application';
+it('lets a second profile owner resupply exact input after lost receipt, with no metadata read effects', () => {
+  const f = modelRecovery();
+  f.db.exec(
+    "CREATE TRIGGER lost_receipt BEFORE INSERT ON ocean_model_connection_receipts BEGIN SELECT RAISE(ABORT,'receipt failure'); END",
+  );
+  expect(() => f.service.set(input)).toThrow('receipt failure');
+  const pending = f.store.read('one')!;
+  expect(pending.pendingRequest).toMatchObject({
+    version: 1,
+    operation: {
+      method: 'modelConnections.set',
+      input: { expectedRevision: null },
+      keyWasSupplied: true,
+    },
+  });
+  f.reopen();
+  const owner = new ModelConnectionService(f.service.options);
+  f.calls.splice(0);
+  const metadata = new ModelConnectionMetadataService(owner.options).list();
+  expect(metadata.items.find((i) => i.connectionId === 'one')?.recovery).toMatchObject({
+    kind: 'retry_available',
+    requiresKeyResupply: true,
+  });
+  expect(f.calls).toEqual([]);
+  expect(() => owner.set({ ...input, key: 'wrong-synthetic-key' })).toThrow('request_conflict');
+  expect(f.calls).toEqual([]);
+  f.db.exec('DROP TRIGGER lost_receipt');
+  const original = owner.set(input);
+  expect(f.store.read('one')?.pendingRequest).toBeNull();
+  f.reopen();
+  f.calls.splice(0);
+  expect(f.service.set(input)).toEqual(original);
+  expect(f.calls).toEqual([]);
+});

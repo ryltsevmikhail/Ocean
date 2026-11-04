@@ -1,3 +1,4 @@
+import type { ModelPendingRequest } from './model-pending-request.js';
 import type { LocalModelQualification } from './model-local-qualification.js';
 import type { ProviderConnectionReceipt } from './provider-connection-ports.js';
 import type { ModelCheckMetadata, ModelConnectionStatus } from './model-connection-types.js';
@@ -26,6 +27,8 @@ export interface ModelConnectionRecord {
   readonly lastCheck: ModelCheckMetadata | null;
   readonly updatedAt: string;
   readonly pendingSecretChange: ModelSecretChange | null;
+  /** Missing only in historic snapshots; canonical decoders materialize null. */
+  readonly pendingRequest?: ModelPendingRequest | null;
   /** Eligibility for the designated old fallback; intent and saved-reference precedence still apply. */
   readonly legacyEnvironment: boolean;
   readonly configuredAfterRestore: boolean;
@@ -66,6 +69,7 @@ export function unconfiguredModelConnection(providerId: string): ModelConnection
     lastCheck: null,
     updatedAt: '1970-01-01T00:00:00.000Z',
     pendingSecretChange: null,
+    pendingRequest: null,
     legacyEnvironment: providerId === 'deepseek',
     configuredAfterRestore: false,
   };

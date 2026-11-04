@@ -1,3 +1,5 @@
+import { boundedModelText } from './model-connection-input.js';
+import type { ModelCatalogEntry } from './model-connection-types.js';
 import type { ModelCheckMetadata, ModelConnectionStatus } from './model-connection-types.js';
 import { readCheckMetadata } from './provider-connection-resolution.js';
 export const modelObject = (v: unknown): v is Record<string, unknown> =>
@@ -9,7 +11,12 @@ export function readModelCheck(value: unknown, connectionId: string): ModelCheck
   const old = readCheckMetadata(source === 'auth_none' ? { ...value, source: 'none' } : value);
   return old === null
     ? null
-    : { ...old, connectionId, source: source === 'auth_none' ? source : old.source };
+    : {
+        ...old,
+        connectionId,
+        models: [...old.models],
+        source: source === 'auth_none' ? source : old.source,
+      };
 }
 /** Closed public snapshots are validated on disk reads, never rebuilt from current credentials. */
 export function modelPublicResult(value: unknown): { version: 1; status: ModelConnectionStatus } {
@@ -111,4 +118,21 @@ function validCapabilities(value: unknown): boolean {
     limit(value['maxOutputTokens']) &&
     ['reported', 'optional', 'unavailable'].some((v) => v === value['usage'])
   );
+}
+
+/** Registered metadata projection never copies arbitrary adapter properties. */
+export function copyModelCatalogEntry(entry: ModelCatalogEntry): ModelCatalogEntry {
+  if (!validCapabilities(entry.capabilities)) throw Error('connection_unverified');
+  const c = entry.capabilities;
+  return {
+    modelId: boundedModelText(entry.modelId, 256),
+    capabilities: {
+      tools: c.tools,
+      streaming: c.streaming,
+      inputModalities: [...c.inputModalities],
+      contextTokens: c.contextTokens,
+      maxOutputTokens: c.maxOutputTokens,
+      usage: c.usage,
+    },
+  };
 }

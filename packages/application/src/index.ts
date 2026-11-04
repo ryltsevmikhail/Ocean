@@ -99,3 +99,9 @@ export { validModelConnectionEndpoint } from './model-connection-input.js';
 export * from './model-local-qualification.js';
 
 export * from './room-model-policy.js';
+
+export * from './model-pending-request.js';
+export * from './model-read-pages.js';
+export * from './model-connection-metadata.js';
+export * from './bot-model-binding-reads.js';
+export * from './model-execution-reads.js';

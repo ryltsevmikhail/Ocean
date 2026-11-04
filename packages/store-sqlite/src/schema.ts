@@ -16,8 +16,8 @@ import { applyMigrations } from './schema-migrations.js';
 
 import { ownerBusy } from './maintenance-owner.js';
 import { userTables } from './schema-inspection.js';
-/** Schema 22 persists room cloud-transfer policy independently of execution review. */
-export const SCHEMA_VERSION = 22;
+/** Schema 23 persists exact keyless pending-request recovery envelopes. */
+export const SCHEMA_VERSION = 23;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 

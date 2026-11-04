@@ -1,3 +1,5 @@
+import { modelConnectionRecord } from './model-connection-validation.js';
+import type { ModelPendingRequest } from './model-pending-request.js';
 import type { ModelConnectionRecord } from './model-connection-ports.js';
 import type { ModelConnectionDescriptor } from './model-credential-ports.js';
 import type { ModelConnectionReadModel } from './model-connection-state.js';
@@ -19,6 +21,7 @@ export interface ModelMutationRequest {
   readonly connectionId: string;
   readonly requestId: string;
   readonly binding: string;
+  readonly pendingRequest?: ModelPendingRequest;
   /** undefined is the historic legacy auto-CAS, never the new create contract. */
   readonly expected: number | null | undefined;
 }
@@ -78,6 +81,7 @@ export class ModelConnectionMutations<T> {
       lastCheck: current?.lastCheck ?? null,
       updatedAt: this.state.options.clock.now().toISOString(),
       pendingSecretChange: null,
+      pendingRequest: null,
       legacyEnvironment: current?.legacyEnvironment ?? this.receipts.legacy === true,
       configuredAfterRestore: configured || (current?.configuredAfterRestore ?? false),
     };
@@ -85,6 +89,7 @@ export class ModelConnectionMutations<T> {
       const pending: ModelConnectionRecord = {
         ...next,
         intent: 'pending',
+        pendingRequest: request.pendingRequest ?? null,
         pendingSecretChange:
           key !== undefined
             ? { action: 'replace', previousRef: oldRef, nextRef }
@@ -107,8 +112,8 @@ export class ModelConnectionMutations<T> {
     const current = this.#read(request);
     if (current?.requestId === request.requestId && current.intent === 'pending')
       return this.#resume(current, request, undefined);
-    this.#revision(current, request.expected);
     if (current === null) throw Error('connection_not_found');
+    this.#revision(current, request.expected);
     const next: ModelConnectionRecord = {
       ...current,
       intent: action === 'disconnect' ? 'disconnected' : 'active',
@@ -119,11 +124,13 @@ export class ModelConnectionMutations<T> {
       binding: request.binding,
       updatedAt: this.state.options.clock.now().toISOString(),
       pendingSecretChange: null,
+      pendingRequest: null,
     };
     if (action === 'remove' && current.secretRef !== null) {
       const pending: ModelConnectionRecord = {
         ...next,
         intent: 'pending',
+        pendingRequest: request.pendingRequest ?? null,
         pendingSecretChange: { action: 'remove', previousRef: current.secretRef, nextRef: null },
       };
       this.state.options.store.put(pending, current.revision);
@@ -137,7 +144,8 @@ export class ModelConnectionMutations<T> {
   }
   #read(request: ModelMutationRequest, explicitKeyRepair = false): ModelConnectionRecord | null {
     const store = this.state.options.store;
-    const current = store.read(request.connectionId);
+    const raw = store.read(request.connectionId);
+    const current = raw === null ? null : modelConnectionRecord(raw);
     if (
       store
         .list()
@@ -170,8 +178,20 @@ export class ModelConnectionMutations<T> {
     request: ModelMutationRequest,
     key: string | undefined,
   ): T {
+    pending = modelConnectionRecord(pending);
+    if (
+      pending.pendingRequest !== null &&
+      pending.pendingRequest !== undefined &&
+      JSON.stringify(pending.pendingRequest) !== JSON.stringify(request.pendingRequest)
+    )
+      throw Error('connection_unverified');
     publishModelSecret(pending, key, this.state.options.secrets);
-    const next: ModelConnectionRecord = { ...pending, intent: 'active', pendingSecretChange: null };
+    const next: ModelConnectionRecord = {
+      ...pending,
+      intent: 'active',
+      pendingSecretChange: null,
+      pendingRequest: null,
+    };
     const resolution = this.state.resolve(next);
     if (
       (pending.pendingSecretChange?.action === 'replace' || next.auth === 'none') &&

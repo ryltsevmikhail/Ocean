@@ -1,3 +1,4 @@
+import { modelPendingRequest } from './model-pending-request.js';
 import { copyLocalQualification } from './model-local-qualification.js';
 import { readModelCheck } from './model-connection-results.js';
 import type { ModelConnectionRecord } from './model-connection-ports.js';
@@ -65,7 +66,7 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
   )
     throw Error('connection_unverified');
   // Build a closed typed shape: arbitrary extra JSON never becomes a credential or result field.
-  return {
+  const record: ModelConnectionRecord = {
     connectionId: value['connectionId'],
     providerId: value['providerId'],
     kind: value['kind'],
@@ -91,4 +92,5 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
     legacyEnvironment: value['legacyEnvironment'],
     configuredAfterRestore: value['configuredAfterRestore'],
   };
+  return { ...record, pendingRequest: modelPendingRequest(value['pendingRequest'], record) };
 }

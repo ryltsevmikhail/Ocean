@@ -112,7 +112,7 @@ it('rolls back schema22 table, backfill and version when publication fails', () 
   close.push(() => db.close());
   initializeSchema(db);
   db.exec(
-    "DROP TABLE ocean_room_model_policies; UPDATE meta SET value='21' WHERE key='schema_version'; CREATE TRIGGER stop_policy BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='22' BEGIN SELECT RAISE(ABORT,'publication failed'); END",
+    "DROP TABLE ocean_room_model_policies; UPDATE meta SET value='21' WHERE key='schema_version'; CREATE TRIGGER stop_policy BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='23' BEGIN SELECT RAISE(ABORT,'publication failed'); END",
   );
   expect(() => initializeSchema(db)).toThrow('publication failed');
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
@@ -124,7 +124,7 @@ it('rolls back schema22 table, backfill and version when publication fails', () 
   db.exec('DROP TRIGGER stop_policy');
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '22',
+    '23',
   );
 });
 it('rejects malformed JSON policy receipts and invalid persisted policy scalars without coercion', () => {

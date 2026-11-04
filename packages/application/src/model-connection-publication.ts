@@ -1,3 +1,4 @@
+import { modelConnectionRecord } from './model-connection-validation.js';
 import type { ModelConnectionRecord } from './model-connection-ports.js';
 import type { ProviderSecretStorePort } from './provider-connection-ports.js';
 import { requestCode } from './provider-connection-request.js';
@@ -7,6 +8,7 @@ export function publishModelSecret(
   key: string | undefined,
   secrets: ProviderSecretStorePort,
 ): void {
+  record = modelConnectionRecord(record);
   const change = record.pendingSecretChange;
   if (record.intent !== 'pending' || change === null) throw Error('provider_unverified');
   try {
