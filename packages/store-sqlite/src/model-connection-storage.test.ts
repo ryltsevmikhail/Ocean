@@ -4,6 +4,8 @@ import { unconfiguredModelConnection, type ModelConnectionRecord } from '@runnet
 import { initializeSchema } from './schema.js';
 import { SqliteModelConnections } from './model-connection-storage.js';
 import { SqliteProviderConnections } from './provider-connection-storage.js';
+import { InMemoryConversationStore } from '@runnets/store';
+import { malformedModelEnums, modelEnumRecord } from '../test-fixtures/model-enum-payloads.js';
 
 const opened: DatabaseSync[] = [];
 afterEach(() => {
@@ -164,3 +166,54 @@ it('validates identity columns and receipt snapshots rather than trusting JSON c
   expect(() => models.receipt('bad')).toThrow('connection_unverified');
   expect(() => models.put({ ...record, revision: 0 }, 1)).toThrow('connection_unverified');
 });
+
+it.each(malformedModelEnums)(
+  'rejects $label in canonical reads and receipt decoding',
+  ({ payload }) => {
+    const { db, models } = setup();
+    db.prepare('UPDATE ocean_model_connections SET payload=?').run(payload);
+    expect(() => models.read(record.connectionId)).toThrow('connection_unverified');
+    expect(() => models.list()).toThrow('connection_unverified');
+    db.prepare('INSERT INTO ocean_model_connection_receipts VALUES(?,?,?,?)').run(
+      'malformed-enum',
+      record.connectionId,
+      'digest',
+      payload,
+    );
+    expect(() => models.receipt('malformed-enum')).toThrow('connection_unverified');
+  },
+);
+
+it.each(malformedModelEnums)(
+  'rejects $label in both adapters before connection or receipt writes',
+  ({ payload }) => {
+    const { models } = setup();
+    const malformed = JSON.parse(payload) as ModelConnectionRecord;
+    for (const store of [models, new InMemoryConversationStore()]) {
+      const before = store.read(record.connectionId);
+      expect(() => store.put(malformed, 0)).toThrow('connection_unverified');
+      expect(() =>
+        store.activate(malformed, 0, {
+          requestId: 'malformed-enum',
+          value: { binding: 'digest', result: malformed },
+        }),
+      ).toThrow('connection_unverified');
+      expect(() =>
+        store.activate(modelEnumRecord, 0, {
+          requestId: 'malformed-snapshot',
+          value: { binding: 'digest', result: malformed },
+        }),
+      ).toThrow('connection_unverified');
+      expect(() =>
+        store.activate(malformed, 0, {
+          requestId: 'malformed-record',
+          value: { binding: 'digest', result: modelEnumRecord },
+        }),
+      ).toThrow('connection_unverified');
+      expect(store.read(record.connectionId)).toEqual(before);
+      expect(store.receipt('malformed-enum')).toBeNull();
+      expect(store.receipt('malformed-snapshot')).toBeNull();
+      expect(store.receipt('malformed-record')).toBeNull();
+    }
+  },
+);

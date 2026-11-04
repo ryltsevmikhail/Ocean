@@ -71,7 +71,7 @@ function setup(providerId: string) {
     nextId: () => 'id',
     sha256: (text) => text,
   });
-  return { models, legacy, service, environment, own, stream, read, secrets, values };
+  return { db, models, legacy, service, environment, own, stream, read, secrets, values };
 }
 it.each(['deepseek', 'unknown'])(
   'refuses an ineligible %s placeholder before touching environment, keys or model calls',
@@ -235,3 +235,35 @@ it('keeps designated fallback eligibility through legacy key publication, remova
   expect(c.service.current()).toBeNull();
   expect(c.stream).not.toHaveBeenCalled();
 });
+
+it.each(
+  ['pending', 'disconnected'].flatMap((intent) =>
+    [null, 'saved-ref'].map((secretRef) => ({ intent, secretRef })),
+  ),
+)(
+  'rejects persisted [$intent] with secretRef=$secretRef before any credential or model effects',
+  ({ intent, secretRef }) => {
+    const c = setup('deepseek');
+    c.values.set('saved-ref', 'fixture');
+    c.db.prepare('UPDATE ocean_model_connections SET payload=?').run(
+      JSON.stringify({
+        ...unconfiguredModelConnection('deepseek'),
+        revision: 1,
+        intent: [intent],
+        secretRef,
+      }),
+    );
+    expect(() => c.service.initialize()).toThrow('connection_unverified');
+    expect(c.service.current()).toBeNull();
+    for (const call of [
+      c.environment,
+      c.own,
+      c.read,
+      c.stream,
+      c.secrets.write,
+      c.secrets.replace,
+      c.secrets.remove,
+    ])
+      expect(call).not.toHaveBeenCalled();
+  },
+);

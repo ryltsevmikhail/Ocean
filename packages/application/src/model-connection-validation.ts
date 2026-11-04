@@ -15,15 +15,18 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
     !text(value['providerId']) ||
     (value['connectionId'].startsWith('legacy:') &&
       value['connectionId'] !== `legacy:${value['providerId']}`) ||
-    !['cloud', 'local'].includes(String(value['kind'])) ||
-    !['api_key', 'none'].includes(String(value['auth'])) ||
+    (value['kind'] !== 'cloud' && value['kind'] !== 'local') ||
+    (value['auth'] !== 'api_key' && value['auth'] !== 'none') ||
     !nullableText(value['endpoint']) ||
     !nullableText(value['defaultModelId']) ||
     !nullableText(value['secretRef']) ||
     !nullableText(value['requestId']) ||
     !nullableText(value['binding']) ||
     !text(value['updatedAt']) ||
-    !['unconfigured', 'active', 'disconnected', 'pending'].includes(String(value['intent'])) ||
+    (value['intent'] !== 'unconfigured' &&
+      value['intent'] !== 'active' &&
+      value['intent'] !== 'disconnected' &&
+      value['intent'] !== 'pending') ||
     typeof value['revision'] !== 'number' ||
     !Number.isSafeInteger(value['revision']) ||
     value['revision'] < 0 ||
@@ -44,7 +47,7 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
   if (
     change !== null &&
     (!object(change) ||
-      !['replace', 'remove'].includes(String(change['action'])) ||
+      (change['action'] !== 'replace' && change['action'] !== 'remove') ||
       !nullableText(change['previousRef']) ||
       !nullableText(change['nextRef']))
   )
@@ -53,12 +56,12 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
   return {
     connectionId: value['connectionId'],
     providerId: value['providerId'],
-    kind: value['kind'] as ModelConnectionRecord['kind'],
+    kind: value['kind'],
     endpoint: value['endpoint'],
-    auth: value['auth'] as ModelConnectionRecord['auth'],
+    auth: value['auth'],
     defaultModelId: value['defaultModelId'],
     secretRef: value['secretRef'],
-    intent: value['intent'] as ModelConnectionRecord['intent'],
+    intent: value['intent'],
     revision: value['revision'],
     requestId: value['requestId'],
     binding: value['binding'],
