@@ -7,7 +7,7 @@
  * the SDK's own declarations resolve to `any` in the repository's NodeNext
  * configuration (see `sdk-boundary.ts`).
  */
-import type { BoundaryAccess } from './sdk-boundary.js';
+import type { BoundaryAccess } from './sdk-access.js';
 import type {
   HostConnectionInput,
   HostIntegrationInput,
@@ -60,6 +60,16 @@ export function createSetupOperations(access: BoundaryAccess): HostSetupOperatio
     },
 
     async installMcp(input: HostMcpInput) {
+      // Pin the transport: stdio would execute a local process, which RC2's
+      // catalog never permits. Endpoint/transport are service-supplied, never
+      // model-supplied (Task 5 obligation).
+      if (input.remoteTransport !== 'streamable-http') {
+        throw new HostOperationError(
+          'invalid',
+          'unsupported_transport',
+          'only streamable-http MCP endpoints may be installed',
+        );
+      }
       const handle = access.extension('mcp');
       if (handle.addServer === undefined) {
         throw new HostOperationError('invalid', 'missing_handler', 'mcp plugin has no addServer');
@@ -119,9 +129,20 @@ export function createSetupOperations(access: BoundaryAccess): HostSetupOperatio
           'oauth.start',
         ),
       );
-      // The synthetic authorization server redirects with the code; this is the
-      // test's stand-in for the owner's browser, not adapter transport traffic.
-      const authorization = await fetch(started.authorizationUrl, { redirect: 'manual' });
+      // TEST-ONLY browser stand-in for the OAuth authorization redirect; product
+      // code never supplies this fetch, so a shipped path can never bypass the
+      // guarded transport client.
+      const oauthSetupFetch = access.oauthSetupFetch;
+      if (oauthSetupFetch === null) {
+        throw new HostOperationError(
+          'invalid',
+          'oauth_setup_unavailable',
+          'OAuth setup is test-only and requires an explicit browser stand-in',
+        );
+      }
+      const authorization = await oauthSetupFetch(started.authorizationUrl, {
+        redirect: 'manual',
+      });
       const location = authorization.headers.get('location');
       const code = location === null ? null : new URL(location).searchParams.get('code');
       if (code === null) {

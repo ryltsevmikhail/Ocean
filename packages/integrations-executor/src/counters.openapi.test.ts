@@ -12,7 +12,8 @@ import { openApiPlugin } from '@executor-js/plugin-openapi/core';
 
 import { createExecutorHost } from './sdk-boundary.js';
 import type { ExecutorHost } from './host-types.js';
-import { ExecutorServicePluginTransport } from './transport.js';
+import { createTestTransport } from './test-support.js';
+import type { ExecutorServicePluginTransport } from './transport.js';
 import {
   openApiAuthTemplates,
   openApiSpecJson,
@@ -27,6 +28,7 @@ interface Harness {
   readonly transport: ExecutorServicePluginTransport;
   readonly target: { integrationId: string; connectionId: string; owner: 'user' };
   readonly toolName: string;
+  readonly elicitationRequests: { tag: string; source: string }[];
   reset(): void;
   close(): Promise<void>;
 }
@@ -35,6 +37,7 @@ async function openHarness(scenario: OpenApiScenario): Promise<Harness> {
   const service = await startOpenApiService(scenario);
   const provider = memoryProvider();
   const wantsOAuth = scenario === 'oauth401';
+  const elicitationRequests: { tag: string; source: string }[] = [];
 
   const host = await createExecutorHost({
     tenantId: 'probe-tenant',
@@ -43,6 +46,8 @@ async function openHarness(scenario: OpenApiScenario): Promise<Harness> {
     plugins: [openApiPlugin()],
     providers: [provider.provider],
     redirectUri: 'http://127.0.0.1:9/oauth/callback',
+    testOnlyOAuthSetupFetch: fetch,
+    onElicitationRequest: (tag, source) => elicitationRequests.push({ tag, source }),
     firstPartyOAuthClients: [
       {
         name: 'probe-as',
@@ -82,7 +87,7 @@ async function openHarness(scenario: OpenApiScenario): Promise<Harness> {
   }
 
   const target = { integrationId: 'probe-api', connectionId: 'work', owner: 'user' as const };
-  const transport = await ExecutorServicePluginTransport.fromHost(host, { enableExecution: true });
+  const transport = await createTestTransport(host, { enableExecution: true });
   const catalog = await transport.discover(target);
   const tool = catalog.tools.find((candidate) => candidate.name.endsWith('writeThing'));
   if (tool === undefined)
@@ -94,6 +99,7 @@ async function openHarness(scenario: OpenApiScenario): Promise<Harness> {
     transport,
     target,
     toolName: tool.name,
+    elicitationRequests,
     reset() {
       service.counts.business = 0;
       service.counts.token = 0;
@@ -186,6 +192,34 @@ describe('real OpenAPI plugin dispatch counters', () => {
     expect(first.schemaDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(first.schemaDigest).toBe(second.schemaDigest);
     expect(first.tools.length).toBeLessThanOrEqual(256);
+    await harness.close();
+  });
+
+  it('an SDK policy-approval gate is accepted for the exact dispatch (one request)', async () => {
+    const harness = await openHarness('ok');
+    harness.elicitationRequests.length = 0;
+    harness.reset();
+    const outcome = await harness.transport.invoke(
+      harness.target,
+      invocation('openapi-policy', harness.toolName),
+    );
+    expect(harness.service.counts.business).toBe(1);
+    expect(outcome.kind).toBe('observed');
+    // The SDK's own consent gate for the selected call is the only accepted
+    // elicitation; it must be bound to the in-flight address/args.
+    expect(harness.elicitationRequests).toEqual([{ tag: 'FormElicitation', source: 'policy' }]);
+    await harness.close();
+  });
+
+  it('upstream 5xx: exactly one POST, uncertain upstream_failure, no retry', async () => {
+    const harness = await openHarness('server500');
+    harness.reset();
+    const outcome = await harness.transport.invoke(
+      harness.target,
+      invocation('openapi-500', harness.toolName),
+    );
+    expect(harness.service.counts.business).toBe(1);
+    expect(outcome).toMatchObject({ kind: 'uncertain', code: 'upstream_failure' });
     await harness.close();
   });
 });

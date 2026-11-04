@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment,
-   @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access,
-   @typescript-eslint/no-unsafe-return --
+   @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+   --
    The pinned @executor-js declaration chain imports @executor-js/fumadb, whose
    declaration files use extensionless relative imports. Under the repository's
    NodeNext + skipLibCheck configuration those imports fail to resolve, so every
@@ -39,23 +39,20 @@ import {
   hostErrorFromCause,
   toDispatchExit,
 } from './host-types.js';
+import { canonicalJson, toServicePluginJson } from './json.js';
+import { createAccess } from './sdk-access.js';
 import { createSetupOperations } from './sdk-setup.js';
 
-export interface ExtensionHandle {
-  readonly register?: (input: unknown) => unknown;
-  readonly addSpec?: (input: unknown) => unknown;
-  readonly addServer?: (input: unknown) => unknown;
-}
-
-/** Shared accessors handed to the (SDK-free) setup module. */
-export interface BoundaryAccess {
-  readonly executor: unknown;
-  run(effect: unknown, what: string): Promise<unknown>;
-  extension(pluginId: string): ExtensionHandle;
-  integrationSlug(value: string): unknown;
-  connectionName(value: string): unknown;
-  authTemplateSlug(value: string): unknown;
-  oauthClientSlug(value: string): unknown;
+/**
+ * Stable key for one in-flight dispatch. Policy-source elicitation is accepted
+ * only for an address+args pair that is currently being dispatched by this
+ * host, so an SDK-originated approval cannot be replayed for another call.
+ */
+function dispatchBindingKey(address: unknown, args: unknown): string | null {
+  if (typeof address !== 'string') return null;
+  const converted = toServicePluginJson(args);
+  if (converted.lossy) return null;
+  return `${address}\u0000${canonicalJson(converted.value)}`;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -101,27 +98,9 @@ function toHostConnection(value: unknown): HostConnection {
         : {
             status: typeof health.status === 'string' ? health.status : 'unknown',
             identity: typeof health.identity === 'string' ? health.identity : null,
+            detail: typeof health.detail === 'string' ? health.detail.slice(0, 240) : null,
+            reason: typeof health.reason === 'string' ? health.reason : null,
           },
-  };
-}
-
-function createAccess(executor: unknown, run: BoundaryAccess['run']): BoundaryAccess {
-  return {
-    executor,
-    run,
-    extension(pluginId) {
-      const handle = asRecord(executor)[pluginId];
-      if (typeof handle === 'object' && handle !== null) return handle;
-      throw new HostOperationError(
-        'invalid',
-        'missing_plugin',
-        `plugin extension "${pluginId}" is unavailable`,
-      );
-    },
-    integrationSlug: (value) => sdk.IntegrationSlug.make(value),
-    connectionName: (value) => sdk.ConnectionName.make(value),
-    authTemplateSlug: (value) => sdk.AuthTemplateSlug.make(value),
-    oauthClientSlug: (value) => sdk.OAuthClientSlug.make(value),
   };
 }
 
@@ -137,19 +116,23 @@ export async function createExecutorHost(options: ExecutorHostOptions): Promise<
     ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }),
   });
 
-  // The SDK's own approval gate asks with `source: "policy"`: the caller has
-  // already recorded consent for this exact tool call through Ocean's journal,
-  // so the host accepts it. Anything a TOOL asks for mid-call is never granted
-  // (an absent source is treated as tool-originated), so extra actions fail
-  // closed.
+  // Counts the dispatches currently in flight in this host, keyed by
+  // address+args. The SDK's own approval gate asks with `source: "policy"`; it
+  // is accepted only when it names the exact address/args of a dispatch this
+  // host is running (Ocean has already journaled consent for that call).
+  // Anything a TOOL asks for mid-call is never granted (an absent source is
+  // treated as tool-originated), and an unbound "policy" request is declined.
+  const inFlightDispatches = new Map<string, number>();
   const onElicitation = (context: unknown): unknown => {
     const record = asRecord(context);
     const request = asRecord(record.request);
     const tag = typeof request._tag === 'string' ? request._tag : 'unknown';
-    const source = record.source === 'policy' ? 'policy' : 'tool';
+    const key = dispatchBindingKey(record.address, record.args);
+    const bound = key !== null && (inFlightDispatches.get(key) ?? 0) > 0;
+    const accepted = record.source === 'policy' && bound;
     return Effect.sync(() => {
-      options.onElicitationRequest?.(tag, source);
-      return { action: source === 'policy' ? ('accept' as const) : ('decline' as const) };
+      options.onElicitationRequest?.(tag, accepted ? 'policy' : 'tool');
+      return { action: accepted ? ('accept' as const) : ('decline' as const) };
     });
   };
 
@@ -176,7 +159,11 @@ export async function createExecutorHost(options: ExecutorHostOptions): Promise<
     throw new HostOperationError(error.failure, error.tag, `${what}: ${error.message}`);
   };
 
-  const access = createAccess(executor, run);
+  const access = createAccess(
+    executor,
+    run,
+    options.testOnlyOAuthSetupFetch === undefined ? null : options.testOnlyOAuthSetupFetch,
+  );
   const setup = createSetupOperations(access);
   const executorRecord = asRecord(executor);
 
@@ -211,7 +198,12 @@ export async function createExecutorHost(options: ExecutorHostOptions): Promise<
     return Promise.all(
       mapped.map(async (tool) => {
         if (tool.inputSchema !== undefined && tool.inputSchema !== null) return tool;
-        const view = asRecord(await run(asEffect(schemaOf(tool.address)), 'tools.schema'));
+        const view = asRecord(
+          await run(
+            asEffect(schemaOf(tool.address)).pipe(Effect.timeout(deadlineMs)),
+            'tools.schema',
+          ),
+        );
         return { ...tool, inputSchema: view.inputSchema };
       }),
     );
@@ -238,18 +230,52 @@ export async function createExecutorHost(options: ExecutorHostOptions): Promise<
     return connection === null ? null : toHostConnection(connection);
   };
 
+  const refreshConnection = async (filter: HostToolFilter, deadlineMs: number): Promise<void> => {
+    const connections = asRecord(executorRecord.connections);
+    const refresh = asCallable(connections.refresh);
+    if (refresh === null) {
+      throw new HostOperationError(
+        'invalid',
+        'missing_handler',
+        'executor has no connections.refresh',
+      );
+    }
+    await run(
+      asEffect(
+        refresh({
+          owner: filter.owner,
+          name: access.connectionName(filter.connectionId ?? ''),
+          integration: access.integrationSlug(filter.integrationId),
+        }),
+      ).pipe(Effect.timeout(deadlineMs)),
+      'connections.refresh',
+    );
+  };
+
   const execute = async (input: HostExecuteInput): Promise<ExecutorDispatchExit> => {
     if (typeof executorRecord.execute !== 'function') {
       throw new HostOperationError('invalid', 'missing_handler', 'executor has no execute');
     }
-    const dispatch = asEffect(
-      executorRecord.execute(sdk.ToolAddress.make(input.address), input.arguments),
-    ).pipe(Effect.timeout(input.deadlineMs));
-    const raced =
-      input.signal === undefined
-        ? dispatch
-        : Effect.raceFirst(dispatch, abortWhenSignalled(input.signal));
-    return toDispatchExit(await Effect.runPromiseExit(raced));
+    const bindingKey = dispatchBindingKey(input.address, input.arguments);
+    if (bindingKey !== null) {
+      inFlightDispatches.set(bindingKey, (inFlightDispatches.get(bindingKey) ?? 0) + 1);
+    }
+    try {
+      const dispatch = asEffect(
+        executorRecord.execute(sdk.ToolAddress.make(input.address), input.arguments),
+      ).pipe(Effect.timeout(input.deadlineMs));
+      const raced =
+        input.signal === undefined
+          ? dispatch
+          : Effect.raceFirst(dispatch, abortWhenSignalled(input.signal));
+      return toDispatchExit(await Effect.runPromiseExit(raced));
+    } finally {
+      if (bindingKey !== null) {
+        const count = (inFlightDispatches.get(bindingKey) ?? 1) - 1;
+        if (count <= 0) inFlightDispatches.delete(bindingKey);
+        else inFlightDispatches.set(bindingKey, count);
+      }
+    }
   };
 
   return {
@@ -257,6 +283,7 @@ export async function createExecutorHost(options: ExecutorHostOptions): Promise<
     httpClientLayer: guarded.httpClientLayer,
     listTools,
     getConnection,
+    refreshConnection,
     execute,
     ...setup,
     async close() {

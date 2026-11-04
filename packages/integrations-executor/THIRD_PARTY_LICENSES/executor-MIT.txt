@@ -6,7 +6,8 @@ https://github.com/UsefulSoftwareCo/executor at commit
 
 NOTE: the installed `@executor-js/sdk` bundle is patched (see
 `patches/README.md` and the repository `NOTICE`); it is not pristine upstream
-bytes. The MIT terms below apply to the patched artifact.
+bytes. The MIT terms below apply to the patched artifact. This file is the
+dependency's third-party license; the package itself is Apache-2.0.
 
 ---
 

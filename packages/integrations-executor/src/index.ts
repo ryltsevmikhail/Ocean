@@ -5,15 +5,10 @@
  * here. The pinned Executor SDK and its Effect runtime stay inside this
  * package; nothing below exposes an SDK, Effect or OAuth type.
  */
-export {
-  ExecutorServicePluginTransport,
-  ExecutorTransportOpenError,
-  assessQualification,
-} from './transport.js';
+export { ExecutorServicePluginTransport, ExecutorTransportOpenError } from './transport.js';
 export type {
   ExecutorTransportOpenOptions,
   ExecutorTransportQualificationReason,
   ExecutorTransportStatus,
 } from './transport.js';
-export { PINNED_IDENTITIES, verifyInstalledSdkChunk } from './pinned-identity.js';
-export type { InstalledSdkChunkIdentity } from './pinned-identity.js';
+export { PINNED_IDENTITIES } from './pinned-identity.js';

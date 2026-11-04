@@ -108,6 +108,10 @@ export async function startOpenApiService(scenario: OpenApiScenario): Promise<Op
         res.end();
         return;
       }
+      if (scenario === 'server500') {
+        writeJson(res, 500, { message: 'upstream exploded after the write attempt' });
+        return;
+      }
       const auth = req.headers.authorization ?? '';
       if (scenario === 'static401' && auth === 'Bearer static-secret-1') {
         writeJson(res, 401, { message: 'token expired' });

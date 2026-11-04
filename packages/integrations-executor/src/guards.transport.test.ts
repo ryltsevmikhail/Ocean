@@ -12,7 +12,7 @@ import { openApiPlugin } from '@executor-js/plugin-openapi/core';
 import type { ExecutorHost } from './host-types.js';
 import { verifyInstalledSdkChunk } from './pinned-identity.js';
 import { createExecutorHost } from './sdk-boundary.js';
-import { ExecutorServicePluginTransport } from './transport.js';
+import { createTestTransport } from './test-support.js';
 import { closeServer, listen, readBody, writeJson } from '../test-fixtures/loopback.js';
 import {
   openApiAuthTemplates,
@@ -84,7 +84,7 @@ async function openSyntheticHost(catalog?: readonly unknown[]): Promise<{
 describe('qualification gate', () => {
   it('execution stays disabled by default and refuses without any network', async () => {
     const fixture = await openSyntheticHost();
-    const transport = await ExecutorServicePluginTransport.fromHost(fixture.host);
+    const transport = await createTestTransport(fixture.host);
     expect(transport.qualification().qualified).toBe(false);
     const target = { integrationId: 'probe', connectionId: 'work', owner: 'user' as const };
     const outcome = await transport.invoke(target, {
@@ -106,7 +106,7 @@ describe('qualification gate', () => {
       ok: false,
       actualSha256: 'f'.repeat(64),
     };
-    const transport = await ExecutorServicePluginTransport.fromHost(fixture.host, {
+    const transport = await createTestTransport(fixture.host, {
       enableExecution: true,
       identity: mismatched,
     });
@@ -132,7 +132,7 @@ describe('qualification gate', () => {
       inputSchema: { type: 'object', properties: {} },
     }));
     const fixture = await openSyntheticHost(huge);
-    const transport = await ExecutorServicePluginTransport.fromHost(fixture.host, {
+    const transport = await createTestTransport(fixture.host, {
       enableExecution: true,
     });
     await expect(
@@ -150,7 +150,7 @@ describe('qualification gate', () => {
       inputSchema: { type: 'object', properties: {} },
     }));
     const fixture = await openSyntheticHost(big);
-    const transport = await ExecutorServicePluginTransport.fromHost(fixture.host, {
+    const transport = await createTestTransport(fixture.host, {
       enableExecution: true,
     });
     await expect(
@@ -187,7 +187,7 @@ describe('real OpenAPI transport guards', () => {
       value: 'static-secret-1',
     });
     const target = { integrationId: 'probe-api', connectionId: 'work', owner: 'user' as const };
-    const transport = await ExecutorServicePluginTransport.fromHost(host, {
+    const transport = await createTestTransport(host, {
       enableExecution: true,
     });
     const catalog = await transport.discover(target);
@@ -228,7 +228,7 @@ describe('real OpenAPI transport guards', () => {
       value: 'static-secret-1',
     });
     const target = { integrationId: 'probe-api', connectionId: 'work', owner: 'user' as const };
-    const transport = await ExecutorServicePluginTransport.fromHost(host, {
+    const transport = await createTestTransport(host, {
       enableExecution: true,
     });
     await expect(transport.discover(target)).rejects.toMatchObject({ code: 'too_many_tools' });

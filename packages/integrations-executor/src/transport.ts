@@ -1,19 +1,11 @@
 /**
- * Qualified, fail-closed service-plugin transport.
+ * Public transport: plain types only.
  *
- * This is the package's public entry point. It implements Ocean's
- * `ServicePluginTransportPort` over the pinned Executor SDK, and refuses to
- * dispatch unless:
- *
- * 1. the caller explicitly enabled execution at construction (disabled by
- *    default, so no product path can reach the network in this task), and
- * 2. the installed SDK chunk hashes to the exact patched bundle from the
- *    qualification run (a missing or drifted bundle is `unqualified`).
- *
- * Discovery and invocation are bounded by the application limits and never
- * retried. The host that owns catalog/connection persistence is not part of
- * this task; `fromHost` is the internal seam the package's tests (and the next
- * host layer) use to wrap an already-created host.
+ * This module (and therefore the package entry point's declaration graph) is
+ * deliberately free of Effect/SDK types: it delegates to an internal
+ * `ExecutorTransportBackend` created by `admission.ts`. Execution is disabled
+ * by default; `open()` verifies the pinned installed chunk on every admission
+ * and refuses unless the caller explicitly enabled execution.
  */
 import { ServicePluginDiscoveryRefusedError } from '@runnets/application';
 import type {
@@ -27,83 +19,32 @@ import type {
   ServicePluginTransportQualification,
 } from '@runnets/application';
 
-import { runDiscovery } from './discovery.js';
-import { createExecutorHost } from './sdk-boundary.js';
-import type { ExecutorHost } from './host-types.js';
-import { notStarted, runInvocation } from './invoke.js';
-import { PINNED_IDENTITIES, verifyInstalledSdkChunk } from './pinned-identity.js';
-import type { InstalledSdkChunkIdentity } from './pinned-identity.js';
+import { admit } from './admission.js';
+import type { ExecutorTransportBackend } from './backend.js';
+import { freezeStatus } from './status.js';
+import type { ExecutorTransportOpenOptions, ExecutorTransportStatus } from './status.js';
 
-export type ExecutorTransportQualificationReason =
-  'invalid_options' | 'execution_not_enabled' | 'pinned_chunk_mismatch' | 'pinned_chunk_unreadable';
+export { ExecutorTransportOpenError } from './status.js';
+export type {
+  ExecutorTransportOpenOptions,
+  ExecutorTransportQualificationReason,
+  ExecutorTransportStatus,
+} from './status.js';
 
-/** Status with the extra facts a host needs to explain a refusal. */
-export interface ExecutorTransportStatus extends ServicePluginTransportQualification {
-  readonly reason: ExecutorTransportQualificationReason | null;
-  readonly requested: boolean;
-  readonly installedChunkSha256: string | null;
-}
+/**
+ * Runtime-only token for the internal constructor: the class can only be
+ * instantiated through `createInternalTransport` below, which is not reachable
+ * from the package entry point. A caller cannot obtain this symbol, so no
+ * forged `ExecutorTransportStatus` can be turned into an instance.
+ */
+const INTERNAL_CONSTRUCTION_TOKEN: unique symbol = Symbol('executor-transport.internal');
 
-export class ExecutorTransportOpenError extends Error {
-  readonly reason: ExecutorTransportQualificationReason;
-
-  constructor(reason: ExecutorTransportQualificationReason, message: string) {
-    super(message);
-    this.name = 'ExecutorTransportOpenError';
-    this.reason = reason;
-  }
-}
-
-export interface ExecutorTransportOpenOptions {
-  /** Executor tenant scope (an opaque host identity, not a secret). */
-  readonly tenantId: string;
-  /** Executor subject scope; the owner of the connections being addressed. */
-  readonly subjectId: string;
-  /** Exact origins this transport may talk to. Never credentials. */
-  readonly allowedOrigins: readonly string[];
-  /**
-   * Execution is OFF unless this is exactly `true`; no product path sets it in
-   * this task. Construction still verifies the pinned bundle when enabled.
-   */
-  readonly enableExecution?: boolean;
-}
-
-/** Pure qualification decision; exported for the fail-closed regression test. */
-export function assessQualification(input: {
-  readonly requested: boolean;
-  readonly identity: InstalledSdkChunkIdentity;
-}): ExecutorTransportStatus {
-  const identities = PINNED_IDENTITIES;
-  const base = {
-    requested: input.requested,
-    identities,
-    installedChunkSha256: input.identity.actualSha256,
-  } as const;
-  if (!input.requested) {
-    return { ...base, qualified: false, reason: 'execution_not_enabled' };
-  }
-  if (!input.identity.ok) {
-    return {
-      ...base,
-      qualified: false,
-      reason:
-        input.identity.actualSha256 === null ? 'pinned_chunk_unreadable' : 'pinned_chunk_mismatch',
-    };
-  }
-  return { ...base, qualified: true, reason: null };
-}
-
-/** Reject construction-time configuration that cannot be enforced. */
-function validateOpenOptions(options: ExecutorTransportOpenOptions): void {
-  if (options.tenantId.trim().length === 0 || options.subjectId.trim().length === 0) {
-    throw new ExecutorTransportOpenError('invalid_options', 'tenantId and subjectId are required');
-  }
-  if (options.allowedOrigins.length === 0) {
-    throw new ExecutorTransportOpenError(
-      'invalid_options',
-      'at least one allowed origin is required',
-    );
-  }
+/** Internal factory for in-package tests / the future host layer (not exported from the entry point). */
+export function createInternalTransport(
+  backend: ExecutorTransportBackend,
+  status: ExecutorTransportStatus,
+): ExecutorServicePluginTransport {
+  return new ExecutorServicePluginTransport(backend, status, INTERNAL_CONSTRUCTION_TOKEN);
 }
 
 function refusalCode(
@@ -112,65 +53,50 @@ function refusalCode(
   return status.reason === 'execution_not_enabled' ? 'execution_disabled' : 'transport_unqualified';
 }
 
-export class ExecutorServicePluginTransport implements ServicePluginTransportPort {
-  private readonly host: ExecutorHost;
-  private readonly current: ExecutorTransportStatus;
-  private closed = false;
+function refusalDetail(status: ExecutorTransportStatus): string {
+  return `Executor transport is not qualified: ${status.reason ?? 'unqualified'}`;
+}
 
-  private constructor(host: ExecutorHost, status: ExecutorTransportStatus) {
-    this.host = host;
-    this.current = status;
+export class ExecutorServicePluginTransport implements ServicePluginTransportPort {
+  readonly #backend: ExecutorTransportBackend;
+  readonly #status: ExecutorTransportStatus;
+  #closed = false;
+
+  /**
+   * Not part of the public contract: the third argument is a module-private
+   * token that only `createInternalTransport`/`open` can supply at runtime.
+   */
+  constructor(
+    backend: ExecutorTransportBackend,
+    status: ExecutorTransportStatus,
+    token: typeof INTERNAL_CONSTRUCTION_TOKEN,
+  ) {
+    if (token !== INTERNAL_CONSTRUCTION_TOKEN) {
+      throw new Error('Executor transport instances are created through its factories only');
+    }
+    this.#backend = backend;
+    this.#status = freezeStatus(status);
   }
 
   /** Public factory. Execution stays disabled unless explicitly enabled. */
   static async open(
     options: ExecutorTransportOpenOptions,
   ): Promise<ExecutorServicePluginTransport> {
-    validateOpenOptions(options);
-    const requested = options.enableExecution === true;
-    const identity = await verifyInstalledSdkChunk();
-    const status = assessQualification({ requested, identity });
-    if (!status.qualified) {
-      const reason = status.reason ?? 'pinned_chunk_mismatch';
-      throw new ExecutorTransportOpenError(
-        reason,
-        `Executor transport cannot enable execution: ${reason}`,
-      );
-    }
-    const host = await createExecutorHost({
-      tenantId: options.tenantId,
-      subjectId: options.subjectId,
-      allowedOrigins: options.allowedOrigins,
-    });
-    return new ExecutorServicePluginTransport(host, status);
+    const admission = await admit(options);
+    return new ExecutorServicePluginTransport(
+      admission.backend,
+      admission.status,
+      INTERNAL_CONSTRUCTION_TOKEN,
+    );
   }
 
-  /**
-   * Internal seam: wrap an existing host (tests today; the Task 5 host layer
-   * that owns catalog/connection persistence later).
-   */
-  static async fromHost(
-    host: ExecutorHost,
-    options: {
-      readonly enableExecution?: boolean;
-      readonly identity?: InstalledSdkChunkIdentity;
-    } = {},
-  ): Promise<ExecutorServicePluginTransport> {
-    const identity = options.identity ?? (await verifyInstalledSdkChunk());
-    const status = assessQualification({
-      requested: options.enableExecution === true,
-      identity,
-    });
-    return new ExecutorServicePluginTransport(host, status);
-  }
-
-  /** Qualification plus the observed installed-chunk digest. */
+  /** Qualification plus the observed installed-chunk digest (frozen). */
   status(): ExecutorTransportStatus {
-    return this.current;
+    return this.#status;
   }
 
   qualification(): ServicePluginTransportQualification {
-    return this.current;
+    return this.#status;
   }
 
   async discover(
@@ -178,16 +104,13 @@ export class ExecutorServicePluginTransport implements ServicePluginTransportPor
     options: ServicePluginDiscoveryOptions = {},
   ): Promise<ServicePluginCatalog> {
     this.assertOpen();
-    if (!this.current.qualified) {
+    if (!this.#status.qualified) {
       throw new ServicePluginDiscoveryRefusedError(
-        refusalCode(this.current),
-        `Executor transport is not qualified: ${this.current.reason ?? 'unqualified'}`,
+        refusalCode(this.#status),
+        refusalDetail(this.#status),
       );
     }
-    return runDiscovery(this.host, target, {
-      ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    return this.#backend.discover(target, options);
   }
 
   async invoke(
@@ -196,23 +119,24 @@ export class ExecutorServicePluginTransport implements ServicePluginTransportPor
     options: ServicePluginInvokeOptions = {},
   ): Promise<ServicePluginInvokeOutcome> {
     this.assertOpen();
-    if (!this.current.qualified) {
-      return notStarted(
-        invocation.invocationId,
-        refusalCode(this.current),
-        `Executor transport is not qualified: ${this.current.reason ?? 'unqualified'}`,
-      );
+    if (!this.#status.qualified) {
+      return {
+        kind: 'not_started',
+        invocationId: invocation.invocationId,
+        code: refusalCode(this.#status),
+        detail: refusalDetail(this.#status),
+      };
     }
-    return runInvocation(this.host, target, invocation, options);
+    return this.#backend.invoke(target, invocation, options);
   }
 
   async close(): Promise<void> {
-    if (this.closed) return;
-    this.closed = true;
-    await this.host.close();
+    if (this.#closed) return;
+    this.#closed = true;
+    await this.#backend.close();
   }
 
   private assertOpen(): void {
-    if (this.closed) throw new Error('Executor transport is closed');
+    if (this.#closed) throw new Error('Executor transport is closed');
   }
 }

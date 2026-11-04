@@ -72,6 +72,50 @@ describe('package surface qualification', () => {
     expect(source.includes('sdk-')).toBe(false);
   });
 
+  it('the public class module drags no Effect/SDK types into its declaration graph', async () => {
+    for (const file of ['transport.ts', 'status.ts', 'backend.ts', 'origins.ts']) {
+      const source = await readFile(new URL(`../src/${file}`, import.meta.url), 'utf8');
+      expect(source.includes("from 'effect'"), file).toBe(false);
+      expect(source.includes('@executor-js'), file).toBe(false);
+      expect(source.includes("from './host-types.js'"), file).toBe(false);
+      expect(source.includes("from './sdk-"), file).toBe(false);
+    }
+  });
+
+  it('the entry point exposes no internal gate seam', async () => {
+    const source = await readFile(new URL('../src/index.ts', import.meta.url), 'utf8');
+    for (const internal of [
+      'fromHost',
+      'verifyInstalledSdkChunk',
+      'assessQualification',
+      'createInternal',
+    ]) {
+      expect(source.includes(internal), internal).toBe(false);
+    }
+    expect(source.includes('PINNED_IDENTITIES')).toBe(true);
+  });
+
+  it('the shipped setup path has no ambient fetch and pins the MCP transport', async () => {
+    const setup = await readFile(new URL('../src/sdk-setup.ts', import.meta.url), 'utf8');
+    expect(setup).not.toContain('globalThis.fetch');
+    expect(setup).not.toMatch(/[^.]\bfetch\(/);
+    expect(setup).toContain('oauth_setup_unavailable');
+    expect(setup).toContain('streamable-http');
+  });
+
+  it('the dead test-config path mapping stays out of tsconfig.tests.json', async () => {
+    const source = await readFile(new URL('../../../tsconfig.tests.json', import.meta.url), 'utf8');
+    expect(source.includes('integrations-executor')).toBe(false);
+  });
+
+  it('patch re-derivation guidance uses the verified line-anchored git-diff method', async () => {
+    const readme = await readFile(new URL('../../../patches/README.md', import.meta.url), 'utf8');
+    expect(readme).toContain('git diff --no-index');
+    expect(readme).toContain('^        \\}\\);$');
+    expect(readme).toContain('2026-11-04');
+    expect(readme).not.toContain('diff -u --label');
+  });
+
   it('plugin /core entry points are real runtime functions', async () => {
     const openapi = await import('@executor-js/plugin-openapi/core');
     const mcp = await import('@executor-js/plugin-mcp/core');

@@ -26,6 +26,8 @@ import {
   SERVICE_PLUGIN_MAX_REQUEST_BYTES,
 } from '@runnets/application';
 
+import { normalizeOrigin } from './origins.js';
+
 export type GuardedFetchCode =
   | 'origin_not_allowed'
   | 'credentials_in_url'
@@ -65,18 +67,6 @@ export interface GuardedHttp {
   readonly httpClientLayer: Layer.Layer<HttpClient.HttpClient>;
 }
 
-/** Parse an exact origin and reject anything carrying a path/credentials. */
-function normalizeOrigin(origin: string): string {
-  const url = new URL(origin);
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error(`allowed origin must be http(s): ${origin}`);
-  }
-  if (url.pathname !== '/' || url.search !== '' || url.hash !== '' || url.username !== '') {
-    throw new Error(`allowed origin must be scheme://host[:port] with no path: ${origin}`);
-  }
-  return url.origin;
-}
-
 function measureRequestBody(
   input: string | URL | Request,
   init: RequestInit | undefined,
@@ -112,10 +102,15 @@ function isRedirect(status: number): boolean {
   return status >= 300 && status < 400;
 }
 
-/** Wrap the response body stream so the byte cap is enforced while streaming. */
-function capResponseBody(response: Response, limit: number): Response {
+/**
+ * Wrap the response body stream so the byte cap is enforced while streaming.
+ * `onOverflow` aborts the request so a client waiting on a dead stream fails
+ * fast instead of consuming the whole call deadline.
+ */
+function capResponseBody(response: Response, limit: number, onOverflow: () => void): Response {
   const declared = response.headers.get('content-length');
   if (declared !== null && Number(declared) > limit) {
+    onOverflow();
     void response.body?.cancel();
     throw new GuardedFetchError(
       'response_too_large',
@@ -132,6 +127,7 @@ function capResponseBody(response: Response, limit: number): Response {
       transform(chunk, controller) {
         total += chunk.byteLength;
         if (total > limit) {
+          onOverflow();
           controller.error(
             new GuardedFetchError(
               'response_too_large',
@@ -193,12 +189,14 @@ export function createGuardedHttp(options: GuardedHttpOptions): GuardedHttp {
       );
     }
 
+    const requestController = new AbortController();
     const deadlineSignal = AbortSignal.timeout(deadlineMs);
     const upstreamSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
     const signal = upstreamSignal
-      ? AbortSignal.any([upstreamSignal, deadlineSignal])
-      : deadlineSignal;
+      ? AbortSignal.any([upstreamSignal, deadlineSignal, requestController.signal])
+      : AbortSignal.any([deadlineSignal, requestController.signal]);
     const requestInit: RequestInit = { ...(init ?? {}), redirect: 'manual', signal };
+
     const response =
       input instanceof Request
         ? await fetchImpl(input, requestInit)
@@ -210,7 +208,7 @@ export function createGuardedHttp(options: GuardedHttpOptions): GuardedHttp {
         `upstream answered ${response.status}; redirects are not followed`,
       );
     }
-    return capResponseBody(response, responseLimit);
+    return capResponseBody(response, responseLimit, () => requestController.abort());
   };
 
   const httpClientLayer = Layer.provide(

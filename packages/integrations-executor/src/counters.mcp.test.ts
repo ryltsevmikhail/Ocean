@@ -12,10 +12,12 @@ import { mcpPlugin } from '@executor-js/plugin-mcp/core';
 
 import { createExecutorHost } from './sdk-boundary.js';
 import type { ExecutorHost } from './host-types.js';
-import { ExecutorServicePluginTransport } from './transport.js';
+import { createTestTransport } from './test-support.js';
+import type { ExecutorServicePluginTransport } from './transport.js';
 import { mcpAuthTemplates, startMcpServer } from '../test-fixtures/mcp-server.js';
 import type { McpScenario } from '../test-fixtures/mcp-server.js';
 import { memoryProvider } from '../test-fixtures/synthetic-plugin.js';
+import { canonicalJson } from './json.js';
 
 interface Harness {
   readonly mcp: Awaited<ReturnType<typeof startMcpServer>>;
@@ -53,7 +55,7 @@ async function openHarness(scenario: McpScenario): Promise<Harness> {
   });
 
   const target = { integrationId, connectionId: 'work', owner: 'user' as const };
-  const transport = await ExecutorServicePluginTransport.fromHost(host, { enableExecution: true });
+  const transport = await createTestTransport(host, { enableExecution: true });
   return {
     mcp,
     host,
@@ -127,6 +129,23 @@ describe('real MCP plugin dispatch counters', () => {
     });
     expect(toolCallDelta(harness.mcp.counts)).toBe(before + 1);
     expect(outcome).toMatchObject({ kind: 'uncertain', code: 'transport_failure' });
+    await harness.close();
+  });
+
+  it('wire-level request body over 1 MiB is refused before any tools/call is sent', async () => {
+    const harness = await openHarness('ok');
+    // Arguments pass the canonical-args pre-check (just under 1 MiB), while the
+    // JSON-RPC envelope pushes the actual wire body over the cap.
+    const value = 'a'.repeat(1_048_576 - canonicalJson({ value: '' }).length - 1);
+    expect(canonicalJson({ value }).length).toBeLessThan(1_048_576);
+    const before = toolCallDelta(harness.mcp.counts);
+    const outcome = await harness.transport.invoke(harness.target, {
+      invocationId: 'mcp-wire-cap',
+      tool: 'write_thing',
+      arguments: { value },
+    });
+    expect(toolCallDelta(harness.mcp.counts)).toBe(before);
+    expect(outcome.kind).toBe('uncertain');
     await harness.close();
   });
 

@@ -28,7 +28,7 @@ EXECUTOR SDK — PINNED PATCHED DEPENDENCY
 Ocean's RC2 service-plugin transport (`packages/integrations-executor`) depends
 on the Executor SDK and its MCP/OpenAPI plugins. The npm tarballs ship no
 LICENSE file; the upstream project's MIT license text and exact copyright line
-are reproduced below and in `packages/integrations-executor/LICENSE`.
+are reproduced below and in `packages/integrations-executor/THIRD_PARTY_LICENSES/executor-MIT.txt`.
 
   Project:    Executor (UsefulSoftwareCo/executor)
   Commit:     3cf6e54659cb34ac731fe3cf747ca139be769b93 (LICENSE retrieved 2026-11-04)

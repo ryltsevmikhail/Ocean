@@ -10,7 +10,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { createExecutorHost } from './sdk-boundary.js';
-import { ExecutorServicePluginTransport } from './transport.js';
+import { createTestTransport } from './test-support.js';
+import type { ExecutorServicePluginTransport } from './transport.js';
 import type { ExecutorHost } from './host-types.js';
 import {
   createSyntheticCounts,
@@ -94,6 +95,7 @@ async function openHarness(
     subjectId: 'probe-subject',
     allowedOrigins: [business.base, token.base],
     redirectUri: 'http://127.0.0.1:9/oauth/callback',
+    testOnlyOAuthSetupFetch: fetch,
     plugins: [
       syntheticPlugin({ scenario, businessBase: business.base, tokenBase: token.base, counts }),
     ],
@@ -135,7 +137,7 @@ async function openHarness(
     });
   }
 
-  const transport = await ExecutorServicePluginTransport.fromHost(host, { enableExecution: true });
+  const transport = await createTestTransport(host, { enableExecution: true });
   return {
     host,
     transport,

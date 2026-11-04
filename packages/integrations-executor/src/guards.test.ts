@@ -27,7 +27,7 @@ import {
   PINNED_SDK_CHUNK_SHA256,
   verifyInstalledSdkChunk,
 } from './pinned-identity.js';
-import { assessQualification } from './transport.js';
+import { assessQualification } from './status.js';
 import { closeServer, listen, writeJson } from '../test-fixtures/loopback.js';
 
 const catchGuarded = async (work: Promise<unknown>): Promise<GuardedFetchError> => {
@@ -93,11 +93,19 @@ describe('guarded HTTP layer', () => {
     await closeServer(server.server);
   });
 
-  it('caps the response body while streaming it', async () => {
+  it('caps the response body while streaming it and aborts the request fast', async () => {
     const server = await listen((_req, res) => writeJson(res, 200, { blob: 'x'.repeat(1_024) }));
-    const guarded = createGuardedHttp({ allowedOrigins: [server.base], responseLimitBytes: 16 });
+    const guarded = createGuardedHttp({
+      allowedOrigins: [server.base],
+      responseLimitBytes: 16,
+      deadlineMs: 10_000,
+    });
+    const startedAt = Date.now();
     const response = await guarded.fetch(`${server.base}/x`);
     const error = await catchGuarded(response.text());
+    // The cap aborts the in-flight request instead of leaving the client to
+    // burn the whole per-call deadline.
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
     expect(error.code).toBe('response_too_large');
     await closeServer(server.server);
   });

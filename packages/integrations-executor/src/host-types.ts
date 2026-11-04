@@ -21,7 +21,14 @@ export interface HostTool {
 
 export interface HostConnection {
   readonly identityLabel: string | null;
-  readonly lastHealth: { readonly status: string; readonly identity: string | null } | null;
+  readonly lastHealth: {
+    readonly status: string;
+    readonly identity: string | null;
+    /** SDK diagnostic, bounded; also carries the "Tool sync failing" marker. */
+    readonly detail: string | null;
+    /** Enumerable SDK reason (`tool_sync_failed` marks an incomplete catalog). */
+    readonly reason: string | null;
+  } | null;
 }
 
 export type HostOperationFailure = 'timeout' | 'interrupted' | 'failure' | 'invalid';
@@ -58,6 +65,13 @@ export interface ExecutorHostOptions {
   readonly firstPartyOAuthClients?: readonly unknown[];
   /** OAuth callback URL; only set by the OAuth counter tests (not RC2 product). */
   readonly redirectUri?: string;
+  /**
+   * TEST-ONLY browser stand-in for the OAuth authorization redirect. Product
+   * code never sets this; the setup seam refuses to run without it so the
+   * authorization GET can never silently bypass the guarded HTTP layer in a
+   * shipped path. RC2 uses static secret references only.
+   */
+  readonly testOnlyOAuthSetupFetch?: typeof fetch;
   /** Test observer for the decline-everything elicitation policy. */
   readonly onElicitationRequest?: (requestTag: string, source: string) => void;
 }
@@ -88,7 +102,8 @@ export interface HostMcpInput {
   readonly name: string;
   readonly description: string;
   readonly endpoint: string;
-  readonly remoteTransport: string;
+  /** Pinned to a loopback HTTP transport; stdio (local process) is refused. */
+  readonly remoteTransport: 'streamable-http';
   readonly authTemplates: readonly unknown[];
 }
 
@@ -127,6 +142,8 @@ export interface HostSetupOperations {
 export interface HostReadOperations {
   listTools(filter: HostToolFilter, deadlineMs: number): Promise<readonly HostTool[]>;
   getConnection(filter: HostToolFilter, deadlineMs: number): Promise<HostConnection | null>;
+  /** Trigger one bounded upstream catalog re-discovery for the connection. */
+  refreshConnection(filter: HostToolFilter, deadlineMs: number): Promise<void>;
   execute(input: HostExecuteInput): Promise<ExecutorDispatchExit>;
 }
 

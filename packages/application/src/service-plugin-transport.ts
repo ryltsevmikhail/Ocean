@@ -62,7 +62,25 @@ export interface ServicePluginAccountIdentity {
   readonly verified: boolean;
 }
 
-/** Bounded tool catalog for one target connection. */
+/**
+ * Completeness of a catalog the transport returned.
+ *
+ * Only `'complete'` is ever returned: an incomplete, stale or failed upstream
+ * listing is a `ServicePluginDiscoveryRefusedError('catalog_incomplete')`, not
+ * a successful catalog. A returned empty catalog therefore means the upstream
+ * authoritatively reported no tools, never "the listing failed".
+ *
+ * TASK 5 OBLIGATION: the catalog/connection service must publish a
+ * `schemaDigest` only from a catalog successfully returned by `discover()` (or
+ * an equivalent complete observation of the same connection generation). It
+ * must treat a refused discovery, a missing observation, or any persisted
+ * snapshot as NOT authoritative: never derive a digest, publish a catalog or
+ * grant access from an incomplete/unobserved listing, and re-discover before
+ * relying on digest-change revocation.
+ */
+export type ServicePluginCatalogCompleteness = 'complete';
+
+/** Bounded, freshly observed tool catalog for one target connection. */
 export interface ServicePluginCatalog {
   readonly target: ServicePluginTarget;
   readonly tools: readonly ServicePluginTool[];
@@ -75,6 +93,8 @@ export interface ServicePluginCatalog {
   readonly account: ServicePluginAccountIdentity;
   /** ISO-8601 instant the catalog was observed. */
   readonly discoveredAt: string;
+  /** Always `'complete'`; incomplete listings are refusals, never catalogs. */
+  readonly completeness: ServicePluginCatalogCompleteness;
 }
 
 /** A single invocation; `invocationId` is the caller's pre-dispatch journal claim. */
@@ -161,6 +181,8 @@ export type ServicePluginDiscoveryFailureCode =
   | 'connection_unknown'
   | 'too_many_tools'
   | 'discovery_too_large'
+  /** The upstream listing failed/was incomplete; the old catalog is not authoritative. */
+  | 'catalog_incomplete'
   | 'deadline_exceeded'
   | 'interrupted'
   | 'transport_failure'

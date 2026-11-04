@@ -1,12 +1,18 @@
 /**
- * Bounded discovery.
+ * Bounded, freshly observed discovery.
  *
- * Fail-closed catalog observation: any refusal or failure raises
- * `ServicePluginDiscoveryRefusedError`, so the caller keeps its previous
- * catalog and its previous grants. The caps are enforced on the observed
- * result (tool count, canonical payload bytes), while the guarded HTTP layer
- * separately caps each response stream, so a plugin cannot return an
- * unbounded catalog.
+ * Fail-closed catalog observation: every call performs one bounded upstream
+ * catalog re-discovery (`connections.refresh`) before reading the catalog, so a
+ * stale or previously failed persisted snapshot can never be returned as a
+ * successful catalog. Any refusal or failure raises
+ * `ServicePluginDiscoveryRefusedError`, and an incomplete listing (the SDK's
+ * `tool_sync_failed` health marker / "Tool sync failing" detail, or a failed
+ * refresh) is `catalog_incomplete`, never an authoritative empty catalog.
+ *
+ * The caps are enforced on the observed result (tool count, canonical payload
+ * bytes), while the guarded HTTP layer separately caps each response stream, so
+ * a plugin cannot return an unbounded catalog. The deadline is a wall-clock
+ * bound: it is re-checked after the listing (including schema backfill).
  */
 import {
   SERVICE_PLUGIN_CALL_DEADLINE_MS,
@@ -25,7 +31,7 @@ import type {
   ServicePluginTool,
 } from '@runnets/application';
 
-import type { ExecutorHost, HostConnection, HostTool } from './host-types.js';
+import type { ExecutorHost, HostConnection, HostTool, HostToolFilter } from './host-types.js';
 import { HostOperationError } from './host-types.js';
 import { canonicalJson, sha256Hex, toServicePluginJson, utf8Bytes } from './json.js';
 
@@ -50,6 +56,17 @@ function readIdentity(connection: HostConnection): ServicePluginAccountIdentity 
   return { identity: connection.identityLabel, verified: false };
 }
 
+/**
+ * An SDK `tool_sync_failed` marker means the listing was not completed.
+ * A connection without a health record has nothing suggesting incompleteness.
+ */
+function isIncomplete(connection: HostConnection): boolean {
+  const health = connection.lastHealth;
+  if (health === null) return false;
+  if (health.reason === 'tool_sync_failed') return true;
+  return health.detail !== null && health.detail.startsWith('Tool sync failing');
+}
+
 function toTool(tool: HostTool): ServicePluginTool | null {
   const schema = toServicePluginJson(tool.inputSchema ?? null);
   if (schema.lossy) return null;
@@ -69,7 +86,25 @@ function toDiscoveryFailure(error: HostOperationError): ServicePluginDiscoveryFa
   }
 }
 
-/** Observe one target's catalog under the application bounds. */
+async function readConnection(
+  host: ExecutorHost,
+  filter: HostToolFilter,
+  remaining: () => number,
+): Promise<HostConnection> {
+  let connection: HostConnection | null;
+  try {
+    connection = await host.getConnection(filter, Math.max(1, remaining()));
+  } catch (error) {
+    if (error instanceof HostOperationError)
+      refused(toDiscoveryFailure(error), 'connection read failed');
+    throw error;
+  }
+  if (connection === null)
+    refused('connection_unknown', 'connection does not exist for this target');
+  return connection;
+}
+
+/** Observe one target's catalog freshly under the application bounds. */
 export async function runDiscovery(
   host: ExecutorHost,
   target: ServicePluginTarget,
@@ -84,40 +119,43 @@ export async function runDiscovery(
 
   const startedAt = Date.now();
   const remaining = (): number => deadlineMs - (Date.now() - startedAt);
+  const filter: HostToolFilter = {
+    integrationId: target.integrationId,
+    connectionId: target.connectionId,
+    owner: target.owner,
+  };
 
-  let connection: HostConnection | null;
+  await readConnection(host, filter, remaining);
+
+  // One bounded upstream re-discovery. A failed refresh must never fall back
+  // to whatever the persisted snapshot happens to contain.
   try {
-    connection = await host.getConnection(
-      {
-        integrationId: target.integrationId,
-        connectionId: target.connectionId,
-        owner: target.owner,
-      },
-      Math.max(1, remaining()),
-    );
+    await host.refreshConnection(filter, Math.max(1, remaining()));
   } catch (error) {
-    if (error instanceof HostOperationError)
-      refused(toDiscoveryFailure(error), 'connection read failed');
+    if (error instanceof HostOperationError) {
+      refused(toDiscoveryFailure(error), 'fresh catalog discovery failed');
+    }
     throw error;
   }
-  if (connection === null)
-    refused('connection_unknown', 'connection does not exist for this target');
-
-  let observed;
-  try {
-    observed = await host.listTools(
-      {
-        integrationId: target.integrationId,
-        connectionId: target.connectionId,
-        owner: target.owner,
-      },
-      Math.max(1, remaining()),
+  const connection = await readConnection(host, filter, remaining);
+  if (isIncomplete(connection)) {
+    refused(
+      'catalog_incomplete',
+      'the upstream tool listing did not complete; no catalog is authoritative',
     );
+  }
+
+  let observed: readonly HostTool[];
+  try {
+    observed = await host.listTools(filter, Math.max(1, remaining()));
   } catch (error) {
     if (error instanceof HostOperationError)
       refused(toDiscoveryFailure(error), 'tool discovery failed');
     throw error;
   }
+  // The deadline is a wall-clock bound, including schema backfill inside the
+  // listing read; a late answer is refused rather than published.
+  if (remaining() <= 0) refused('deadline_exceeded', 'discovery exceeded its deadline');
   if (observed.length > SERVICE_PLUGIN_MAX_TOOLS) {
     refused(
       'too_many_tools',
@@ -149,5 +187,6 @@ export async function runDiscovery(
     schemaDigest: sha256Hex(payload),
     account: readIdentity(connection),
     discoveredAt: new Date().toISOString(),
+    completeness: 'complete',
   };
 }

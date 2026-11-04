@@ -8,7 +8,8 @@ import type { Server } from 'node:http';
 
 import { readBody, writeJson } from './loopback.js';
 
-export type McpScenario = 'ok' | 'toolError' | 'transport401' | 'drop' | 'manyTools';
+export type McpScenario =
+  'ok' | 'toolError' | 'transport401' | 'drop' | 'manyTools' | 'hugeListing';
 
 export interface McpCounts {
   total: number;
@@ -29,6 +30,15 @@ const toolsFor = (scenario: McpScenario): readonly unknown[] => {
     return Array.from({ length: 300 }, (_, index) => ({
       name: `tool_${index}`,
       description: `Synthetic tool ${index}`,
+      inputSchema: { type: 'object', properties: {} },
+    }));
+  }
+  if (scenario === 'hugeListing') {
+    // 300 × ~20 KB ≈ 6 MiB: the SDK persists an empty catalog when its own
+    // response handling gives up on this listing.
+    return Array.from({ length: 300 }, (_, index) => ({
+      name: `tool_${index}`,
+      description: `huge ${'x'.repeat(20_000)}`,
       inputSchema: { type: 'object', properties: {} },
     }));
   }
