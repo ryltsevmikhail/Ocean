@@ -22,11 +22,17 @@ import { acquireOwnership } from './ownership.js';
 import { SCHEMA_VERSION } from './schema.js';
 
 /**
- * Shipped schema versions this binary may inspect and snapshot without migrating.
- * Must stay one step wide: bumping `SCHEMA_VERSION` adds the previous release (14
- * for RC1) so the update path can still doctor, back up and restore it.
+ * Schema versions this binary may inspect and snapshot without migrating.
+ *
+ * The real rule: every released schema (5…14, with 14 = installed RC1) stays
+ * admitted so doctor, backup and format-2 restore keep working across the
+ * supported update path. The directly preceding release is always included
+ * through `SCHEMA_VERSION`. Unreleased intermediates (15 = provider
+ * connections, 16 = broadcast) are admitted only because this branch's own
+ * development artifacts can exist on a disposable profile; they are not
+ * supported releases and may be dropped once no artifact ever produced them.
  */
-const MAINTAINABLE_SCHEMAS = [5, 6, 10, 11, 12, 13, 14, 16, SCHEMA_VERSION];
+const MAINTAINABLE_SCHEMAS = [5, 6, 10, 11, 12, 13, 14, 15, 16, SCHEMA_VERSION];
 
 export interface DatabaseSummary {
   readonly schema: number;

@@ -24,7 +24,12 @@ afterEach(() => {
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
 export function host(
-  options: { restored?: boolean; env?: Record<string, string | undefined> } = {},
+  options: {
+    restored?: boolean;
+    env?: Record<string, string | undefined>;
+    /** Optional gate that holds discovery open so a drain/stop race stays deterministic. */
+    discoverGate?: Promise<void>;
+  } = {},
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'ocean-plugin-host-'));
   directories.push(directory);
@@ -37,14 +42,18 @@ export function host(
   ];
   const digest = sha256(canonicalJson([...tools].sort((a, b) => (a.name < b.name ? -1 : 1))));
   const transport = fakePluginTransport(
-    (target) => ({
-      target,
-      tools,
-      schemaDigest: digest,
-      account: { identity: 'octocat', verified: true },
-      discoveredAt: '2026-11-04T00:00:00.000Z',
-      completeness: 'complete',
-    }),
+    async (target) => {
+      if (target === undefined) throw Error('plugin_fixture_target');
+      await options.discoverGate;
+      return {
+        target,
+        tools,
+        schemaDigest: digest,
+        account: { identity: 'octocat', verified: true },
+        discoveredAt: '2026-11-04T00:00:00.000Z',
+        completeness: 'complete',
+      };
+    },
     () => ({
       kind: 'observed',
       invocationId: 'inv',
@@ -74,7 +83,7 @@ export async function dispatch(
   params: Record<string, unknown> = {},
 ): Promise<unknown> {
   const reply = await plugins.dispatch(method, params);
-  if (reply.error) throw Error(reply.error.code);
+  if ('error' in reply) throw Error(reply.error.code);
   return reply.result;
 }
 

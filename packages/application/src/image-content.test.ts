@@ -6,6 +6,7 @@ import {
   messageText,
   resolveFail,
   resolveOk,
+  resolveUnbound,
   resolverStub,
   sha256,
   tinyImage,
@@ -67,14 +68,35 @@ describe('message content resolution', () => {
     });
   });
 
-  it('refuses a malformed or truncated marker instead of leaking it as text', () => {
+  it('strips a malformed or truncated marker to its visible text and never leaks the payload', () => {
     const malformed = 'текст\n\n[Ocean Desktop attachments v1]\n{"version":1}';
     const resolver = resolverStub(resolveOk(tinyImage()));
-    expect(resolveMessageContent({ ...scope, body: malformed }, resolver)).toMatchObject({
-      ok: false,
-      error: { code: 'image_unavailable' },
+    // History reconstruction keeps the room usable: the marker body is inert text.
+    expect(resolveMessageContent({ ...scope, body: malformed }, resolver)).toEqual({
+      ok: true,
+      value: 'текст',
     });
     expect(resolver.requests).toHaveLength(0);
+    // A fresh admission still fails closed.
+    expect(
+      resolveMessageContent({ ...scope, body: malformed, phase: 'committing' }, resolver),
+    ).toMatchObject({ ok: false, error: { code: 'image_unavailable' } });
+  });
+
+  it('strips a marker with no durable binding on reconstruction but refuses it on admission', () => {
+    const resolver = resolverStub(resolveUnbound());
+    // No preparation/message↔request binding: the body was never an image message.
+    expect(resolveMessageContent(scope, resolver)).toEqual({
+      ok: true,
+      value: 'Что на изображении?',
+    });
+    expect(resolver.requests).toHaveLength(1);
+    expect(
+      resolveMessageContent(
+        { ...scope, admittedRequestId: requestId, phase: 'committing' },
+        resolver,
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'image_unavailable' } });
   });
 
   it('propagates the resolver refusal code without calling the provider', () => {

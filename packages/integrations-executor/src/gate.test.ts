@@ -191,7 +191,9 @@ describe('public qualification gate', () => {
         template: 'oauth',
         clientSlug: 'first-party:probe',
       }),
-    ).rejects.toBeInstanceOf(Error);
+    ).rejects.toMatchObject({ name: 'HostOperationError' });
+    // The exact shipped-path refusal (no test-only browser stand-in) is asserted
+    // specifically in `counters.openapi.test.ts` as `oauth_setup_unavailable`.
     await host.close();
   });
 

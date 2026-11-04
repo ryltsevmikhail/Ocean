@@ -118,9 +118,10 @@ describe('direct chat image admission', () => {
       { mode: 'admit', codingAvailable: false },
     );
     if (!first.ok || 'record' in first.value) throw Error('first admission');
+    const admitted = first.value;
     // Complete the turn so a second model turn is admissible.
     f.store.atomic((tx) => {
-      const turn = tx.chatTurn(first.value.turn.id);
+      const turn = tx.chatTurn(admitted.turn.id);
       if (turn === null) throw Error('turn');
       tx.putChatTurn({ ...turn, status: 'completed' });
     });
@@ -160,8 +161,11 @@ describe('direct chat image admission', () => {
       { mode: 'admit', codingAvailable: false },
     );
     if (!first.ok || 'record' in first.value) throw Error('first admission');
+    // Keep the narrowed admission for the callback below (property narrowing
+    // does not survive into a nested function).
+    const admitted = first.value;
     f.store.atomic((tx) => {
-      const turn = tx.chatTurn(first.value.turn.id);
+      const turn = tx.chatTurn(admitted.turn.id);
       if (turn === null) throw Error('turn');
       tx.putChatTurn({ ...turn, status: 'completed' });
     });

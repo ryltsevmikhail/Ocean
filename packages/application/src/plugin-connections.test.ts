@@ -146,8 +146,12 @@ describe('plugin connections', () => {
   it('invalidates active connections on a restored profile', async () => {
     const fixture = serviceFixture();
     const connection = await fixture.readyWorkingConnection();
+    // Seed the restored store with the durable record (the view has no
+    // identityVerified field), exactly as it existed before the restore.
+    const record = fixture.state.connections.get(connection.id);
+    if (record === null) throw Error('connection record');
     const restored = serviceFixture({ restored: true });
-    restored.state.connections.add({ ...connection, state: 'active' });
+    restored.state.connections.add({ ...record, state: 'active' });
     restored.connections.initialize();
     expect(restored.connections.get(connection.id).state).toBe('disconnected');
   });

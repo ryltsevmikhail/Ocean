@@ -18,6 +18,9 @@ export interface VendorFixture {
   readonly requests: { method: string; url: string; authorization: string; body: string }[];
   hold(): void;
   release(): void;
+  /** Hold the next `/models` response so a drain/stop race stays deterministic. */
+  holdModels(): void;
+  releaseModels(): void;
   close(): Promise<void>;
 }
 export async function vendorFixture(
@@ -27,6 +30,8 @@ export async function vendorFixture(
   const requests: { method: string; url: string; authorization: string; body: string }[] = [];
   let gate: Promise<void> | null = null;
   let release: (() => void) | null = null;
+  let modelGate: Promise<void> | null = null;
+  let releaseModels: (() => void) | null = null;
   const server = createServer((request, response) => {
     void (async () => {
       const url = request.url ?? '';
@@ -39,6 +44,7 @@ export async function vendorFixture(
         body,
       });
       if (url === '/models' && request.method === 'GET') {
+        if (modelGate !== null) await modelGate;
         response.writeHead(200, { 'content-type': 'application/json' });
         response.end(
           JSON.stringify({
@@ -86,6 +92,15 @@ export async function vendorFixture(
     release() {
       release?.();
       release = null;
+    },
+    holdModels() {
+      modelGate = new Promise<void>((resolve) => {
+        releaseModels = resolve;
+      });
+    },
+    releaseModels() {
+      releaseModels?.();
+      releaseModels = null;
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };

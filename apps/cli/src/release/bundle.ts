@@ -42,6 +42,8 @@ export const PINNED_SDK_CHUNK_SHA256 =
 export const PINNED_PATCH_FILE = 'patches/@executor-js__sdk@1.6.11.patch';
 export const PINNED_PATCH_SHA256 =
   'e1c1bfa9a41049321f45747f3ae8907d89604fca06872ec0a4871483db1b9fad';
+/** The lockfile must carry exactly this many `patch_hash` records for the pinned patch. */
+export const PINNED_PATCH_HASH_RECORDS = 5;
 
 /** The only external dependencies the bundled adapter may declare. */
 export const ADAPTER_DEPENDENCIES: Readonly<Record<string, string>> = {
@@ -115,11 +117,18 @@ export function assertPinnedBuildIdentities(root: string): ReleasePins {
       `pinned patch identity mismatch: expected ${PINNED_PATCH_SHA256}, observed ${patchDigest}`,
     );
   const lockfile = readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8');
-  const patchHashes = [...lockfile.matchAll(/patch_hash=([a-f0-9]+)/g)].map(
+  // Capture the complete value to a delimiter, so a truncated/extra-suffixed
+  // identity cannot silently match the pinned prefix.
+  const patchHashes = [...lockfile.matchAll(/patch_hash=([^\s,)&]+)/g)].map(
     (match) => match[1] ?? '',
   );
-  if (patchHashes.length === 0)
-    throw new Error('lockfile recorded no patch_hash identity for the Executor SDK patch');
+  if (patchHashes.length !== PINNED_PATCH_HASH_RECORDS)
+    throw new Error(
+      `lockfile must record exactly ${PINNED_PATCH_HASH_RECORDS} patch_hash identities for the Executor SDK patch; observed ${patchHashes.length}`,
+    );
+  for (const hash of patchHashes)
+    if (!/^[a-f0-9]{64}$/.test(hash))
+      throw new Error(`lockfile recorded a malformed patch_hash identity: ${hash}`);
   const driftedHash = patchHashes.find((hash) => hash !== PINNED_PATCH_SHA256);
   if (driftedHash !== undefined)
     throw new Error(

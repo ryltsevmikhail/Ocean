@@ -21,6 +21,14 @@ export function createRestorationCheck(paths: RestorationPaths, restore: boolean
     restoredRuntimeAdmission(paths.profile, origin, undefined, active);
   };
 }
+/**
+ * The restore-mode maintenance host serves reads and exactly one explicit owner
+ * decision: `restore.preview` opens the rebind card inside this host and
+ * `decisions.resolve` answers it from a live TTY. Removing that entry breaks the
+ * documented restore/rebind confirmation path (RC2 final review M1: the mutation
+ * in the allowlist is load-bearing, not an oversight). Nothing here starts a
+ * model turn, tool, provider/plugin mutation or broadcast mutation.
+ */
 const MAINTENANCE_READS = new Set(
   `rooms.list rooms.members history.list runs.list runs.events runs.result runs.get
   receipts.get observe bots.list coding.show coding.diff coding.pending coding.panel
@@ -28,7 +36,6 @@ const MAINTENANCE_READS = new Set(
   plugin.catalog plugin.inspect plugin.connections plugin.access-list
   broadcasts.get broadcasts.list`.split(/\s+/),
 );
-/** A restore-mode maintenance host serves reads only; every mutation stays refused. */
 export function maintenanceRead(method: string): boolean {
   return MAINTENANCE_READS.has(method);
 }

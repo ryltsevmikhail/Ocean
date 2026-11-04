@@ -41,8 +41,11 @@ describe('fresh admission binds the prepared image to its request', () => {
     const f = fixture(resolver);
     const first = admitChat(f.deps, scope(f.flashRoom.id, requestId), f.provider, policy);
     if (!first.ok || 'record' in first.value) throw Error('first admission');
+    // Keep the narrowed admission for the callback below (property narrowing
+    // does not survive into a nested function).
+    const admitted = first.value;
     f.store.atomic((tx) => {
-      const turn = tx.chatTurn(first.value.turn.id);
+      const turn = tx.chatTurn(admitted.turn.id);
       if (turn === null) throw Error('turn');
       tx.putChatTurn({ ...turn, status: 'completed' });
     });

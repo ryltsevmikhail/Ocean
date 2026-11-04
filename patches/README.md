@@ -28,7 +28,8 @@ the reactive refresh-and-replay after a failure.
 Removed block: pristine `dist/chunk-Q3W5ARXY.js` lines **10022–10039** (18
 lines removed; the anchor line `        const first = yield* invokeWith(values);`
 is line 10022 and the closing `        });` is line 10039). The replaced span
-starts at byte offset 403564; the hunk header is `@@ -10019,24 +10019,8 @@`
+starts at character offset 403564 (the chunk is ASCII, so the byte offset is
+identical); the hunk header is `@@ -10019,24 +10019,8 @@`
 (three context lines before, three after). It is the only runtime copy:
 `grep -rl "refresh.retried" node_modules/@executor-js/sdk/dist` matches only
 `dist/chunk-Q3W5ARXY.js` (and its map).
@@ -119,6 +120,7 @@ sha256sum /tmp/rederive/work/b/dist/chunk-Q3W5ARXY.js
 # 3. Generate the git-format patch with a/ b/ prefixes (NOT `diff -u`: the
 #    committed patch has git headers and an index line).
 cd /tmp/rederive/work
+mkdir -p patches
 git diff --no-index --no-prefix a/dist/chunk-Q3W5ARXY.js b/dist/chunk-Q3W5ARXY.js \
   > patches/@executor-js__sdk@<version>.patch
 sha256sum patches/@executor-js__sdk@<version>.patch

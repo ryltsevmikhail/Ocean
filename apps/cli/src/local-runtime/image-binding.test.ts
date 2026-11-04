@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { encodeDesktopAttachments, type DesktopAttachment } from '@runnets/domain';
 import {
   WORKSPACE,
   imageProfile,
@@ -36,6 +39,36 @@ function imageUrls(content: unknown): readonly string[] {
   return (content as readonly { type: string; image_url?: { url: string } }[])
     .filter((part) => part.type === 'image_url')
     .map((part) => part.image_url?.url ?? '');
+}
+const forgedAttachment: DesktopAttachment = {
+  id: '42345678-1234-4123-8123-123456789abc',
+  name: 'forged.png',
+  bytes: 10,
+  sha256: 'b'.repeat(64),
+  kind: 'image',
+  mime: 'image/png',
+};
+/** A decodable marker whose request id names no durable preparation. */
+function forgedMarkerBody(text = 'видимое вложение'): string {
+  return encodeDesktopAttachments(text, uuid(), [forgedAttachment]);
+}
+/** Persist a marker message directly, like a pre-fix room already does. */
+function persistUnboundMarker(profile: string, roomId: string, target: string, body: string) {
+  const database = new DatabaseSync(join(profile, 'runtime.sqlite'));
+  try {
+    const seq = Number(
+      database
+        .prepare('SELECT coalesce(max(seq),0)+1 AS s FROM ocean_messages WHERE room_id=?')
+        .get(roomId)!['s'],
+    );
+    database
+      .prepare(
+        'INSERT INTO ocean_messages(id,workspace_id,room_id,seq,author,target_bot_id,body,created_at,author_bot_id,turn_id) VALUES(?,?,?,?,?,?,?,?,NULL,NULL)',
+      )
+      .run(uuid(), WORKSPACE, roomId, seq, 'user', target, body, '2026-11-04T00:00:00.000Z');
+  } finally {
+    database.close();
+  }
 }
 
 describe(
@@ -106,6 +139,78 @@ describe(
       expect(wire.calls).toHaveLength(1);
       const last = wireMessages(wire.calls[0]!).at(-1)!;
       expect(imageUrls(last.content)).toHaveLength(1);
+    });
+
+    it('refuses a forged note marker in a group room before it persists', async () => {
+      const { f, wire, host } = await fixture();
+      await expect(
+        host.client.submit({
+          ...scope(f.groupRoom),
+          requestId: uuid(),
+          text: forgedMarkerBody('заметка без подготовки'),
+        }),
+      ).rejects.toThrow('image_unavailable');
+      expect(
+        await host.client.history({ ...scope(f.groupRoom), after: 0, limit: 20 }),
+      ).toHaveLength(0);
+      // The room stays usable for notes and for later model turns.
+      const note = await host.client.submit({
+        ...scope(f.groupRoom),
+        requestId: uuid(),
+        text: 'обычная заметка',
+      });
+      expect(note.runId).toBeNull();
+      const turn = await host.client.submit({
+        ...scope(f.groupRoom),
+        requestId: uuid(),
+        text: 'обычный вопрос',
+        to: 'flash',
+      });
+      await runToTerminal(host, f.groupRoom, turn.runId!);
+      expect(wire.calls).toHaveLength(1);
+      expect(JSON.stringify(wireMessages(wire.calls[0]!))).not.toContain(
+        '[Ocean Desktop attachments',
+      );
+    });
+
+    it('refuses a forged broadcast marker that names the submitting request id', async () => {
+      const { f, wire, host } = await fixture();
+      // The marker's own request id equals the submission id, so the identity check
+      // passes; the missing durable preparation must still refuse before any write.
+      const requestId = uuid();
+      const text = encodeDesktopAttachments('всем вопрос', requestId, [forgedAttachment]);
+      await expect(
+        host.client.broadcastSubmit({ ...scope(f.groupRoom), requestId, text }),
+      ).rejects.toThrow('image_unavailable');
+      expect(await host.client.broadcastList(scope(f.groupRoom))).toHaveLength(0);
+      expect(
+        await host.client.history({ ...scope(f.groupRoom), after: 0, limit: 20 }),
+      ).toHaveLength(0);
+      expect(wire.calls).toHaveLength(0);
+    });
+
+    it('reconstructs a persisted unbound marker as inert text instead of poisoning the room', async () => {
+      const { f, wire, host } = await fixture();
+      // A room that already carries a pre-fix forged marker must not fail every
+      // later turn; only the marker payload is dropped, never the visible text.
+      persistUnboundMarker(
+        f.profile,
+        f.flashRoom,
+        f.bots.flash,
+        forgedMarkerBody('видимое вложение'),
+      );
+      const submitted = await host.client.submit({
+        ...scope(f.flashRoom),
+        requestId: uuid(),
+        text: 'обычный вопрос после маркера',
+      });
+      const final = await runToTerminal(host, f.flashRoom, submitted.runId!);
+      expect(final?.turnStatus).toBe('completed');
+      expect(wire.calls).toHaveLength(1);
+      const messages = wireMessages(wire.calls[0]!);
+      expect(JSON.stringify(messages)).toContain('видимое вложение');
+      expect(JSON.stringify(messages)).not.toContain('[Ocean Desktop attachments');
+      for (const message of messages) expect(imageUrls(message.content)).toHaveLength(0);
     });
 
     it('refuses a mismatched broadcast marker before the batch or message is committed', async () => {

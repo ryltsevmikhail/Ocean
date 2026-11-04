@@ -8,13 +8,8 @@ import { openOceanProfile } from '../src/ocean/profile.js';
 import { startLocalRuntime, type LocalRuntimeHost } from '../src/local-runtime/host.js';
 import { connectLocalRuntime, DesktopAttachmentClient } from '@runnets/tools-node';
 import type { LocalRuntimeClient } from '@runnets/tools-node';
-import type {
-  HttpClient,
-  HttpRequest,
-  HttpResponse,
-  ProviderModelInfo,
-  ProviderPort,
-} from '@runnets/application';
+import type { ProviderModelInfo, ProviderPort } from '@runnets/application';
+import type { HttpClient, HttpRequest, HttpResponse } from '@runnets/provider-core';
 import { createDeepSeekProvider } from '@runnets/provider-deepseek';
 
 export const WORKSPACE = 'ws_ocean';

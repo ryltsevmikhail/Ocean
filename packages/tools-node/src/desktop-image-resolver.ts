@@ -43,6 +43,8 @@ type Attempt<T> =
   | { readonly kind: 'ok'; readonly value: T }
   | { readonly kind: 'refused'; readonly code: ImageResolutionFailure };
 const refused = (): ImageResolveResult => ({ ok: false, code: 'image_unavailable' });
+/** No durable preparation or message↔request binding: the marker was never authoritative. */
+const unbound = (): ImageResolveResult => ({ ok: false, code: 'image_unavailable', unbound: true });
 
 export function desktopImageResolver(
   store: DesktopImageAuthorityStore,
@@ -66,21 +68,25 @@ function resolveRequest(
   profileId: string,
   request: ImageResolveRequest,
 ): ImageResolveResult {
-  const binding = store.binding();
-  if (binding === null || !bindingValid(binding, profile, profileId)) return refused();
-  if (request.phase === 'persisted') {
-    const message = store.message(request.roomId, request.messageId);
-    if (message === null || message.body !== request.body) return refused();
-  }
-  // A fresh admission has no receipt yet: the marker must name the admitting request.
+  // Locate the durable authority first. A marker that names no completed
+  // preparation (or is not bound to its message by a receipt/adoption) was never
+  // an image message: report it as unbound so history reconstruction can keep the
+  // marker-free display text instead of poisoning every later turn. Everything
+  // after a proven locator fails closed, including corrupt/missing bytes.
+  const preparation = store.prepared(request.roomId, request.requestId);
+  if (preparation === null || !preparationValid(preparation, request.body)) return unbound();
   if (
     request.phase === 'committing' &&
     (request.admittedRequestId === undefined || request.admittedRequestId !== request.requestId)
   )
     return refused();
-  const preparation = store.prepared(request.roomId, request.requestId);
-  if (preparation === null || !preparationValid(preparation, request.body)) return refused();
-  if (request.phase === 'persisted' && !messageBound(store, request, preparation)) return refused();
+  if (request.phase === 'persisted') {
+    const message = store.message(request.roomId, request.messageId);
+    if (message === null || message.body !== request.body) return refused();
+    if (!messageBound(store, request, preparation)) return unbound();
+  }
+  const binding = store.binding();
+  if (binding === null || !bindingValid(binding, profile, profileId)) return refused();
   // The marker's claimed ids must be exactly the durable operation ids, in order.
   if (
     request.expected.length !== preparation.ids.length ||

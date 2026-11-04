@@ -36,7 +36,6 @@ OCEAN_DESKTOP_PROFILE=/absolute/private/profile pnpm --filter @ocean/desktop sta
 pnpm build
 pnpm --filter @ocean/desktop bundle
 node apps/desktop/qa/smoke.mjs
-node apps/desktop/qa/entrypoint.mjs
 # Доступность composer и Send при открытых «Сведениях» на 1024/1280/1920:
 OCEAN_QA_CLI=/absolute/built/apps/cli/dist/main.js \
   OCEAN_QA_ROOT=/absolute/private/evidence node apps/desktop/qa/layout.mjs
@@ -45,10 +44,17 @@ OCEAN_QA_CLI=/absolute/installed/apps/cli/dist/main.js \
   OCEAN_QA_ROOT=/absolute/private/evidence node apps/desktop/qa/current.mjs
 ```
 
+Устаревший драйвер `qa/entrypoint.mjs` удалён в RC2: он ждал удалённый элемент
+отмены и не соответствовал объединённому UI. Его роль выполняет `qa/current.mjs`
+против явно выбранного установленного CLI; отдельного «стандартного» драйвера
+запуска больше нет.
+
 Текущий драйвер `current.mjs` сохраняет приватные доказательства, использует
 синтетические HOME, все XDG-каталоги и TMPDIR для каждого процесса, отдельный
 userData и передаёт только реальное GUI-подключение Wayland. Он не использует
-пользовательский D-Bus или физический буфер обмена.
+пользовательский D-Bus или физический буфер обмена. Для запуска Electron на
+Wayland требуется **абсолютный** путь сокета в `WAYLAND_DISPLAY`; относительное
+имя (`wayland-0`) не квалифицируется.
 
 Драйвер `layout.mjs` проверяет при открытых «Сведениях», что поле ввода и кнопка
 отправки на 1024, 1280 и 1920 видимы, доступны, не перекрыты панелью и реально

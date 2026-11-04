@@ -70,10 +70,17 @@ and renderer/native event logs are retained, including platform warnings.
 pnpm build
 pnpm --filter @ocean/desktop bundle
 node apps/desktop/qa/smoke.mjs
-node apps/desktop/qa/entrypoint.mjs
+OCEAN_QA_CLI=/absolute/installed/apps/cli/dist/main.js \
+  OCEAN_QA_ROOT=/absolute/private/evidence node apps/desktop/qa/current.mjs
 ```
 
-These historical results do not qualify the new runtime-owned asset layout. The scripts need separate requalification; no current installed or open Desktop was changed for 7.7. The Wayland drivers create private temporary userData, workspace, runtime directory and profile. The explicitly started owner uses a deterministic in-process HTTP replacement and a fixture-only key. The entrypoint driver launches the actual `pnpm --filter @ocean/desktop start` command twice. Only the disposable window enables a loopback debugging port. The driver drops a committed attachment-send acknowledgement, damages and removes the local attachment receipt while retaining the draft, then recovers the original admission from the restored frozen binding after local attachment bytes go missing, observes the same receipt from a separate SDK process and starts the standard room TUI in a PTY. It closes the window while generation waits, releases the provider and verifies one answer and one dispatch across clients and a reopened GUI. A separate GUI case fills room history, verifies a context refusal causes zero dispatches, then edits and submits a shorter turn. Transfer QA uses synthetic file inputs, paste/drop events and an intercepted save dialog, and compares the exported image and binary bytes. Physical OS clipboard, interactive file pickers, installed app and live providers require separate qualification.
+The pre-7.7 `qa/entrypoint.mjs` driver was retired in RC2: it waited for a
+cancellation control the merged UI no longer renders. `qa/current.mjs` is its
+supported successor and covers the same lost-acknowledgement, frozen-binding
+recovery, same-run reopen and one-answer/one-dispatch scenarios against an
+explicitly selected installed CLI.
+
+These historical results do not qualify the new runtime-owned asset layout. The scripts need separate requalification; no current installed or open Desktop was changed for 7.7. The Wayland drivers create private temporary userData, workspace, runtime directory and profile. The explicitly started owner uses a deterministic in-process HTTP replacement and a fixture-only key. The former entrypoint driver launched the actual `pnpm --filter @ocean/desktop start` command twice; `current.mjs` launches the standard app the same way. Only the disposable window enables a loopback debugging port. The driver drops a committed attachment-send acknowledgement, damages and removes the local attachment receipt while retaining the draft, then recovers the original admission from the restored frozen binding after local attachment bytes go missing, observes the same receipt from a separate SDK process and starts the standard room TUI in a PTY. It closes the window while generation waits, releases the provider and verifies one answer and one dispatch across clients and a reopened GUI. A separate GUI case fills room history, verifies a context refusal causes zero dispatches, then edits and submits a shorter turn. Transfer QA uses synthetic file inputs, paste/drop events and an intercepted save dialog, and compares the exported image and binary bytes. Physical OS clipboard, interactive file pickers, installed app and live providers require separate qualification. On Wayland, `WAYLAND_DISPLAY` must be an absolute socket path; a bare `wayland-0` is not qualified.
 
 ## External RunneBot / ACP client
 

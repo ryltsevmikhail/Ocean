@@ -39,21 +39,9 @@ import {
   hostErrorFromCause,
   toDispatchExit,
 } from './host-types.js';
-import { canonicalJson, toServicePluginJson } from './json.js';
+import { dispatchBindingKey, elicitationAccepted } from './elicitation-binding.js';
 import { createAccess } from './sdk-access.js';
 import { createSetupOperations } from './sdk-setup.js';
-
-/**
- * Stable key for one in-flight dispatch. Policy-source elicitation is accepted
- * only for an address+args pair that is currently being dispatched by this
- * host, so an SDK-originated approval cannot be replayed for another call.
- */
-function dispatchBindingKey(address: unknown, args: unknown): string | null {
-  if (typeof address !== 'string') return null;
-  const converted = toServicePluginJson(args);
-  if (converted.lossy) return null;
-  return `${address}\u0000${canonicalJson(converted.value)}`;
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
@@ -127,9 +115,7 @@ export async function createExecutorHost(options: ExecutorHostOptions): Promise<
     const record = asRecord(context);
     const request = asRecord(record.request);
     const tag = typeof request._tag === 'string' ? request._tag : 'unknown';
-    const key = dispatchBindingKey(record.address, record.args);
-    const bound = key !== null && (inFlightDispatches.get(key) ?? 0) > 0;
-    const accepted = record.source === 'policy' && bound;
+    const accepted = elicitationAccepted(record, inFlightDispatches);
     return Effect.sync(() => {
       options.onElicitationRequest?.(tag, accepted ? 'policy' : 'tool');
       return { action: accepted ? ('accept' as const) : ('decline' as const) };

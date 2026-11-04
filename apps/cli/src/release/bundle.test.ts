@@ -7,7 +7,15 @@
  * with the build-recorded chunk inventory; tampering is refused closed.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -108,6 +116,32 @@ it('asserts every pinned identity and bundles the pinned dependency tree', () =>
   expect([...bundle.files.keys()]).toContain('dist/index.js');
   expect([...bundle.files.keys()].some((name) => name.endsWith('.map'))).toBe(false);
   expect([...bundle.files.keys()]).toContain('dist/' + ADAPTER_INTEGRITY_FILE);
+});
+
+it('refuses a lockfile with missing, extra or malformed patch_hash identities', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ocean-pins-'));
+  roots.push(root);
+  mkdirSync(join(root, 'patches'), { recursive: true });
+  copyFileSync(
+    join(workspace, 'patches', '@executor-js__sdk@1.6.11.patch'),
+    join(root, 'patches', '@executor-js__sdk@1.6.11.patch'),
+  );
+  const lockfile = (records: readonly string[]) =>
+    writeFileSync(join(root, 'pnpm-lock.yaml'), records.join('\n') + '\n');
+  const pinned = (count: number) =>
+    Array.from({ length: count }, () => 'patch_hash=' + PINNED_PATCH_SHA256);
+  lockfile([]);
+  expect(() => assertPinnedBuildIdentities(root)).toThrow('exactly 5 patch_hash');
+  lockfile(pinned(4));
+  expect(() => assertPinnedBuildIdentities(root)).toThrow('exactly 5 patch_hash');
+  lockfile([...pinned(5), 'patch_hash=' + PINNED_PATCH_SHA256]);
+  expect(() => assertPinnedBuildIdentities(root)).toThrow('exactly 5 patch_hash');
+  lockfile([...pinned(4), 'patch_hash=zzz']);
+  expect(() => assertPinnedBuildIdentities(root)).toThrow('malformed patch_hash');
+  lockfile([...pinned(4), 'patch_hash=' + PINNED_PATCH_SHA256 + 'garbage']);
+  expect(() => assertPinnedBuildIdentities(root)).toThrow('malformed patch_hash');
+  lockfile([...pinned(4), 'patch_hash=' + '0'.repeat(64)]);
+  expect(() => assertPinnedBuildIdentities(root)).toThrow('patch_hash identity mismatch');
 });
 
 it('is deterministic: same input bytes produce the same chunk inventory and digests', () => {

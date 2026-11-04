@@ -211,6 +211,52 @@ describe('real OpenAPI plugin dispatch counters', () => {
     await harness.close();
   });
 
+  it('shipped OAuth setup refuses the missing browser step with oauth_setup_unavailable', async () => {
+    const service = await startOpenApiService('oauth401');
+    // Exactly the qualified harness minus the test-only browser stand-in: the
+    // shipped path must refuse instead of falling back to ambient fetch.
+    const host = await createExecutorHost({
+      tenantId: 'probe-tenant',
+      subjectId: 'probe-subject',
+      allowedOrigins: [service.business.base, service.token.base],
+      plugins: [openApiPlugin()],
+      providers: [memoryProvider().provider],
+      redirectUri: 'http://127.0.0.1:9/oauth/callback',
+      firstPartyOAuthClients: [
+        {
+          name: 'probe-as',
+          authorizationUrl: `${service.token.base}/authorize`,
+          tokenUrl: `${service.token.base}/token`,
+          clientId: 'probe-client',
+          clientSecret: 'probe-secret',
+        },
+      ],
+    });
+    try {
+      await host.installOpenApi({
+        integrationId: 'probe-api',
+        name: 'Probe API',
+        description: 'Synthetic OpenAPI service',
+        specJson: openApiSpecJson(service.business.base),
+        authTemplates: openApiAuthTemplates.oauth2(service.token.base),
+      });
+      await expect(
+        host.createOAuthConnection({
+          integrationId: 'probe-api',
+          connectionId: 'work',
+          template: 'oauth',
+          clientSlug: 'first-party:probe-as',
+        }),
+      ).rejects.toMatchObject({ name: 'HostOperationError', tag: 'oauth_setup_unavailable' });
+      // No authorization redirect and no token grant happened on the shipped path.
+      expect(service.counts.grants).toEqual([]);
+      expect(service.counts.business).toBe(0);
+    } finally {
+      await host.close();
+      await service.close();
+    }
+  });
+
   it('upstream 5xx: exactly one POST, uncertain upstream_failure, no retry', async () => {
     const harness = await openHarness('server500');
     harness.reset();

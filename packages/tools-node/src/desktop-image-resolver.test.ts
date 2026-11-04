@@ -88,6 +88,31 @@ describe('runtime Desktop image resolver', () => {
     ).toMatchObject({ ok: false, code: 'image_unavailable' });
   });
 
+  it('reports markers without a durable preparation or message binding as unbound', () => {
+    const f = fixture();
+    const info = f.importImage();
+    const receipt = f.prepare(REQUEST, 'Что на фото?', [info.id]);
+    // The marker names a request id with no preparation at all.
+    expect(
+      resolve(f, {
+        messageId: 'msg1',
+        body: receipt.prepared,
+        requestId: '32345678-1234-4123-8123-123456789abc',
+        expected: expectedFor(info),
+      }),
+    ).toEqual({ ok: false, code: 'image_unavailable', unbound: true });
+    // A durable preparation exists but the message was never bound by its receipt.
+    persistMessage(f, { id: 'msg2', body: receipt.prepared, requestId: REQUEST, receipt: false });
+    expect(
+      resolve(f, {
+        messageId: 'msg2',
+        body: receipt.prepared,
+        requestId: REQUEST,
+        expected: expectedFor(info),
+      }),
+    ).toEqual({ ok: false, code: 'image_unavailable', unbound: true });
+  });
+
   it('re-resolves the identical persisted image after an owner restart', () => {
     const f = fixture();
     const info = f.importImage();
@@ -110,6 +135,7 @@ describe('runtime Desktop image resolver', () => {
       }),
     ).toEqual(first);
     fs.rmSync(join(f.binding().root, f.roomId), { recursive: true, force: true });
+    // A genuine bound image with missing bytes is an explicit failure, never unbound.
     expect(
       resolve(f, {
         messageId: 'msg1',
@@ -117,6 +143,6 @@ describe('runtime Desktop image resolver', () => {
         requestId: REQUEST,
         expected: expectedFor(info),
       }),
-    ).toMatchObject({ ok: false, code: 'image_unavailable' });
+    ).toEqual({ ok: false, code: 'image_unavailable' });
   });
 });

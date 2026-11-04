@@ -67,6 +67,28 @@ records prove its association. No send is replayed by capture or materialization
 Native image rendering, preview, four-file selection and export remain host
 operations; save writes the exact authorized read bytes.
 
+### RC2 marker hardening and inert unbound markers
+
+The runtime refuses any marker-bearing submit body that does not decode or has no
+completed `prepare:<room>:<requestId>` operation for the same room and request id
+before the message/turn/batch is written (`image_unavailable`; a started
+preparation is `desktop_outcome_unknown`; a body/recipient mismatch is
+`request_conflict`). Broadcast submission checks this before the batch exists;
+direct turns check it in admission. A Note keeps its no-model semantics and is
+prepared with `to: null`, so it follows the same binding. The offline CLI composes
+the same resolver and admission checks but does not replicate the runtime's
+pre-write prepared-`to` refusal: it refuses the turn at admission with zero
+provider dispatch.
+
+History reconstruction no longer poisons a room on a marker persisted before this
+hardening. A marker body with no durable preparation, or with no receipt/adoption
+binding to that exact message, is inert display text: the resolver reports it as
+unbound and everything from the marker onward is stripped. A genuine image message
+whose authority exists but whose blob, metadata or header is missing, replaced,
+corrupt or oversized still fails closed with zero bytes sent. The accepted
+`desktop-assets.test.ts` migration case seeds such a pre-fix row directly and
+proves the room stays usable.
+
 `snapshotCodingDatabase(path, destination, callback)` now also supplies a bounded
 `DesktopAssetInventory` as the callback's second argument, independently of coding
 task count. `readDesktopBackupInventory` reads a frozen, non-owned database only.

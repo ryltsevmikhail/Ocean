@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PLUGIN_GRANT_MAX_TOOLS,
+  PLUGIN_MAX_GRANT_TOOLS,
   PLUGIN_POLICY_VERSION,
   validPluginGrantScope,
   type PluginGrantScope,
@@ -37,7 +37,7 @@ describe('exact plugin grant scope', () => {
     expect(validPluginGrantScope(scope({ tools: [] }))).toBe(false);
     expect(
       validPluginGrantScope(
-        scope({ tools: Array.from({ length: PLUGIN_GRANT_MAX_TOOLS + 1 }, (_, i) => 't' + i) }),
+        scope({ tools: Array.from({ length: PLUGIN_MAX_GRANT_TOOLS + 1 }, (_, i) => 't' + i) }),
       ),
     ).toBe(false);
     expect(validPluginGrantScope(scope({ tools: ['list_issues', 'list_issues'] }))).toBe(false);

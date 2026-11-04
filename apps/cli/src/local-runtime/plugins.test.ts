@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   isLocalPluginCatalogView,
   isLocalPluginCatalogViews,
@@ -87,6 +87,46 @@ describe('runtime plugin host dispatch', () => {
     expect(reply.error?.code).toBe('restore_restricted');
     const catalog = await dispatch(plugins, 'plugin.catalog', {});
     expect(Array.isArray(catalog)).toBe(true);
+  });
+
+  it('drains an in-flight discovery and refuses new owner mutations while draining', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { plugins, transport } = host({ discoverGate: gate });
+    await dispatch(plugins, 'plugin.install', { pluginId: 'github' });
+    await dispatch(plugins, 'plugin.enable', { pluginId: 'github' });
+    const connection = (await dispatch(plugins, 'plugin.connection-add', {
+      name: 'work',
+      pluginId: 'github',
+      credentialReference: 'OCEAN_PLUGIN_TOKEN',
+    })) as { id: string; generation: number };
+    await dispatch(plugins, 'plugin.connection-consent', {
+      connectionId: connection.id,
+      expectedGeneration: connection.generation,
+    });
+    const inFlight = plugins.dispatch('plugin.connection-discover', {
+      connectionId: connection.id,
+      expectedGeneration: connection.generation,
+    });
+    await vi.waitFor(() => expect(transport.discoverCalls).toBe(1));
+    let drained = false;
+    const drain = plugins.drain().then(() => {
+      drained = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    // The drain waits for the owner discovery instead of discarding its effect.
+    expect(drained).toBe(false);
+    expect(await plugins.dispatch('plugin.install', { pluginId: 'github' })).toMatchObject({
+      error: { code: 'runtime_draining' },
+    });
+    // Sync reads stay available while the effect drains.
+    expect(await plugins.dispatch('plugin.catalog', {})).toHaveProperty('result');
+    release();
+    await drain;
+    expect(drained).toBe(true);
+    expect(await inFlight).toHaveProperty('result');
   });
 
   it('keeps the credential value out of every wire reply', async () => {

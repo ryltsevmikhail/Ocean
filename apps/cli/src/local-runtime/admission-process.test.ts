@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { openOceanProfile } from '../ocean/profile.js';
 import { rooms } from '../../test-fixtures/local-runtime-admission.test.js';
+import { detachedClient } from '../../test-fixtures/detached-client.test.js';
 
 it
   .runIf(process.platform === 'linux')
@@ -52,39 +53,10 @@ it
     host.stdout!.on('data', (b: Buffer) => {
       log += b.toString();
     });
-    const client = async (body: string) => {
-      const child = spawn(
-        process.execPath,
-        [
-          '--input-type=module',
-          '-e',
-          `
-      import {connectLocalRuntime} from './packages/tools-node/dist/index.js';
-      const client = await connectLocalRuntime({profile:process.argv[1]});
-      const request = JSON.parse(process.argv[2]);
-      try {console.log(JSON.stringify(await (${body})));} catch(e) {console.log(JSON.stringify({error:e.message}));}
-      finally {client.close();}
-    `,
-          profile,
-          JSON.stringify(request),
-        ],
-        { env },
-      );
-      let out = '',
-        err = '';
-      child.stdout.on('data', (b: Buffer) => {
-        out += b.toString();
-      });
-      child.stderr.on('data', (b: Buffer) => {
-        err += b.toString();
-      });
-      const code = await new Promise((resolve) => child.once('close', resolve));
-      if (code !== 0) throw Error('client failed: ' + err);
-      return JSON.parse(out);
-    };
+    const client = detachedClient({ profile, env, request });
     try {
       await vi.waitFor(() => expect(log).toContain('ready'), { timeout: 5000 });
-      const receipt = await client('client.submit(request)');
+      const receipt = await client<{ runId: string; turnId: string }>('client.submit(request)');
       expect(receipt.runId).toEqual(expect.any(String));
       expect(await client('client.submit(request)')).toEqual(receipt);
       expect(readFileSync(join(profile, 'calls'), 'utf8')).toBe('dispatch\n');
@@ -95,11 +67,14 @@ it
       if (scenario === 'observe' || scenario.startsWith('cancel')) {
         const scope = { workspaceId: request.workspaceId, roomId: request.roomId };
         const run = { ...scope, runId: receipt.runId };
-        const call = (method: string, params: unknown) =>
-          client('client.' + method + '(' + JSON.stringify(params) + ')');
-        const observe = (cursor?: string, waitMs = 0) =>
-          call('observeRun', { ...run, cursor, waitMs });
-        const initial = await observe();
+        const call = <T = unknown>(method: string, params: unknown) =>
+          client<T>('client.' + method + '(' + JSON.stringify(params) + ')');
+        const observe = <T = unknown>(cursor?: string, waitMs = 0) =>
+          call<T>('observeRun', { ...run, cursor, waitMs });
+        const initial = await observe<{
+          cursor: string;
+          snapshot: { version: number; performerId: string };
+        }>();
         expect(initial).toMatchObject({
           kind: 'snapshot',
           roomSeq: 1,
@@ -125,7 +100,7 @@ it
             error: 'unknown_run',
           });
           expect(log).not.toContain('abort');
-          const ack = await call('cancelRun', cancel);
+          const ack = await call<{ version: number }>('cancelRun', cancel);
           expect(ack).toEqual({ ...cancel, version: snapshot.version + 1, status: 'requested' });
           await vi.waitFor(() => expect(log).toContain('abort'));
           expect(await call('cancelRun', cancel)).toEqual(ack);

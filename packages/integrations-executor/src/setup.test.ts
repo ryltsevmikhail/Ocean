@@ -96,9 +96,14 @@ describe('executor plugin setup seam', () => {
   });
 
   it('refuses a construction token it did not mint', () => {
+    // The constructor is token-sealed and private to the class declaration; the
+    // forged-call probe needs the erased runtime constructor type.
+    const ForgedSetup = ExecutorPluginSetup as unknown as new (
+      ...args: unknown[]
+    ) => ExecutorPluginSetup;
     expect(
       () =>
-        new ExecutorPluginSetup(
+        new ForgedSetup(
           {} as never,
           { execution: 'disabled', pinned: {} },
           [],

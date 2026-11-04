@@ -194,6 +194,9 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         expect(exact.reason).toBe('exit');
         expect(exact.truncated).toBe(false);
         expect(exact.output.length).toBe(cap);
+        // Vestigial RC1 assertion retained deliberately: completion is reported by
+        // the supervisor's reserved status, never by a marker in captured stdout, so
+        // no completion token may appear in project-visible output.
         expect(exact.output).not.toContain('OCEAN_COMPLETE');
         expect(exact.cleanupConfirmed).toBe(true);
         const oversized = await runSandbox({

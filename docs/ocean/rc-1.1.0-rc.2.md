@@ -1,0 +1,397 @@
+# Ocean 1.1 RC2 candidate record
+
+Status: **RC2 candidate under final qualification; not a release decision.** This
+records what the RC2 candidate implements, what it deliberately leaves open, and
+which evidence classes it rests on. It is explicit about planned versus
+implemented behavior. The released baseline remains Ocean 1.0; RC1 remains the
+installed candidate. Stable 1.1 is **not** complete.
+
+Two facts frame this record:
+
+- The last chat-tool stage (plugins through actual chat) is **Task 6** and is not
+  part of this candidate. See [the Task 6 section](#task-6--final-chat-tool-stage-after-merge).
+- No live GitHub qualification exists. Plugin execution ships **disabled by
+  default**, and the live GitHub gate is explicitly unqualified.
+
+## Immutable candidate
+
+| Field                      | Value                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Base                       | `v1.0.0` (Ocean 1.0)                                                                                                                 |
+| Candidate branch           | `codex/ocean-rc2`                                                                                                                    |
+| Frozen review revision     | `5d2e1c7` (final whole-branch review)                                                                                                |
+| Fix-wave revision          | `0f0af49` plus the local commit `fix: close the RC2 review wave` recorded with this document (exact SHA in the release report)       |
+| Schema                     | **17** (14 = installed RC1)                                                                                                          |
+| Frozen toolchain           | Node **v26.13.0** (exact `manifest.node` in the artifact), pnpm 12.16.1                                                              |
+| Platform                   | Linux x86_64, local filesystem, Wayland for the Desktop                                                                              |
+| Desktop artifact           | separate Electron package; not inside the CLI archive                                                                                |
+| Owner-installed state kept | RC1 release `1.1.0-rc.1`, `current` symlink, inactive `ocean-rc-runtime` service, RC profile, key file — untouched by this candidate |
+
+## What RC2 implements
+
+### 1. Runtime-owned provider connection
+
+- **Sources are explicit and labeled.** `external` = `DEEPSEEK_API_KEY` supplied
+  by the environment (never persisted; `provider.check` reports
+  `persisted: false` because Ocean owns no revision for it); `saved` = an
+  Ocean-managed key in the private credential store outside the profile/backup
+  tree (directory `0700`, files `0600`); `injected` = a host seam for tests and
+  read-only sessions; `none`. A saved key's opaque reference lives in SQLite, the
+  value never does.
+- **Explicit disconnect wins.** `provider.disconnect` blocks environment fallback
+  after restart. Deleting an Ocean-managed key does not revoke it at DeepSeek and
+  does not delete an unrelated external source.
+- **Restore requires reconnection.** A restored profile starts inert (`restored`
+  state, provider mutations refused, `provider.status` readable). The backup
+  contains connection metadata but no secret; a usable provider requires an
+  explicit new `provider.set` after rebind. Restored inertness is derived from the
+  host `restored` flag, not from a durable inert column (accepted residual).
+- **No replay across rotation.** An admitted turn keeps its exact immutable
+  provider snapshot; later calls use the newly activated configuration. A check is
+  one bounded explicit `GET /models`, never a model request and never retried.
+- Owner API over the authenticated socket: `provider.status`, `provider.check`,
+  `provider.set`, `provider.disconnect`, `provider.removeSavedKey`. A stop drains
+  an in-flight check and refuses new mutations while draining (`runtime_draining`).
+
+### 2. Everyone broadcast versus Note
+
+- **One durable batch.** `Everyone` persists one user message, a frozen recipient
+  list, a context boundary and one child run identity per member **before**
+  dispatch. Each member gets at most one answer; retries with the same request id
+  return the original identities and changed data conflicts. There is no automatic
+  follow-up round and no bot-to-bot conversation.
+- **Note keeps no-model semantics.** A note is a saved room message with no model
+  turn; it stays available while a batch holds the room.
+- **States and admission.** Batch states are `open | paused | completed |
+abandoned`; children are persisted `queued` and then run. New model turns are
+  refused while a batch holds the room (`batch_open`); an uncertain child blocks
+  the room until the owner resolves it (`recovery_required`); an ordinary busy
+  room is `room_busy`. Notes and history remain readable.
+- **Recovery is conservative.** An interrupted batch pauses. An explicit
+  owner action with batch id + expected version may continue only
+  known-not-started children, and only when every started child has a known
+  terminal outcome and no hold remains. Uncertainty is never replayed. Abandonment
+  covers only proven-undispatched work; unknown children stay uncertain.
+  Cross-client guessing never settles an effect.
+- **Limits/known acceptances.** Recovery is polling-based (≤30 s refresh/resync;
+  no push contract). The text-only owner-ack invariant test is a proxy; there is
+  no separate graceful-stop or restore-time broadcast-mutation end-to-end test.
+  Legacy pre-fix `open|paused` batches with unmarked `queued` children have no
+  released writer (RC1 has no broadcast; RC2 is this candidate), so they cannot
+  exist in a shipped artifact.
+
+### 3. Genuine image input
+
+- **Provider-neutral contract.** Messages carry typed text/image content parts;
+  only the DeepSeek adapter maps them to inline `image_url` wire parts. Legacy
+  string messages, tool results and ACP stay compatible.
+- **Runtime authority, not markers.** The runtime resolves authenticated
+  room-bound immutable assets through an I/O port. A Desktop attachment marker is
+  a locator hint only; it never grants authority and never reaches the model as
+  text. Persisted markers are re-authenticated on every context reconstruction.
+- **Hardened marker handling (this fix wave).** Admission refuses any
+  marker-bearing body that does not decode or has no completed
+  `prepare:<room>:<requestId>` receipt for the same room+requestId
+  (`image_unavailable`; a started preparation is `desktop_outcome_unknown`).
+  Broadcast submission checks this before the batch or message is written; direct
+  turns check it in admission; notes keep their no-model semantics but their
+  prepared body follows the same binding. On history reconstruction an
+  **unbound** marker (no durable preparation or no message↔request receipt /
+  adoption) is inert display text: the marker payload is stripped and the room
+  stays usable. A **genuine** image message whose blob, metadata or header is
+  missing, replaced, corrupt or oversized still fails closed with zero bytes sent.
+- **Budgets.** Ocean attachment limit: 4 files × 10 MiB. Inline request budgets:
+  raw image bytes ≤ 34 MiB, pre-check 47 MiB, complete serialized body hard limit
+  48 MiB (all UTF-8 incl. base64/history). Sides ≤ 8192 px; the ≥15-image crowded
+  rule caps sides at 4096 px (vendor behavior unverified, see below). No Files API
+  and no external-URL fallback in RC2.
+- **Per-model capability refusal.** Capabilities come from the model table
+  (`deepseek-flash` accepts images; `deepseek-v4-pro` is text-only in this
+  candidate). A text-only model receives a visible `model_image_unsupported`
+  refusal with zero dispatches; no silent metadata-only substitute and no
+  automatic model/account switch. In a mixed-capability broadcast the capable
+  child gets the actual bytes and the text-only child is refused before dispatch.
+- **Recorded limitations.** Native preview is side-only 8192 px; the earlier
+  24-MP cap is removed and an 8192×8192 decode can cost ≈268 MB in the Electron
+  main process. The 256 KiB pre-SOF scan can refuse metadata-heavy JPEGs. Legacy
+  image messages without the durable binding are now inert text rather than
+  permanent failures. Tool rounds re-gate the already-verified bytes in memory and
+  do not literally rebuild context. Live vendor behavior remains unverified: image
+  support in `deepseek-v4-pro` (U6), system/assistant image parts (U7), the exact
+  48 MiB boundary at the vendor (U9), animated GIF/WebP (U14), the ≥15-image 4096
+  rule, MIME-versus-bytes mismatch and tools+images. The Task 1/3 private evidence
+  is the only basis for the few live calls that were made.
+
+### 4. Plugin pilot (Task 4/5 scope, execution disabled)
+
+- **Shipped pinned GitHub catalog.** A declarative, read-only GitHub manifest
+  (`list_issues`, `issue_read`) ships in the binary. Installation makes **zero**
+  GitHub requests and refuses `already_installed` afterwards; `plugin.repair` is
+  the explicit recovery path. Installs land **disabled by default** and only a
+  verified copy may be enabled.
+- **Named connections and exact grants.** `plugin.connection-add` stores a named
+  connection with an environment-variable **reference** (values never cross the
+  runtime); metadata discovery requires explicit one-use owner consent before any
+  network request. Grants bind exact workspace/room/bot/connection generation/
+  tool set/repository, and account identity is honestly labeled verified or
+  unverified. Version/endpoint/schema/account changes invalidate prior grants and
+  pending confirmations. Restore keeps plugin state and grants inert.
+- **Executor qualification and pinning.** `@executor-js/sdk`,
+  `@executor-js/plugin-openapi` and `@executor-js/plugin-mcp` are pinned to
+  `1.6.11`; `effect` and `@effect/platform-node-shared` to `4.0.0-beta.59`; the
+  patched SDK chunk is sha256 `6d3d22c9…` and the patch file sha256
+  `e1c1bfa9…`. The patch removes the reactive OAuth refresh-and-replay that could
+  produce a second business request after 401. The packaged adapter verifies its
+  bundle inventory before admission. **Execution is literally disabled by
+  default** (`status.execution === 'disabled'`); the setup seam cannot enable it
+  from the wire, and the one allowed invocation causes at most one business
+  request. The build now asserts exactly five valid `patch_hash` lockfile records
+  and refuses malformed values.
+- **Pilot limits.** 1 MiB per message, discovery at most 4 MiB and 256 tools, 30 s
+  per call, at most 16 tools per grant. The chat-path limits — 16 plugin calls per
+  turn and 32 KiB model-visible output with explicit truncation — are Task 6
+  obligations, not implemented here.
+- **Elicitation ruling.** The SDK's `source: "policy"` approval is accepted only
+  when it names the exact address and canonical arguments of a dispatch already
+  in flight in this host; a committed negative test covers the unbound case. That
+  is safe for the read-only pilot only. Mutating plugins (stage 5) additionally
+  require Ocean's exact-args owner confirmation before claim.
+- **Live GitHub gate: UNQUALIFIED.** No approved test connection or repository
+  exists, and `gh`/tokens were not used as a substitute. A mocked or loopback MCP
+  fixture is not live acceptance. Process-suite children are outside the
+  in-process fetch guard; they use loopback/unix sockets only (accepted).
+
+### 5. Desktop and release shape
+
+- **1024 px composer acceptance fix.** The details overlay breakpoint moved from
+  1079 to 1023 and the Desktop threshold from 1080 to 1024; at 1024/1280/1920 with
+  Details open the composer and Send are visible, reachable and usable. The RED
+  measurement for the pre-fix layout was a 45,920 px² composer overlap and a
+  1,600 px² Send overlap with hit-testing landing on `ASIDE.details`. At 801–1023
+  px with Details opened manually the overlay still covers the composer; that is a
+  disclosed pre-existing boundary complaint path, not a qualified state.
+- **GUI driver.** The stale pre-merge `qa/entrypoint.mjs` driver was retired; the
+  maintained driver is `apps/desktop/qa/current.mjs` against an explicitly
+  selected installed CLI. On Wayland, `WAYLAND_DISPLAY` must be an **absolute**
+  socket path; a bare `wayland-0` is not qualified. CDP viewport emulation is not
+  a physical resize, and real IME behavior is a separate scope.
+- **Schema 14 → 17.** Migration 15 adds provider connections, 16 adds broadcast
+  batches and 17 adds the plugin catalog/connections/grants. Migration is
+  forward-only and transactional. **Rollback is by restore**, never by running an
+  older binary on a newer database: an RC1 binary opening a schema-17 profile
+  reports `unsupported_schema` and fails closed (verified in the dry-run). A
+  compatible backup (format 2, or an RC1-era format-2 envelope) restores into a
+  new profile and migrates forward.
+- **Maintainable schemas.** Doctor/backup/snapshot without migrating admit every
+  released schema (5, 6, 10…14), the branch intermediates 15 (provider) and 16
+  (broadcast) that disposable RC2 development profiles can contain, and the
+  current 17.
+- **Archive.** Deterministic `ocean-1.1.0-rc.2-linux-x64.tar.gz` with exact
+  revision, inventory, SHA-256 and licenses; no secrets, caches, profiles, source
+  maps or nested `node_modules`. This wave additionally excludes test-only
+  compiled modules (`*fixture*`, `*-cleanup*`) and internal `docs/superpowers/`
+  planning/session documents, and the packaged adapter manifest no longer
+  advertises `.d.ts` files the archive does not ship.
+
+## Gates
+
+Measured on the fix-wave commit bytes (`fix: close the RC2 review wave`), clean
+tree, shell Node v26.12.0 for the root gates and Node **v26.13.0** for artifact
+work:
+
+| Gate                                | Command                                        | Result                                                                                 |
+| ----------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Build                               | `pnpm build`                                   | exit 0                                                                                 |
+| Root check                          | `pnpm check`                                   | exit 0 — see the preset rows below                                                     |
+| └ typecheck / lint                  | `pnpm typecheck`, `pnpm lint`                  | exit 0, no findings                                                                    |
+| └ source preset                     | `vitest run --config vitest.source.config.ts`  | exit 0 — **361 files / 2090 tests passed**, 16 skipped files / 42 skipped tests        |
+| └ process preset                    | `vitest run --config vitest.process.config.ts` | exit 0 — **34 files / 127 tests passed**, 16 skipped files / 35 skipped tests          |
+| Format                              | `pnpm format:check`                            | exit 0 — all matched files use Prettier code style                                     |
+| Strict test typing (not in `check`) | `tsc -p tsconfig.tests.json --noEmit`          | **80 errors / 32 files remaining** (was 97/43; the 17 RC2-introduced errors are fixed) |
+| Native/installed/GUI/live           | separate scopes                                | not re-qualified by this wave; see below                                               |
+
+### Strict-test typing baseline (honest classification)
+
+`tsconfig.tests.json` is deliberately **not** part of `pnpm check`. Measured at
+the frozen revision `5d2e1c7`: 97 errors in 43 files. Seventeen of them were
+introduced by RC2 test files added after `8e3ce79` (image/plugin/provider tests
+and fixtures); all 17 are fixed in this wave. The remaining 80 errors in 32 files
+are **not a v1.0.0 baseline**: only 3 of the 32 error files existed at `v1.0.0`
+(`command.test.ts` 1, `group.test.ts` 1, `review.test.ts` 2 = 4 errors). The
+other 76 errors in 30 files were introduced after `v1.0.0` **inside this branch**
+by RC1/RC2 work, mostly RC2 provider/desktop suites. They are recorded per file
+and left unmodified so the fix wave does not churn unrelated RC1 tests. Full
+transcript (`tsc -p tsconfig.tests.json --noEmit`) retained outside Git.
+
+## Evidence provenance
+
+- **Local, reproducible evidence**: the committed source/process suites above,
+  run from the clean worktree. They use deterministic providers, loopback HTTP,
+  unix sockets and private synthetic profiles; no vendor or GitHub traffic.
+- **Private live evidence** (RC1/RC2 task evidence) lives outside Git, never in the
+  archive: private profiles, screenshots and vendor transcripts stay under the
+  owner-controlled artifacts directory. This wave re-stored the retained RC1-era
+  format-2 evidence backup at its authentic `0600` mode (directory `0700`); its
+  bytes are unchanged (`sha256 b0bc2562…`) and it was not committed.
+- **Dry-run artifacts** (revision `8e3ce79`, Node v26.13.0) prove the rollback
+  story: RC1 binary reads `unsupported_schema` on a migrated database; an RC1-era
+  format-2 backup restores into RC2 and migrates with data preserved;
+  program-level up/rollback leaves profile bytes unchanged. Artifacts **must be
+  rebuilt** at the fix revision because the manifest revision changes every
+  archive hash; the dry-run hashes therefore do not certify the frozen candidate.
+- **Live calls made so far** (private evidence, not repeated here): Task 1 one
+  `GET /models`; Task 2 one live two-bot broadcast (2 provider calls); Task 3
+  vision acceptance 3 images / 3 calls plus one GUI call and an earlier disclosed
+  round of 3 = 7 calls. No other live vendor traffic. **No live GitHub call was
+  made.**
+- **Skips are not passes.** Native sandbox/native-GUI suites, live DeepSeek
+  behavior and the live GitHub path remain separate qualification scopes; skipped
+  tests are reported as skips and never as passes.
+
+## Explicitly unqualified gates
+
+1. Live GitHub / Executor plugin execution — no approved connection or repository;
+   execution stays disabled and the live gate is visibly unqualified.
+2. Live DeepSeek behavior of RC2 features (image U6/U7/U9/U14, the ≥15-image 4096
+   rule, MIME-versus-bytes, tools+images, `GET /models` billing/limits) — only the
+   retained private Task 1/3 evidence supports these.
+3. Real native/GUI/installed acceptance at the frozen fix revision — the frozen
+   rebuild, disposable install/migration/rollback, installed CLI/TUI/ACP and
+   Electron GUI runs remain the release gates of Task 8.
+4. RC1 binary against a migrated schema-17 profile beyond the dry-run record.
+5. Task 6 scope (below).
+6. Native shard/native-skip coverage — not re-executed; skips remain skips.
+7. Disk-backed `TMPDIR`/native filesystem portability (RC1 §A6) — not re-probed.
+8. Vue/Electron wiring beyond helper tests — no Vue harness; Task 7 GUI runs are
+   the only evidence.
+9. Mixed-capability broadcast panel display in the GUI — probe-level only.
+10. `status`/`stop` against the owner's live installed runtime — deliberately not
+    exercised.
+11. Publication (remote commit/tree, uploaded/downloaded hashes) — not part of
+    this wave.
+
+## Known limitations and accepted rulings
+
+- `provider.check` for an external credential reports `persisted: false`; restored
+  inertness rests on the host `restored` flag, not a durable column.
+- Broadcast recovery remains polling-based; the text-only owner-ack invariant is
+  proved by a proxy; no separate graceful-stop or restore-broadcast E2E.
+- Legacy pre-fix abandoned batches with unmarked `queued` children cannot be
+  written by any released artifact (RC1 has no broadcast).
+- Malformed persisted `secret_ref` recovers as `invalid_input` (requires DB
+  tampering); Vue provider/plugin settings wiring is helper-tested only (no Vue
+  harness); an interrupted credential rotation can leave an inert unreferenced old
+  secret reference (store is `0600`); the retired-model hint can mask a
+  simultaneous provider outage (wording only).
+- The token-sealed internal constructor and `createInternalTransport` appear in
+  the adapter `.d.ts` but are unreachable at runtime; revisit with the Task 6
+  public seam.
+- `source: "policy"` elicitation acceptance is safe for the read-only pilot only;
+  stage-5 mutating plugins require exact-args owner confirmation (Task 6 gate).
+- Process-suite children are outside the parent in-process fetch guard; they use
+  loopback/unix sockets only.
+- Known non-reproduced flake: "only one simultaneous ordinary restart can retire a
+  predecessor" (`process.test.ts`); keep it as a recorded flake, never weakened to
+  pass.
+- Desktop audit parts 4–6 never appeared; nothing was invented to replace them.
+  The 801–1023 px manual-Details overlap is disclosed, not qualified.
+- The 8192 px preview decode cost and the 256 KiB pre-SOF scan are disclosed
+  image limitations, not passes.
+- The restore-mode maintenance allowlist contains `decisions.resolve`. It is
+  load-bearing: `restore.preview` opens the rebind confirmation card inside that
+  maintenance host and the owner answers it over the same socket, so removing the
+  entry breaks restore/rebind confirmation (seven regression tests). The contract
+  comment now names it as the only admitted mutation, and a regression test pins
+  that no model turn, tool, provider/plugin mutation or broadcast mutation is
+  admitted.
+
+## Consolidated fix wave (this candidate)
+
+The final whole-branch review found the candidate **NEEDS FIX** (2 Critical, 3
+Important, 13 Minor, 8 Info). Two Critical defects were already fixed before this
+wave (`0f0af49`: broadcast prepared-marker refusal ordering, stale release-test
+expectations). This wave closes the rest:
+
+- **I3 marker hardening** — unbound/forged prepared markers are refused before
+  write on direct, note and broadcast paths and become inert display text on
+  history reconstruction; genuine corrupt/missing assets still fail closed.
+- **I2 tooling** — stale `qa/entrypoint.mjs` retired; its three documentation
+  references now point at the maintained `qa/current.mjs`.
+- **M2** — graceful stop now supervises and drains provider settings and plugin
+  surfaces; in-flight checks/discoveries are awaited (bounded) and new mutations
+  refuse `runtime_draining`.
+- **M3** — `MAINTAINABLE_SCHEMAS` admits the branch intermediate schema 15 and the
+  stale "one step wide" comment is replaced by the real rule.
+- **M4** — the two over-cap RC1 test files are split under 300 physical lines, as
+  is the regression file this wave's earlier fix had grown past the cap.
+- **M5/M6** — the release archive excludes test-only compiled modules
+  (`*fixture*`, `*-cleanup*`) and internal `docs/superpowers/`; packaging tests
+  cover both.
+- **M7** — the build requires exactly five valid `patch_hash` records and refuses
+  malformed values.
+- **M8** — the packaged adapter manifest no longer advertises unshipped `.d.ts`.
+- **M9** — the retained private evidence backup was re-stored at authentic `0600`
+  (bytes unchanged, outside Git).
+- **M10/M11** — crash-matrix sandbox-suite count corrected to 14 (16 files with
+  the workflow/dispatch natives) and the vestigial/row-11 citations annotated.
+- **M12** — patch re-derivation wording/step fixed, the shipped OAuth setup path
+  now has a committed `oauth_setup_unavailable` negative test and the unbound
+  policy-elicitation case has committed coverage.
+- **M13** — unused public `desktopMetadata` export removed;
+  `ConversationServiceDeps` wording corrected (the TUI never opens a durable
+  profile; the offline CLI keeps the checks but refuses at admission instead of
+  pre-write).
+- **Strict-test typing** — the 17 RC2-introduced errors are fixed; the remaining
+  80 are recorded per file as branch-introduced after `v1.0.0`, not a `v1.0.0`
+  baseline.
+- **M1 ruling** — recorded above; the review's removal suggestion would have broken
+  the rebind confirmation path, so the entry stays with a corrected contract and a
+  regression pin.
+
+## Task 6 — final chat-tool stage (after merge)
+
+**Not part of this candidate.** Task 6 is the last chat-tool stage and merges
+after this wave; results must be recorded here only after that merge and its
+scoped delta review. It must deliver:
+
+- a task-independent granted-tool source that returns only the addressed bot's
+  allowed schemas, wired into the normal chat path;
+- `PluginCallAdmissionService` with the durable journal claim before transport and
+  atomic settlement, rechecking membership/connection generation/schema/pinned
+  version/repository;
+- the pilot chat limits: **16 calls per turn** and **32 KiB model-visible output
+  with explicit truncation**;
+- immutable name→endpoint binding and durable operation inspection;
+- zero business requests for denied/ungranted/revoked/wrong-bot/wrong-room/wrong-
+  repository/restored-permission paths, and no redispatch for drops/startup
+  recovery (including a different request id);
+- broadcast recipients keep their isolation and gain no plugin authority;
+- provider/plugin capabilities stay read-only in restore mode;
+- the live GitHub gate with an explicitly owner-approved test connection and
+  repository. Without that prerequisite the candidate ships with the gate visibly
+  unqualified.
+
+This section is a placeholder until the Task 6 merge; no Task 6 result is claimed
+here.
+
+### Owner enablement steps for the live GitHub gate
+
+1. Owner creates a dedicated test connection and **one** test repository, and
+   explicitly approves them for qualification (no credential import from another
+   application).
+2. Install and enable the pinned plugin (disabled by default), add a named
+   connection with an environment-variable reference, consent once to metadata
+   discovery, then grant the exact `list_issues`/`issue_read` tools plus
+   repository scope to the test bot/room.
+3. Run the chat path (requires Task 6) and record requests, results, refusals and
+   uncertainty separately from mocked/loopback evidence.
+4. If any step is unavailable, keep the gate unqualified — do not present mocked
+   GitHub traffic as live acceptance.
+
+## Release decision
+
+**Not yet.** This candidate is honest but not releasable: the scoped re-review of
+this fix wave, frozen artifacts at the fix revision (Node v26.13.0), disposable
+install/migration/rollback, and installed RC2 acceptance including the real GUI
+must complete first. RC2 is published only after acceptance, and stable 1.1 is not
+declared complete while its gates remain open.

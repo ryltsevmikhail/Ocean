@@ -138,6 +138,7 @@ export function persistPersistedMessage(
         roomId,
         seq: 1,
         author: 'user' as const,
+        targetBotId: f.botId,
         body: input.body,
         createdAt: '2026-11-04T00:00:00.000Z',
       },

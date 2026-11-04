@@ -7,7 +7,7 @@
  * inventory and determinism checks use the real adapter bundle.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -44,6 +44,18 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   expect(names.filter((name) => name.endsWith('.map'))).toEqual([]);
   expect(names.filter((name) => name.includes('/node_modules/'))).toEqual([]);
   expect(names.filter((name) => name.includes('node_modules/.pnpm'))).toEqual([]);
+  // Test-only compiled helpers never ship, while the product modules beside them do.
+  expect(
+    readdirSync(join(workspace, 'apps/cli/dist/ocean')).some((name) =>
+      /fixture|cleanup/.test(name),
+    ),
+  ).toBe(true);
+  expect(names.filter((name) => /fixture|cleanup/i.test(name))).toEqual([]);
+  expect(names).toContain('apps/cli/dist/ocean/coding-project-host.js');
+  // Internal planning/session documents stay out of the installed product.
+  expect(names.filter((name) => name.startsWith('docs/superpowers/'))).toEqual([]);
+  expect(names).toContain('docs/ocean/production.md');
+  expect(names).toContain('docs/integration/local-runtime.md');
   // The tsc output of the adapter is replaced by the bundle, never shipped beside it.
   expect(names).not.toContain(ADAPTER + 'dist/transport.js');
   expect(names).toContain(ADAPTER + 'dist/index.js');
@@ -51,6 +63,19 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   expect(names).toContain(ADAPTER + 'package.json');
   expect(names).toContain(ADAPTER + 'LICENSE');
   expect(names).toContain(ADAPTER + 'THIRD_PARTY_LICENSES/executor-MIT.txt');
+  // Only bundled .js chunks ship: the packaged manifest must not advertise d.ts
+  // declaration files that the archive does not contain (RC2 final review M8).
+  const adapterManifest = JSON.parse(
+    files.get(ADAPTER + 'package.json')?.body.toString() ?? '',
+  ) as {
+    types?: string;
+    dependencies?: unknown;
+    exports: { '.': { types?: string; import: string } };
+  };
+  expect(adapterManifest.types).toBeUndefined();
+  expect(adapterManifest.exports['.'].types).toBeUndefined();
+  expect(adapterManifest.exports['.'].import).toBe('./dist/index.js');
+  expect(adapterManifest.dependencies).toBeUndefined();
   const chunks = names.filter((name) => name.startsWith(ADAPTER + 'dist/'));
   expect(chunks.length).toBeGreaterThan(10);
   const manifestBytes = files.get('manifest.json')?.body;

@@ -123,3 +123,7 @@ export function resolveOk(...images: readonly ImagePart[]): ImageResolveResult {
 export function resolveFail(code: 'image_unavailable' | 'image_too_large'): ImageResolveResult {
   return { ok: false, code };
 }
+/** A marker that names no durable preparation/message binding. */
+export function resolveUnbound(): ImageResolveResult {
+  return { ok: false, code: 'image_unavailable', unbound: true };
+}

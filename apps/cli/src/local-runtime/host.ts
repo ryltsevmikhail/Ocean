@@ -166,7 +166,17 @@ export async function startLocalRuntime(
         stopping = (async (): Promise<LocalRuntimeStop> => {
           try {
             await assertRuntimeDrained(
-              [turns, broadcasts, options.drain, decisions, panels, restoration, finalization],
+              [
+                turns,
+                broadcasts,
+                options.drain,
+                decisions,
+                panels,
+                restoration,
+                finalization,
+                provider.settings,
+                plugins,
+              ],
               drainDeadlineMs,
             );
             endpoint.check();

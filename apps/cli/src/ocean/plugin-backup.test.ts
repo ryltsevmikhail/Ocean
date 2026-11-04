@@ -19,7 +19,6 @@ import {
   canary,
   cleanupFixture,
   close,
-  context,
   credentialReference,
   entry,
   env,

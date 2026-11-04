@@ -86,14 +86,19 @@ it('uses the actual authenticated runtime for native host import, preparation an
   expect(
     (await reopened.history([{ ...message, roomId: scope.roomId }]))[0]?.attachments,
   ).toBeUndefined();
-  const copied = await client.submit({
-    workspaceId: 'ws_ocean',
-    roomId: scope.groupId,
-    requestId: randomUUID(),
-    text: input.text,
-  });
+  // A copied/forged prepared body can no longer be admitted for a different
+  // request id: the runtime refuses it before any message exists (RC2 I3).
+  await expect(
+    client.submit({
+      workspaceId: 'ws_ocean',
+      roomId: scope.groupId,
+      requestId: randomUUID(),
+      text: input.text,
+    }),
+  ).rejects.toThrow('image_unavailable');
+  // The history decoder still refuses to render an unbound marker row.
   expect(
-    (await reopened.history([{ ...message, id: copied.messageId }]))[0]?.attachments,
+    (await reopened.history([{ ...message, id: 'foreign-message' }]))[0]?.attachments,
   ).toBeUndefined();
   await expect(
     host.handle({ op: 'attachment-preview', room: 'unknown', id: info.id }),

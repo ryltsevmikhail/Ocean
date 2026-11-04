@@ -69,7 +69,18 @@ export interface ImageResolveRequest {
 
 export type ImageResolveResult =
   | { readonly ok: true; readonly images: readonly ImagePart[] }
-  | { readonly ok: false; readonly code: ImageResolutionFailure };
+  | {
+      readonly ok: false;
+      readonly code: ImageResolutionFailure;
+      /**
+       * The marker names no durable preparation/message binding, so it was never
+       * an authoritative image message. History reconstruction treats such a body
+       * as inert display text instead of failing every later turn in the room; a
+       * genuine image whose asset is corrupt/missing never sets this flag and
+       * stays an explicit fail-closed refusal.
+       */
+      readonly unbound?: true;
+    };
 
 /**
  * One runtime adapter authenticates Desktop assets. Synchronous by design: the
@@ -93,6 +104,12 @@ export interface MessageContentScope {
  * Turn one persisted message body into model content. Legacy plain text stays a
  * string; text-only attachment messages become their marker-free text; image
  * messages become text plus runtime-verified image parts.
+ *
+ * A marker body with no durable image authority (malformed JSON, an unbound
+ * preparation, or no message↔request binding) is inert display text on history
+ * reconstruction: refusing it forever would let one pasted marker poison every
+ * later turn in the room. A genuine image message whose asset is corrupt,
+ * missing or oversized still fails closed because its authority exists.
  */
 export function resolveMessageContent(
   scope: MessageContentScope,
@@ -100,9 +117,11 @@ export function resolveMessageContent(
 ): ConversationResult<ChatContent> {
   const decoded = decodeDesktopAttachments(scope.body);
   if (decoded === null) {
-    return hasDesktopAttachmentMarker(scope.body)
-      ? conversationFailure('image_unavailable')
-      : ok(scope.body);
+    if (!hasDesktopAttachmentMarker(scope.body)) return ok(scope.body);
+    // Never leak the raw marker payload; a fresh admission stays refused.
+    return scope.phase === 'persisted'
+      ? ok(desktopAttachmentText(scope.body))
+      : conversationFailure('image_unavailable');
   }
   // The fresh message is not yet bound by a receipt, so the marker's preparation
   // request id must be exactly the submitting request id. A mismatch would be
@@ -125,7 +144,11 @@ export function resolveMessageContent(
     expected: decoded.files.map((file) => ({ id: file.id, sha256: file.sha256 })),
     phase: scope.phase,
   });
-  if (!resolved.ok) return conversationFailure(resolved.code);
+  if (!resolved.ok) {
+    if (scope.phase === 'persisted' && resolved.unbound === true)
+      return ok(desktopAttachmentText(scope.body));
+    return conversationFailure(resolved.code);
+  }
   const text = desktopAttachmentText(scope.body);
   if (resolved.images.length === 0) return ok(text);
   const parts: ContentPart[] = text === '' ? [] : [{ type: 'text', text }];

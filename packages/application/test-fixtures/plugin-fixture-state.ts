@@ -10,6 +10,7 @@ import type {
   PluginCredentialReferencePort,
   PluginDiscoveryConsentRecord,
   PluginInstallStorePort,
+  PluginInstalledVersion,
   PluginRoomFacts,
 } from '../src/plugin-ports.js';
 import type { PluginGrantRecord } from '@runnets/domain';

@@ -17,7 +17,6 @@ import {
   symlinkSync,
   unlinkSync,
   writeFileSync,
-  readlinkSync,
 } from 'node:fs';
 import { connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -28,6 +27,7 @@ import { openOceanProfile } from '../ocean/profile.js';
 import { startLocalRuntime } from './host.js';
 import { recoverEndpoint } from './endpoint.js';
 import { EndpointLayout, mount, profileKey } from './endpoint-files.js';
+import { endpointEvidence } from '../../test-fixtures/endpoint-evidence.test.js';
 const cleanup: (() => void | Promise<void>)[] = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
@@ -86,27 +86,6 @@ async function fixture(kill = true) {
     }
   }
   return { profile, run, root, paths };
-}
-function snapshot(directory: string): unknown {
-  return readdirSync(directory)
-    .sort()
-    .map((name) => {
-      const path = join(directory, name);
-      const st = lstatSync(path, { bigint: true });
-      return [
-        name,
-        String(st.ino),
-        String(st.mode),
-        String(st.uid),
-        String(st.mtimeNs),
-        String(st.ctimeNs),
-        st.isFile()
-          ? createHash('sha256').update(readFileSync(path)).digest('hex')
-          : st.isSymbolicLink()
-            ? readlinkSync(path)
-            : null,
-      ];
-    });
 }
 it.each([
   'forged contents',
@@ -182,11 +161,11 @@ it.each([
       break;
     }
   }
-  const entries = snapshot(paths.directory);
+  const entries = endpointEvidence(paths.directory);
   await expect(startLocalRuntime({ profile, provider: null })).rejects.toThrow(
     /^(endpoint_exists|endpoint_changed|insecure_permissions)$/,
   );
-  expect(snapshot(paths.directory)).toEqual(entries);
+  expect(endpointEvidence(paths.directory)).toEqual(entries);
   if (kind === 'foreign listener') {
     const s = connect(paths.endpoint);
     expect(String((await once(s, 'data'))[0])).toBe('foreign');
@@ -293,12 +272,12 @@ it.each([
   } finally {
     db.close();
   }
-  const entries = snapshot(paths.directory);
+  const entries = endpointEvidence(paths.directory);
   const start = startLocalRuntime({ profile, provider: null }).then(async (host) => {
     await host.stop();
     await host.closed;
     return 'accepted old binding';
   });
   await expect(start).rejects.toThrow('endpoint_exists');
-  expect(snapshot(paths.directory)).toEqual(entries);
+  expect(endpointEvidence(paths.directory)).toEqual(entries);
 });

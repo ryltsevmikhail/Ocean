@@ -26,6 +26,28 @@ export interface ReleasePackage {
 /** Package directory name of the one allowlisted bundled adapter. */
 const ADAPTER_DIRECTORY = ADAPTER_SOURCE_DIR.split('/').at(-1) ?? '';
 
+/**
+ * Compiled test helpers (`*fixture*`, `*-cleanup*`) live beside product modules in
+ * `dist` but are imported by tests only and are never installed.
+ */
+const TEST_ONLY_MODULE = /(?:^|\/)[^/]*(?:fixture|cleanup)[^/]*\.js$/i;
+
+/**
+ * Internal planning/session documents are committed for the repository, not for an
+ * installed product: they carry owner home paths and handoff/session prompts.
+ */
+const EXCLUDED_DOCS_DIRECTORIES = new Set(['docs/superpowers/']);
+
+/** Only bundled `.js` chunks ship; never advertise declaration files the archive lacks. */
+function stripDeclarationReferences(manifest: Record<string, unknown>): void {
+  delete manifest['types'];
+  const exports = manifest['exports'];
+  if (typeof exports !== 'object' || exports === null) return;
+  const entry = (exports as Record<string, unknown>)['.'];
+  if (typeof entry !== 'object' || entry === null) return;
+  delete (entry as Record<string, unknown>)['types'];
+}
+
 /** Refuse any package whose runtime dependencies would not be shipped. */
 function checkDependencies(
   name: string,
@@ -54,6 +76,10 @@ function assertPackagedLayout(files: ReadonlyMap<string, unknown>): void {
       throw new Error('Release archive must not ship source maps: ' + name);
     if (/node_modules\/\.pnpm|node_modules\/\.cache|\.tsbuildinfo$/.test(name))
       throw new Error('Release archive must not ship build caches: ' + name);
+    if (TEST_ONLY_MODULE.test(name))
+      throw new Error('Release archive must not ship a test-only module: ' + name);
+    if (name.startsWith('docs/superpowers/'))
+      throw new Error('Release archive must not ship internal planning documents: ' + name);
     for (const [at, segment] of name.split('/').entries())
       if (segment === 'node_modules' && at !== 0)
         throw new Error('Release archive must not ship nested node_modules: ' + name);
@@ -110,8 +136,11 @@ export async function packageRelease(
     readFileSync(path, 'utf8').replace(/^\/\/# sourceMappingURL=.*$/gm, '');
   const copyDocs = (directory: string, relative: string) => {
     for (const e of readdirSync(directory, { withFileTypes: true })) {
-      if (e.isDirectory()) copyDocs(join(directory, e.name), relative + e.name + '/');
-      else if (e.isFile()) add(relative + e.name, readFileSync(join(directory, e.name)));
+      const path = relative + e.name;
+      if (e.isDirectory()) {
+        if (EXCLUDED_DOCS_DIRECTORIES.has(path + '/')) continue;
+        copyDocs(join(directory, e.name), path + '/');
+      } else if (e.isFile()) add(path, readFileSync(join(directory, e.name)));
       else throw new Error('Unexpected document link');
     }
   };
@@ -127,6 +156,7 @@ export async function packageRelease(
     const destination = name === 'cli' ? 'apps/cli' : 'node_modules/@runnets/' + name;
     manifest['version'] = version;
     delete manifest['dependencies'];
+    if (name === ADAPTER_DIRECTORY) stripDeclarationReferences(manifest);
     add(destination + '/package.json', JSON.stringify(manifest, null, 2) + '\n');
     if (name === ADAPTER_DIRECTORY) {
       // Ship the deterministic bundle instead of the tsc output; the pinned
@@ -143,11 +173,13 @@ export async function packageRelease(
         if (entry.isDirectory()) {
           if (entry.name !== 'release')
             copy(join(directory, entry.name), relative + entry.name + '/');
-        } else if (entry.isFile() && entry.name.endsWith('.js'))
+        } else if (entry.isFile() && entry.name.endsWith('.js')) {
+          if (TEST_ONLY_MODULE.test(relative + entry.name)) continue;
           add(
             destination + '/dist/' + relative + entry.name,
             compiled(join(directory, entry.name)),
           );
+        }
       }
     };
     copy(join(from, 'dist'), '');

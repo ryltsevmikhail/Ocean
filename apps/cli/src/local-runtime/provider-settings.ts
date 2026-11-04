@@ -93,6 +93,9 @@ async function probe(
 /** Owner API over the authenticated socket; every reply is metadata only. */
 export class ProviderSettings {
   readonly #service: ProviderConnectionService;
+  /** A stop must never report `complete` while an owner network check is discarded. */
+  #draining = false;
+  readonly #inFlight = new Set<Promise<RuntimeReply>>();
   constructor(service: ProviderConnectionService) {
     this.#service = service;
   }
@@ -108,10 +111,10 @@ export class ProviderSettings {
           : { error: { code: 'invalid_params' } };
       case 'provider.check':
         if (!isLocalProviderQuery(params)) return { error: { code: 'invalid_params' } };
-        return this.#run(() => this.#service.check(detached));
+        return this.#supervise(() => this.#service.check(detached));
       case 'provider.set':
         if (!isLocalProviderSetRequest(params)) return { error: { code: 'invalid_params' } };
-        return this.#run(() =>
+        return this.#supervise(() =>
           this.#service.set({
             requestId: params.requestId,
             model: params.model,
@@ -121,7 +124,7 @@ export class ProviderSettings {
       case 'provider.disconnect':
       case 'provider.removeSavedKey':
         if (!isLocalProviderRevisionRequest(params)) return { error: { code: 'invalid_params' } };
-        return this.#run(() =>
+        return this.#supervise(() =>
           method === 'provider.disconnect'
             ? this.#service.disconnect(params)
             : this.#service.removeSavedKey(params),
@@ -130,12 +133,26 @@ export class ProviderSettings {
         return { error: { code: 'invalid_params' } };
     }
   }
+  /** Track one asynchronous owner mutation until its effect is settled or refused. */
+  #supervise(run: () => unknown): Promise<RuntimeReply> {
+    if (this.#draining) return Promise.resolve({ error: { code: 'runtime_draining' } });
+    const job = this.#run(run);
+    this.#inFlight.add(job);
+    void job.finally(() => this.#inFlight.delete(job));
+    return job;
+  }
   async #run(run: () => unknown): Promise<RuntimeReply> {
     try {
       return { result: await run() };
     } catch (error) {
       return { error: { code: requestCode(error, 'outcome_unknown') } };
     }
+  }
+  /** Refuse new mutations and await every in-flight check/set/disconnect. */
+  async drain(): Promise<'settled'> {
+    this.#draining = true;
+    await Promise.all(this.#inFlight);
+    return 'settled';
   }
 }
 export interface ProviderHostInput {

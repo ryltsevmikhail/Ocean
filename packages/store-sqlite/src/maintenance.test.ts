@@ -35,6 +35,22 @@ it('doctor does not take ownership or migrate a database', () => {
   );
   check.close();
 });
+it('admits the unreleased intermediate schemas 15 and 16 to doctor and backup', async () => {
+  const { root, path } = setup();
+  const db = new DatabaseSync(path);
+  try {
+    for (const version of ['15', '16']) {
+      db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(version);
+      expect(inspectDatabase(path), version).toMatchObject({ status: 'ok' });
+    }
+    db.prepare("UPDATE meta SET value='15' WHERE key='schema_version'").run();
+  } finally {
+    db.close();
+  }
+  await expect(snapshotDatabase(path, join(root, 'schema15.sqlite'))).resolves.toMatchObject({
+    schema: 15,
+  });
+});
 it('snapshots WAL with exclusive maintenance ownership and preserves unresolved claims', async () => {
   const { root, path } = setup();
   const db = new DatabaseSync(path);
