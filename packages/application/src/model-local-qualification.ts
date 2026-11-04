@@ -39,7 +39,8 @@ export function copyLocalQualification(value: unknown): LocalModelQualification 
     new Set(c['inputModalities']).size !== c['inputModalities'].length ||
     c['contextTokens'] !== value['configuredContextTokens'] ||
     (c['maxOutputTokens'] !== null && !positive(c['maxOutputTokens'])) ||
-    !['reported', 'optional', 'unavailable'].includes(String(c['usage']))
+    typeof c['usage'] !== 'string' ||
+    (c['usage'] !== 'reported' && c['usage'] !== 'optional' && c['usage'] !== 'unavailable')
   )
     throw Error('connection_unverified');
   return {
@@ -53,7 +54,7 @@ export function copyLocalQualification(value: unknown): LocalModelQualification 
       inputModalities: c['inputModalities'].includes('image') ? ['text', 'image'] : ['text'],
       contextTokens: value['configuredContextTokens'],
       maxOutputTokens: c['maxOutputTokens'],
-      usage: c['usage'] as ModelCapabilities['usage'],
+      usage: c['usage'],
     },
   };
 }
