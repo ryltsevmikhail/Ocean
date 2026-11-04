@@ -60,3 +60,5 @@ export * from './coding-finalization-binding.js';
 export * from './coding-finalization-execute.js';
 export * from './coding-finalization-recovery.js';
 export * from './coding-finalization-result.js';
+
+export * from './service-plugin-transport.js';
