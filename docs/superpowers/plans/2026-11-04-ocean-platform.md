@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`; остальные B–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`; остальные задачи B–H пока запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -152,7 +152,8 @@ A принят. B детализирован ниже; C–F — отдельн�
 
 ## B. Облачные и локальные модели — подробный контракт
 
-В B принят шаг хранения/миграции (задача 4, `6633439`);
+В B приняты хранение/миграция (задача 4, `6633439`) и настройки/ключи
+(задача 5, `ca25fa6`);
 [доказательства и ограничения](../../ocean/platform-stage-b.md). Остальные задачи
 ещё не реализованы. Ниже 14 последовательных задач (4–17), с сохранением
 принятого этапа A. Это детализация уже утверждённого направления; C–F ещё
@@ -261,11 +262,11 @@ Each task's numbered steps are red test → run → minimal implementation → g
 **Files:** Create `packages/application/src/{model-connections,model-connection-resolution,model-connection-publication,model-connections.test}.ts`; modify existing provider-connections.ts/provider-connection-ports.ts/provider-connection-state.ts facade and test-fixtures/provider-connection-fakes.ts; extend model-connection storage from Task 4.
 **Interfaces:** Consumes Task 4. Produces `ModelConnectionService.set(input:ModelConnectionSetInput):ModelConnectionStatus`, `.check(connectionId,signal?):Promise<ModelConnectionCheck>`, `.disconnect(input:ModelConnectionRevisionInput):ModelConnectionStatus`, `.removeSavedKey(input:ModelConnectionRevisionInput):ModelConnectionStatus`. Revision input has connectionId/requestId/expectedRevision; set adds providerId/kind/endpoint/auth/defaultModelId/key?, with expectedRevision:null only for create. ModelCredentialFactory.catalog(descriptor) is synchronous and returns modelId/ModelCapabilities entries; activate(descriptor,secret) returns an immutable ModelCredential with source saved/external/auth_none. external(descriptor) is a separate method called only after eligibility/intent/secret/restore checks. Introduce domain/model-capabilities.ts now; Task8 consumes it. Local auth-none never masquerades as legacy source none. Keep legacy public DTOs exact.
 
-- [ ] Add tests for two same-vendor connections, auth-none with no secret read/header, missing cloud key refusal, revision conflict before secret writes, cross-namespace requestId collision and exact legacy receipt replay.
-- [ ] Run `pnpm exec vitest run --config vitest.source.config.ts packages/application/src/model-connections.test.ts` and confirm red.
-- [ ] Implement validated metadata, per-connection configuredAfterRestore and explicit legacyEnvironment. Limits: connection/model 256 UTF-8 bytes, provider 64, request 128, endpoint 2048. Reject endpoint userinfo/query/fragment; cloud canonical HTTPS only; first local profile loopback IP only. Key omission retains existing credential; auth-none must be explicit and rejects supplied key. Default model update never mutates bots.
-- [ ] Persist old/new refs in pending intent before replace/remove, verify publication, activate+receipt atomically. Preserve existing secret-store modes/fsync. Legacy pending without previousRef remains unverified until explicit repair; never infer activation or delete unidentified refs. Slow probe only updates its exact revision. Reconfigure one restored connection without enabling siblings.
-- [ ] Run new tests plus existing provider-connection-{activation,resolution,boundaries}.test.ts and `pnpm build`; commit Task 5. Legacy service delegates through a compatibility translator preserving old DTO/fingerprint semantics, not a second mutation implementation.
+- [x] Add tests for two same-vendor connections, auth-none with no secret read/header, missing cloud key refusal, revision conflict before secret writes, cross-namespace requestId collision and exact legacy receipt replay.
+- [x] Run `pnpm exec vitest run --config vitest.source.config.ts packages/application/src/model-connections.test.ts` and confirm red.
+- [x] Implement validated metadata, per-connection configuredAfterRestore and explicit legacyEnvironment. Limits: connection/model 256 UTF-8 bytes, provider 64, request 128, endpoint 2048. Reject endpoint userinfo/query/fragment; cloud canonical HTTPS only; first local profile loopback IP only. Key omission retains existing credential; auth-none must be explicit and rejects supplied key. Default model update never mutates bots.
+- [x] Persist old/new refs in pending intent before replace/remove, verify publication, activate+receipt atomically. Preserve existing secret-store modes/fsync. Legacy pending without previousRef remains unverified until explicit repair; never infer activation or delete unidentified refs. Slow probe only updates its exact revision. Reconfigure one restored connection without enabling siblings.
+- [x] Run new tests plus existing provider-connection-{activation,resolution,boundaries}.test.ts and `pnpm build`; commit Task 5. Legacy service delegates through a compatibility translator preserving old DTO/fingerprint semantics, not a second mutation implementation.
 
 **Replay/composition decisions:** New v2 receipts add optional versioned publicResult:{version:1,status:ModelConnectionStatus}; all newly admitted v2 mutations commit and return that exact public snapshot, including first response. Never expose internal result/secret refs or regenerate replay from current credentials/catalog. Old internal v2 receipts without publicResult refuse receipt_result_unavailable without effects. Legacy receipt bytes and fingerprint tuples stay exact. Use one mutation/publication algorithm with typed legacy/v2 receipt sinks and one canonical transaction. Internal constructor ports may evolve explicitly across typed composition/tests; never emulate durable canonical fields in an old port that cannot persist them. Scope compatibility is the existing client/CLI/TUI/ACP behavior. All persisted enums require strict scalar checks, never String coercion.
 
@@ -373,6 +374,8 @@ Each task's numbered steps are red test → run → minimal implementation → g
 - [ ] Before editing transport, verify accepted A3 `1a99fcb`: hello.clientFeatures allows at most 16 strings of length 1..64; current marker is plugin.session-authority-v1; legacy sockets receive filtered plugin.* hello/status capabilities and plugin.* is blocked before dispatch. Preserve this per-socket behavior. Do not grow frozen RC2 hello/status beyond 64 or add every B method as a legacy capability; controller verified the frozen RC2 validator against cfa8490 apart from its first comment.
 - [ ] Create strict validator/old-client regression tests, including one host with concurrent legacy/current/B sockets, alternating status/plugin/B operations to prove negotiation cannot leak across sockets; run `pnpm exec vitest run --config vitest.source.config.ts packages/contracts/src/local-model-connections.test.ts packages/tools-node/src/local-model-connections-client.test.ts` red.
 - [ ] Implement new negotiation gate before dispatch and bounded DTOs. Legacy provider.* response/request validators remain exact; translate default connection only. New methods absent feature → explicit unsupported; new client against old host disables these controls. Filter internal model-dispatch events from legacy wire projections rather than sending unrecognized new DTO fields.
+- [ ] Before exposing settings, define owner-visible pending recovery: retain the exact request identity/payload needed for retry across disconnects, disclose when the key must be supplied again, and never treat a fresh requestId as permission to discard pending cleanup. Legacy missing intent needs explicit repair, not invented history.
+- [ ] Close Task5 review minor: unknown connection disconnect/remove must return `connection_not_found`, not `revision_conflict`; pin both cases before exposing the new RPC error contract.
 - [ ] Run green plus local-provider.test.ts and final A3 compatibility tests; `pnpm build`; commit Task 15. Process compatibility tests use built normal entry points and process config, not source alias imports.
 
 ### Task 16: Minimal connection and bot-binding settings UI
@@ -405,6 +408,11 @@ Anthropic: raw `/v1/messages`, x-api-key, version `2026-10-21`, initial `claude-
 Local: Ollama `/api/chat` native NDJSON, explicit auth-none or API key, metadata checks only at /api/version,/api/tags,/api/show. Candidate `qwen3:1.7b` Q4_K_M, think:false, num_ctx4096, num_predict512; tag page lists 1.4GB/short digest 8f68893c685c, not a qualified full digest. Pin actual installed identity/version during live qualification. [Chat](https://docs.ollama.com/api/chat), [model metadata](https://docs.ollama.com/api-reference/show-model-details), [cloud caveat](https://docs.ollama.com/api/authentication), [candidate](https://ollama.com/library/qwen3:1.7b).
 
 Observed notebook: i5-13420H, ~15GiB RAM, Intel UHD; no ollama/llama-server in PATH, Ollama inactive, loopback11434 unavailable, no standard model directory found. Backend/weights, full digest/version, live resource/tool/offline evidence and explicitly provided cloud keys are missing prerequisites. Do not install/download/start services automatically to close them. Keep DeepSeek adapter behavior and documented model metadata intact.
+
+Решение пользователя 2026-11-04: живые проверки OpenAI/Anthropic и сбор
+отдельных API-ключей пока отложены. Реализация адаптеров и проверки на fixtures
+остаются в плане. Отложенная live-проверка не считается пройденной;
+в B/F отдельно указать фактически квалифицированные провайдеры.
 
 ## Task 18: C. Постоянные права и готовые MCP-инструменты — приоритет 1
 
