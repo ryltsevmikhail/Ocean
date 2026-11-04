@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 import type { ProfileIntentOutputKind, ProfileRebindRecord } from '@runnets/domain';
 import type { CodingAssetCapture } from './coding-asset-state.js';
 import { profileHash } from './profile-backup-output.js';
-import { captureCodingAssetTree } from './coding-asset-scan.js';
+import { captureAssetTreeAt, captureCodingAssetTree } from './coding-asset-scan.js';
 import { validateCodingAssetLinks } from './coding-asset-links.js';
 import { readLineageFile, type LineageFileCapture } from './profile-lineage-file.js';
 import { desktopBindingMatches, withDesktopRoot } from './desktop-root.js';
@@ -183,8 +183,8 @@ function captureOutput(
   }
   const capture =
     record.state === 'ready' && output.kind === 'desktop' && record.result?.desktop
-      ? withDesktopRoot(record.result.desktop, () =>
-          captureCodingAssetTree(output.path!, outputLimits, 'all'),
+      ? withDesktopRoot(record.result.desktop, (held) =>
+          captureAssetTreeAt(output.path!, outputLimits, 'all', held.fd),
         )
       : captureCodingAssetTree(output.path, outputLimits, 'all');
   try {

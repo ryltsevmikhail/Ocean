@@ -55,12 +55,12 @@ export function captureDesktopAssets(input: DesktopAssetInventory): DesktopAsset
   const inventory = freeze(structuredClone(input));
   const binding = inventory.binding;
   if (!binding) throw Error('desktop_binding_mismatch');
-  return withDesktopRoot(binding, () => {
+  return withDesktopRoot(binding, (held) => {
     const source = captureAssetTreeAt(
       binding.root,
       { bytes: 134217728, entries: 10000, depth: 3 },
       'desktop',
-      undefined,
+      held.fd,
       (metadata) => {
         if (
           Buffer.byteLength(

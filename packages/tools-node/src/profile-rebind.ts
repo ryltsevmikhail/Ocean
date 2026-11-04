@@ -76,8 +76,11 @@ export class RestoredProfileFiles implements ProfileRebindFiles {
         !desktopBindingMatches(binding) ||
         binding.originalRoot !== archived?.originalRoot ||
         binding.identity === archived?.identity ||
-        withDesktopRoot(binding, () =>
-          profileHash(scanAssetSource(binding.root, CODING_ASSET_LIMITS, 'desktop').manifest),
+        withDesktopRoot(binding, (held) =>
+          profileHash(
+            scanAssetSource(binding.root, CODING_ASSET_LIMITS, 'desktop', undefined, false, held.fd)
+              .manifest,
+          ),
         ) !== profileHash(source.catalog.desktop.manifest)
       )
         throw Error('rebind_desktop_changed');
