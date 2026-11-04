@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`; остальные задачи B–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`; остальные задачи B–H пока запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -154,7 +154,8 @@ A принят. B детализирован ниже; C–F — отдельн�
 
 В B приняты хранение/миграция (задача 4, `6633439`) и настройки/ключи
 (задача 5, `ca25fa6`), привязки ботов (задача 6, `14a4931`) и признак новой
-фиксации команды (задача 7, `72afcb3`);
+фиксации команды (задача 7, `72afcb3`), а также журнал вызовов модели
+(задача 8, `fbaa413`);
 [доказательства и ограничения](../../ocean/platform-stage-b.md). Остальные задачи
 ещё не реализованы. Ниже 14 последовательных задач (4–17), с сохранением
 принятого этапа A. Это детализация уже утверждённого направления; C–F ещё
@@ -298,7 +299,7 @@ Each task's numbered steps are red test → run → minimal implementation → g
 **Files:** Create `packages/domain/src/{model-dispatch,model-dispatch-decide,model-dispatch-evolve,model-dispatch.test}.ts`; modify domain/{commands,events,state,decide,evolve,index}.ts. Create application/model-activation-types.ts for application-only provider pairing; re-export domain shapes from application/provider.ts/index.ts.
 **Interfaces:** Produces exact snapshot/usage/completion/payload/state types and StartModelRequest/SettleModelRequest commands defined above. Domain helpers are `decideModelDispatch(state,command):Result<readonly TaskRunEventDraft[]>` and `evolveModelDispatch(state,event):TaskRunState`; event status transitions are null (hold current lifecycle state).
 
-**Preflight decisions (planned, not implemented):**
+**Accepted implementation decisions:**
 
 - Unknown settlement from running appends existing `task_run.reconciling` atomically after settlement/accounting; cancelling/reconciling retain their state. The new model events keep null status transitions. Unknown over-budget usage never appends exhaustion.
 - Existing `usage_recorded` alone debits exact tokens and updates model knownTokens. Settlement updates estimated/unavailable evidence; first Start seeds knownTokens from the existing budget ledger. Event-prefix replay must not double-charge.
@@ -308,11 +309,11 @@ Each task's numbered steps are red test → run → minimal implementation → g
 - TaskRun cannot infer legacy admission from modelExecution:null. Task10 enforces persisted activation for production continuation; explicit host compatibility remains. No era flag, new table or changed checkpoint format. Preserve exact stop-reason vocabulary: terminal/unknown reason differs from unknown completion.
 - Task9 must not append a duplicate BeginReconcile after atomic unknown settlement. Split validation/guards/usage/evolution helpers along these responsibilities to retain the 300-line cap.
 
-- [ ] Write state-table tests for first/second start, ordinal gap, changed activation, expired deadline, wrong attempt, double settle, finite budget, cancel-before/after start, unknown completion guards and forced versus completed cleanup. Assert `expect(actualEvents.map(e=>e.type)).toEqual(['attempt.model_request_settled','attempt.usage_recorded'])` for known in-budget actual usage.
-- [ ] Run `pnpm exec vitest run --config vitest.source.config.ts packages/domain/src/model-dispatch.test.ts packages/domain/src/usage.test.ts` and confirm new assertions red.
-- [ ] Implement journal semantics above. Add old-event replay default modelExecution:null and known-token summary from old usage events; once modelExecution starts, settle owns all new usage. Validate finite nonnegative integer counts and ISO timestamps, preserve existing terminal immutability. Bounds are turn-wide and do not reset on attempt retry.
-- [ ] Test event-prefix checkpoints with new/old events, unknown completion with actual over-budget usage remains held, generic ResolveReconcile cannot authorize another start. No new table or mutable budget cache.
-- [ ] Run targeted tests plus existing taskrun-{lifecycle,replay,recovery}.test.ts, `pnpm build`; commit Task 8. Split existing decide usage helpers if needed to keep ≤300 lines.
+- [x] Write state-table tests for first/second start, ordinal gap, changed activation, expired deadline, wrong attempt, double settle, finite budget, cancel-before/after start, unknown completion guards and forced versus completed cleanup. Assert `expect(actualEvents.map(e=>e.type)).toEqual(['attempt.model_request_settled','attempt.usage_recorded'])` for known in-budget actual usage.
+- [x] Run `pnpm exec vitest run --config vitest.source.config.ts packages/domain/src/model-dispatch.test.ts packages/domain/src/usage.test.ts` and confirm new assertions red.
+- [x] Implement journal semantics above. Add old-event replay default modelExecution:null and known-token summary from old usage events; once modelExecution starts, settle owns all new usage. Validate finite nonnegative integer counts and ISO timestamps, preserve existing terminal immutability. Bounds are turn-wide and do not reset on attempt retry.
+- [x] Test event-prefix checkpoints with new/old events, unknown completion with actual over-budget usage remains held, generic ResolveReconcile cannot authorize another start. No new table or mutable budget cache.
+- [x] Run targeted tests plus existing taskrun-{lifecycle,replay,recovery}.test.ts, `pnpm build`; commit Task 8. Split existing decide usage helpers if needed to keep ≤300 lines.
 
 ### Task 9: Engine integration with honest usage and bounded host execution
 
@@ -324,6 +325,7 @@ Each task's numbered steps are red test → run → minimal implementation → g
 - [ ] Before stream commit Start with executeWithDisposition; only committed returns dispatch. Replay/unknown commit outcome does not call provider. Combine owner signal with frozen deadline/request timeout; retain current active-turn exclusion. Use persisted startedRequests+1 as the next ordinal, rather than resetting it to the loop counter on a later attempt. Normalize usage and terminal evidence once; persist settlement before tools or completion; do not invoke legacy settleUsage again for the same round.
 - [ ] Test a provider whose pending iterator.next() ignores AbortSignal: deadlines must stop host waiting with durable unknown/reconciliation, zero tools/new dispatch, and no claimed cleanup. Do not await iterator.return() indefinitely or let late output reset bounds or settle twice.
 - [ ] Tests: `expect(cloudCalls).toBe(0)` after local failure; terminal optional missing metric records unsupported/not_reported as appropriate with no zero usage event; broken stream records unknown and no tools; pre-send abort confirms no model request; abort after start remains cancelling unless valid completion and tool quiescence are known. Requests over 24 and total deadline over 600000 stop; late output cannot reset bounds.
+- [ ] After build, qualify existing local-runtime own-engine-process, lost-receipt-process and restart-process tests independently if root check stops at the known source baseline; this task changes the real dispatch path. Use built entry points and private profiles, record exact revision/results.
 - [ ] Run new tests plus turn-safety/own-engine and `apps/cli/src/engine/{turn,turn-local,agent-loop}.test.ts`, `apps/cli/src/acp/agent-provider.test.ts`; `pnpm build`; commit Task 9. Logs lacking atomic disposition refuse model execution, with an explicit fixture upgrade rather than disabling journaling.
 
 ### Task 10: Per-bot activation at durable chat/broadcast admission
