@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { activation, settlement, startPayload } from '../test-fixtures/model-dispatch.js';
 import {
   ABSENT,
   COMMAND_SOURCES,
@@ -120,6 +121,15 @@ const SAMPLES: { readonly [TType in CommandType]: CommandPayloads[TType] } = {
   Admit: {},
   Schedule: {},
   StartAttempt: { attemptId: 'at_0001', reason: 'initial', provider: 'provider-a', model: MODEL },
+  StartModelRequest: {
+    ...startPayload(),
+    attemptId: 'at_0001',
+    activation: {
+      ...activation(),
+      identity: { source: 'host', providerId: 'provider-a', modelId: MODEL },
+    },
+  },
+  SettleModelRequest: { ...settlement(), attemptId: 'at_0001' },
   RecordUsage: {
     attemptId: 'at_0001',
     usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
@@ -188,7 +198,8 @@ const TERMINAL_FIXTURES: ReadonlyArray<readonly [TaskRunStatus, () => TaskRunAgg
 
 describe('terminal TaskRun immutability', () => {
   it('covers every command type in the source table', () => {
-    expect(COMMAND_TYPES).toHaveLength(19);
+    expect(COMMAND_TYPES).toHaveLength(21);
+    expect(Object.keys(SAMPLES).sort()).toEqual([...COMMAND_TYPES].sort());
   });
 
   for (const [expectedStatus, fixture] of TERMINAL_FIXTURES) {
@@ -242,6 +253,8 @@ describe('command source table', () => {
     expect(COMMAND_SOURCES.Schedule).toEqual(['queued']);
     expect(COMMAND_SOURCES.StartAttempt).toEqual(['admitted', 'retrying']);
     expect(COMMAND_SOURCES.RecordUsage).toEqual(['running', 'cancelling']);
+    expect(COMMAND_SOURCES.StartModelRequest).toEqual(['running']);
+    expect(COMMAND_SOURCES.SettleModelRequest).toEqual(['running', 'cancelling', 'reconciling']);
     expect(COMMAND_SOURCES.CompleteCleanup).toEqual(['cancelling']);
     expect(COMMAND_SOURCES.RequestCancel).toEqual([
       'created',

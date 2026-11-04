@@ -6,6 +6,7 @@
  * consults it instead of duplicating conditions.
  */
 
+import type { ModelExecutionState } from './model-dispatch.js';
 import type { CommandType } from './commands.js';
 import type { RunBudget } from './budget.js';
 import type { AttemptReason, FailureInfo, WaitingReason } from './events.js';
@@ -59,6 +60,8 @@ export const COMMAND_SOURCES = {
   StartAttempt: ['admitted', 'retrying'],
   // A versioned cancel can precede the active provider's final usage report.
   RecordUsage: ['running', 'cancelling'],
+  StartModelRequest: ['running'],
+  SettleModelRequest: ['running', 'cancelling', 'reconciling'],
   Wait: ['running'],
   Resume: ['waiting'],
   Retry: ['running'],
@@ -118,6 +121,7 @@ export interface TaskRunState {
   readonly model: string;
   readonly policyId: PolicyId;
   readonly budget: RunBudget;
+  readonly modelExecution: ModelExecutionState | null;
   readonly activeAttempt: ActiveAttempt | null;
   readonly attemptCount: number;
   readonly waitingReason: WaitingReason | null;

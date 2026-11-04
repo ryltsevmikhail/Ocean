@@ -6,6 +6,7 @@
  * event other than creation applied to an absent aggregate).
  */
 
+import { evolveModelDispatch } from './model-dispatch-evolve.js';
 import { createBudget } from './budget.js';
 import type { EventEnvelope, TaskRunEvent, TaskRunEventType } from './events.js';
 import { policyId, type TaskRunId } from './ids.js';
@@ -24,6 +25,8 @@ export const STATUS_AFTER_EVENT = {
   'task_run.admitted': 'admitted',
   'attempt.started': 'running',
   'attempt.usage_recorded': null,
+  'attempt.model_request_started': null,
+  'attempt.model_request_settled': null,
   'task_run.waiting': 'waiting',
   'task_run.resumed': 'running',
   'attempt.retry_scheduled': 'retrying',
@@ -67,6 +70,9 @@ function apply(state: TaskRunState, event: TaskRunEvent): TaskRunState {
         attemptCount: event.payload.ordinal,
         waitingReason: null,
       };
+    case 'attempt.model_request_started':
+    case 'attempt.model_request_settled':
+      return evolveModelDispatch(next, event);
     case 'attempt.usage_recorded': {
       const { usage } = event.payload;
       const tokens = [usage.inputTokens, usage.outputTokens, usage.totalTokens];
@@ -76,7 +82,7 @@ function apply(state: TaskRunState, event: TaskRunEvent): TaskRunState {
         );
       }
       return {
-        ...next,
+        ...evolveModelDispatch(next, event),
         budget: {
           ...state.budget,
           consumed: {
@@ -173,6 +179,7 @@ export function evolve(aggregate: TaskRunAggregate, event: TaskRunEvent): TaskRu
       model: p.model,
       policyId: policyId(p.policyId),
       budget: createBudget(p.budget),
+      modelExecution: null,
       activeAttempt: null,
       attemptCount: 0,
       waitingReason: null,

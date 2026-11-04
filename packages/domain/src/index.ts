@@ -67,3 +67,7 @@ export * from './plugin-operation.js';
 export * from './plugin-backup.js';
 
 export * from './model-capabilities.js';
+
+export * from './model-dispatch.js';
+export { decideModelDispatch } from './model-dispatch-decide.js';
+export { evolveModelDispatch } from './model-dispatch-evolve.js';

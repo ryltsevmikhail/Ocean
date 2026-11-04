@@ -6,7 +6,7 @@
  * knows about a specific vendor, and the runtime consumes only this contract.
  */
 
-import type { ImageMediaType } from '@runnets/domain';
+import type { CompletionStopReason, ImageMediaType } from '@runnets/domain';
 
 /** Provider-neutral text content. Legacy messages keep a plain string instead. */
 export interface TextPart {
@@ -75,8 +75,17 @@ export interface TokenUsage {
   readonly totalTokens: number;
 }
 
-export type CompletionStopReason =
-  'stop' | 'length' | 'content_filter' | 'tool_calls' | 'cancelled' | 'unknown';
+export type {
+  CompletionStopReason,
+  ModelActivationSnapshot,
+  ModelExecutionIdentity,
+  ModelExecutionLimits,
+  ModelUsageEvidence,
+  ModelCompletionEvidence,
+  StartModelRequestPayload,
+  SettleModelRequestPayload,
+  ModelExecutionState,
+} from '@runnets/domain';
 
 export type ProviderErrorCode =
   | 'auth'

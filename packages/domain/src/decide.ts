@@ -5,6 +5,9 @@
  * mutates state: the caller appends the drafts to the log and then evolves.
  */
 
+import { decideModelDispatch } from './model-dispatch-decide.js';
+import { guardModelDispatch } from './model-dispatch-guards.js';
+import { decideUsage } from './usage-decide.js';
 import type { AnyCommand, CommandType } from './commands.js';
 import { DomainError, err, ok, type Result } from './errors.js';
 import { ID_PREFIX, isValidId, policyId as brandPolicyId } from './ids.js';
@@ -64,6 +67,10 @@ export function decide(
     return err(DomainError.invalidTransition(from, command.type));
   }
 
+  if (aggregate.status !== 'absent') {
+    const guarded = guardModelDispatch(aggregate, command);
+    if (!guarded.ok) return guarded;
+  }
   const events = buildEvents(aggregate, command);
   if (!events.ok) return events;
   return events;
@@ -127,41 +134,14 @@ function buildEvents(
         ),
       ]);
     }
+    case 'StartModelRequest':
+    case 'SettleModelRequest':
     case 'RecordUsage': {
-      if (aggregate.status === 'absent') {
-        return err(DomainError.invalidTransition('absent', 'RecordUsage'));
-      }
-      const p = command.payload;
-      const checked = requireRunningAttempt(aggregate, p.attemptId);
-      if (!checked.ok) return checked;
-      if (
-        !Number.isInteger(p.usage.inputTokens) ||
-        p.usage.inputTokens < 0 ||
-        !Number.isInteger(p.usage.outputTokens) ||
-        p.usage.outputTokens < 0 ||
-        !Number.isInteger(p.usage.totalTokens) ||
-        p.usage.totalTokens < 0
-      ) {
-        return err(DomainError.invalidArgument('usage token counts must be non-negative integers'));
-      }
-
-      const events: TaskRunEventDraft[] = [
-        draft('attempt.usage_recorded', { attemptId: p.attemptId, usage: { ...p.usage } }, base),
-      ];
-      // A finite token limit that actual usage crosses is a durable terminal
-      // fact (ADR-0012): the settlement and the exhaustion commit together.
-      const limit = aggregate.budget.limits.provider_tokens;
-      const consumed = aggregate.budget.consumed.provider_tokens + p.usage.totalTokens;
-      if (limit !== null && consumed > limit) {
-        events.push(
-          draft(
-            'task_run.budget_exhausted',
-            { dimension: 'provider_tokens', limit, consumed },
-            base,
-          ),
-        );
-      }
-      return ok(events);
+      if (aggregate.status === 'absent')
+        return err(DomainError.invalidTransition('absent', command.type));
+      return command.type === 'RecordUsage'
+        ? decideUsage(aggregate, command)
+        : decideModelDispatch(aggregate, command);
     }
     case 'Wait':
       return ok([draft('task_run.waiting', { reason: command.payload.reason }, base)]);

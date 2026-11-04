@@ -6,6 +6,7 @@
  * vocabulary; it contains no storage or transport concerns.
  */
 
+import type { StartModelRequestPayload, SettleModelRequestPayload } from './model-dispatch.js';
 import type { ConversationId, PolicyId, TaskRunId, WorkspaceId } from './ids.js';
 
 export const AGGREGATE_TYPES = [
@@ -123,7 +124,7 @@ export interface TokenUsagePayload {
 /**
  * Committed usage settlement for one attempt.
  *
- * Usage is attempt-scoped and idempotent (one settlement per attempt); it is
+ * Each committed report is attempt-scoped usage evidence; it is
  * the evidence the budget ledger consumes, never a mutable counter.
  */
 export interface AttemptUsageRecordedPayload {
@@ -196,6 +197,8 @@ export interface TaskRunEventPayloads {
   'task_run.admitted': Record<string, never>;
   'attempt.started': AttemptStartedPayload;
   'attempt.usage_recorded': AttemptUsageRecordedPayload;
+  'attempt.model_request_started': StartModelRequestPayload;
+  'attempt.model_request_settled': SettleModelRequestPayload;
   'task_run.waiting': TaskRunWaitingPayload;
   'task_run.resumed': Record<string, never>;
   'attempt.retry_scheduled': AttemptRetryScheduledPayload;
