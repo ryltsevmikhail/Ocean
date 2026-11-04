@@ -53,9 +53,9 @@ const {
   abandonBroadcast,
   stop,
 } = useDesktop();
-const details = ref(window.innerWidth >= 1080);
+const details = ref(window.innerWidth >= 1024);
 const roomList = ref(false);
-const wide = matchMedia('(min-width:1080px)');
+const wide = matchMedia('(min-width:1024px)');
 const oneColumn = matchMedia('(max-width:800px)');
 function adapt() {
   details.value = wide.matches;

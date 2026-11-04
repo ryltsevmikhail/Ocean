@@ -22,16 +22,20 @@ globalThis.fetch = async (url, options = {}) => {
   }
   const { messages } = JSON.parse(options.body);
   const last = messages.at(-1).content;
+  // Provider-neutral content may be typed parts (authenticated images): inspect its text only.
+  const lastText = Array.isArray(last)
+    ? last.map((part) => (typeof part.text === 'string' ? part.text : '')).join('\n')
+    : last;
   appendFileSync(process.env.OCEAN_TEST_LOG, JSON.stringify(messages) + '\n');
-  if (last.includes('slow-turn')) await setTimeout(60000, null, { signal: options.signal });
+  if (lastText.includes('slow-turn')) await setTimeout(60000, null, { signal: options.signal });
   // Deterministic broadcast hold: the owner can be killed mid-child; recovery owns the batch.
-  if (last.includes('hold-broadcast'))
+  if (lastText.includes('hold-broadcast'))
     while (!existsSync(process.env.OCEAN_TEST_LOG + '.broadcast-release'))
       await setTimeout(50, null, { signal: options.signal });
-  if (last.startsWith('detach-turn'))
+  if (lastText.startsWith('detach-turn'))
     while (!existsSync(process.env.OCEAN_TEST_LOG + '.release'))
       await setTimeout(50, null, { signal: options.signal });
-  const text = 'Test provider · ' + (last.startsWith('detach-turn') ? 'detach-turn' : last);
+  const text = 'Test provider · ' + (lastText.startsWith('detach-turn') ? 'detach-turn' : lastText);
   const chunks = [
     { choices: [{ delta: { content: text }, finish_reason: null }] },
     { choices: [{ delta: {}, finish_reason: 'stop' }] },
