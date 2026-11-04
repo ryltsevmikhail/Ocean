@@ -26,34 +26,34 @@ export function validateModelSet(input: ModelConnectionSetInput): void {
   if (input.key !== undefined) validKey(input.key);
   if (input.auth === 'none' && (input.kind !== 'local' || input.key !== undefined))
     throw Error('invalid_params');
-  let endpoint: URL;
+  if (!validModelConnectionEndpoint(input.kind, input.endpoint)) throw Error('invalid_params');
+}
+
+/** Eligibility for unchanged owner or persisted endpoint metadata; no normalization or I/O. */
+export function validModelConnectionEndpoint(
+  kind: 'cloud' | 'local',
+  value: unknown,
+): value is string {
   try {
-    endpoint = new URL(input.endpoint);
+    const text = boundedModelText(value, 2048);
+    const endpoint = new URL(text);
+    if (
+      endpoint.username !== '' ||
+      endpoint.password !== '' ||
+      endpoint.search !== '' ||
+      endpoint.hash !== '' ||
+      /[?#]/.test(text)
+    )
+      return false;
+    if (endpoint.origin + (endpoint.pathname === '/' ? '' : endpoint.pathname) !== text)
+      return false;
+    if (kind === 'cloud') return endpoint.protocol === 'https:';
+    if (kind !== 'local') return false;
+    return (
+      ['http:', 'https:'].includes(endpoint.protocol) &&
+      (endpoint.hostname === '[::1]' || /^127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(endpoint.hostname))
+    );
   } catch {
-    throw Error('invalid_params');
-  }
-  if (
-    endpoint.username !== '' ||
-    endpoint.password !== '' ||
-    endpoint.search !== '' ||
-    endpoint.hash !== '' ||
-    /[?#]/.test(input.endpoint)
-  )
-    throw Error('invalid_params');
-  if (input.kind === 'cloud') {
-    if (
-      endpoint.protocol !== 'https:' ||
-      endpoint.origin + (endpoint.pathname === '/' ? '' : endpoint.pathname) !== input.endpoint
-    )
-      throw Error('invalid_params');
-  } else {
-    const host = endpoint.hostname;
-    if (endpoint.origin + (endpoint.pathname === '/' ? '' : endpoint.pathname) !== input.endpoint)
-      throw Error('invalid_params');
-    if (
-      !['http:', 'https:'].includes(endpoint.protocol) ||
-      !(host === '[::1]' || /^127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(host))
-    )
-      throw Error('invalid_params');
+    return false;
   }
 }

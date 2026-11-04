@@ -1,7 +1,8 @@
-import type {
-  ModelConnectionDescriptor,
-  ModelCredentialFactory,
-  ModelCredential,
+import {
+  validModelConnectionEndpoint,
+  type ModelConnectionDescriptor,
+  type ModelCredentialFactory,
+  type ModelCredential,
 } from '@runnets/application';
 import {
   DeepSeekProvider,
@@ -19,7 +20,7 @@ export function createProviderActivationFactory(
     d.providerId === 'deepseek' &&
     d.kind === 'cloud' &&
     d.auth === 'api_key' &&
-    d.endpoint !== null;
+    validModelConnectionEndpoint(d.kind, d.endpoint);
   const activate = (
     d: ModelConnectionDescriptor,
     key: string,

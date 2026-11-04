@@ -76,3 +76,58 @@ it('uses the unchanged configured endpoint for chat and probe through the inject
     'https://configured.invalid/v1/models',
   ]);
 });
+
+const invalidPersistedEndpoints = [
+  'http://example.invalid',
+  'https://user@example.invalid/v1',
+  'https://user:password@example.invalid/v1',
+  'https://example.invalid/v1?key=value',
+  'https://example.invalid/v1#fragment',
+  'https://example.invalid?',
+  'https://example.invalid#',
+  'https://example.invalid/',
+  'https://EXAMPLE.invalid',
+  'https://example.invalid:443',
+  'https://example.invalid/v1/../api',
+  ' https://example.invalid',
+];
+it.each(invalidPersistedEndpoints)(
+  'refuses persisted endpoint %s in catalog and both credential entry points',
+  (endpoint) => {
+    let environmentReads = 0,
+      savedKeyReads = 0;
+    const factory = createProviderActivationFactory({
+      env: new Proxy(
+        {},
+        {
+          get: () => {
+            environmentReads++;
+            return 'fixture-environment-key';
+          },
+        },
+      ),
+    });
+    const descriptor = {
+      connectionId: 'persisted',
+      providerId: 'deepseek',
+      kind: 'cloud' as const,
+      endpoint,
+      auth: 'api_key' as const,
+      defaultModelId: 'deepseek-flash',
+    };
+    const models = factory.catalog(descriptor);
+    const saved = factory.activate(descriptor, {
+      status: 'ok',
+      get key() {
+        savedKeyReads++;
+        return 'fixture-saved-key';
+      },
+    });
+    const external = factory.external(descriptor);
+    expect(models).toEqual([]);
+    expect(saved).toBeNull();
+    expect(external).toBeNull();
+    expect(environmentReads).toBe(0);
+    expect(savedKeyReads).toBe(0);
+  },
+);

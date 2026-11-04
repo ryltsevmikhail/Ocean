@@ -3,6 +3,7 @@ import type { ModelConnectionStorePort } from './model-connection-ports.js';
 import type { ModelCredentialFactory } from './model-credential-ports.js';
 import type { ProviderSecretStorePort } from './provider-connection-ports.js';
 import type { ProviderActivation, ProviderActivationPort } from './model-activation-types.js';
+import { validModelConnectionEndpoint } from './model-connection-input.js';
 import { resolveModelConnection } from './model-connection-resolution.js';
 import {
   freezeModelActivation,
@@ -33,7 +34,7 @@ export class ProviderActivationService implements ProviderActivationPort {
       record === null ||
       record.providerId !== bot.provider ||
       binding.modelId !== bot.model ||
-      record.endpoint === null
+      !validModelConnectionEndpoint(record.kind, record.endpoint)
     )
       return no();
     const resolution = resolveModelConnection(record, d.factory, d.secrets, d, binding.modelId);

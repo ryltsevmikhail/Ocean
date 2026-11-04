@@ -93,3 +93,5 @@ export * from './model-dispatch.js';
 
 export * from './provider-activation.js';
 export * from './model-activation-snapshot.js';
+
+export { validModelConnectionEndpoint } from './model-connection-input.js';
