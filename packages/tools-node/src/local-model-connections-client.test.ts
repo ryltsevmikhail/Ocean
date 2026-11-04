@@ -86,3 +86,33 @@ it('copies nested request identity before awaiting an untrusted reply', async ()
   });
   await expect(result).rejects.toThrow('invalid_frame');
 });
+it('validates bound-bot page scope and returned ID cursor', async () => {
+  const bound = {
+    bot: {
+      id: 'bot',
+      workspaceId: 'ws',
+      handle: 'bot',
+      name: 'Bot',
+      role: 'Fixture',
+      provider: 'deepseek',
+      model: 'deepseek-flash',
+      profileVersion: 2,
+    },
+    binding: { connectionId: 'named', modelId: 'deepseek-flash' },
+  };
+  const page = { version: 1, workspaceId: 'ws', roomId: 'room', items: [bound], nextAfter: 'bot' };
+  const send = vi.fn().mockResolvedValue(page);
+  const client = localModelConnectionsClient(send, { capabilities: [LOCAL_MODEL_CONNECTIONS] });
+  const query = { workspaceId: 'ws', roomId: 'room', after: 'a', limit: 1 };
+  expect(await client.listBoundBots(query)).toEqual(page);
+  expect(send).toHaveBeenLastCalledWith('bots.listBound', query);
+  for (const bad of [
+    { ...page, workspaceId: 'foreign' },
+    { ...page, roomId: 'foreign' },
+    { ...page, nextAfter: 'skipped' },
+    { ...page, items: [{ ...bound, bot: { ...bound.bot, workspaceId: 'foreign' } }] },
+  ]) {
+    send.mockResolvedValue(bad);
+    await expect(client.listBoundBots(query)).rejects.toThrow('invalid_frame');
+  }
+});

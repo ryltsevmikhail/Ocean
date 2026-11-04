@@ -55,10 +55,13 @@ it('shares canonical settings, binding and policy snapshots across two authentic
   const setCall = vi.spyOn(ModelConnectionService.prototype, 'set');
   const saved = await f.client.setModelConnection(f.set);
   const service = setCall.mock.contexts[0] as ModelConnectionService;
-  const activateCredential = vi.spyOn(service.options.factory, 'activate');
-  const externalCredential = vi.spyOn(service.options.factory, 'external');
-  const secretRead = vi.spyOn(service.options.secrets, 'read');
   expect(saved).toMatchObject({ connectionId: 'named', revision: 1, source: 'saved' });
+  await f.client.setModelConnection({
+    ...f.set,
+    connectionId: 'other',
+    requestId: 'other-set',
+    defaultModelId: 'deepseek-v4-pro',
+  });
   const bound = await f.client.createBoundBot({
     workspaceId: 'ws_ocean',
     requestId: 'create-bound',
@@ -72,9 +75,16 @@ it('shares canonical settings, binding and policy snapshots across two authentic
     requestId: 'bind-original',
     botId: f.profile.botId,
     expectedProfileVersion: 1,
-    binding: bound.binding!,
+    binding: { connectionId: 'other', modelId: 'deepseek-v4-pro' },
   });
   expect(changed.bot.profileVersion).toBe(2);
+  expect(bound.bot.profileVersion).toBe(1);
+  const activateCredential = vi.spyOn(service.options.factory, 'activate');
+  const externalCredential = vi.spyOn(service.options.factory, 'external');
+  const secretRead = vi.spyOn(service.options.secrets, 'read');
+  const secretWrite = vi.spyOn(service.options.secrets, 'write');
+  const secretReplace = vi.spyOn(service.options.secrets, 'replace');
+  const secretRemove = vi.spyOn(service.options.secrets, 'remove');
   const activate = vi.spyOn(ProviderActivationService.prototype, 'resolve');
   const check = vi.spyOn(ModelConnectionService.prototype, 'check');
   const beforeRequests = f.vendor.requests.length;
@@ -92,6 +102,38 @@ it('shares canonical settings, binding and policy snapshots across two authentic
   });
   const bots = await f.other.listBoundBots(f.scope);
   expect(bots.items).toContainEqual(changed);
+  const expected = [bound, changed].sort((a, b) => (a.bot.id < b.bot.id ? -1 : 1));
+  const firstBotPage = await f.other.listBoundBots({ workspaceId: 'ws_ocean', limit: 1 });
+  expect(firstBotPage).toEqual({
+    version: 1,
+    workspaceId: 'ws_ocean',
+    roomId: null,
+    items: [expected[0]],
+    nextAfter: expected[0]!.bot.id,
+  });
+  const secondBotPage = await f.other.listBoundBots({
+    workspaceId: 'ws_ocean',
+    limit: 1,
+    after: firstBotPage.nextAfter!,
+  });
+  expect(secondBotPage).toEqual({
+    version: 1,
+    workspaceId: 'ws_ocean',
+    roomId: null,
+    items: [expected[1]],
+    nextAfter: null,
+  });
+  const traversed = [...firstBotPage.items, ...secondBotPage.items];
+  expect(traversed.map(({ bot }) => bot.id)).toEqual(expected.map(({ bot }) => bot.id));
+  expect(new Set(traversed.map(({ bot }) => bot.id)).size).toBe(2);
+  expect(traversed.find(({ bot }) => bot.id === bound.bot.id)).toMatchObject({
+    bot: { profileVersion: 1 },
+    binding: { connectionId: 'named', modelId: 'deepseek-flash' },
+  });
+  expect(traversed.find(({ bot }) => bot.id === changed.bot.id)).toMatchObject({
+    bot: { profileVersion: 2 },
+    binding: { connectionId: 'other', modelId: 'deepseek-v4-pro' },
+  });
   const policy = await f.other.getRoomModelPolicy(f.scope);
   const next = await f.client.setRoomModelPolicy({
     ...f.scope,
@@ -103,6 +145,9 @@ it('shares canonical settings, binding and policy snapshots across two authentic
   expect(activateCredential).not.toHaveBeenCalled();
   expect(externalCredential).not.toHaveBeenCalled();
   expect(secretRead).not.toHaveBeenCalled();
+  expect(secretWrite).not.toHaveBeenCalled();
+  expect(secretReplace).not.toHaveBeenCalled();
+  expect(secretRemove).not.toHaveBeenCalled();
   expect(activate).not.toHaveBeenCalled();
   expect(check).not.toHaveBeenCalled();
   expect(f.vendor.requests).toHaveLength(beforeRequests);
