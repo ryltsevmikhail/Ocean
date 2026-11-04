@@ -1,0 +1,18 @@
+{
+  "name": "@runnets/provider-openai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@runnets/provider-core": "workspace:*"
+  },
+  "license": "Apache-2.0"
+}

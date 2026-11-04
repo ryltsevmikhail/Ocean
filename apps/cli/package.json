@@ -16,7 +16,8 @@
     "@runnets/provider-deepseek": "workspace:*",
     "@runnets/store": "workspace:*",
     "@runnets/store-sqlite": "workspace:*",
-    "@runnets/tools-node": "workspace:*"
+    "@runnets/tools-node": "workspace:*",
+    "@runnets/provider-openai": "workspace:*"
   },
   "license": "Apache-2.0"
 }

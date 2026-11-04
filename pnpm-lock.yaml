@@ -221,6 +221,9 @@ importers:
       '@runnets/provider-deepseek':
         specifier: workspace:*
         version: link:../../packages/provider-deepseek
+      '@runnets/provider-openai':
+        specifier: workspace:*
+        version: link:../../packages/provider-openai
       '@runnets/store':
         specifier: workspace:*
         version: link:../../packages/store
@@ -303,6 +306,12 @@ importers:
         version: link:../application
 
   packages/provider-deepseek:
+    dependencies:
+      '@runnets/provider-core':
+        specifier: workspace:*
+        version: link:../provider-core
+
+  packages/provider-openai:
     dependencies:
       '@runnets/provider-core':
         specifier: workspace:*

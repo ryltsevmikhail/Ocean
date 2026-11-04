@@ -8,3 +8,5 @@
 export * from './provider.js';
 export * from './http.js';
 export * from './sse.js';
+export * from './usage.js';
+export * from './bounded-http.js';

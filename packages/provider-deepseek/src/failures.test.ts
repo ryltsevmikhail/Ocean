@@ -169,7 +169,11 @@ describe('DeepSeekProvider failures', () => {
       request({ signal: controller.signal }),
     );
 
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(3);
+    expect(events[1]).toEqual({
+      type: 'usage_evidence',
+      evidence: { kind: 'unavailable', reason: 'interrupted' },
+    });
     expect(events[0]).toEqual({ type: 'text_delta', text: 'partial' });
     expect(errorOf(events).code).toBe('cancelled');
     expect(terminal(events)).toHaveLength(1);

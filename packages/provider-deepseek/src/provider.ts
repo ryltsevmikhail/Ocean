@@ -149,7 +149,7 @@ export class DeepSeekProvider implements ProviderPort {
     }
 
     try {
-      yield* mapStream(response.stream());
+      yield* mapStream(response.stream(), request.model);
     } catch (error) {
       yield { type: 'error', error: errorFromException(error, { cancelled, timeout }) };
     }

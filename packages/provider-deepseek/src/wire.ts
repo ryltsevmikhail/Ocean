@@ -6,7 +6,13 @@
  * so a vendor shape change fails as a typed error instead of a crash.
  */
 
-import type { ChatContent, ChatMessage, ModelRequest, TokenUsage } from '@runnets/provider-core';
+import {
+  validateTokenUsage,
+  type ChatContent,
+  type ChatMessage,
+  type ModelRequest,
+  type TokenUsage,
+} from '@runnets/provider-core';
 
 export const DEEPSEEK_DEFAULT_ORIGIN = 'https://api.deepseek.com';
 export const DEEPSEEK_CHAT_PATH = '/chat/completions';
@@ -27,10 +33,6 @@ export function asRecord(value: unknown): Record<string, unknown> | null {
 
 function readText(value: unknown): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
-}
-
-function readCount(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
 /** Fail closed instead of silently dropping a part the vendor may not accept. */
@@ -101,13 +103,11 @@ export { WireContentError };
 export function readUsage(value: unknown): TokenUsage | null {
   const record = asRecord(value);
   if (record === null) return null;
-  const inputTokens = readCount(record['prompt_tokens']);
-  const outputTokens = readCount(record['completion_tokens']);
-  const total = readCount(record['total_tokens']);
-  if (inputTokens === null && outputTokens === null && total === null) return null;
-  const input = inputTokens ?? 0;
-  const output = outputTokens ?? 0;
-  return { inputTokens: input, outputTokens: output, totalTokens: total ?? input + output };
+  return validateTokenUsage({
+    inputTokens: record['prompt_tokens'],
+    outputTokens: record['completion_tokens'],
+    totalTokens: record['total_tokens'],
+  });
 }
 
 /** Read one streamed choice delta, or null when the chunk carries no choice. */
