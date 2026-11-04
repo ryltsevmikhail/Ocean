@@ -12,13 +12,24 @@ import { PINNED_IDENTITIES, PINNED_SDK_CHUNK_SHA256 } from './pinned-identity.js
 import type { InstalledSdkChunkIdentity } from './pinned-identity.js';
 
 export type ExecutorTransportQualificationReason =
-  'invalid_options' | 'execution_not_enabled' | 'pinned_chunk_mismatch' | 'pinned_chunk_unreadable';
+  | 'invalid_options'
+  | 'execution_not_enabled'
+  | 'pinned_chunk_mismatch'
+  | 'pinned_chunk_unreadable'
+  | 'bundle_integrity_mismatch'
+  | 'bundle_integrity_unreadable';
 
 /** Status with the extra facts a host needs to explain a refusal. */
 export interface ExecutorTransportStatus extends ServicePluginTransportQualification {
   readonly reason: ExecutorTransportQualificationReason | null;
   readonly requested: boolean;
   readonly installedChunkSha256: string | null;
+  /** Which layout-specific proof was evaluated: installed SDK chunk or packaged bundle. */
+  readonly integrityMode: 'source' | 'bundle';
+  /** Number of bundle chunks covered by the packaged proof; null for source layout. */
+  readonly bundleFileCount: number | null;
+  /** Which integrity proof was evaluated and what it observed (no file contents). */
+  readonly integrityDetail: string;
 }
 
 export interface ExecutorTransportOpenOptions {
@@ -66,16 +77,26 @@ export function assessQualification(input: {
     requested: input.requested,
     identities: PINNED_IDENTITIES,
     installedChunkSha256: input.identity.actualSha256,
+    integrityMode: input.identity.mode ?? 'source',
+    bundleFileCount: input.identity.bundleFiles ?? null,
+    integrityDetail: input.identity.detail,
   } as const;
   if (!input.requested) {
     return freezeStatus({ ...base, qualified: false, reason: 'execution_not_enabled' });
   }
   if (!input.identity.ok) {
+    const unreadable = input.identity.actualSha256 === null;
     return freezeStatus({
       ...base,
       qualified: false,
       reason:
-        input.identity.actualSha256 === null ? 'pinned_chunk_unreadable' : 'pinned_chunk_mismatch',
+        input.identity.mode === 'bundle'
+          ? unreadable
+            ? 'bundle_integrity_unreadable'
+            : 'bundle_integrity_mismatch'
+          : unreadable
+            ? 'pinned_chunk_unreadable'
+            : 'pinned_chunk_mismatch',
     });
   }
   if (
