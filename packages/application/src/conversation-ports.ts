@@ -1,4 +1,5 @@
 import type {
+  BroadcastBatch,
   ChatTurn,
   ChatReview,
   RoomExecutionPolicy,
@@ -75,6 +76,15 @@ export interface ConversationTransaction {
   putMessage(message: ConversationMessage): void;
   receipt(requestId: string): ConversationReceipt | null;
   putReceipt(requestId: string, receipt: ConversationReceipt): void;
+  /** Durable broadcast batch, its frozen children and the room's open/paused batch. */
+  broadcastBatch(id: string): BroadcastBatch | null;
+  broadcastBatchByRequest(requestId: string): BroadcastBatch | null;
+  broadcastBatchForRoom(roomId: string): BroadcastBatch | null;
+  broadcastBatches(roomId: string, limit: number): readonly BroadcastBatch[];
+  /** Batches that still hold their room (open or awaiting an owner decision). */
+  broadcastOpenBatches(): readonly BroadcastBatch[];
+  putBroadcastBatch(batch: BroadcastBatch): void;
+  broadcastTurns(batchId: string): readonly ChatTurn[];
   completeReviewRequest(
     requestId: string,
     decisionId: string,

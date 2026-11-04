@@ -18,6 +18,7 @@ it('suppresses only runtime_absent feedback while the welcome screen is shown', 
 });
 it('translates every turn status without exposing run metadata', () => {
   const expected = {
+    queued: 'В очереди рассылки',
     accepted: 'Запрос принят',
     dispatching: 'Готовим ответ…',
     prepared: '@review отвечает…',

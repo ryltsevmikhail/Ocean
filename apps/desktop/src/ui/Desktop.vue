@@ -10,6 +10,7 @@ import ProfilePanel from './ProfilePanel.vue';
 import RoomHistory from './RoomHistory.vue';
 import RoomComposer from './RoomComposer.vue';
 import RoomManager from './RoomManager.vue';
+import BroadcastPanel from './BroadcastPanel.vue';
 import ProviderSettings from './ProviderSettings.vue';
 import { useDesktop } from './state.js';
 const {
@@ -43,6 +44,10 @@ const {
   refresh,
   team,
   send,
+  sendBroadcast,
+  broadcastBusy,
+  continueBroadcast,
+  abandonBroadcast,
   stop,
 } = useDesktop();
 const details = ref(window.innerWidth >= 1080);
@@ -179,6 +184,11 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
         :read-error="readError"
         @refresh="guard(() => read(room))"
       />
+      <BroadcastPanel
+        :busy="busy || broadcastBusy"
+        @continue="guard(continueBroadcast)"
+        @abandon="guard(abandonBroadcast)"
+      />
       <RuntimeFeedback
         :feedback="feedback"
         :receipt="receipt"
@@ -201,6 +211,7 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
         :active="active"
         :uncertain="uncertain"
         @send="(ids) => guard(() => send(ids))"
+        @broadcast="(ids) => guard(() => sendBroadcast(ids))"
         @stop="stop"
       />
     </main>

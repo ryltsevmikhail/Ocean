@@ -18,3 +18,4 @@ export * from './local-desktop-assets.js';
 export * from './local-restore.js';
 export * from './local-finalization.js';
 export * from './local-provider.js';
+export * from './local-broadcast.js';

@@ -66,6 +66,29 @@ export const commands = z.discriminatedUnion('op', [
     expectedRevision: z.int().nonnegative(),
   }),
   z.strictObject({
+    op: z.literal('broadcast'),
+    requestId,
+    ...room,
+    text: z
+      .string()
+      .max(16384)
+      .refine((value) => !value.startsWith('--') && value !== '-V'),
+    attachments: z.array(z.uuid()).max(4).optional(),
+  }),
+  z.strictObject({ op: z.literal('broadcast-list'), ...room }),
+  z.strictObject({
+    op: z.literal('broadcast-continue'),
+    ...room,
+    batchId: id,
+    expectedRevision: z.int().nonnegative(),
+  }),
+  z.strictObject({
+    op: z.literal('broadcast-abandon'),
+    ...room,
+    batchId: id,
+    expectedRevision: z.int().nonnegative(),
+  }),
+  z.strictObject({
     op: z.literal('send'),
     requestId,
     ...room,
@@ -115,6 +138,7 @@ export const run = z.object({
   version: z.int().nonnegative(),
   performerId: id,
   turnStatus: z.enum([
+    'queued',
     'accepted',
     'dispatching',
     'prepared',
@@ -185,6 +209,43 @@ export const providerStatus = z
     lastCheck: providerCheckMetadata.nullable(),
   })
   .strict();
+export const broadcastChildState = z.enum([
+  'queued',
+  'running',
+  'answered',
+  'refused',
+  'uncertain',
+  'cancelled',
+  'not_started',
+]);
+export const broadcastChild = z.object({
+  botId: id,
+  handle: z.string().min(1).max(128),
+  name: z.string().min(1).max(128),
+  provider: z.string().min(1).max(128),
+  model: z.string().min(1).max(256),
+  turnId: id,
+  runId: id,
+  position: z.int().nonnegative(),
+  state: broadcastChildState,
+  resultMessageId: id.nullable(),
+});
+export const broadcastBatch = z
+  .object({
+    version: z.literal(1),
+    id,
+    workspaceId: z.literal('ws_ocean'),
+    roomId: id,
+    requestId,
+    messageId: id,
+    boundarySeq: z.int().positive(),
+    recipients: z.array(broadcastChild).min(2).max(32),
+    state: z.enum(['open', 'paused', 'completed', 'abandoned', 'refused']),
+    revision: z.int().positive(),
+    createdAt: z.iso.datetime({ offset: true }),
+    updatedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
 export const envelope = z.discriminatedUnion('ok', [
   z.object({ version: z.literal(1), ok: z.literal(true), data: z.unknown() }),
   z.object({
@@ -214,6 +275,10 @@ export const outputs = {
   bot: z.object({ kind: z.literal('bot'), data: bot }),
   send: receipt,
   receipt: receipt.nullable(),
+  broadcast: broadcastBatch,
+  'broadcast-list': z.array(broadcastBatch).max(50),
+  'broadcast-continue': broadcastBatch,
+  'broadcast-abandon': broadcastBatch,
   provider: providerStatus,
   'provider-set': providerStatus,
   'provider-disconnect': providerStatus,
@@ -230,4 +295,6 @@ export type Run = z.infer<typeof run>;
 
 export type ProfileReport = z.infer<typeof outputs.status>;
 export type ProviderStatus = z.infer<typeof providerStatus>;
+export type BroadcastBatch = z.infer<typeof broadcastBatch>;
+export type BroadcastChild = z.infer<typeof broadcastChild>;
 export type ProviderCheck = z.infer<(typeof outputs)['provider-check']>['check'];

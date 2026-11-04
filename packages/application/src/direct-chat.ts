@@ -1,20 +1,11 @@
-import {
-  validConversationText,
-  conversationId,
-  workspaceId,
-  taskRunId,
-  unlimitedBudget,
-  ok,
-  type ChatTurn,
-  type ConversationResult,
-} from '@runnets/domain';
+import { ok, type ChatTurn, type ConversationResult } from '@runnets/domain';
 import {
   admitChat,
-  updateChat,
   type DirectChatRequest,
   type ChatAdmissionMode,
 } from './direct-chat-admission.js';
-import { publishChat, recoverChats } from './direct-chat-publication.js';
+import { recoverChats } from './direct-chat-publication.js';
+import { executeChatTurn, type ChatCodingTools } from './chat-turn-execution.js';
 import type { ConversationServiceDeps } from './conversations.js';
 import type { TaskRunService } from './service.js';
 import {
@@ -29,10 +20,7 @@ export type { ChatAdmissionReceipt, ReceiptQuery, RunQuery } from './chat-receip
 export type { ChatAdmissionMode, DirectChatRequest } from './direct-chat-admission.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
 import type { TurnUpdate } from './turn-update.js';
-import { cancelBeforeDispatch, ChatPreparationRefusal } from './chat-preparation.js';
 export { ChatPreparationRefusal } from './chat-preparation.js';
-import type { TurnInput } from './types.js';
-import { runTurn } from './turn.js';
 
 export interface RecordedRoomMessage {
   readonly status: 'recorded';
@@ -44,10 +32,7 @@ export interface DirectChatDeps extends ConversationServiceDeps {
   readonly tasks: TaskRunService;
   readonly codingTools?: {
     /** Successful preparation must join its workers and prove their cleanup before returning. */
-    forTurn(
-      turn: ChatTurn,
-      signal: AbortSignal,
-    ): Promise<NonNullable<TurnInput['tools']> & { readonly cleanupConfirmed: true }>;
+    forTurn(turn: ChatTurn, signal: AbortSignal): Promise<ChatCodingTools>;
   };
 }
 export interface SubmitDirectInput extends DirectChatRequest {
@@ -127,101 +112,21 @@ export class DirectChatService {
     turn: ChatTurn,
     messages: readonly ChatMessage[],
   ): Promise<ChatTurn> {
-    const { tasks, store, clock } = this.#deps;
-    const id = taskRunId(turn.taskRunId);
-    let preparationStarted = false,
-      preparationSettled = turn.codingTaskId === undefined;
-    const cancelled = async () => {
-      if (!(await cancelBeforeDispatch(tasks, turn, input.signal))) return null;
-      const next = { ...turn, status: 'cancelled' as const };
-      updateChat(store, turn, next);
-      return next;
-    };
-    try {
-      const created = await tasks.execute({
-        type: 'CreateTaskRun',
-        commandId: 'chat-create-' + turn.id,
-        taskRunId: id,
-        expectedVersion: 0,
-        actor: { kind: 'user', id: 'owner' },
-        payload: {
-          conversationId: conversationId('cv_' + turn.roomId),
-          workspaceId: workspaceId('ws_' + turn.workspaceId),
-          parentTaskRunId: null,
-          model: turn.bot.model,
-          policyId: 'pl_ocean',
-          budget: unlimitedBudget(),
-        },
-      });
-      if (!created.ok) throw created.error;
-      const early = await cancelled();
-      if (early) return early;
-      preparationStarted = turn.codingTaskId !== undefined;
-      const tools =
-        turn.codingTaskId === undefined
-          ? undefined
-          : await this.#deps.codingTools!.forTurn(turn, input.signal);
-      if (tools && tools.cleanupConfirmed !== true) throw Error('preparation cleanup unknown');
-      preparationSettled = true;
-      const afterPreparation = await cancelled();
-      if (afterPreparation) return afterPreparation;
-      const dispatched = { ...turn, status: 'dispatching' as const };
-      updateChat(store, turn, dispatched);
-      turn = dispatched;
-      const outcome = await runTurn({
-        // Room continuations never inherit tool authority from a legacy CLI or ACP session.
-        tools,
-        service: tasks,
-        provider: input.provider,
-        taskRunId: id,
-        model: turn.bot.model,
+    return executeChatTurn(
+      {
+        tasks: this.#deps.tasks,
+        store: this.#deps.store,
+        clock: this.#deps.clock,
+        ...(this.#deps.codingTools === undefined ? {} : { codingTools: this.#deps.codingTools }),
+      },
+      {
+        turn,
         messages,
+        provider: input.provider,
         signal: input.signal,
         emit: input.emit,
-        beforeComplete: async (text, stopReason) => {
-          if (!validConversationText(text, 1048576)) throw new Error('Invalid final response');
-          const state = await tasks.state(id);
-          if (state.status !== 'running') throw new Error('chat task cannot prepare an answer');
-          const prepared = {
-            ...turn,
-            status: 'prepared' as const,
-            text,
-            preparedVersion: state.version,
-            stopReason,
-          };
-          updateChat(store, turn, prepared);
-          turn = prepared;
-        },
-      });
-      if (outcome.kind === 'completed') return await publishChat(store, tasks, clock, turn);
-      // A dispatched stream failure can leave remote work or billing unknown.
-      const next = {
-        ...turn,
-        status: outcome.kind === 'cancelled' ? ('cancelled' as const) : ('uncertain' as const),
-        text: '',
-      };
-      updateChat(store, turn, next);
-      return next;
-    } catch (error) {
-      if (error instanceof ChatPreparationRefusal) preparationSettled = true;
-      if (preparationSettled && turn.status !== 'prepared') {
-        const beforeAttempt = await cancelled();
-        if (beforeAttempt) return beforeAttempt;
-      }
-      // Prepared data is retained so local recovery can finish publication safely.
-      if (turn.status !== 'prepared') {
-        const next = {
-          ...turn,
-          status:
-            turn.status === 'accepted' &&
-            (!preparationStarted || error instanceof ChatPreparationRefusal)
-              ? ('failed' as const)
-              : ('uncertain' as const),
-        };
-        updateChat(store, turn, next);
-      }
-      throw error;
-    }
+      },
+    );
   }
   /** Requires exclusive host ownership. Never replays a provider or tool request. */
   recover(): Promise<void> {

@@ -5,6 +5,7 @@ import Glyph from './Glyph.vue';
 import AttachmentCard from './AttachmentCard.vue';
 import { useAttachments } from './composer-attachments.js';
 import type { Bot, Run } from '../protocol.js';
+import { BROADCAST_RECIPIENT } from './broadcast-mode.js';
 const props = defineProps<{
   roomId: string;
   group: boolean;
@@ -17,7 +18,11 @@ const props = defineProps<{
 }>();
 const recipient = defineModel<string>('recipient', { required: true });
 const draft = defineModel<string>('draft', { required: true });
-const emit = defineEmits<{ send: [attachments: string[]]; stop: [run: Run] }>();
+const emit = defineEmits<{
+  send: [attachments: string[]];
+  broadcast: [attachments: string[]];
+  stop: [run: Run];
+}>();
 const picker = ref<HTMLInputElement>();
 const { files, importing, error, add, select, clear } = useAttachments(() => props.roomId);
 watch(
@@ -35,11 +40,11 @@ const sendDisabled = computed(
 const { field, send, keydown } = useComposerInput(
   () => sendDisabled.value,
   () => props.sent,
-  () =>
-    emit(
-      'send',
-      files.value.map((f) => f.id),
-    ),
+  () => {
+    const ids = files.value.map((f) => f.id);
+    if (props.group && recipient.value === BROADCAST_RECIPIENT) emit('broadcast', ids);
+    else emit('send', ids);
+  },
 );
 function drop(event: DragEvent) {
   if (!props.busy && !props.uncertain) void add(Array.from(event.dataTransfer?.files ?? []));
@@ -77,7 +82,13 @@ function paste(event: ClipboardEvent) {
           :readonly="busy || uncertain"
           :aria-busy="busy"
           aria-label="Сообщение"
-          :placeholder="recipient ? 'Сообщение для @' + recipient + '…' : 'Сообщение в комнату…'"
+          :placeholder="
+            recipient === BROADCAST_RECIPIENT
+              ? 'Один вопрос всем участникам…'
+              : recipient
+                ? 'Сообщение для @' + recipient + '…'
+                : 'Сообщение в комнату…'
+          "
           maxlength="16384"
         ></textarea>
       </div>
@@ -104,7 +115,8 @@ function paste(event: ClipboardEvent) {
           <label v-if="group" class="recipient"
             ><span class="sr-only">Кому</span
             ><select v-model="recipient" :disabled="busy || uncertain">
-              <option value="">Всем · заметка</option>
+              <option :value="BROADCAST_RECIPIENT">Всем (broadcast)</option>
+              <option value="">Заметка</option>
               <option v-for="b in members" :key="b.id" :value="b.handle">@{{ b.handle }}</option>
             </select></label
           >
@@ -138,6 +150,10 @@ function paste(event: ClipboardEvent) {
     >
     <small v-if="uncertain"
       >Повторная отправка проверит тот же запрос с теми же вложениями и адресатом.</small
+    >
+    <small v-if="group && recipient === BROADCAST_RECIPIENT"
+      >Всем: один вопрос, по одному ответу от каждого участника, без автоматических раундов.
+      Приостановленную рассылку можно продолжить или оставить в панели рассылки.</small
     >
     <small v-if="importing" role="status">Прикрепляем файлы…</small>
     <p v-if="error" role="alert" class="runtime-error">{{ error }}</p>

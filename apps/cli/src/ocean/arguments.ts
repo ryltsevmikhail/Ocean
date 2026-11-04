@@ -6,6 +6,7 @@ export interface OceanArguments {
   readonly staticDoctor?: boolean;
   readonly textOnly: boolean;
   readonly bots: readonly string[];
+  readonly attachments: readonly string[];
 }
 const valueFlags = new Set([
   'profile',
@@ -35,6 +36,9 @@ const valueFlags = new Set([
   'reason',
   'accept',
   'review-version',
+  'batch',
+  'revision',
+  'attachment',
 ]);
 /** Parse once, rejecting ambiguous flags and duplicate options before accessing a profile. */
 export function oceanArguments(argv: readonly string[]): OceanArguments {
@@ -44,6 +48,7 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
   let textOnly = false,
     staticDoctor = false;
   const bots: string[] = [];
+  const attachments: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined) continue;
@@ -65,13 +70,14 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
       const value = argv[++i];
       if (
         !valueFlags.has(key) ||
-        (key !== 'bot' && flags.has(key)) ||
+        (!['bot', 'attachment'].includes(key) && flags.has(key)) ||
         value === undefined ||
         value.startsWith('--')
       )
         throw new Error('Invalid or duplicate option');
       flags.set(key, value);
       if (key === 'bot') bots.push(value);
+      if (key === 'attachment') attachments.push(value);
     } else positional.push(token);
   }
   if (flags.has('task') && !['send', 'tui'].includes(positional[0] ?? ''))
@@ -85,6 +91,7 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
     flags,
     json,
     bots,
+    attachments,
     textOnly,
   };
 }

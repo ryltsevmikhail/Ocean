@@ -1,6 +1,7 @@
 import type { Run } from '../protocol.js';
 
 export const turnText: Record<Run['turnStatus'], string> = {
+  queued: 'В очереди рассылки',
   accepted: 'Запрос принят',
   dispatching: 'Готовим ответ…',
   prepared: 'Отвечает…',

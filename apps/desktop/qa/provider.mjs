@@ -24,6 +24,10 @@ globalThis.fetch = async (url, options = {}) => {
   const last = messages.at(-1).content;
   appendFileSync(process.env.OCEAN_TEST_LOG, JSON.stringify(messages) + '\n');
   if (last.includes('slow-turn')) await setTimeout(60000, null, { signal: options.signal });
+  // Deterministic broadcast hold: the owner can be killed mid-child; recovery owns the batch.
+  if (last.includes('hold-broadcast'))
+    while (!existsSync(process.env.OCEAN_TEST_LOG + '.broadcast-release'))
+      await setTimeout(50, null, { signal: options.signal });
   if (last.startsWith('detach-turn'))
     while (!existsSync(process.env.OCEAN_TEST_LOG + '.release'))
       await setTimeout(50, null, { signal: options.signal });
