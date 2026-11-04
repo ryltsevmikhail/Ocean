@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`; остальные задачи B–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`; остальные задачи B–H пока запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -153,7 +153,8 @@ A принят. B детализирован ниже; C–F — отдельн�
 ## B. Облачные и локальные модели — подробный контракт
 
 В B приняты хранение/миграция (задача 4, `6633439`) и настройки/ключи
-(задача 5, `ca25fa6`), а также привязки ботов (задача 6, `14a4931`);
+(задача 5, `ca25fa6`), привязки ботов (задача 6, `14a4931`) и признак новой
+фиксации команды (задача 7, `72afcb3`);
 [доказательства и ограничения](../../ocean/platform-stage-b.md). Остальные задачи
 ещё не реализованы. Ниже 14 последовательных задач (4–17), с сохранением
 принятого этапа A. Это детализация уже утверждённого направления; C–F ещё
@@ -286,11 +287,11 @@ Each task's numbered steps are red test → run → minimal implementation → g
 **Files:** Modify `packages/application/src/{command-commit,service}.ts`, `packages/store/src/command-commit.ts`, `packages/store-sqlite/src/command-commit.ts`; extend existing atomic-command.test.ts in both stores; Create `packages/application/src/command-disposition.test.ts`.
 **Interfaces:** Produces `CommandCommitResult {receipt:CommandReceipt; disposition:'committed'|'replayed'}`; add optional CommandCommitPort.commitWithDisposition(same args as commit):Promise<Result<CommandCommitResult>> and `TaskRunService.executeWithDisposition(command:AnyCommand):Promise<Result<CommandCommitResult>>`. Keep execute/commit signatures and persisted receipts unchanged.
 
-- [ ] Add concurrency test with identical command submitted twice: one committed, one replayed, one event batch. Lookup-hit and inside-transaction race both return replayed; conflicting payload remains conflict. Assert `expect(results.map(x=>x.disposition).sort()).toEqual(['committed','replayed'])`.
-- [ ] Run `pnpm exec vitest run --config vitest.source.config.ts packages/application/src/command-disposition.test.ts packages/store/src/atomic-command.test.ts packages/store-sqlite/src/atomic-command.test.ts` and confirm new assertions red.
-- [ ] Implement disposition at existing atomic append+receipt boundary, not by post-hoc version comparison. Existing execute maps out receipt; new execute requires atomic commitWithDisposition or fails atomic_commands_required. Do not retrofit non-atomic fake logs into fresh execution authority.
-- [ ] Run the same tests and `pnpm build`; inspect receipt byte equality and rollback behavior.
-- [ ] Commit Task 7. This additive API is independently reviewable and is required before fresh start can authorize network I/O.
+- [x] Add concurrency test with identical command submitted twice: one committed, one replayed, one event batch. Lookup-hit and inside-transaction race both return replayed; conflicting payload remains conflict. Assert `expect(results.map(x=>x.disposition).sort()).toEqual(['committed','replayed'])`.
+- [x] Run `pnpm exec vitest run --config vitest.source.config.ts packages/application/src/command-disposition.test.ts packages/store/src/atomic-command.test.ts packages/store-sqlite/src/atomic-command.test.ts` and confirm new assertions red.
+- [x] Implement disposition at existing atomic append+receipt boundary, not by post-hoc version comparison. Existing execute maps out receipt; new execute requires atomic commitWithDisposition or fails atomic_commands_required. Do not retrofit non-atomic fake logs into fresh execution authority.
+- [x] Run the same tests and `pnpm build`; inspect receipt byte equality and rollback behavior.
+- [x] Commit Task 7. This additive API is independently reviewable and is required before fresh start can authorize network I/O.
 
 ### Task 8: TaskRun model-dispatch evidence and guards
 
@@ -321,6 +322,7 @@ Each task's numbered steps are red test → run → minimal implementation → g
 - [ ] Test normalized ACP/injected identity source host has no connectionRevision, provider:null no model event, legacy maxModelRequests clamp remains, reported/optional/unavailable branches differ, and finite token budget rejects unsupported usage pre-network.
 - [ ] Run `pnpm exec vitest run --config vitest.source.config.ts packages/application/src/usage-evidence.test.ts packages/application/src/model-dispatch.test.ts` and confirm red.
 - [ ] Before stream commit Start with executeWithDisposition; only committed returns dispatch. Replay/unknown commit outcome does not call provider. Combine owner signal with frozen deadline/request timeout; retain current active-turn exclusion. Use persisted startedRequests+1 as the next ordinal, rather than resetting it to the loop counter on a later attempt. Normalize usage and terminal evidence once; persist settlement before tools or completion; do not invoke legacy settleUsage again for the same round.
+- [ ] Test a provider whose pending iterator.next() ignores AbortSignal: deadlines must stop host waiting with durable unknown/reconciliation, zero tools/new dispatch, and no claimed cleanup. Do not await iterator.return() indefinitely or let late output reset bounds or settle twice.
 - [ ] Tests: `expect(cloudCalls).toBe(0)` after local failure; terminal optional missing metric records unsupported/not_reported as appropriate with no zero usage event; broken stream records unknown and no tools; pre-send abort confirms no model request; abort after start remains cancelling unless valid completion and tool quiescence are known. Requests over 24 and total deadline over 600000 stop; late output cannot reset bounds.
 - [ ] Run new tests plus turn-safety/own-engine and `apps/cli/src/engine/{turn,turn-local,agent-loop}.test.ts`, `apps/cli/src/acp/agent-provider.test.ts`; `pnpm build`; commit Task 9. Logs lacking atomic disposition refuse model execution, with an explicit fixture upgrade rather than disabling journaling.
 
@@ -404,6 +406,7 @@ Each task's numbered steps are red test → run → minimal implementation → g
 **Files:** Create CLI local-runtime/{model-connections-process,model-recovery-process}.test.ts and ocean/model-binding-backup.test.ts; Create test-fixtures/model-provider-host.ts; modify release/{package,installed}.test.ts and test-fixtures/release-repo.ts. Update implemented/planned status in product docs only after evidence.
 **Interfaces:** Consumes all prior tasks; fixtures create scratch profiles/private fixture keys only. Process tests use compiled package imports; filename _process_.test.ts already matches vitest.process-cases.config.ts. Confirm all new child fixtures build under CLI tsconfig and all provider aliases exist in vitest.config.ts; register any exception explicitly.
 
+- [ ] Complete Task7 review minor: after reopening SQLite, replay the command originally admitted by executeWithDisposition through both APIs and compare exact receipt JSON, in addition to existing unchanged-row checks.
 - [ ] Tests two clients, lost receipt, same requestId after rotation/restart, distinct cloud/local bot bindings, model start before crash, no redispatch, unknown usage versus unknown completion, restore all connections inert, reconnect one only, raw legacy receipt replay, foreign-key integrity and old binary refusal of newer schema.
 - [ ] Run `pnpm build` then `pnpm exec vitest run --config vitest.process.config.ts apps/cli/src/local-runtime/model-connections-process.test.ts apps/cli/src/local-runtime/model-recovery-process.test.ts`; run backup test through source config. Expected all assertions pass, including cloud-call counter 0 for local failure. Source/process split must not accidentally skip new cases.
 - [ ] Package smoke imports new public adapters from installed tree without repository resolution or Codex/Claude CLI. Existing packageRelease requires clean committed tree and Node 26; keep source engine floor and pinned Executor/license checks. Do not stash/reset protected dirty work to manufacture a clean release.

@@ -1,9 +1,10 @@
 # Ocean Platform: прогресс этапа B
 
 Дата: 2026-11-04. **Приняты B1 — хранение/миграция** (`6633439`) и
-**B2 — сервис настроек/ключей** (`ca25fa6`), **B3 — привязки ботов** (`14a4931`).
+**B2 — сервис настроек/ключей** (`ca25fa6`), **B3 — привязки ботов** (`14a4931`)
+и **B4 — новая фиксация команды или повтор квитанции** (`72afcb3`).
 Учёт вызовов модели, адаптеры, клиентские API и смешанная команда ещё
-запланированы в [задачах 7–17](../superpowers/plans/2026-11-04-ocean-platform.md).
+запланированы в [задачах 8–17](../superpowers/plans/2026-11-04-ocean-platform.md).
 Это не приёмка stable и не обновление установленного RC2.
 
 ## B1: хранение и миграция
@@ -156,3 +157,32 @@ pnpm check
 pnpm build
 pnpm format:check
 ```
+
+## B4: новая фиксация команды и повтор квитанции
+
+Новый `TaskRunService.executeWithDisposition` возвращает старую квитанцию
+и признак committed/replayed. Его устанавливает та же атомарная операция,
+которая записывает события и квитанцию. Повтор, включая гонку внутри commit,
+не получает признак нового исполнения. Старые execute/commit и формат
+сохранённых квитанций не меняются. Хранилище без этой атомарной возможности
+не допускается к новому API; прежние сценарии продолжают использовать execute.
+
+Независимое ревью одобрило изменение. На `72afcb3`: 33 целевых теста,
+строгая компиляция и build прошли. Проверены гонки в обоих хранилищах, отказ
+до I/O при отсутствии возможности, ошибка записи квитанции и сохранность
+сырого JSON после повторного открытия SQLite. Полную матрицу повторов после
+открытия дополняет задача 17 по minor-замечанию ревью.
+
+Root `pnpm check`: typecheck/lint PASS; 2436 passed, 3 known failed, 44 skipped;
+exit 1. Build: exit 0. Format: exit 1 только на двух сохранённых Executor-файлах.
+Межпроцессная и живая приёмка здесь не заявляются. Сам журнал вызовов модели
+и его включение в движок остаются задачами 8–9.
+
+```sh
+pnpm test packages/application/src/command-disposition.test.ts packages/application/src/command-commit-disposition.test.ts packages/store/src/atomic-command.test.ts packages/store-sqlite/src/atomic-command.test.ts packages/store-sqlite/src/command-disposition.test.ts
+pnpm check
+pnpm build
+pnpm format:check
+```
+
+Команды запускаются из корня с одноразовыми HOME/XDG/TMPDIR.
