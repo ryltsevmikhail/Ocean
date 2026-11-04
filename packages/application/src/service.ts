@@ -19,7 +19,12 @@ import {
   type TaskRunId,
 } from '@runnets/domain';
 
-import { commandConflict, snapshotCommand, type CommandLookup } from './command-commit.js';
+import {
+  commandConflict,
+  snapshotCommand,
+  type CommandCommitResult,
+  type CommandLookup,
+} from './command-commit.js';
 
 import type {
   CommandDedupPort,
@@ -51,13 +56,28 @@ export class TaskRunService {
    * expected version.
    */
   async execute(submitted: AnyCommand): Promise<Result<CommandReceipt>> {
+    const result = await this.#execute(submitted, false);
+    return result.ok ? ok(result.value.receipt) : result;
+  }
+
+  /** Execute only when the atomic adapter can authoritatively identify a fresh commit. */
+  executeWithDisposition(submitted: AnyCommand): Promise<Result<CommandCommitResult>> {
+    return this.#execute(submitted, true);
+  }
+
+  async #execute(
+    submitted: AnyCommand,
+    requireDisposition: boolean,
+  ): Promise<Result<CommandCommitResult>> {
     const command = snapshotCommand(submitted);
     const { dedup } = this.#deps;
     const commands = this.#deps.log.commands;
+    if (requireDisposition && !commands?.commitWithDisposition)
+      throw Error('atomic_commands_required');
     if (commands !== undefined) {
       const previous = await commands.lookup(command);
       if (!previous.ok) return previous;
-      if (previous.value !== null) return ok(previous.value);
+      if (previous.value !== null) return ok({ receipt: previous.value, disposition: 'replayed' });
     } else if (dedup !== undefined) {
       const previous = await dedup.get(command.commandId);
       if (previous !== null) return commandConflict();
@@ -72,7 +92,8 @@ export class TaskRunService {
       if (commands !== undefined) {
         const concurrent = await commands.lookup(command);
         if (!concurrent.ok) return concurrent;
-        if (concurrent.value !== null) return ok(concurrent.value);
+        if (concurrent.value !== null)
+          return ok({ receipt: concurrent.value, disposition: 'replayed' });
       }
       return decision;
     }
@@ -83,10 +104,15 @@ export class TaskRunService {
       actorId: command.actor.id,
     };
     if (commands !== undefined) {
-      const result = await commands.commit(command, aggregate.version, decision.value, meta);
+      const result = commands.commitWithDisposition
+        ? await commands.commitWithDisposition(command, aggregate.version, decision.value, meta)
+        : await commands.commit(command, aggregate.version, decision.value, meta).then((legacy) =>
+            // Compatibility only: executeWithDisposition refuses this adapter before any I/O.
+            legacy.ok ? ok({ receipt: legacy.value, disposition: 'committed' as const }) : legacy,
+          );
       if (result.ok && dedup !== undefined) {
         try {
-          await dedup.put(result.value);
+          await dedup.put(result.value.receipt);
         } catch {
           // The atomic log owns the authoritative receipt. A legacy mirror is
           // best-effort and cannot turn a durable success into a reported failure.
@@ -115,7 +141,7 @@ export class TaskRunService {
       events: outcome.events,
     };
     if (dedup !== undefined) await dedup.put(receipt);
-    return ok(receipt);
+    return ok({ receipt, disposition: 'committed' });
   }
 
   /** Inspect an exact request-bound receipt without authorizing new execution. */
