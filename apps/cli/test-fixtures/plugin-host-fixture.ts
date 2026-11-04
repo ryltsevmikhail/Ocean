@@ -12,7 +12,8 @@ import { openSqliteStore, type SqliteStore } from '@runnets/store-sqlite';
 import { ConversationService } from '@runnets/application';
 import { canonicalJson } from '@runnets/domain';
 import { fakePluginTransport } from '../../../packages/application/test-fixtures/plugin-fakes.js';
-import { runtimePluginsHost, type RuntimePlugins } from '../src/local-runtime/plugins.js';
+import { composePluginRuntime } from '../src/plugin-runtime.js';
+import { RuntimePlugins } from '../src/local-runtime/plugins.js';
 
 const directories: string[] = [];
 const stores: SqliteStore[] = [];
@@ -62,19 +63,28 @@ export function host(
       vendorErrorCode: null,
     }),
   );
-  const plugins = runtimePluginsHost({
+  const clock = { now: () => new Date('2026-11-04T00:00:00.000Z') };
+  const pluginRuntime = composePluginRuntime({
     profile,
     stores: {
       catalog: store.pluginCatalog,
       connections: store.pluginConnections,
       access: store.pluginAccess,
+      admission: store.pluginAdmission,
+      operations: store.pluginOperations,
     },
+    clock,
     restored: options.restored ?? false,
     env: options.env ?? { OCEAN_PLUGIN_TOKEN: 'fixture-only' },
     transport,
-    now: () => Date.parse('2026-11-04T00:00:00.000Z'),
   });
-  return { store, plugins, transport, profile, directory, tools, digest };
+  const plugins = new RuntimePlugins({
+    catalog: pluginRuntime.services.catalog,
+    connections: pluginRuntime.services.connections,
+    access: pluginRuntime.services.access,
+    operations: pluginRuntime.operations,
+  });
+  return { store, plugins, pluginRuntime, clock, transport, profile, directory, tools, digest };
 }
 
 export async function dispatch(

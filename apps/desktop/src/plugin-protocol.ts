@@ -17,6 +17,14 @@ const generation = z.int().min(1);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const version = z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]{1,32})?$/);
 const repository = z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})\/[A-Za-z0-9._-]{1,100}$/);
+const operationState = z.enum([
+  'started',
+  'observed',
+  'failed',
+  'not_started',
+  'uncertain',
+  'acknowledged',
+]);
 
 export const pluginCommands = [
   z.strictObject({ op: z.literal('plugin-catalog'), search: z.string().max(128).optional() }),
@@ -65,6 +73,18 @@ export const pluginCommands = [
     acknowledgeGroupVisibility: z.boolean(),
   }),
   z.strictObject({ op: z.literal('plugin-access-revoke'), grantId: id }),
+  z.strictObject({
+    op: z.literal('plugin-operations-list'),
+    room: id.optional(),
+    state: operationState.optional(),
+  }),
+  z.strictObject({ op: z.literal('plugin-operation-show'), operationId: id }),
+  z.strictObject({
+    op: z.literal('plugin-operation-acknowledge'),
+    operationId: id,
+    expectedRevision: z.int().min(1),
+    reason: z.string().max(512).optional(),
+  }),
 ];
 
 export const pluginInstalled = z
@@ -194,6 +214,35 @@ export const pluginEnableResult = z
   .object({ installed: pluginInstalled, revokedGrants: z.int().nonnegative() })
   .strict();
 
+export const pluginOperationView = z
+  .object({
+    id,
+    workspaceId: z.string().min(1).max(128),
+    roomId: id,
+    botId: id,
+    pluginId,
+    connectionId: id,
+    connectionGeneration: generation,
+    endpoint: z.string().min(1).max(2048),
+    tool: z.string().min(1).max(128),
+    repository: z.string().min(1).max(256),
+    schemaDigest: digest,
+    argumentsDigest: digest,
+    arguments: z.string().max(4096),
+    state: operationState,
+    outcomeCode: z.string().max(64).nullable(),
+    detail: z.string().max(512).nullable(),
+    resultSummary: z.string().max(8192).nullable(),
+    resultBytes: z.int().nonnegative().nullable(),
+    truncated: z.boolean(),
+    revision: z.int().min(1),
+    createdAt: z.string().max(64),
+    settledAt: z.string().max(64).nullable(),
+    acknowledgedAt: z.string().max(64).nullable(),
+    acknowledgedReason: z.string().max(512).nullable(),
+  })
+  .strict();
+
 export const pluginOutputs = {
   'plugin-catalog': z.array(pluginCatalogView).max(64),
   'plugin-inspect': pluginCatalogView,
@@ -211,6 +260,9 @@ export const pluginOutputs = {
   'plugin-access-preview': pluginGrantPreview,
   'plugin-access-grant': pluginGrantView,
   'plugin-access-revoke': pluginGrantView,
+  'plugin-operations-list': z.array(pluginOperationView).max(200),
+  'plugin-operation-show': pluginOperationView,
+  'plugin-operation-acknowledge': pluginOperationView,
 } as const;
 
 export type PluginCatalogView = z.infer<typeof pluginCatalogView>;
@@ -220,3 +272,4 @@ export type PluginGrantPreview = z.infer<typeof pluginGrantPreview>;
 export type PluginConsentPreview = z.infer<typeof pluginConsentPreview>;
 export type PluginDiscoveryResult = z.infer<typeof pluginDiscoveryResult>;
 export type PluginOutputs = typeof pluginOutputs;
+export type PluginOperationView = z.infer<typeof pluginOperationView>;

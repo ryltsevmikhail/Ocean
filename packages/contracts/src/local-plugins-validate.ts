@@ -199,3 +199,4 @@ export function isLocalPluginDisconnectResult(
   );
 }
 export * from './local-plugins-validate-grants.js';
+export * from './local-plugins-validate-operations.js';

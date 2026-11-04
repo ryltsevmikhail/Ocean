@@ -10,6 +10,7 @@ import type { ServicePluginTransportQualification } from '@runnets/application';
 
 import { PINNED_IDENTITIES, PINNED_SDK_CHUNK_SHA256 } from './pinned-identity.js';
 import type { InstalledSdkChunkIdentity } from './pinned-identity.js';
+import type { ExecutorConnectionProvisioner } from './provision-types.js';
 
 export type ExecutorTransportQualificationReason =
   | 'invalid_options'
@@ -40,10 +41,21 @@ export interface ExecutorTransportOpenOptions {
   /** Exact origins this transport may talk to. Never credentials. */
   readonly allowedOrigins: readonly string[];
   /**
-   * Execution is OFF unless this is exactly `true`; no product path sets it in
-   * this task. Construction still verifies the pinned bundle when enabled.
+   * Execution is OFF unless this is exactly `true`. Construction still verifies
+   * the pinned bundle when enabled, and every admission re-hashes it.
    */
   readonly enableExecution?: boolean;
+  /**
+   * Host-supplied environment-reference resolver, shared with the setup seam.
+   * The value is used only inside the adapter host and never returned.
+   */
+  readonly resolveCredential?: (reference: string) => string | null;
+  /**
+   * Lazy declarative provisioner consulted only by `discover()`, i.e. only
+   * after the owner's single-use metadata-discovery consent. `connections.create`
+   * performs the one upstream connect/tool-sync of that consented pass.
+   */
+  readonly provision?: ExecutorConnectionProvisioner;
 }
 
 export class ExecutorTransportOpenError extends Error {

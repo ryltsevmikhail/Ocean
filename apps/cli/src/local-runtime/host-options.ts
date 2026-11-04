@@ -38,8 +38,15 @@ export interface LocalRuntimeHostOptions {
   readonly credentialDir?: string;
   /** Test-only deterministic vendor transport origin; never wire input. */
   readonly providerBaseUrl?: string;
-  /** Test-only deterministic service-plugin transport; production stays disabled. */
+  /** Test-only deterministic service-plugin transport (deterministic fixtures only). */
   readonly pluginTransport?: ServicePluginTransportPort;
+  /** Test-only environment references for plugin credentials; defaults to `process.env`. */
+  readonly pluginEnv?: Readonly<Record<string, string | undefined>>;
+  /**
+   * Test-only loopback endpoint for the real Executor adapter against local
+   * MCP/OpenAPI servers. Ignored unless the address is loopback.
+   */
+  readonly pluginEndpointOverride?: string;
   /** Test-only deterministic clock; production omits it and uses Date.now (never wire input). */
   readonly now?: () => number;
   /** Additional host supervision joins runtime-owned execution before SQLite close. */

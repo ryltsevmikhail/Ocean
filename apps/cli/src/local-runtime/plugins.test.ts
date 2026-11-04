@@ -150,4 +150,89 @@ describe('runtime plugin host dispatch', () => {
     expect(serialized).not.toContain(canary);
     expect(serialized).toContain('OCEAN_PLUGIN_TOKEN');
   });
+
+  it('serves the durable operation journal and the versioned owner acknowledgement', async () => {
+    const { plugins, store } = host();
+    const context = { taskRunId: 'run_1', attemptId: 'attempt_1' };
+    const id = 'attempt_1_plugin_call_1';
+    await store.tools.claim(id, 'list_issues', context, 'fingerprint');
+    store.pluginAdmission.atomic((tx) => {
+      tx.beginOperation({
+        id,
+        taskRunId: 'run_1',
+        attemptId: 'attempt_1',
+        workspaceId: 'ws_ocean',
+        roomId: 'room_1',
+        botId: 'bot_dev',
+        pluginId: 'github',
+        connectionId: 'conn_work',
+        connectionGeneration: 1,
+        endpoint: 'https://api.githubcopilot.com/mcp/',
+        tool: 'list_issues',
+        repository: 'team/api',
+        schemaDigest: 'a'.repeat(64),
+        argumentsDigest: 'b'.repeat(64),
+        arguments: '{"owner":"team","repo":"api"}',
+        state: 'started',
+        outcomeCode: null,
+        detail: null,
+        resultSummary: null,
+        resultBytes: null,
+        truncated: false,
+        revision: 1,
+        createdAt: '2026-11-04T00:00:00.000Z',
+        settledAt: null,
+        acknowledgedAt: null,
+        acknowledgedReason: null,
+      });
+      return undefined;
+    });
+    store.pluginAdmission.settleOperation(
+      id,
+      {
+        state: 'uncertain',
+        outcomeCode: 'transport_failure',
+        detail: 'connection lost after dispatch',
+        resultSummary: null,
+        resultBytes: null,
+        truncated: false,
+        settledAt: '2026-11-04T00:00:01.000Z',
+      },
+      'uncertain',
+      context,
+    );
+    const list = (await dispatch(plugins, 'plugin.operations-list', {
+      roomId: 'room_1',
+    })) as readonly { id: string; state: string; revision: number }[];
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id, state: 'uncertain', revision: 2 });
+    const show = await dispatch(plugins, 'plugin.operation-show', { operationId: id });
+    expect((show as { endpoint: string }).endpoint).toBe('https://api.githubcopilot.com/mcp/');
+    const acknowledged = (await dispatch(plugins, 'plugin.operation-acknowledge', {
+      operationId: id,
+      expectedRevision: 2,
+      reason: 'checked by hand',
+    })) as { state: string; acknowledgedReason: string };
+    expect(acknowledged.state).toBe('acknowledged');
+    expect(acknowledged.acknowledgedReason).toBe('checked by hand');
+    expect(await store.tools.pending()).toHaveLength(0);
+    expect(
+      (
+        (await plugins.dispatch('plugin.operation-acknowledge', {
+          operationId: id,
+          expectedRevision: 3,
+        })) as { error?: { code: string } }
+      ).error?.code,
+    ).toBe('operation_not_uncertain');
+  });
+
+  it('keeps operation reads available in restore mode and mutations refused', async () => {
+    const { plugins } = host({ restored: true });
+    expect(Array.isArray(await dispatch(plugins, 'plugin.operations-list', {}))).toBe(true);
+    const reply = (await plugins.dispatch('plugin.operation-acknowledge', {
+      operationId: 'missing',
+      expectedRevision: 1,
+    })) as { error?: { code: string } };
+    expect(reply.error?.code).toBe('restore_restricted');
+  });
 });

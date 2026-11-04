@@ -184,6 +184,19 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
       });
     case 'plugin-access-revoke':
       return client.pluginAccessRevoke({ grantId: c.grantId });
+    case 'plugin-operations-list':
+      return client.pluginOperationsList({
+        ...(c.room === undefined ? {} : { roomId: c.room }),
+        ...(c.state === undefined ? {} : { state: c.state }),
+      });
+    case 'plugin-operation-show':
+      return client.pluginOperationShow({ operationId: c.operationId });
+    case 'plugin-operation-acknowledge':
+      return client.pluginOperationAcknowledge({
+        operationId: c.operationId,
+        expectedRevision: c.expectedRevision,
+        ...(c.reason === undefined ? {} : { reason: c.reason }),
+      });
     case 'send':
       return client.submit({
         workspaceId,

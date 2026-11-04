@@ -87,6 +87,7 @@ describe('schema initialization', () => {
       'ocean_plugin_connections',
       'ocean_plugin_consents',
       'ocean_plugin_grants',
+      'ocean_plugin_operations',
       'ocean_plugin_versions',
       'ocean_profile_rebinds',
       'ocean_provider_connections',

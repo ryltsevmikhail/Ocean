@@ -15,7 +15,6 @@ import type {
   PluginManifest,
 } from '@runnets/domain';
 import type { Clock } from './ports.js';
-import type { ToolEffectContext } from './tools.js';
 import type {
   ServicePluginAccountIdentity,
   ServicePluginTool,
@@ -234,25 +233,15 @@ export interface PluginAccessStorePort {
   revoke(grantId: string, at: string): boolean;
 }
 
-/** One SQLite immediate transaction immediately before transport dispatch. */
-export interface PluginAdmissionTransaction {
-  member(workspaceId: string, roomId: string, botId: string): boolean;
-  connection(connectionId: string): PluginConnectionRecord | null;
-  grant(id: string): PluginGrantRecord | null;
-  enabledVersion(pluginId: string): PluginInstalledVersion | null;
-  /** The durable journal claim; false never dispatches. */
-  claim(id: string, tool: string, context: ToolEffectContext, fingerprint: string): boolean;
-}
-
-export interface PluginAdmissionStorePort {
-  atomic<T>(work: (tx: PluginAdmissionTransaction) => T): T;
-  /** Journal settlement after the transport result; never replays a dispatch. */
-  settle(
-    id: string,
-    outcome: 'completed' | 'failed' | 'uncertain' | 'not_started',
-    context: ToolEffectContext,
-  ): void;
-}
+/**
+ * Admission transaction/port live in `plugin-admission-ports.ts`; re-exported
+ * here so existing imports keep one public entry.
+ */
+export type {
+  PluginAdmissionSettlement,
+  PluginAdmissionStorePort,
+  PluginAdmissionTransaction,
+} from './plugin-admission-ports.js';
 
 /** Reads only whether the owner-configured environment reference is present. */
 export interface PluginCredentialReferencePort {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import Glyph from './Glyph.vue';
+import PluginOperations from './PluginOperations.vue';
 import type { Bot, Room } from '../protocol.js';
 import {
   addPluginConnection,
@@ -112,6 +113,7 @@ function close() {
           </button>
         </div>
       </section>
+      <PluginOperations :room="props.room" :disabled="busy || pluginBusy" />
       <h2>Подключения</h2>
       <p class="muted">
         Credential — только имя переменной окружения. Значение Ocean не читает и не хранит.

@@ -11,6 +11,8 @@ import type { ExecutorHost } from './host-types.js';
 import { runInvocation } from './invoke.js';
 import { normalizeAllowedOrigins } from './origins.js';
 import { verifyPinnedIntegrity } from './pinned-integrity.js';
+import { createProvisioning, type Provisioning } from './provision.js';
+import { createSetupCredentialProvider } from './setup-provider.js';
 import { createExecutorHost } from './sdk-boundary.js';
 import type { ExecutorTransportBackend } from './backend.js';
 import type { ExecutorTransportOpenOptions, ExecutorTransportStatus } from './status.js';
@@ -19,6 +21,8 @@ import { ExecutorTransportOpenError, assessQualification, freezeStatus } from '.
 export interface Admission {
   readonly backend: ExecutorTransportBackend;
   readonly status: ExecutorTransportStatus;
+  /** Present only when a declarative provisioner was supplied. */
+  readonly provisioning: Provisioning | null;
 }
 
 /** Wrap an already-created host (tests / the future Task 5 host layer). */
@@ -39,6 +43,10 @@ function admittedOrigins(options: ExecutorTransportOpenOptions): readonly string
   if (options.tenantId.trim().length === 0 || options.subjectId.trim().length === 0) {
     invalidOptions('tenantId and subjectId are required');
   }
+  if (options.resolveCredential !== undefined && typeof options.resolveCredential !== 'function')
+    invalidOptions('resolveCredential must be a function');
+  if (options.provision !== undefined && typeof options.provision !== 'function')
+    invalidOptions('provision must be a function');
   try {
     return normalizeAllowedOrigins(options.allowedOrigins);
   } catch (error) {
@@ -71,6 +79,17 @@ export async function admit(options: ExecutorTransportOpenOptions): Promise<Admi
     tenantId: options.tenantId,
     subjectId: options.subjectId,
     allowedOrigins,
+    // The writable session provider lets the consented discovery pass create
+    // the named connection with an environment-reference credential.
+    ...(options.provision === undefined ? {} : { providers: [createSetupCredentialProvider()] }),
   });
-  return { backend: createBackend(host), status: freezeStatus(status) };
+  const provisioning =
+    options.provision === undefined
+      ? null
+      : createProvisioning(host, {
+          allowedOrigins,
+          resolveCredential: options.resolveCredential ?? (() => null),
+          provision: options.provision,
+        });
+  return { backend: createBackend(host), status: freezeStatus(status), provisioning };
 }

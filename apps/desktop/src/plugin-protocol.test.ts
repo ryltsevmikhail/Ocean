@@ -6,6 +6,7 @@ import {
   pluginGrantPreview,
   pluginGrantView,
   pluginInstalled,
+  pluginOperationView,
 } from './plugin-protocol.js';
 
 const catalog = {
@@ -132,5 +133,73 @@ describe('desktop plugin protocol', () => {
         revokedAt: null,
       }).success,
     ).toBe(true);
+  });
+});
+
+describe('Desktop durable plugin operation contract', () => {
+  const operation = {
+    id: 'op_1',
+    workspaceId: 'ws_ocean',
+    roomId: 'room_1',
+    botId: 'bot_dev',
+    pluginId: 'github',
+    connectionId: 'conn_work',
+    connectionGeneration: 2,
+    endpoint: 'https://api.githubcopilot.com/mcp/',
+    tool: 'list_issues',
+    repository: 'team/api',
+    schemaDigest: 'b'.repeat(64),
+    argumentsDigest: 'c'.repeat(64),
+    arguments: '{"owner":"team","repo":"api"}',
+    state: 'uncertain',
+    outcomeCode: 'transport_failure',
+    detail: 'connection lost after dispatch',
+    resultSummary: null,
+    resultBytes: null,
+    truncated: false,
+    revision: 2,
+    createdAt: '2026-11-04T00:00:00.000Z',
+    settledAt: '2026-11-04T00:00:00.000Z',
+    acknowledgedAt: null,
+    acknowledgedReason: null,
+  };
+
+  it('accepts the read-only operation view and rejects unknown fields', () => {
+    expect(pluginOperationView.safeParse(operation).success).toBe(true);
+    expect(pluginOperationView.safeParse({ ...operation, credentialValue: 'x' }).success).toBe(
+      false,
+    );
+    expect(pluginOperationView.safeParse({ ...operation, state: 'done' }).success).toBe(false);
+  });
+
+  it('exposes versioned list/show/acknowledge commands and bounded outputs', () => {
+    const commandsSchema = commands;
+    expect(commandsSchema.safeParse({ op: 'plugin-operations-list', room: 'room_1' }).success).toBe(
+      true,
+    );
+    expect(
+      commandsSchema.safeParse({ op: 'plugin-operation-show', operationId: 'op_1' }).success,
+    ).toBe(true);
+    expect(outputs['plugin-operations-list'].safeParse([operation]).success).toBe(true);
+    expect(outputs['plugin-operation-show'].safeParse(operation).success).toBe(true);
+    expect(
+      outputs['plugin-operation-acknowledge'].safeParse({
+        ...operation,
+        state: 'acknowledged',
+        acknowledgedAt: '2026-11-04T00:01:00.000Z',
+        acknowledgedReason: 'seen',
+        revision: 3,
+      }).success,
+    ).toBe(true);
+    expect(
+      commandsSchema.safeParse({ op: 'plugin-operation-acknowledge', operationId: 'op_1' }).success,
+    ).toBe(false);
+    expect(
+      commandsSchema.safeParse({
+        op: 'plugin-operation-acknowledge',
+        operationId: 'op_1',
+        expectedRevision: 0,
+      }).success,
+    ).toBe(false);
   });
 });

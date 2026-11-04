@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_BUSY_TIMEOUT_MS, openDatabase } from './schema.js';
 import { SqlitePluginCatalog } from './plugin-catalog-storage.js';
@@ -136,6 +137,8 @@ function fixture() {
     transport: transport.transport,
     credentials: { available: () => true },
     adapter: ADAPTER,
+    now: () => '2026-11-04T00:00:00.000Z',
+    sha256: (text: string) => createHash('sha256').update(text).digest('hex'),
   });
   return { db, accessService, access, connections, journal, transport, admission };
 }

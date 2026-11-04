@@ -11,6 +11,7 @@ import type {
   PluginDiscoveryConsentRecord,
   PluginInstallStorePort,
   PluginInstalledVersion,
+  PluginOperationStorePort,
   PluginRoomFacts,
 } from '../src/plugin-ports.js';
 import type { PluginGrantRecord } from '@runnets/domain';
@@ -24,6 +25,7 @@ import {
   fakeAccessStore,
   fakeAdmissionStore,
   fakeCredentials,
+  fakeOperationStore,
   type FakeAccessStore,
 } from './plugin-authority-fakes.js';
 
@@ -33,9 +35,15 @@ export interface PluginFixtureState {
   readonly connections: PluginConnectionStorePort;
   readonly access: FakeAccessStore;
   readonly admission: PluginAdmissionStorePort;
+  readonly operations: PluginOperationStorePort;
   readonly credentials: PluginCredentialReferencePort;
   readonly versions: Map<string, PluginInstalledVersion>;
   readonly grants: Map<string, PluginGrantRecord>;
+  /** Raw connection rows: tests may simulate a competing host's generation bump. */
+  readonly connectionRows: Map<string, PluginConnectionRecord>;
+  /** Raw operation rows: tests may simulate a crash before settlement. */
+  readonly operationRows: Map<string, PluginOperationRecord>;
+  readonly resolvedRows: Set<string>;
   readonly confirmations: Map<string, MockGrantConfirmation>;
   readonly members: Set<string>;
   readonly rooms: Map<string, PluginRoomFacts>;
@@ -56,9 +64,13 @@ export function pluginFixtureState(): PluginFixtureState {
     connections: fakeConnectionStore(maps),
     access: fakeAccessStore(maps),
     admission: fakeAdmissionStore(maps),
+    operations: fakeOperationStore(maps),
     credentials: fakeCredentials(),
     versions: maps.versions,
     grants: maps.grants,
+    connectionRows: maps.connections,
+    operationRows: maps.operations,
+    resolvedRows: maps.resolved,
     confirmations: maps.confirmations,
     members: maps.members,
     rooms: maps.rooms,

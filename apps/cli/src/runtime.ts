@@ -1,16 +1,5 @@
-import type {
-  ConversationStore,
-  DesktopAssetStore,
-  ImageAssetResolverPort,
-  PluginAccessStorePort,
-  PluginAdmissionStorePort,
-  PluginCatalogStorePort,
-  PluginConnectionStorePort,
-  ProfileRebindStore,
-  ProviderConnectionStorePort,
-} from '@runnets/application';
 import { runtimeServiceOver as serviceOver } from './runtime-service.js';
-import { codingTurnFactory, type CodingTurnFactoryDeps } from './coding-turn-factory.js';
+import { codingTurnFactory } from './coding-turn-factory.js';
 import {
   GitCodingProject,
   GitCodingApplyProject,
@@ -23,7 +12,6 @@ import { realpathSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { runtimeIncomplete, restoredRuntimeAdmission } from './runtime-restoration.js';
 import { randomUUID, createHash } from 'node:crypto';
-import type { TaskRunService } from '@runnets/application';
 import {
   RoomRuntimeRuns,
   CodingTaskService,
@@ -41,72 +29,16 @@ import {
   ChatReviewService,
   reconcileInterrupted,
   recoverCodingFinalizations,
-  type OwnerDecisionStore,
-  type CodingFinalizationStore,
-  type Clock,
-  type CodingTestEvidenceStore,
-  type RuntimeRecovery,
-  type ToolJournalPort,
 } from '@runnets/application';
 import { openSqliteStore, ownSqliteRuntime } from '@runnets/store-sqlite';
-import type { EndpointProof, ProfileReads } from '@runnets/store-sqlite';
+import { composeRuntimePlugins } from './runtime-plugins.js';
 import { systemClock } from '@runnets/store';
 import { createEphemeralRuntime } from './runtime-ephemeral.js';
+export type { Runtime, RuntimeOptions } from './runtime-types.js';
+import type { Runtime, RuntimeOptions } from './runtime-types.js';
+
 export const RUNTIME_ENV_KEY = 'RUNNE_DB';
-export interface Runtime {
-  readonly restored?: boolean;
-  openRebindStore?(): ProfileRebindStore;
-  readonly desktopAssets?: DesktopAssetStore;
-  openProfileReads?(): ProfileReads;
-  openEndpointProof?(): EndpointProof;
-  readonly ownerDecisions: OwnerDecisionStore;
-  openRoomRuns?(): RoomRuntimeRuns;
-  readonly coding: CodingTaskService;
-  /** Durable finalization store; absent on the ephemeral host. */
-  readonly finalization?: CodingFinalizationStore;
-  /** Provider connection metadata; durable hosts own the only authoritative copy. */
-  readonly providerConnections?: ProviderConnectionStorePort;
-  /** Authoritative plugin catalog/connection/grant stores; durable hosts only. */
-  readonly plugins?: {
-    readonly catalog: PluginCatalogStorePort;
-    readonly connections: PluginConnectionStorePort;
-    readonly access: PluginAccessStorePort;
-    readonly admission: PluginAdmissionStorePort;
-  };
-  /** Current durable profile owner identity (lease owner); absent when ephemeral. */
-  readonly ownerId?: string;
-  readonly codingReview?: CodingReviewService;
-  readonly codingApply?: CodingApplyService;
-  readonly codingApplyInspection?: CodingApplyInspectionService;
-  readonly codingApplyResolution?: CodingApplyResolutionService;
-  readonly codingEvidence?: CodingTestEvidenceStore;
-  readonly codingApprovals: CodingApprovalService;
-  readonly codingChanges: CodingChangesetService;
-  readonly service: TaskRunService;
-  readonly conversations: ConversationService;
-  /** Durable conversation transaction surface used by the broadcast runner. */
-  readonly conversationStore?: ConversationStore;
-  readonly chat: DirectChatService;
-  /** Durable broadcast admission/decisions; absent on the ephemeral host. */
-  readonly broadcasts?: RoomBroadcastService;
-  readonly reviews: ChatReviewService;
-  readonly durable: boolean;
-  readonly toolJournal?: ToolJournalPort;
-  /** All entry points await recovery before accepting work. */
-  readonly ready: Promise<RuntimeRecovery>;
-  close(): void;
-}
-export interface RuntimeOptions {
-  /** Runtime image authority factory; the store exists only after composition. */
-  readonly imageResolver?: (store: DesktopAssetStore) => ImageAssetResolverPort;
-  readonly codingWorktreeDirectory?: string;
-  readonly codingTools?: Pick<CodingTurnFactoryDeps, 'sandbox' | 'owner' | 'inspectSandbox'>;
-  readonly requireUnpublished?: boolean;
-  readonly restoredAccess?: boolean;
-  readonly clock?: Clock;
-  readonly dbPath?: string | undefined;
-  readonly mode?: 'ephemeral' | 'durable' | undefined;
-}
+
 /** Durable means a persistent database, durable tool claims, and exclusive recovery ownership. */
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const dbPath = options.dbPath?.trim() ?? '';
@@ -161,9 +93,21 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       admit: (binding, tx) => codingApprovalAdmission(binding, tx, codingDeps),
       restored: codingDeps.restored,
     });
+    const pluginRuntime = composeRuntimePlugins({
+      profile: dirname(dbPath),
+      store,
+      clock: deps.clock,
+      restored,
+      ...(options.pluginMutationsAllowed === undefined
+        ? {}
+        : { mutationsAllowed: options.pluginMutationsAllowed }),
+      ...(options.pluginTransport === undefined ? {} : { transport: options.pluginTransport }),
+      ...(options.pluginEnv === undefined ? {} : { env: options.pluginEnv }),
+    });
     const chat = new DirectChatService({
       ...deps,
       tasks: service,
+      ...(pluginRuntime.tools === null ? {} : { grantedTools: pluginRuntime.tools }),
       ...(options.codingTools
         ? {
             codingTools: codingTurnFactory({
@@ -187,6 +131,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       // Unfinished batches pause only after started children were resolved by chat recovery.
       broadcasts.recover();
       codingApply.recover();
+      // Lower crashed plugin operations to `uncertain` before generic journal recovery.
+      pluginRuntime.operations?.recover();
       return reconcileInterrupted(service, store.tools);
     });
     return {
@@ -198,7 +144,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         connections: store.pluginConnections,
         access: store.pluginAccess,
         admission: store.pluginAdmission,
+        operations: store.pluginOperations,
       },
+      pluginRuntime,
       ownerId: codingDeps.ownerId,
       openRebindStore: () => store.rebind,
       service,

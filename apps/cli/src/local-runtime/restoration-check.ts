@@ -34,6 +34,7 @@ const MAINTENANCE_READS = new Set(
   receipts.get observe bots.list coding.show coding.diff coding.pending coding.panel
   decisions.list decisions.get decisions.preview decisions.resolve provider.status
   plugin.catalog plugin.inspect plugin.connections plugin.access-list
+  plugin.operations-list plugin.operation-show
   broadcasts.get broadcasts.list`.split(/\s+/),
 );
 export function maintenanceRead(method: string): boolean {

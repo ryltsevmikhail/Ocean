@@ -1,26 +1,18 @@
 /**
- * Host composition for plugin catalog, connections and exact grants.
+ * Owner API over the authenticated runtime socket.
  *
- * Ocean owns all plugin state; the Executor transport is injected and remains
- * disabled by default. The composed services only ever see plain metadata and
- * environment variable NAMES. Credential values are resolved inside the future
- * transport host and never cross this module.
+ * Catalog, named-connection references, exact grants and the durable operation
+ * journal cross this wire as metadata only: a connection exposes the
+ * environment variable NAME, never a credential value.
  */
 
-import {
+import { PluginRefusedError } from '@runnets/application';
+import type {
   PluginAccessService,
   PluginCatalogService,
   PluginConnectionService,
-  PluginRefusedError,
-  ServicePluginDiscoveryRefusedError,
-  type PluginAccessStorePort,
-  type PluginCatalogStorePort,
-  type PluginConnectionStorePort,
-  type PluginCredentialReferencePort,
-  type ServicePluginInvokeOutcome,
-  type ServicePluginTransportPort,
+  PluginOperationsService,
 } from '@runnets/application';
-import { SHIPPED_PLUGIN_CATALOG, type PluginAdapterIdentity } from '@runnets/domain';
 import {
   isLocalPluginCatalogQuery,
   isLocalPluginConnectionAddRequest,
@@ -33,111 +25,17 @@ import {
   isLocalPluginRevokeRequest,
 } from '@runnets/contracts';
 import {
-  createEnvironmentCredentialReferences,
-  createPluginInstallStore,
-} from '@runnets/tools-node';
-import { randomUUID, createHash } from 'node:crypto';
+  isLocalPluginOperationAcknowledgeRequest,
+  isLocalPluginOperationListQuery,
+  isLocalPluginOperationQuery,
+} from '@runnets/contracts';
 import type { RuntimeReply } from './queries.js';
-
-/** Adapter build identity this host was qualified against (Task 4 pinned identities). */
-export const PLUGIN_ADAPTER_IDENTITY: PluginAdapterIdentity = {
-  adapter: 'runnets-executor',
-  protocolVersion: 1,
-  sdkVersion: '1.6.11',
-  manifestSchemaVersion: 1,
-};
-
-/** Fail-closed default: no SDK import, no host, no network request. */
-class DisabledPluginTransport implements ServicePluginTransportPort {
-  qualification() {
-    return {
-      qualified: false,
-      reason: 'execution_disabled',
-      identities: { 'plugin-transport': 'disabled' },
-    } as const;
-  }
-  discover(): Promise<never> {
-    return Promise.reject(
-      new ServicePluginDiscoveryRefusedError(
-        'execution_disabled',
-        'service plugin execution is disabled in this build',
-      ),
-    );
-  }
-  invoke(): Promise<ServicePluginInvokeOutcome> {
-    return Promise.resolve({
-      kind: 'not_started',
-      invocationId: '',
-      code: 'execution_disabled',
-      detail: 'service plugin execution is disabled in this build',
-    });
-  }
-}
-
-export interface PluginHostStores {
-  readonly catalog: PluginCatalogStorePort;
-  readonly connections: PluginConnectionStorePort;
-  readonly access: PluginAccessStorePort;
-}
-
-export interface RuntimePluginHostOptions {
-  readonly profile: string;
-  readonly stores: PluginHostStores;
-  readonly restored: boolean;
-  readonly mutationsAllowed?: boolean;
-  readonly env?: Readonly<Record<string, string | undefined>>;
-  readonly now?: (() => number) | undefined;
-  /** Test-only deterministic transport; production omits it and stays disabled. */
-  readonly transport?: ServicePluginTransportPort;
-  readonly credentials?: PluginCredentialReferencePort;
-  readonly adapter?: PluginAdapterIdentity;
-}
-
-export interface PluginServices {
-  readonly catalog: PluginCatalogService;
-  readonly connections: PluginConnectionService;
-  readonly access: PluginAccessService;
-}
-
-export function runtimePluginsHost(options: RuntimePluginHostOptions): RuntimePlugins {
-  const time = () => new Date(options.now?.() ?? Date.now());
-  const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
-  const context = {
-    clock: { now: time },
-    nextId: () => randomUUID().replaceAll('-', ''),
-    sha256,
-    restored: options.restored,
-    mutationsAllowed: options.mutationsAllowed ?? options.restored !== true,
-  };
-  const files = createPluginInstallStore({ profile: options.profile });
-  // Interrupted temp publications are inert; drop only this store's own leftovers.
-  files.sweepInterrupted();
-  const catalog = new PluginCatalogService({
-    catalog: SHIPPED_PLUGIN_CATALOG,
-    store: options.stores.catalog,
-    files,
-    adapter: options.adapter ?? PLUGIN_ADAPTER_IDENTITY,
-    ...context,
-  });
-  catalog.initialize();
-  const connections = new PluginConnectionService({
-    store: options.stores.connections,
-    versions: catalog,
-    transport: options.transport ?? new DisabledPluginTransport(),
-    credentials:
-      options.credentials ?? createEnvironmentCredentialReferences(options.env ?? process.env),
-    adapter: options.adapter ?? PLUGIN_ADAPTER_IDENTITY,
-    ...context,
-  });
-  connections.initialize();
-  const access = new PluginAccessService({ store: options.stores.access, ...context });
-  return new RuntimePlugins({ catalog, connections, access });
-}
 
 export interface RuntimePluginsServices {
   readonly catalog: PluginCatalogService;
   readonly connections: PluginConnectionService;
   readonly access: PluginAccessService;
+  readonly operations: PluginOperationsService | null;
 }
 
 /** Owner API over the authenticated socket; replies are metadata only. */
@@ -153,7 +51,7 @@ export class RuntimePlugins {
     return this.#services;
   }
   dispatch(method: string, params: Record<string, unknown>): RuntimeReply | Promise<RuntimeReply> {
-    const { catalog, connections, access } = this.#services;
+    const { catalog, connections, access, operations } = this.#services;
     switch (method) {
       case 'plugin.catalog': {
         if (!isLocalPluginCatalogQuery(params)) return invalid();
@@ -235,6 +133,21 @@ export class RuntimePlugins {
         const request = params;
         return this.#supervise(() => access.revoke(request.grantId));
       }
+      case 'plugin.operations-list': {
+        if (operations === null || !isLocalPluginOperationListQuery(params)) return invalid();
+        const query = params;
+        return { result: operations.list(query) };
+      }
+      case 'plugin.operation-show': {
+        if (!isLocalPluginOperationQuery(params)) return invalid();
+        return this.#run(() => requireOperations(operations).show(params.operationId));
+      }
+      case 'plugin.operation-acknowledge': {
+        if (operations === null || !isLocalPluginOperationAcknowledgeRequest(params))
+          return invalid();
+        const request = params;
+        return this.#run(() => requireOperations(operations).acknowledge(request));
+      }
       default:
         return invalid();
     }
@@ -265,6 +178,11 @@ export class RuntimePlugins {
     await Promise.all(this.#inFlight);
     return 'settled';
   }
+}
+
+function requireOperations(operations: PluginOperationsService | null): PluginOperationsService {
+  if (operations === null) throw new PluginRefusedError('operations_unavailable', 'unavailable');
+  return operations;
 }
 
 function invalid(): RuntimeReply {

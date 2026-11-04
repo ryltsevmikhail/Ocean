@@ -5,7 +5,7 @@ import type {
   PluginInstalledVersion,
   PluginRoomFacts,
 } from '../src/plugin-ports.js';
-import type { PluginGrantRecord } from '@runnets/domain';
+import type { PluginGrantRecord, PluginOperationRecord } from '@runnets/domain';
 import type { PluginManifest } from '@runnets/domain';
 
 export const clone = <T>(value: T): T => structuredClone(value);
@@ -29,6 +29,9 @@ export interface PluginFakeMaps {
   readonly rooms: Map<string, PluginRoomFacts>;
   readonly claims: Map<string, string>;
   readonly settled: Map<string, string>;
+  readonly operations: Map<string, PluginOperationRecord>;
+  /** Acknowledgement releases the journal hold without rewriting the uncertain outcome. */
+  readonly resolved: Set<string>;
   readonly counts: { revokedGrants: number; revokedConfirmations: number; publishCalls: number };
   readonly fileState: { failure: Error | null; digestOverride: string | null };
 }
@@ -45,6 +48,8 @@ export function pluginFakeMaps(): PluginFakeMaps {
     rooms: new Map(),
     claims: new Map(),
     settled: new Map(),
+    operations: new Map(),
+    resolved: new Set(),
     counts: { revokedGrants: 0, revokedConfirmations: 0, publishCalls: 0 },
     fileState: { failure: null, digestOverride: null },
   };

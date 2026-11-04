@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SHIPPED_PLUGIN_CATALOG, canonicalJson } from '@runnets/domain';
@@ -177,6 +178,8 @@ describe('plugin profile backup and restore', () => {
       transport,
       credentials,
       adapter: PINNED,
+      now: () => '2026-11-04T00:00:00.000Z',
+      sha256: (text: string) => createHash('sha256').update(text).digest('hex'),
     });
     const denied = await restoredAdmission.call({
       workspaceId: 'ws_ocean',

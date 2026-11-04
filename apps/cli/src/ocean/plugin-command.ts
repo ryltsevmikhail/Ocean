@@ -11,6 +11,7 @@ import type { Readable, Writable } from 'node:stream';
 import type { LocalRuntimeClient } from '@runnets/tools-node';
 import type { OceanArguments } from './arguments.js';
 import { required } from './arguments.js';
+import { runPluginOperationsCommand } from './plugin-operations-command.js';
 
 export interface PluginCommandResult {
   readonly data: unknown;
@@ -71,6 +72,7 @@ export async function runPluginCommand(
 ): Promise<PluginCommandResult> {
   void input;
   const [area, action] = args.positional;
+  if (area === 'operations') return runPluginOperationsCommand(client, args, output);
   if (area === 'catalog') {
     if (action === undefined || action === 'list') {
       const search = args.flags.get('search');

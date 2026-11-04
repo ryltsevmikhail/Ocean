@@ -21,6 +21,7 @@ import type {
 
 import { admit } from './admission.js';
 import type { ExecutorTransportBackend } from './backend.js';
+import type { ServicePluginTarget as Target } from '@runnets/application';
 import { freezeStatus } from './status.js';
 import type { ExecutorTransportOpenOptions, ExecutorTransportStatus } from './status.js';
 
@@ -44,7 +45,7 @@ export function createInternalTransport(
   backend: ExecutorTransportBackend,
   status: ExecutorTransportStatus,
 ): ExecutorServicePluginTransport {
-  return new ExecutorServicePluginTransport(backend, status, INTERNAL_CONSTRUCTION_TOKEN);
+  return new ExecutorServicePluginTransport(backend, status, INTERNAL_CONSTRUCTION_TOKEN, null);
 }
 
 function refusalCode(
@@ -60,6 +61,8 @@ function refusalDetail(status: ExecutorTransportStatus): string {
 export class ExecutorServicePluginTransport implements ServicePluginTransportPort {
   readonly #backend: ExecutorTransportBackend;
   readonly #status: ExecutorTransportStatus;
+  /** Lazy provisioning hook; only `discover()` may create an upstream connection. */
+  readonly #ensure: ((target: Target) => Promise<void>) | null;
   #closed = false;
 
   /**
@@ -70,12 +73,14 @@ export class ExecutorServicePluginTransport implements ServicePluginTransportPor
     backend: ExecutorTransportBackend,
     status: ExecutorTransportStatus,
     token: typeof INTERNAL_CONSTRUCTION_TOKEN,
+    ensure: ((target: Target) => Promise<void>) | null = null,
   ) {
     if (token !== INTERNAL_CONSTRUCTION_TOKEN) {
       throw new Error('Executor transport instances are created through its factories only');
     }
     this.#backend = backend;
     this.#status = freezeStatus(status);
+    this.#ensure = ensure;
   }
 
   /** Public factory. Execution stays disabled unless explicitly enabled. */
@@ -87,6 +92,7 @@ export class ExecutorServicePluginTransport implements ServicePluginTransportPor
       admission.backend,
       admission.status,
       INTERNAL_CONSTRUCTION_TOKEN,
+      admission.provisioning === null ? null : (target) => admission.provisioning!.ensure(target),
     );
   }
 
@@ -110,6 +116,10 @@ export class ExecutorServicePluginTransport implements ServicePluginTransportPor
         refusalDetail(this.#status),
       );
     }
+    // Consented discovery is the only place an upstream connection is created:
+    // the install is network-free and `connections.create` performs the one
+    // bounded connect/tool-sync of this pass.
+    if (this.#ensure !== null) await this.#ensure({ ...target });
     return this.#backend.discover(target, options);
   }
 
