@@ -124,7 +124,7 @@ abandoned`; children are persisted `queued` and then run. New model turns are
   rule, MIME-versus-bytes mismatch and tools+images. The Task 1/3 private evidence
   is the only basis for the few live calls that were made.
 
-### 4. Plugin pilot (Task 4/5 scope, execution disabled)
+### 4. Plugin pilot (Tasks 4–6; install disabled by default)
 
 - **Shipped pinned GitHub catalog.** A declarative, read-only GitHub manifest
   (`list_issues`, `issue_read`) ships in the binary. Installation makes **zero**
@@ -144,11 +144,14 @@ abandoned`; children are persisted `queued` and then run. New model turns are
   patched SDK chunk is sha256 `6d3d22c9…` and the patch file sha256
   `e1c1bfa9…`. The patch removes the reactive OAuth refresh-and-replay that could
   produce a second business request after 401. The packaged adapter verifies its
-  bundle inventory before admission. **Execution is literally disabled by
-  default** (`status.execution === 'disabled'`); the setup seam cannot enable it
-  from the wire, and the one allowed invocation causes at most one business
-  request. The build now asserts exactly five valid `patch_hash` lockfile records
-  and refuses malformed values.
+  bundle inventory before admission. `status.execution` is `'disabled'` until the
+  owner installs and enables the pinned plugin; the host composition in
+  `apps/cli/src/plugin-transport.ts` is the only place that requests execution,
+  after re-verifying the pinned chunk, and the setup seam cannot enable it from
+  the wire. One allowed invocation causes at most one business request; denied or
+  unqualified paths fall back to the disabled transport with zero business
+  requests. The build asserts exactly five valid `patch_hash` lockfile records and
+  refuses malformed values.
 - **Pilot limits.** 1 MiB per message, discovery at most 4 MiB and 256 tools, 30 s
   per call, at most 16 tools per grant, 16 plugin calls per turn, and 32 KiB
   model-visible output with explicit truncation (implemented in Task 6).
