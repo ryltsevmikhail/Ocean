@@ -26,7 +26,7 @@ function oldProfile() {
   const ids = createDurableIdGenerator(db);
   const clock = { now: () => new Date('2026-11-02T00:00:00Z') };
   const tasks = new TaskRunService({ log: new SqliteEventLog(db, ids), clock, ids });
-  const store = new SqliteConversationStore(db);
+  const store = new SqliteConversationStore(db, { legacySchema: true });
   let id = 10;
   const nextId = () => String(++id).padStart(4, '0');
   const conversations = new ConversationService({ store, clock, nextId });

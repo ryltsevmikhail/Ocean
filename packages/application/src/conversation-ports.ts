@@ -4,6 +4,7 @@ import type {
   ChatReview,
   RoomExecutionPolicy,
   Bot,
+  BotModelBinding,
   BotProfileInput,
   ConversationMessage,
   DirectRoom,
@@ -67,6 +68,8 @@ export interface ConversationTransaction {
   botByHandle(handle: string): Bot | null;
   bots(): readonly Bot[];
   putBot(bot: Bot): void;
+  modelBinding(botId: string): BotModelBinding | null;
+  putModelBinding(botId: string, binding: BotModelBinding): void;
   room(id: string): Room | null;
   rooms(): readonly Room[];
   directRoom(botId: string): DirectRoom | null;

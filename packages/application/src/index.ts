@@ -5,6 +5,8 @@ export * from './command-commit.js';
 export * from './provider.js';
 export * from './provider-admission.js';
 export * from './provider-connection-ports.js';
+export * from './model-connection-ports.js';
+export * from './model-connection-validation.js';
 export * from './provider-connection-resolution.js';
 export * from './provider-connection-request.js';
 export * from './provider-connection-state.js';

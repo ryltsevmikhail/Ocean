@@ -34,6 +34,14 @@ it('distinguishes a complete portable format2 identity from historical format1 m
   ).toBe(true);
   expect(validProfileBackupManifest({ ...body, format: 2 })).toBe(false);
 });
+it('accepts schema20 metadata backups while refusing unsupported future schemas', () => {
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 20 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 21 } })).toBe(
+    false,
+  );
+});
 it('rejects coerced versions, unbounded counters, duplicate room positions and unknown format2 claims', () => {
   for (const malformed of [
     { ...value, format: '2' },

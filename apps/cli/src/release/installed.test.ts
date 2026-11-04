@@ -97,7 +97,10 @@ it('migrates a schema-14 RC1-shaped profile and restores an RC1-era format-2 bac
     `INSERT INTO ocean_messages (id, workspace_id, room_id, seq, author, target_bot_id, body, created_at, author_bot_id, turn_id)
      VALUES ('rc1-message','ws_ocean',?,1,'user',?,'RC1-era message','2026-11-01T00:00:00.000Z',NULL,NULL)`,
   ).run(roomId, botId);
-  db.exec(`DROP TABLE IF EXISTS ocean_provider_receipts;
+  db.exec(`DROP TABLE IF EXISTS ocean_bot_model_bindings;
+    DROP TABLE IF EXISTS ocean_model_connection_receipts;
+    DROP TABLE IF EXISTS ocean_model_connections;
+    DROP TABLE IF EXISTS ocean_provider_receipts;
     DROP TABLE IF EXISTS ocean_provider_connections;
     UPDATE meta SET value='14' WHERE key='schema_version';`);
   db.close();
@@ -118,7 +121,7 @@ it('migrates a schema-14 RC1-shaped profile and restores an RC1-era format-2 bac
   try {
     expect(
       restoredDb.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('19');
+    ).toBe('20');
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_rooms').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_bots').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_messages').get()?.['n']).toBe(1);

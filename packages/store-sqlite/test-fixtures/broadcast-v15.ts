@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-imports -- Test-only fixture for this package's own schema. */
 import type { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_BUSY_TIMEOUT_MS, openDatabase } from '../src/schema.js';
+import { omitModelConnectionSchema } from './model-schema.js';
 
 function memory(): DatabaseSync {
   return openDatabase(':memory:', DEFAULT_BUSY_TIMEOUT_MS);
@@ -16,6 +17,7 @@ function memory(): DatabaseSync {
  */
 export function genuineSchema15(): { db: DatabaseSync; turns: unknown[]; messages: unknown[] } {
   const db = memory();
+  omitModelConnectionSchema(db);
   db.exec(`
     INSERT INTO ocean_workspace VALUES(1,'ws','/project');
     INSERT INTO ocean_bots VALUES

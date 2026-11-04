@@ -17,6 +17,7 @@ export * from './budget.js';
 export * from './side-effect.js';
 
 export * from './conversations.js';
+export * from './model-binding.js';
 
 export * from './image-content.js';
 

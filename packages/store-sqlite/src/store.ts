@@ -21,6 +21,8 @@ import { SqliteCodingStore } from './coding-store.js';
 import type { CodingApprovalStore, CodingStore } from '@runnets/application';
 import { finalizationStore } from './coding-finalization-store.js';
 import { SqliteProviderConnections } from './provider-connection-storage.js';
+import { SqliteModelConnections } from './model-connection-storage.js';
+import type { ModelConnectionStorePort } from '@runnets/application';
 import { SqlitePluginCatalog } from './plugin-catalog-storage.js';
 import { SqlitePluginConnections } from './plugin-connection-storage.js';
 import { SqlitePluginAccess } from './plugin-access-storage.js';
@@ -76,6 +78,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  readonly modelConnections: ModelConnectionStorePort;
   readonly providerConnections: ProviderConnectionStorePort;
   readonly pluginCatalog: PluginCatalogStorePort;
   readonly pluginConnections: PluginConnectionStorePort;
@@ -139,6 +142,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   let closed = false;
   const tools = new SqliteToolJournal(db);
   return {
+    modelConnections: new SqliteModelConnections(db),
     providerConnections: new SqliteProviderConnections(db),
     pluginCatalog: new SqlitePluginCatalog(db),
     pluginConnections: new SqlitePluginConnections(db),

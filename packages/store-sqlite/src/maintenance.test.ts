@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openSqliteStore, ownSqliteRuntime } from './index.js';
 import { inspectDatabase, snapshotDatabase } from './maintenance.js';
+import { omitModelConnectionSchema } from '../test-fixtures/model-schema.js';
 const roots: string[] = [];
 afterEach(() => {
   for (const p of roots.splice(0)) rmSync(p, { recursive: true, force: true });
@@ -50,6 +51,29 @@ it('admits the unreleased intermediate schemas 15 and 16 to doctor and backup', 
   await expect(snapshotDatabase(path, join(root, 'schema15.sqlite'))).resolves.toMatchObject({
     schema: 15,
   });
+});
+it('keeps genuine schema19 doctor and snapshot available without migrating the source or copy', async () => {
+  const { root, path } = setup();
+  const db = new DatabaseSync(path);
+  omitModelConnectionSchema(db);
+  db.prepare("UPDATE meta SET value='19' WHERE key='schema_version'").run();
+  db.close();
+  expect(inspectDatabase(path)).toMatchObject({ status: 'ok', summary: { schema: 19 } });
+  const copyPath = join(root, 'schema19.sqlite');
+  await expect(snapshotDatabase(path, copyPath)).resolves.toMatchObject({ schema: 19 });
+  for (const file of [path, copyPath]) {
+    const check = new DatabaseSync(file, { readOnly: true });
+    try {
+      expect(
+        check.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
+      ).toBe('19');
+      expect(
+        check.prepare("SELECT name FROM sqlite_master WHERE name='ocean_model_connections'").get(),
+      ).toBeUndefined();
+    } finally {
+      check.close();
+    }
+  }
 });
 it('snapshots WAL with exclusive maintenance ownership and preserves unresolved claims', async () => {
   const { root, path } = setup();

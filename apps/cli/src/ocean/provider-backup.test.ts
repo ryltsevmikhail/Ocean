@@ -59,6 +59,25 @@ it('backs up provider metadata but no credential path or bytes, and restores ine
     saved.service.set({ requestId: 'set-1', key: KEY, model: 'deepseek-flash' }),
   ).toMatchObject({ source: 'saved', state: 'connected', revision: 1 });
   saved.close();
+  const source = openSqliteStore({ path: join(profile, 'runtime.sqlite') });
+  try {
+    // Even an earlier explicit restore configuration must not travel as activation authority.
+    const connection = source.modelConnections.read('legacy:deepseek')!;
+    expect(connection.configuredAfterRestore).toBe(true);
+    source.modelConnections.put(
+      {
+        ...connection,
+        connectionId: 'second',
+        legacyEnvironment: false,
+        configuredAfterRestore: true,
+      },
+      null,
+    );
+    expect(source.providerConnections.receipt('set-1')?.result.revision).toBe(1);
+    expect(JSON.stringify(source.providerConnections.receipt('set-1'))).not.toContain(KEY);
+  } finally {
+    source.close();
+  }
   const credentialFile = join(profile + '.credentials', 'providers.json');
   expect(readFileSync(credentialFile, 'utf8')).toContain(KEY);
 
@@ -94,8 +113,17 @@ it('backs up provider metadata but no credential path or bytes, and restores ine
       intent: 'active',
       secretRef: expect.stringMatching(/^psec_/),
     });
+    expect(restored.modelConnections.list()).toHaveLength(2);
+    expect(restored.modelConnections.list().every((row) => !row.configuredAfterRestore)).toBe(true);
+    expect(restored.providerConnections.receipt('set-1')?.result.revision).toBe(1);
   } finally {
     restored.close();
+  }
+  const unchanged = openSqliteStore({ path: join(profile, 'runtime.sqlite') });
+  try {
+    expect(unchanged.modelConnections.list().every((row) => row.configuredAfterRestore)).toBe(true);
+  } finally {
+    unchanged.close();
   }
   // The backup excluded the credential directory, so this restored profile has no secret bytes.
   const restoredBytes = files(restoredDirectory).map((path) =>

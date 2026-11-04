@@ -30,6 +30,8 @@ export { readRestorationBackupState } from './restoration-backup.js';
 export { finalizationStore } from './coding-finalization-store.js';
 export { projectFinalizationHeld } from './coding-finalization-holds.js';
 export { SqliteProviderConnections } from './provider-connection-storage.js';
+export { SqliteModelConnections } from './model-connection-storage.js';
+export { MODEL_CONNECTION_TABLES, migrateModelConnections } from './model-connection-schema.js';
 export {
   PROVIDER_CONNECTION_TABLES,
   migrateProviderConnections,

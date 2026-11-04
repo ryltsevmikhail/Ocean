@@ -22,6 +22,7 @@ export function installRestoreOrigin(
       // survive the restore, so re-connection and re-grant are required before
       // any network call could be admitted.
       store.pluginConnections.invalidateRestored(new Date().toISOString());
+      // install also clears every connection's configuredAfterRestore flag in its metadata transaction.
       store.restoration.install({
         version: 1,
         snapshotId: hash(JSON.stringify(manifest)),

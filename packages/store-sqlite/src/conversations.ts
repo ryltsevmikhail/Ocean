@@ -13,28 +13,43 @@ import { withImmediateTransaction } from './transaction.js';
 import { botRow, messageRow, roomRow, workspaceRow } from './conversation-rows.js';
 import { readText } from './rows.js';
 import { SCHEMA_VERSION } from './schema.js';
+import { insertLegacyModelBinding, modelBindingStorage } from './model-binding-storage.js';
 
 /** SQLite writes and request receipts commit under one immediate write lock. */
 export class SqliteConversationStore implements ConversationStore {
   readonly #db: DatabaseSync;
   readonly #legacyKey: (id: string) => ConversationReceipt | null;
-  constructor(db: DatabaseSync) {
+  readonly #legacySchema: boolean;
+  constructor(db: DatabaseSync, options: { readonly legacySchema?: true } = {}) {
     this.#db = db;
     this.#legacyKey = legacyReviewKey(db);
+    this.#legacySchema = options.legacySchema === true;
   }
   /** Pre-migration fixtures stay readable; the broadcast surface is current-schema only. */
   #broadcastSurface() {
     const row = this.#db.prepare("SELECT value FROM meta WHERE key='schema_version'").get();
     const version = Number(row?.['value']);
-    return Number.isSafeInteger(version) && version < SCHEMA_VERSION
-      ? null
-      : broadcastStorage(this.#db);
+    return Number.isSafeInteger(version) && version < 16 ? null : broadcastStorage(this.#db);
   }
 
   /** Roll back profile, room, history and sequence allocation if any receipt write fails. */
   atomic<T>(work: (transaction: ConversationTransaction) => T): T {
     const db = this.#db,
       legacyKey = this.#legacyKey;
+    const version = Number(
+      db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
+    );
+    const current = version === SCHEMA_VERSION;
+    if (
+      !current &&
+      !(
+        this.#legacySchema &&
+        Number.isSafeInteger(version) &&
+        version >= 1 &&
+        version < SCHEMA_VERSION
+      )
+    )
+      throw Error('unsupported_schema');
     const decodeRoom = (row: Record<string, unknown>) =>
       roomRow(
         row,
@@ -48,6 +63,14 @@ export class SqliteConversationStore implements ConversationStore {
       work({
         ...chatStorage(db),
         ...reviewStorage(db),
+        ...(current
+          ? modelBindingStorage(db)
+          : {
+              modelBinding: () => null,
+              putModelBinding: () => {
+                throw Error('unsupported_schema');
+              },
+            }),
         ...(() => {
           const broadcasts = this.#broadcastSurface();
           if (broadcasts === null)
@@ -99,6 +122,7 @@ export class SqliteConversationStore implements ConversationStore {
             b.model,
             b.profileVersion,
           );
+          if (current) insertLegacyModelBinding(db, b);
         },
         room(id) {
           const row = db.prepare('SELECT * FROM ocean_rooms WHERE id=?').get(id);

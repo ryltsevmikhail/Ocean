@@ -36,7 +36,10 @@ async function call(profile: string, args: string[], options: OceanCommandOption
 function downgradeToSchema14(profile: string): void {
   const db = new DatabaseSync(join(profile, 'runtime.sqlite'));
   try {
-    db.exec(`DROP TABLE IF EXISTS ocean_provider_receipts;
+    db.exec(`DROP TABLE IF EXISTS ocean_bot_model_bindings;
+    DROP TABLE IF EXISTS ocean_model_connection_receipts;
+    DROP TABLE IF EXISTS ocean_model_connections;
+    DROP TABLE IF EXISTS ocean_provider_receipts;
       DROP TABLE IF EXISTS ocean_provider_connections;
       UPDATE meta SET value='14' WHERE key='schema_version';`);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(

@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import { migrateDesktopAssets } from './desktop-schema.js';
+import { MODEL_CONNECTION_TABLES, migrateModelConnections } from './model-connection-schema.js';
 import { CODING_APPLY_TABLES, migrateCodingApplications } from './coding-apply-schema.js';
 import { CODING_REVIEW_TABLES, migrateCodingReviews } from './coding-review-schema.js';
 import { CODING_APPROVAL_TABLES, migrateCodingApprovals } from './coding-approval-schema.js';
@@ -105,5 +106,9 @@ export function applyMigrations(
   if (previousVersion < 18) migratePluginOperations(db);
   else
     for (const table of PLUGIN_OPERATION_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 20) migrateModelConnections(db);
+  else
+    for (const table of MODEL_CONNECTION_TABLES)
       if (!existing.has(table)) throw Error('database schema is missing table ' + table);
 }
