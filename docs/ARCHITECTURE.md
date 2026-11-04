@@ -1,8 +1,16 @@
 # Architecture
 
-Ocean is an event-sourced TypeScript runtime with CLI, ACP and terminal hosts.
-Rust Runne is reference material, not a crate layout to reproduce. The desktop
-client is a separate project; this repository has no desktop or web UI dependencies.
+The current product architecture and priorities are specified in
+[Ocean platform architecture](ocean/platform-architecture.md), with its
+[implementation roadmap](superpowers/plans/2026-11-04-ocean-platform.md).
+Ocean has a shared local server and an in-repository Desktop client. Its own
+Runne-based loop calls model-provider APIs; Codex/Claude CLI engines are not
+part of the accepted direction.
+
+The sections below describe the **inherited runtime baseline**, not the complete
+current product. In particular, its original client-boundary and process-local
+history limitations do not describe the later shared-runtime/room implementation.
+Rust Runne remains reference material, not a crate layout to reproduce.
 
 ## 1. State ownership
 
