@@ -8,6 +8,7 @@ import {
   fsyncSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -19,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createArchive } from './archive.js';
 import { archiveFiles, installArchive, sha256 } from './installer.js';
+import { workspace } from '../../test-fixtures/release-repo.js';
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -99,6 +101,30 @@ function releaseRepo(base: string, options: { licenses?: boolean } = {}): string
   mkdirSync(repo);
   for (const dir of ['apps/cli/dist/release', 'packages/domain/dist', 'docs'])
     mkdirSync(join(repo, dir), { recursive: true });
+  // A synthetic adapter entry that still bundles the real pinned dependency tree.
+  const adapter = join(repo, 'packages/integrations-executor');
+  mkdirSync(join(adapter, 'dist'), { recursive: true });
+  mkdirSync(join(adapter, 'THIRD_PARTY_LICENSES'), { recursive: true });
+  writeFileSync(
+    join(adapter, 'package.json'),
+    readFileSync(join(workspace, 'packages/integrations-executor/package.json')),
+  );
+  writeFileSync(
+    join(adapter, 'dist/index.js'),
+    "import '@executor-js/sdk/core';\nimport '@executor-js/plugin-openapi/core';\nimport '@executor-js/plugin-mcp/core';\nimport 'effect';\nexport const fixtureAdapter = true;\n",
+  );
+  writeFileSync(
+    join(adapter, 'THIRD_PARTY_LICENSES/executor-MIT.txt'),
+    'fixture third-party license',
+  );
+  symlinkSync(
+    join(workspace, 'packages/integrations-executor/node_modules'),
+    join(adapter, 'node_modules'),
+  );
+  symlinkSync(join(workspace, 'node_modules'), join(repo, 'node_modules'));
+  mkdirSync(join(repo, 'patches'), { recursive: true });
+  for (const name of readdirSync(join(workspace, 'patches')))
+    writeFileSync(join(repo, 'patches', name), readFileSync(join(workspace, 'patches', name)));
   if (options.licenses !== false) {
     mkdirSync(join(repo, 'LICENSES'), { recursive: true });
     writeFileSync(join(repo, 'LICENSES/fixture-notice.txt'), 'fixture notice');
@@ -116,8 +142,8 @@ function releaseRepo(base: string, options: { licenses?: boolean } = {}): string
   const source = readFileSync(new URL('./installer.ts', import.meta.url), 'utf8');
   writeFileSync(join(repo, 'apps/cli/dist/release/installer.js'), stripTypeScriptTypes(source));
   writeFileSync(join(repo, 'packages/domain/dist/index.js'), 'export const fixture=true;');
-  for (const name of ['LICENSE', 'NOTICE', 'README.md', 'pnpm-lock.yaml'])
-    writeFileSync(join(repo, name), 'fixture');
+  for (const name of ['LICENSE', 'NOTICE', 'README.md']) writeFileSync(join(repo, name), 'fixture');
+  writeFileSync(join(repo, 'pnpm-lock.yaml'), readFileSync(join(workspace, 'pnpm-lock.yaml')));
   execFileSync('git', ['init', '-q'], { cwd: repo });
   execFileSync('git', ['add', '.'], { cwd: repo });
   execFileSync(
@@ -127,24 +153,24 @@ function releaseRepo(base: string, options: { licenses?: boolean } = {}): string
   );
   return repo;
 }
-it('packages a standalone checkout without a LICENSES tree and includes one when present', () => {
+it('packages a standalone checkout without a LICENSES tree and includes one when present', async () => {
   const root = temporary(),
-    absent = packageRelease(
+    absent = await packageRelease(
       releaseRepo(join(root, 'absent'), { licenses: false }),
       '0.1.0',
       join(root, 'a'),
     ),
-    present = packageRelease(releaseRepo(join(root, 'present')), '0.1.0', join(root, 'b'));
+    present = await packageRelease(releaseRepo(join(root, 'present')), '0.1.0', join(root, 'b'));
   const absentFiles = archiveFiles(readFileSync(absent.archive)),
     presentFiles = archiveFiles(readFileSync(present.archive));
   expect([...absentFiles.keys()].some((name) => name.startsWith('LICENSES/'))).toBe(false);
   expect(presentFiles.has('LICENSES/fixture-notice.txt')).toBe(true);
 });
-it('packaged install command upgrades and rolls back from an independent installation', () => {
+it('packaged install command upgrades and rolls back from an independent installation', async () => {
   const root = temporary(),
     repo = releaseRepo(root);
-  const a = packageRelease(repo, '0.1.0', join(root, 'a')),
-    b = packageRelease(repo, '0.2.0', join(root, 'b'));
+  const a = await packageRelease(repo, '0.1.0', join(root, 'a')),
+    b = await packageRelease(repo, '0.2.0', join(root, 'b'));
   expect(
     archiveFiles(readFileSync(a.archive)).get('apps/cli/dist/main.js')?.body.toString(),
   ).not.toContain('sourceMappingURL');

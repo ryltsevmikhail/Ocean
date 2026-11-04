@@ -10,7 +10,7 @@ import { runDiscovery } from './discovery.js';
 import type { ExecutorHost } from './host-types.js';
 import { runInvocation } from './invoke.js';
 import { normalizeAllowedOrigins } from './origins.js';
-import { verifyInstalledSdkChunk } from './pinned-identity.js';
+import { verifyPinnedIntegrity } from './pinned-integrity.js';
 import { createExecutorHost } from './sdk-boundary.js';
 import type { ExecutorTransportBackend } from './backend.js';
 import type { ExecutorTransportOpenOptions, ExecutorTransportStatus } from './status.js';
@@ -56,7 +56,7 @@ function admittedOrigins(options: ExecutorTransportOpenOptions): readonly string
  */
 export async function admit(options: ExecutorTransportOpenOptions): Promise<Admission> {
   const allowedOrigins = admittedOrigins(options);
-  const identity = await verifyInstalledSdkChunk();
+  const identity = await verifyPinnedIntegrity();
   const status = assessQualification({
     requested: options.enableExecution === true,
     identity,

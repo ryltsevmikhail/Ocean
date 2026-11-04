@@ -13,6 +13,11 @@
  * execution when the digest does not match. The check is asynchronous file I/O
  * and runs once when a transport is opened; the adapter never enables
  * execution speculatively.
+ *
+ * This module implements the **source/workspace** proof. A packaged release
+ * ships a pre-bundled adapter without an SDK `node_modules` tree and uses the
+ * build-recorded bundle proof in `bundle-integrity.ts`; `pinned-integrity.ts`
+ * selects the layout-specific proof without any caller input.
  */
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -71,6 +76,10 @@ export interface InstalledSdkChunkIdentity {
   readonly chunkPath: string | null;
   /** Human-readable reason; never contains file contents. */
   readonly detail: string;
+  /** Layout this identity was observed in; absent means `source` for older callers. */
+  readonly mode?: 'source' | 'bundle';
+  /** Bundle chunk count in bundle mode; null/absent for source layout. */
+  readonly bundleFiles?: number | null;
 }
 
 export interface VerifyInstalledSdkChunkOptions {
@@ -135,6 +144,8 @@ export async function verifyInstalledSdkChunk(
         actualSha256: actual,
         chunkPath: candidate,
         detail: 'installed Executor SDK chunk matches the pinned patched digest',
+        mode: 'source',
+        bundleFiles: null,
       };
     }
     return {
@@ -143,6 +154,8 @@ export async function verifyInstalledSdkChunk(
       actualSha256: actual,
       chunkPath: candidate,
       detail: `installed Executor SDK chunk sha256 ${actual} does not match pinned ${expected}`,
+      mode: 'source',
+      bundleFiles: null,
     };
   }
 
@@ -152,5 +165,7 @@ export async function verifyInstalledSdkChunk(
     actualSha256: null,
     chunkPath: options.chunkPath === undefined ? null : options.chunkPath,
     detail: `installed Executor SDK chunk not found (looked for ${PINNED_SDK_CHUNK})`,
+    mode: 'source',
+    bundleFiles: null,
   };
 }

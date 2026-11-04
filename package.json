@@ -30,6 +30,7 @@
     "@types/node": "24.13.3",
     "eslint": "9.39.5",
     "prettier": "3.9.10",
+    "rolldown": "1.2.16",
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.1",
     "vitest": "4.1.12"

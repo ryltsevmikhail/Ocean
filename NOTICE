@@ -59,6 +59,23 @@ notice continue to apply to the patched artifact; the modification is recorded
 here and in `patches/README.md`. The runtime refuses to enable execution unless
 the installed chunk matches the pinned patched digest above.
 
+Packaged release verification: the release archive does not ship the Executor
+`node_modules` tree. `pnpm package:release` first asserts the installed patched
+chunk digest, the patch digest, the lockfile `patch_hash` records, the pinned
+SDK/plugin/Effect/`@effect/platform-node-shared` versions and the pinned
+rolldown version; it then pre-bundles the adapter into
+`node_modules/@runnets/integrations-executor/dist/**` and records
+`bundle-integrity.json` (pinned versions, patched-chunk and patch digests, and
+the SHA-256 of every emitted chunk). The release manifest records the same file
+inventory and SHA-256 values. At admission the packaged adapter re-hashes every
+bundled chunk, requires the recorded chunk set to be exactly the shipped one,
+and cross-checks the recorded pins against its own constants; a missing,
+unreadable or mismatching proof refuses qualification. Source/workspace runs
+instead hash the installed `@executor-js/sdk` chunk. Neither layout accepts a
+host- or caller-supplied identity, and verification never enables execution:
+execution stays disabled unless a host explicitly enables it after a successful
+proof.
+
 MIT License (Executor, https://github.com/UsefulSoftwareCo/executor)
 
 Copyright (c) 2026 Rhys Sullivan
