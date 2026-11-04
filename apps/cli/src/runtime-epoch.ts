@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { ProfileRebindRecord, RestoreOrigin } from '@runnets/domain';
 import { readProfileRestoreSnapshot } from '@runnets/store-sqlite';
-import { verifyRestoredProfileOrigin, desktopRootIdentity } from '@runnets/tools-node';
+import { verifyRestoredProfileOrigin, desktopBindingMatches } from '@runnets/tools-node';
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 /** Ready is durable authority, not an instruction to replay materialization or archived operations. */
@@ -49,7 +49,7 @@ export function verifyRuntimeEpoch(
     result.desktop &&
     (result.desktop.profileId !== origin.profileId ||
       result.desktop.root !== p.plan.desktop?.root ||
-      desktopRootIdentity(result.desktop.root) !== result.desktop.identity)
+      !desktopBindingMatches(result.desktop))
   )
     throw Error('invalid_execution_epoch');
 }

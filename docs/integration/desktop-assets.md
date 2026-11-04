@@ -33,7 +33,8 @@ continued old-client writes cannot alter canonical bytes or create associations.
 
 Schema 12 adds operation, upload and adopted-message tables transactionally.
 `meta.desktop_assets_binding` records the authenticated profile hash, canonical
-root/device/inode/mount/private identity, and original root as provenance.
+root/storage identity, and original root as provenance. Schema 19 declares support
+for the versioned durable identity described below.
 Relocated profiles refuse the old binding before reading its source; the owner
 must use the explicit maintenance rebind flow. An admitted but unfinished enrollment remains
 `desktop_outcome_unknown`, with evidence retained and no automatic retry/repair.
@@ -44,6 +45,65 @@ writer is retained only as a test fixture. Connection loss cannot leave a client
 filesystem writer. Maintenance snapshots refuse `owner_busy` while the runtime
 exists; a snapshot holds ownership through the full capture callback and excludes
 runtime startup. This is offline maintenance, not an online snapshot promise.
+
+## Durable binding in the stable 1.1 implementation
+
+On qualified Linux x86_64 Btrfs, new enrollment and authorized restore rebind
+encode `linux-btrfs-v1` inside the existing `DesktopBinding.identity` string.
+The anchor binds filesystem UUID, subvolume UUID and ID, opaque kernel file handle
+(type and bounded bytes), UID, GID and exact private directory mode. The portable
+binding retains exactly `profileId`, `root`, `identity`, `originalRoot`; old
+six-numeric-field evidence remains readable. Unknown versions or malformed
+anchors refuse before attachment bodies are read.
+
+The adapter invokes fixed `/usr/bin/python3 -I -S` code with an already-open root
+at descriptor 3, an empty environment, no pathname argument or shell, bounded
+buffers, a two-second timeout and a 4 KiB output cap. It uses descriptor-relative
+Btrfs ioctls and `name_to_handle_at`, never `open_by_handle_at`. Full Node
+ctime/device/inode/mount/permission/path witnesses surround that probe. Current
+held-root mount identity controls every child read and publication; durable
+fields are never split to obtain a mount ID. A later independent operation can
+accept a new device or mount assignment, while substitution during an operation
+still refuses. Ordinary child writes do not change the durable anchor.
+
+Other filesystems retain **legacy-exact** mode: all six original numeric fields
+must still match. `desktopIdentityMode` exposes this mode explicitly. Missing or
+failed helper support on Btrfs does not downgrade a new or anchored binding.
+Already-drifted legacy bindings have no independent continuity proof and cannot
+be automatically repaired from inode/UID/GID/mode alone.
+
+An ordinary, currently matching legacy binding can upgrade only under exclusive
+runtime startup or public backup maintenance ownership. The exact old identity,
+full bounded Desktop evidence, held root through the transaction, and exact
+serialized-meta CAS are required. Only the active binding changes; historical
+enrollment results, completed receipts and unknown operations remain unchanged.
+Schema-18 maintenance publishes schema 19 in the same transaction as the first
+anchor. Older maintenance schemas remain exact legacy mode until normal runtime
+startup performs their full schema migration. Read paths, archive verification,
+and an ordinary store open never migrate a Desktop binding; an already anchored
+startup does not recapture the tree.
+
+Active legacy **ready rebind lineage is excluded** from this upgrade. Its ready
+record and meta copy stay byte-identical in exact legacy mode. While the old root
+still matches, use verified backup, source-independent restore and an authorized
+new rebind to obtain an anchored epoch. If it has already drifted, use an existing
+verified backup; do not edit four fields or rewrite a historical ready record.
+New ready epochs retain their original anchor across boot drift and subsequent
+lineage backup/restore/rebind. Archived identities are inert evidence: verification
+never probes their old source paths.
+
+Schema 19 also makes RC2 and older hosts refuse an upgraded profile before
+execution. A direct binary downgrade is unsupported; retain a compatible
+pre-upgrade backup for rollback. These local metadata proofs do not distinguish a
+complete cloned filesystem with identical UUIDs/handles, or an attacker able to
+rewrite both authoritative SQLite state and storage as the owner.
+
+The native tests qualify the fixed helper on a disposable Btrfs directory, child
+writes, copied replacement, a new mount namespace and a mount change during a
+held operation. Device renumbering and cross-layer recovery use injected
+observations with real disposable files/SQLite. No physical reboot is claimed.
+Run the separate native gate after building:
+`OCEAN_DESKTOP_BTRFS_NATIVE=1 pnpm exec vitest run --config vitest.source.config.ts packages/tools-node/src/desktop-durable-native.test.ts`.
 
 ## Protocol and evidence
 

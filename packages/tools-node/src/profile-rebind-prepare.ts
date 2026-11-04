@@ -10,7 +10,8 @@ import { restoreCodingDependencyTask } from './coding-dependency-archive.js';
 import { withProfileArchive } from './profile-backup-verify.js';
 import { profileArchiveContext } from './profile-archive-context.js';
 import { profileManifestCharge } from './profile-backup-accounting.js';
-import { desktopRootIdentity, restoreDesktopAssets } from './desktop-assets.js';
+import { restoreDesktopAssets } from './desktop-assets.js';
+import { desktopBindingIdentity } from './desktop-root.js';
 import { attachRebindGit } from './profile-rebind-git.js';
 import { rebindSync, rebindWrite } from './profile-rebind-io.js';
 import { verifyReboundTree } from './profile-rebind-tree.js';
@@ -74,7 +75,7 @@ export async function prepareRebind(
         desktop = {
           profileId: p.origin.profileId,
           root: plan.desktop.root,
-          identity: desktopRootIdentity(plan.desktop.root),
+          identity: desktopBindingIdentity(plan.desktop.root),
           originalRoot: source.catalog.desktop.inventory.binding!.originalRoot,
         };
       }

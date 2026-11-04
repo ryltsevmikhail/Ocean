@@ -118,7 +118,7 @@ it('migrates a schema-14 RC1-shaped profile and restores an RC1-era format-2 bac
   try {
     expect(
       restoredDb.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('18');
+    ).toBe('19');
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_rooms').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_bots').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_messages').get()?.['n']).toBe(1);

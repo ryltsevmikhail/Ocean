@@ -1,3 +1,4 @@
+import { upgradeDesktopBinding, type DesktopBindingUpgrade } from './desktop-binding-upgrade.js';
 import { desktopAssetStore } from './desktop-assets.js';
 import { restoreOriginStore } from './restore-origin.js';
 import type { RestoreOriginStore } from '@runnets/application';
@@ -84,6 +85,7 @@ export interface SqliteStore {
   readonly restoration: RestoreOriginStore;
   readonly rebind: ProfileRebindStore;
   readonly desktopAssets: DesktopAssetStore;
+  maintainDesktopBinding(prepare: DesktopBindingUpgrade): 'upgraded' | 'unchanged' | 'legacy-ready';
   openProfileReads(ownerId: string): ProfileReads;
   openEndpointProof(): EndpointProof;
   readonly ownerDecisions: OwnerDecisionStore;
@@ -146,6 +148,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
     restoration: restoreOriginStore(db),
     rebind: profileRebindStore(db, tools),
     desktopAssets: desktopAssetStore(db),
+    maintainDesktopBinding: (prepare) => upgradeDesktopBinding(db, prepare),
     openProfileReads: (ownerId) => profileReads(db, ownerId),
     openEndpointProof: () => openEndpointProof(db),
     ownerDecisions: new SqliteOwnerDecisions(db),

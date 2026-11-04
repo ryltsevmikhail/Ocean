@@ -1,3 +1,4 @@
+import { upgradeDesktopBinding, type DesktopBindingUpgrade } from './desktop-binding-upgrade.js';
 import { desktopInventory, readDesktopBackupInventory } from './desktop-inventory.js';
 import type { DesktopAssetInventory } from '@runnets/domain';
 import { assertUnpublished } from './endpoint-proof.js';
@@ -24,7 +25,7 @@ import { SCHEMA_VERSION } from './schema.js';
 /**
  * Schema versions this binary may inspect and snapshot without migrating.
  *
- * The real rule: every released schema (5, 6, 10, 11, 12, 13, 14; 14 = installed RC1) stays
+ * The real rule: every released schema (5, 6, 10, 11, 12, 13, 14, 18; 18 = RC2) stays
  * admitted so doctor, backup and format-2 restore keep working across the
  * supported update path. The directly preceding release is always included
  * through `SCHEMA_VERSION`. Unreleased intermediates (15 = provider
@@ -32,7 +33,7 @@ import { SCHEMA_VERSION } from './schema.js';
  * development artifacts can exist on a disposable profile; they are not
  * supported releases and may be dropped once no artifact ever produced them.
  */
-const MAINTAINABLE_SCHEMAS = [5, 6, 10, 11, 12, 13, 14, 15, 16, 17, SCHEMA_VERSION];
+const MAINTAINABLE_SCHEMAS = [5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, SCHEMA_VERSION];
 
 export interface DatabaseSummary {
   readonly schema: number;
@@ -173,8 +174,9 @@ export async function snapshotCodingDatabase<T>(
     plugins: PluginBackupInventory,
   ) => Promise<T>,
   finalize?: SnapshotFinalizer<T>,
+  upgradeDesktop?: DesktopBindingUpgrade,
 ): Promise<CodingDatabaseSnapshot<T>> {
-  const result = await snapshotOwned(path, destination, capture, finalize);
+  const result = await snapshotOwned(path, destination, capture, finalize, upgradeDesktop);
   if (!result.inventory) throw Error('invalid_coding_inventory');
   return { summary: result.summary, inventory: result.inventory, assets: result.assets as T };
 }
@@ -187,6 +189,7 @@ async function snapshotOwned<T>(
     plugins: PluginBackupInventory,
   ) => Promise<T>,
   finalize?: SnapshotFinalizer<T>,
+  upgradeDesktop?: DesktopBindingUpgrade,
 ): Promise<{ summary: DatabaseSummary; inventory?: CodingBackupInventory; assets?: T }> {
   if (!existsSync(path) || !lstatSync(path).isFile() || lstatSync(path).isSymbolicLink())
     throw new Error('profile_missing');
@@ -203,6 +206,7 @@ async function snapshotOwned<T>(
       if (e instanceof Error && e.message === 'endpoint_exists') throw e;
       throw new Error('owner_busy');
     }
+    if (upgradeDesktop) upgradeDesktopBinding(db, upgradeDesktop);
     const original = summary(db);
     const desktopBinding = db
       .prepare("SELECT value FROM meta WHERE key='desktop_assets_binding'")

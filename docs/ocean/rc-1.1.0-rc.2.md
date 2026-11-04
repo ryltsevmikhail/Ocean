@@ -529,8 +529,14 @@ first, the binding identity was re-anchored atomically to the observed identity 
 (`metadata` update guarded by the exact old value; `quick_check` and `foreign_key_check` clean). This
 is a disclosed environment repair, not a product feature: the product has no self-repair for device
 identity drift, and a future reboot that changes the device mapping can require the same disclosed
-repair. A follow-up product improvement (safe re-anchor only when inode/uid/gid/mode match) remains a
-known limitation of this candidate.
+repair. Matching inode/uid/gid/mode alone does not prove filesystem, subvolume or
+inode-incarnation continuity and is not a safe automatic repair plan. The stable
+follow-up implements a versioned Btrfs namespace/file-handle anchor and an exact,
+exclusive-owner legacy migration; already-drifted roots and legacy ready lineage
+still require explicit backup/restore/rebind recovery. See the
+[durable binding contract](../integration/desktop-assets.md#durable-binding-in-the-stable-11-implementation).
+This paragraph preserves the RC2 repair as historical evidence, not a supported
+four-field re-anchor mechanism.
 
 ## Release decision
 

@@ -165,3 +165,7 @@ export {
   type PluginBackupFile,
 } from './plugin-backup-files.js';
 export { localPluginClient, type LocalPluginClient } from './local-plugin-client.js';
+
+export { desktopBindingIdentity, desktopBindingMatches } from './desktop-root.js';
+export { desktopIdentityMode } from './desktop-identity.js';
+export { prepareDesktopBindingUpgrade } from './desktop-binding-upgrade.js';

@@ -1,3 +1,4 @@
+import { validDesktopBindingShape } from './desktop-identity.js';
 import { checkProfileArchiveFile } from './profile-archive-context.js';
 import * as fs from 'node:fs';
 import { join } from 'node:path';
@@ -115,7 +116,12 @@ export function verifyDesktopArchive(
       ),
       catalog = JSON.parse(original.toString('utf8')) as DesktopAssetCatalog;
     const { hash: digest, ...body } = catalog;
-    if (catalog.format !== 1 || hash(body) !== digest) throw Error('invalid_desktop_archive');
+    if (
+      catalog.format !== 1 ||
+      hash(body) !== digest ||
+      !validDesktopBindingShape(catalog.inventory?.binding)
+    )
+      throw Error('invalid_desktop_archive');
     const manifest = validateCodingAssetManifest(catalog.manifest);
     if (manifest.entries.length > 10000 || manifest.bytes > 134217728)
       throw Error('invalid_desktop_archive');

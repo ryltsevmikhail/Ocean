@@ -47,3 +47,5 @@ export {
   readPluginBackupInventory,
   readMaintenancePluginInventory,
 } from './plugin-backup-inventory.js';
+
+export type { DesktopBindingUpgrade } from './desktop-binding-upgrade.js';

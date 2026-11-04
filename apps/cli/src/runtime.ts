@@ -1,6 +1,7 @@
 import { runtimeServiceOver as serviceOver } from './runtime-service.js';
 import { codingTurnFactory } from './coding-turn-factory.js';
 import {
+  prepareDesktopBindingUpgrade,
   GitCodingProject,
   GitCodingApplyProject,
   SqliteProjectLeases,
@@ -62,6 +63,15 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         options.restoredAccess,
         active,
       );
+    } catch (error) {
+      store.close();
+      throw error;
+    }
+    try {
+      if (!restored)
+        store.maintainDesktopBinding((binding, inventory) =>
+          prepareDesktopBindingUpgrade(binding, inventory, dirname(dbPath)),
+        );
     } catch (error) {
       store.close();
       throw error;

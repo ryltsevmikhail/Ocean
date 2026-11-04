@@ -30,6 +30,15 @@ Existing rows remain intact. Old receipts without request bindings cannot prove
 which request committed: retries fail closed rather than returning unverifiable
 receipts. Legacy tool claims remain replay-blocking and appear in diagnostics.
 
+Schema 19 is the durable Desktop identity capability boundary. Its transactional
+schema migration preserves history, binding bytes and uncertain operation states;
+filesystem anchoring is a separate exclusive-owner step. RC2 (schema 18) refuses
+schema 19 before runtime ownership or execution. Ordinary supported-schema
+inspection stays read-only. Public backup maintenance may atomically advance an
+exact schema-18 Desktop binding and the capability version before freezing its
+snapshot; it never rewrites immutable ready rebind lineage. See
+[Desktop binding and legacy recovery](desktop-assets.md#durable-binding-in-the-stable-11-implementation).
+
 The v2 journal binds a claim to TaskRun, attempt, invocation and request before
 dispatch. Outcomes are `started`, `not_started`, `completed`, `failed` or
 `uncertain`. Results/output are not saved in the journal. Tool request fingerprints are SHA-256 digests; raw tool arguments and outputs

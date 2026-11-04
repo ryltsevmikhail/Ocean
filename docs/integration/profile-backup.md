@@ -338,3 +338,15 @@ the same real session path proves stored, logical, metadata and entry ceilings
 are shared across the chain without deduplication, refuses before publication,
 retains a refused incomplete destination and shows the independent verifier
 rejects it.
+
+## Stable Desktop identity compatibility
+
+The schema-19 host reads old format-2 schema 15/16/17/18 archives without opening
+archived Desktop source paths. Restore retains their binding as inert evidence;
+authorized new rebind establishes a fresh destination identity. Live capture uses
+the shared durable Desktop validator and current operation mount witness. Public
+backup maintenance can upgrade a fully matching ordinary schema-18 legacy binding
+before snapshot under exclusive ownership, with its schema capability update in
+the same transaction. Archive verification never performs this migration.
+Active ready lineage is immutable and excluded; see
+[Desktop binding and recovery](desktop-assets.md#durable-binding-in-the-stable-11-implementation).
