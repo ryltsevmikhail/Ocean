@@ -139,6 +139,21 @@ export class InMemoryConversationStore implements ConversationStore, ModelConnec
           modelId: value.model,
         });
       },
+      replaceBot: (bot, expectedProfileVersion) => {
+        const previous = state.bots.get(bot.id);
+        if (
+          previous?.profileVersion !== expectedProfileVersion ||
+          previous.workspaceId !== bot.workspaceId ||
+          !Number.isSafeInteger(expectedProfileVersion) ||
+          expectedProfileVersion < 1 ||
+          !Number.isSafeInteger(bot.profileVersion) ||
+          bot.profileVersion !== expectedProfileVersion + 1
+        )
+          throw Error('bot_profile_version_conflict');
+        if ([...state.bots.values()].some((b) => b.id !== bot.id && b.handle === bot.handle))
+          throw Error('handle_taken');
+        state.bots.set(bot.id, bot);
+      },
       modelBinding: (id) => state.bindings.get(id) ?? null,
       putModelBinding: (id, binding) => {
         if (!state.bots.has(id) || !state.connections.has(binding.connectionId))

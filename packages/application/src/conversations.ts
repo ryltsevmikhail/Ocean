@@ -59,7 +59,9 @@ export class ConversationService {
     return this.#deps.store.atomic((tx) => {
       const previous = tx.receipt(command.requestId);
       if (previous !== null)
-        return previous.binding === binding && previous.reply.kind !== 'review_request'
+        return previous.binding === binding &&
+          previous.reply.kind !== 'review_request' &&
+          previous.reply.kind !== 'bound_bot'
           ? ok(previous.reply)
           : conversationFailure('request_conflict');
       if (admission === 'existing_only') return conversationFailure('admission_closed');

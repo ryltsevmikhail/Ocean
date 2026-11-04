@@ -5,6 +5,7 @@ import type {
   RoomExecutionPolicy,
   Bot,
   BotModelBinding,
+  BoundBot,
   BotProfileInput,
   ConversationMessage,
   DirectRoom,
@@ -41,6 +42,7 @@ export interface ConversationReceipt {
   readonly binding: string;
   readonly reply:
     | ConversationReply
+    | { readonly kind: 'bound_bot'; readonly data: BoundBot }
     | {
         readonly kind: 'review_request';
         readonly data: {
@@ -68,6 +70,8 @@ export interface ConversationTransaction {
   botByHandle(handle: string): Bot | null;
   bots(): readonly Bot[];
   putBot(bot: Bot): void;
+  /** Compare and replace an existing profile; never insert. */
+  replaceBot(bot: Bot, expectedProfileVersion: number): void;
   modelBinding(botId: string): BotModelBinding | null;
   putModelBinding(botId: string, binding: BotModelBinding): void;
   room(id: string): Room | null;

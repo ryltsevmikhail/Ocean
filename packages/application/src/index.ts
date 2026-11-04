@@ -83,3 +83,5 @@ export * from './model-connection-types.js';
 export * from './model-credential-ports.js';
 export * from './model-connections.js';
 export { modelPublicResult, readModelCheck } from './model-connection-results.js';
+
+export * from './bot-model-binding.js';

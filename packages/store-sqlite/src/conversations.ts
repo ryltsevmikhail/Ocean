@@ -67,6 +67,9 @@ export class SqliteConversationStore implements ConversationStore {
           ? modelBindingStorage(db)
           : {
               modelBinding: () => null,
+              replaceBot: () => {
+                throw Error('unsupported_schema');
+              },
               putModelBinding: () => {
                 throw Error('unsupported_schema');
               },
@@ -183,9 +186,17 @@ export class SqliteConversationStore implements ConversationStore {
             reply === null ||
             typeof reply !== 'object' ||
             !('kind' in reply) ||
-            !['workspace', 'bot', 'room', 'message', 'turn', 'review', 'review_request'].includes(
-              String(reply.kind),
-            ) ||
+            typeof reply.kind !== 'string' ||
+            ![
+              'workspace',
+              'bot',
+              'bound_bot',
+              'room',
+              'message',
+              'turn',
+              'review',
+              'review_request',
+            ].includes(reply.kind) ||
             !('data' in reply)
           )
             throw new Error('Invalid conversation receipt');
