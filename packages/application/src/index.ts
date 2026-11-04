@@ -3,6 +3,12 @@ export * from './service.js';
 export * from './tools.js';
 export * from './command-commit.js';
 export * from './provider.js';
+export * from './provider-admission.js';
+export * from './provider-connection-ports.js';
+export * from './provider-connection-resolution.js';
+export * from './provider-connection-request.js';
+export * from './provider-connection-state.js';
+export * from './provider-connections.js';
 export * from './types.js';
 export * from './commands.js';
 export * from './lifecycle.js';
@@ -17,6 +23,12 @@ export * from './conversation-ports.js';
 export * from './conversations.js';
 
 export * from './direct-chat.js';
+export * from './chat-turn-execution.js';
+export * from './room-broadcast-views.js';
+export * from './room-broadcast-runner.js';
+export * from './room-broadcast.js';
+
+export * from './image-content.js';
 
 export * from './chat-review.js';
 
@@ -51,3 +63,16 @@ export * from './coding-finalization-binding.js';
 export * from './coding-finalization-execute.js';
 export * from './coding-finalization-recovery.js';
 export * from './coding-finalization-result.js';
+
+export * from './service-plugin-transport.js';
+
+export * from './plugin-ports.js';
+export * from './plugin-json.js';
+export * from './plugin-catalog.js';
+export * from './plugin-connections.js';
+export * from './plugin-access.js';
+export * from './plugin-admission.js';
+export * from './plugin-operation-ports.js';
+export * from './plugin-operations.js';
+export * from './plugin-turn-tools.js';
+export * from './plugin-adapter-identity.js';

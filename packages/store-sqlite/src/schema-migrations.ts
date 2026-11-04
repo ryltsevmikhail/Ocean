@@ -13,6 +13,13 @@ import { REVIEW_TABLES, migrateReviews } from './review-schema.js';
 import { migrateOwnerDecisions } from './owner-decisions.js';
 import { migrateRestoration } from './restore-origin.js';
 import { migrateCodingFinalizations } from './coding-finalization-schema.js';
+import {
+  PROVIDER_CONNECTION_TABLES,
+  migrateProviderConnections,
+} from './provider-connection-schema.js';
+import { BROADCAST_TABLES, migrateBroadcasts } from './broadcast-schema.js';
+import { PLUGIN_TABLES, migratePlugins } from './plugin-schema.js';
+import { PLUGIN_OPERATION_TABLES, migratePluginOperations } from './plugin-operation-schema.js';
 /** Additive migrations from every older supported schema; never guesses effect state. */
 export function applyMigrations(
   db: DatabaseSync,
@@ -83,4 +90,20 @@ export function applyMigrations(
   if (previousVersion < 14) migrateCodingFinalizations(db);
   else if (!existing.has('ocean_coding_finalizations'))
     throw Error('database schema is missing finalization tables');
+  if (previousVersion < 15) migrateProviderConnections(db);
+  else
+    for (const table of PROVIDER_CONNECTION_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 16) migrateBroadcasts(db);
+  else
+    for (const table of BROADCAST_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 17) migratePlugins(db);
+  else
+    for (const table of PLUGIN_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 18) migratePluginOperations(db);
+  else
+    for (const table of PLUGIN_OPERATION_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
 }

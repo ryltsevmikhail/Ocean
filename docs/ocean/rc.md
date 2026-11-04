@@ -2,6 +2,8 @@
 
 Qualified on BigPC on 2026-11-02. Q01–Q12 passed for the local Linux terminal product. The accepted candidate is **1.0.0-rc.3**. RC.1 and RC.2 are superseded by installer fixes. This records the RC acceptance. The owner subsequently authorized publication as Ocean 1.0 on 2026-11-02; see the release record below.
 
+> This document is the **Ocean 1.0** acceptance record. It does not describe the RC2 candidate. The next candidate is recorded separately in [rc-1.1.0-rc.2.md](rc-1.1.0-rc.2.md).
+
 ## Immutable candidate
 
 | Field                           | Value                                                                                        |

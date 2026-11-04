@@ -113,6 +113,23 @@ export class SqliteToolJournal implements ToolJournalPort {
       .run(payload, id, context.taskRunId, context.attemptId, fingerprint);
     if (result.changes !== 1) throw Error('unresolved apply effect missing');
   }
+  /**
+   * Owner acknowledgement of one uncertain service-plugin operation: records an
+   * exact resolution so the global unknown-effect hold is released while the
+   * original `uncertain` outcome and every replay protection stay intact.
+   * Never claims remote certainty and never authorizes a retry.
+   */
+  resolveUncertainNow(id: string, context: ToolEffectContext, tool: string, payload: string): void {
+    if (tool.length === 0) throw Error('plugin operation tool required');
+    const result = this.#db
+      .prepare(
+        `INSERT INTO tool_effect_resolutions_v1
+      SELECT id,task_run_id,attempt_id,fingerprint,? FROM tool_invocations_v2
+      WHERE id=? AND task_run_id=? AND attempt_id=? AND tool=? AND outcome='uncertain'`,
+      )
+      .run(payload, id, context.taskRunId, context.attemptId, tool);
+    if (result.changes !== 1) throw Error('uncertain plugin effect is missing');
+  }
   /** Includes legacy unresolved claims globally so upgrades cannot hide uncertainty. */
   async pending(taskRunId?: string): Promise<readonly ToolEffectRecord[]> {
     await Promise.resolve();
@@ -160,6 +177,10 @@ export class SqliteToolJournal implements ToolJournalPort {
   /** A restart can only lower a started claim to uncertain; it never permits replay. */
   async recover(id: string, context: ToolEffectContext): Promise<void> {
     await Promise.resolve();
+    this.recoverNow(id, context);
+  }
+  /** Synchronous recovery used inside an owner transaction; never permits replay. */
+  recoverNow(id: string, context: ToolEffectContext): void {
     if (context.taskRunId === '' && context.attemptId === '') {
       this.#db
         .prepare(

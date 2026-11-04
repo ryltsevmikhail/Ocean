@@ -63,6 +63,18 @@ export async function routeProfileCommand(
       );
       return 0;
     }
+    if (args.command === 'plugin') {
+      const { runPluginCommand } = await import('./plugin-command.js');
+      const result = await runPluginCommand(c, args, output, input, error);
+      output.write(JSON.stringify({ version: 1, ok: true, data: result.data }) + '\n');
+      return result.code;
+    }
+    if (args.command === 'broadcast') {
+      const { runBroadcastCommand } = await import('./broadcast-command.js');
+      const result = await runBroadcastCommand(c, args, input, output, error, controller.signal);
+      output.write(JSON.stringify({ version: 1, ok: true, data: result.data }) + '\n');
+      return result.code;
+    }
     const { runFinalizationCommand } = await import('./finalization-command.js');
     const result =
       args.command === 'run'

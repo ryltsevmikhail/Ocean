@@ -1,13 +1,9 @@
-import { runtimeDesktopAssets, desktopSubmitRefusal } from './desktop-assets.js';
-import { RuntimeRestoration } from './restoration.js';
 import {
-  restoredRuntimeAdmission,
-  restoreMarkerPresent,
-  runtimeIncomplete,
-} from '../runtime-restoration.js';
-import { readRestorationAuthority } from '@runnets/store-sqlite';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+  runtimeDesktopAssets,
+  desktopSubmitRefusal,
+  desktopImageResolver,
+} from './desktop-assets.js';
+import { RuntimeRestoration } from './restoration.js';
 import { LOCAL_RESTORE_METHODS } from '@runnets/contracts';
 import { profileCommand } from './profile-commands.js';
 import { PROFILE_METHODS } from '@runnets/contracts';
@@ -15,8 +11,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { closeSync } from 'node:fs';
 import { recoverEndpoint, publishEndpoint } from './endpoint.js';
 import { profileKey, type EndpointLayout } from './endpoint-files.js';
-import type { ProviderPort, RuntimeRecovery } from '@runnets/application';
-import { LOCAL_RUNTIME_MAX_WAIT_MS, LOCAL_ROOM_METHODS } from '@runnets/contracts';
+import type { ImageAssetResolverPort } from '@runnets/application';
+import { LOCAL_RUNTIME_MAX_WAIT_MS } from '@runnets/contracts';
 import type {
   LocalRuntimeIdentity,
   LocalRuntimeStatus,
@@ -26,37 +22,23 @@ import { localRuntimePaths } from '@runnets/tools-node';
 import { CodingPanelQueries } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
-import { LOCAL_DECISION_METHODS } from '@runnets/contracts';
 import { RuntimeTurns } from './turns.js';
-import { createProviderFromEnv } from '../engine/provider.js';
-import type { RuntimeOptions } from '../runtime.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
-import { drainBeforeDeadline } from './drain.js';
+import { assertRuntimeDrained } from './drain-supervision.js';
 import { RuntimeFinalization } from './finalization.js';
 import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
-export interface LocalRuntimeHost {
-  readonly identity: LocalRuntimeIdentity;
-  readonly recovery: RuntimeRecovery;
-  readonly closed: Promise<void>;
-  status(): LocalRuntimeStatus;
-  stop(): Promise<LocalRuntimeStop>;
-}
-export interface LocalRuntimeHostOptions {
-  readonly profile: string;
-  readonly restore?: boolean;
-  /** Host-only composition. Providers and coding authority never arrive over the wire. */
-  readonly codingTools?: Pick<
-    NonNullable<RuntimeOptions['codingTools']>,
-    'sandbox' | 'inspectSandbox'
-  >;
-  readonly provider?: ProviderPort | null;
-  /** Test-only deterministic clock; production omits it and uses Date.now (never wire input). */
-  readonly now?: () => number;
-  /** Additional host supervision joins runtime-owned execution before SQLite close. */
-  readonly drain?: () => Promise<'settled' | 'uncertain'>;
-  readonly drainDeadlineMs?: number;
-}
+import { LOCAL_PROVIDER_METHODS } from '@runnets/contracts';
+import { LOCAL_BROADCAST_METHODS } from '@runnets/contracts';
+import { systemClock } from '@runnets/store';
+import { RuntimeBroadcasts } from './broadcast.js';
+import { runtimeCapabilities } from './capabilities.js';
+import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
+import { settingsHosts } from './settings-hosts.js';
+import { hostPluginSettings } from './host-plugin.js';
+import type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
+export type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
+
 /** The existing runtime remains the only SQLite owner and recovery/effect journal executor. */
 export async function startLocalRuntime(
   options: LocalRuntimeHostOptions,
@@ -69,22 +51,20 @@ export async function startLocalRuntime(
   )
     throw Error('invalid_input');
   const paths = localRuntimePaths(options.profile);
-  const checkRestoration = () => {
-    if (runtimeIncomplete(paths.profile)) throw Error('recovery_required');
-    if (options.restore || !restoreMarkerPresent(paths.profile)) return;
-    // Ordinary host startup requires a verified ready epoch; inert quarantines never start.
-    const database = join(paths.profile, 'runtime.sqlite');
-    if (!existsSync(database)) throw Error('restore_restricted');
-    const { origin, active } = readRestorationAuthority(database);
-    if (!origin || !active) throw Error('restore_restricted');
-    restoredRuntimeAdmission(paths.profile, origin, undefined, active);
-  };
+  const checkRestoration = createRestorationCheck(paths, options.restore === true);
   checkRestoration();
   const originalProfile = profileKey(paths);
   let decisions: RuntimeDecisions;
+  let images: ImageAssetResolverPort | undefined;
+  const plugin = await hostPluginSettings(options);
   const runtime = openOceanProfile(paths.profile, false, {
+    pluginTransport: plugin.transport,
+    pluginEnv: plugin.env,
+    pluginMutationsAllowed: options.restore !== true,
     // This host alone validates and retires a surviving publication before serving.
     requireUnpublished: false,
+    imageResolver: (store) =>
+      (images = desktopImageResolver(store, paths.profile, paths.profileId)),
     ...(!options.restore && {
       codingTools: {
         ...(options.codingTools ?? registeredCodingTools(paths.profile)),
@@ -112,6 +92,21 @@ export async function startLocalRuntime(
     if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
       throw Error('durable_runtime_required');
     const restored = options.restore === true || runtime.restored === true;
+    // Saved/environment credentials and plugin state are resolved by the runtime, never by a client.
+    const { provider, plugins } = settingsHosts({
+      profile: paths.profile,
+      runtime,
+      env: process.env,
+      now: options.now,
+      restored,
+      restore: options.restore === true,
+      injected: options.provider === undefined ? null : options.provider,
+      disabled: options.provider === null,
+      providerSecretStore: options.providerSecretStore,
+      credentialDir: options.credentialDir,
+      providerBaseUrl: options.providerBaseUrl,
+    });
+    plugin.connections(runtime.plugins?.connections);
     const finalization = new RuntimeFinalization(
       runtime.finalization,
       decisions.owner,
@@ -129,33 +124,31 @@ export async function startLocalRuntime(
       protocol: 1,
       profileId: paths.profileId,
       instanceId: randomUUID(),
-      capabilities: [
-        'status',
-        'stop',
-        'turns.submit',
-        'desktop.assets',
-        'receipts.get',
-        'runs.get',
-        ...LOCAL_ROOM_METHODS,
-        ...LOCAL_DECISION_METHODS,
-        'coding.panel',
-        ...PROFILE_METHODS,
-        ...LOCAL_RESTORE_METHODS,
-        ...(options.restore ? [] : LOCAL_FINALIZATION_METHODS),
-        ...(options.restore ? ['restore.maintenance'] : []),
-      ],
+      capabilities: runtimeCapabilities(options.restore === true),
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
       runtime.chat,
-      options.restore
-        ? null
-        : options.provider === undefined
-          ? createProviderFromEnv(process.env)
-          : options.provider,
+      provider.activation,
       runtime.openRoomRuns(),
       identity.instanceId,
     );
+    if (!runtime.broadcasts || !runtime.conversationStore) throw Error('durable_runtime_required');
+    const broadcasts = new RuntimeBroadcasts({
+      service: runtime.broadcasts,
+      execution: {
+        tasks: runtime.service,
+        store: runtime.conversationStore,
+        clock: systemClock,
+        ...(runtime.pluginRuntime?.tools === null || runtime.pluginRuntime?.tools === undefined
+          ? {}
+          : { grantedTools: runtime.pluginRuntime.tools }),
+      },
+      clock: systemClock,
+      provider: provider.activation,
+      ...(images === undefined ? {} : { images }),
+    });
+    turns.attachControllers((runId) => broadcasts.controllerFor(runId));
     let databaseClosed = false;
     const descriptor = {
       protocol: 1 as const,
@@ -180,20 +173,20 @@ export async function startLocalRuntime(
         state = 'draining';
         stopping = (async (): Promise<LocalRuntimeStop> => {
           try {
-            if (
-              (await drainBeforeDeadline(async () => {
-                const [jobs, extra] = await Promise.all([
-                  turns.drain(),
-                  options.drain ? options.drain() : 'settled',
-                  decisions.drain(),
-                  panels.drain(),
-                  restoration.drain(),
-                  finalization.drain(),
-                ]);
-                return jobs === 'settled' && extra === 'settled' ? 'settled' : 'uncertain';
-              }, drainDeadlineMs)) !== 'settled'
-            )
-              throw Error('stop_incomplete');
+            await assertRuntimeDrained(
+              [
+                turns,
+                broadcasts,
+                options.drain,
+                decisions,
+                panels,
+                restoration,
+                finalization,
+                provider.settings,
+                plugins,
+              ],
+              drainDeadlineMs,
+            );
             endpoint.check();
             if (!transport || !publication || !endpoint.matches('runtime.sock', transport.socketFd))
               throw Error('endpoint_changed');
@@ -205,6 +198,7 @@ export async function startLocalRuntime(
             endpoint.unlink('runtime.sock', transport.socketFd);
             endpoint.sync();
             proof.retire(publication.digest);
+            await runtime.pluginRuntime?.shutdown();
             turns.closeObservers();
             databaseClosed = true;
             transport.server.close(() => resolveClosed());
@@ -241,11 +235,22 @@ export async function startLocalRuntime(
             return { error: { code: 'restore_restricted' } };
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
             return finalization.dispatch(method, params);
-          if (method === 'desktop.assets') return desktop(params, state !== 'ready');
-          if (method === 'turns.submit') {
-            const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
+          if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
+            return provider.settings.dispatch(method, params, detached);
+          if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
+          // Prepared-attachment admission runs before any submit dispatch, including
+          // the broadcast runner: a mismatched marker must never commit a message.
+          if (method === 'turns.submit' || method === 'broadcasts.submit') {
+            const code = desktopSubmitRefusal(
+              runtime.desktopAssets!,
+              params,
+              method === 'broadcasts.submit',
+            );
             if (code) return { error: { code } };
           }
+          if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
+            return broadcasts.dispatch(method, params, detached);
+          if (method === 'desktop.assets') return desktop(params, state !== 'ready');
           if (
             method === 'coding.panel' ||
             method === 'coding.diff' ||
@@ -286,13 +291,4 @@ export async function startLocalRuntime(
     }
     throw error;
   }
-}
-
-const MAINTENANCE_READS = new Set(
-  `rooms.list rooms.members history.list runs.list runs.events runs.result runs.get
-  receipts.get observe bots.list coding.show coding.diff coding.pending coding.panel
-  decisions.list decisions.get decisions.preview decisions.resolve`.split(/\s+/),
-);
-function maintenanceRead(method: string): boolean {
-  return MAINTENANCE_READS.has(method);
 }

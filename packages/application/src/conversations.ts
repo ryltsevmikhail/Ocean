@@ -8,6 +8,7 @@ import {
   type ConversationResult,
   type Room,
 } from '@runnets/domain';
+import type { ImageAssetResolverPort } from './image-content.js';
 import type { Clock } from './ports.js';
 import type {
   ConversationCommand,
@@ -20,6 +21,17 @@ export interface ConversationServiceDeps {
   readonly store: ConversationStore;
   readonly nextId: () => string;
   readonly clock: Clock;
+  /**
+   * Runtime-owned image authority. Every durable profile host composes it (the
+   * shared runtime; the TUI never opens a durable profile on its own); only
+   * ephemeral/no-asset hosts omit it. An attachment marker (image or text) is then
+   * refused explicitly, never silently dropped.
+   *
+   * The offline CLI host resolves images through the same port but does not
+   * replicate the runtime's pre-write prepared-`to` refusal; it keeps the same
+   * room/hash/bytes checks in admission and refuses the turn instead.
+   */
+  readonly images?: ImageAssetResolverPort | undefined;
 }
 
 /** Own workspace, profile and direct-history rules under one atomic adapter transaction. */

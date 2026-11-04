@@ -8,7 +8,9 @@ import {
   type ConversationResult,
 } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
+import { providerAdmits } from './provider-admission.js';
 import type { ConversationServiceDeps } from './conversations.js';
+import { admitImageRequest } from './image-content.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
 import { roomContext } from './room-context.js';
 
@@ -97,22 +99,29 @@ export function admitChat(
       tx.putReceipt(request.requestId, { binding, reply: { kind: 'message', data: record } });
       return ok({ record });
     }
+    // A durable batch holds the room between its children; only Notes stay available.
+    if (tx.broadcastBatchForRoom(room.id) !== null) return conversationFailure('batch_open');
     const active = tx.activeChatTurn(room.id);
     if (active !== null)
       return conversationFailure(active.status === 'uncertain' ? 'recovery_required' : 'room_busy');
-    if (
-      provider === null ||
-      provider.id !== selected.provider ||
-      !provider.models.includes(selected.model) ||
-      !provider.capabilities.streaming ||
-      !provider.capabilities.usage
-    )
-      return conversationFailure('provider_unavailable');
-    const context = roomContext(tx, room, selected, request.text);
-    if (!context.ok) return context;
+    if (!providerAdmits(provider, selected)) return conversationFailure('provider_unavailable');
     const id = deps.nextId();
     const messageId = deps.nextId();
     const seq = tx.nextSequence(room.id);
+    const context = roomContext(
+      tx,
+      room,
+      selected,
+      { text: request.text, messageId, requestId: request.requestId, phase: 'committing' },
+      deps.images,
+    );
+    if (!context.ok) return context;
+    const images = admitImageRequest({
+      provider,
+      model: selected.model,
+      messages: context.value,
+    });
+    if (!images.ok) return images;
     const turn: ChatTurn = {
       ...(request.taskId === undefined ? {} : { codingTaskId: request.taskId }),
       id,

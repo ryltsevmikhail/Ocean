@@ -26,7 +26,10 @@ export function readRoomRuns(room: string) {
     (r) => r.turnId,
   );
 }
-export function useRoomFeed(preview: (roomId: string, message: Message) => void) {
+export function useRoomFeed(
+  preview: (roomId: string, message: Message) => void,
+  sync?: (roomId: string) => Promise<void>,
+) {
   const history = ref<Message[]>([]),
     runs = ref<Run[]>([]),
     readError = ref('');
@@ -58,6 +61,7 @@ export function useRoomFeed(preview: (roomId: string, message: Message) => void)
           reset ? 0 : (history.value.at(-1)?.seq ?? 0),
         );
         const snapshots = await readRoomRuns(room);
+        await sync?.(room);
         if (token !== epoch) return;
         if (reset) history.value = messages;
         else history.value = history.value.concat(messages);

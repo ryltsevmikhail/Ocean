@@ -9,8 +9,11 @@ import { ProviderError } from './provider.js';
 
 export interface HttpRequest {
   readonly url: string;
+  /** HTTP method; existing chat-completion callers keep the historical POST default. */
+  readonly method?: 'GET' | 'POST';
   readonly headers: Readonly<Record<string, string>>;
-  readonly body: string;
+  /** Request body; absent for a bounded metadata GET. */
+  readonly body?: string;
   readonly signal?: AbortSignal;
 }
 
@@ -65,9 +68,9 @@ export function createFetchHttpClient(fetchImpl: FetchLike = globalThis.fetch): 
       let response: Response;
       try {
         const init: RequestInit = {
-          method: 'POST',
+          method: request.method ?? 'POST',
           headers: request.headers,
-          body: request.body,
+          ...(request.body === undefined ? {} : { body: request.body }),
           ...(request.signal === undefined ? {} : { signal: request.signal }),
         };
         response = await fetchImpl(request.url, init);

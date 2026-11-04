@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { runText } from './runtime-text.js';
+import { receiptLabel, runText } from './runtime-text.js';
 import type { Run } from '../protocol.js';
 defineProps<{
   feedback: string;
   receipt: string;
+  accepted?: boolean;
   error: boolean;
   run: Run | undefined;
   label: (id: string) => string;
@@ -21,9 +22,7 @@ defineEmits<{ refresh: [] }>();
     </div>
     <div role="status">
       <p v-if="feedback && !error">{{ feedback }}</p>
-      <p v-if="receipt" :title="receipt">
-        {{ receipt.startsWith('Принято') ? 'Сообщение принято' : 'Квитанция не подтверждена' }}
-      </p>
+      <p v-if="receipt" :title="receipt">{{ receiptLabel(receipt, accepted) }}</p>
       <p v-if="run && run.turnStatus !== 'failed'" :title="run.runId + ' [v' + run.version + ']'">
         {{ runText(run, label(run.performerId)) }}
       </p>

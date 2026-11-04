@@ -1,8 +1,11 @@
 # Runtime-owned Desktop asset capture (7.7)
 
-Implemented in development source after accepted 7.6 (`ce482d5`). This is a
-composable Desktop subgraph, not public full-format-2 backup or complete profile
-restore. Independent acceptance remains with the controller.
+The original 7.7 subgraph was implemented after accepted 7.6 (`ce482d5`).
+Public full-format-2 backup/quarantine restore followed in 7.8 and explicit owner
+rebind in 7.9. Installed Linux qualification is accepted through 7.12. The current
+7.13 real GUI gate and its retained evidence are described in
+[Desktop integration](desktop-client.md#current-installed-runtime-gui-qualification-713);
+independent acceptance of that gate remains with the controller.
 
 ## Trust and ownership
 
@@ -31,8 +34,8 @@ continued old-client writes cannot alter canonical bytes or create associations.
 Schema 12 adds operation, upload and adopted-message tables transactionally.
 `meta.desktop_assets_binding` records the authenticated profile hash, canonical
 root/device/inode/mount/private identity, and original root as provenance.
-Relocated profiles refuse the old binding before reading its source; rebind is
-future explicit owner work. An admitted but unfinished enrollment remains
+Relocated profiles refuse the old binding before reading its source; the owner
+must use the explicit maintenance rebind flow. An admitted but unfinished enrollment remains
 `desktop_outcome_unknown`, with evidence retained and no automatic retry/repair.
 
 Every reachable Desktop publication now executes synchronously in the owner
@@ -63,6 +66,29 @@ marker remains text unless exact owner preparation and frozen message/request
 records prove its association. No send is replayed by capture or materialization.
 Native image rendering, preview, four-file selection and export remain host
 operations; save writes the exact authorized read bytes.
+
+### RC2 marker hardening and inert unbound markers
+
+The runtime refuses any marker-bearing submit body that does not decode or has no
+completed `prepare:<room>:<requestId>` operation for the same room and request id
+before the message/turn/batch is written (`image_unavailable`; a started
+preparation is `desktop_outcome_unknown`; a body/recipient mismatch is
+`request_conflict`). Broadcast submission checks this before the batch exists;
+direct turns check it in admission. A Note keeps its no-model semantics and is
+prepared with `to: null`, so it follows the same binding. The offline CLI composes
+the same resolver and admission checks but does not replicate the runtime's
+pre-write prepared-`to` refusal: it refuses the turn at admission with zero
+provider dispatch.
+
+History reconstruction no longer poisons a room on a marker persisted before this
+hardening. A marker body with no durable preparation, or with no receipt/adoption
+binding to that exact message, is inert display text: the resolver reports it as
+unbound and everything from the marker onward is stripped. A genuine image message
+whose authority exists but whose blob, metadata or header is missing, replaced,
+corrupt or oversized still fails closed with zero bytes sent. The accepted
+`desktop-assets.test.ts` migration case seeds such a pre-fix row directly, and the
+`image-binding.test.ts` regression proves the room stays usable (a later turn completes with the
+marker inert, no image part, no provider request for the forged bytes).
 
 `snapshotCodingDatabase(path, destination, callback)` now also supplies a bounded
 `DesktopAssetInventory` as the callback's second argument, independently of coding
@@ -116,15 +142,17 @@ unit-injected separately from the opt-in native mount qualification.
 Independent client-process tests exercise the production shared Desktop adapter,
 a paused upload versus snapshot, snapshot-held runtime startup refusal, reconnect
 and an actual owner SIGKILL in receipt link/unlink. Linux tests qualify real child
-mount refusal before body reads and late shared-mmap corruption. Electron host
-integration uses a mocked native rendering boundary; new GUI/installed behavior
-is not qualified here. Historical pre-7.7 GUI scripts need separate qualification
-against the new canonical ownership layout.
+mount refusal before body reads and late shared-mmap corruption. The original Electron host
+unit integration uses a mocked native rendering boundary. The 7.13 driver adds
+actual standard-entrypoint Wayland windows against an installed 7.12 runtime,
+with canonical operation faults, exact exported bytes and source-deleted public
+restore; it preserves its private screenshots and event logs. Historical pre-7.7
+GUI results remain historical and do not establish canonical ownership.
 
 Run root `pnpm check`, `pnpm build`, `pnpm format:check`; targeted process:
 `pnpm exec vitest run --config vitest.process.config.ts apps/cli/src/local-runtime/desktop-assets-process.test.ts`;
 native: `OCEAN_SANDBOX_NATIVE=1 pnpm exec vitest run --config vitest.process.config.ts packages/tools-node/src/desktop-assets-native.test.ts`.
-Use explicit disposable HOME, XDG_RUNTIME_DIR and userData for every qualification.
+Use explicit disposable HOME, all XDG directories, TMPDIR and userData for every qualification.
 
 The low-level SQLite-only capture port still refuses external coding and bound
 Desktop assets; unregistered marker-bearing profiles require explicit enrollment
@@ -132,5 +160,6 @@ instead of silently producing a new SQLite-only backup. Old format-1 text-only
 archives retain their historical summary shape and restore guard. New public
 backups use [format 2](profile-backup.md), including zero-coding-task Desktop
 profiles. Unified budgets and inert quarantine are implemented in 7.8; executable
-rebind, remaining crash intervals, installed/live RC, current GUI acceptance,
-final whole-branch review and publication remain OPEN.
+rebind and installed Linux gates are implemented and separately accepted through
+7.12. Current GUI independent acceptance, live RC, final whole-branch review and
+publication remain OPEN.

@@ -28,6 +28,10 @@ export interface DesktopAssetStore {
   uploaded(id: string): { room: string; name: string; size: number; sha256: string; data: string };
   prepared(room: string, requestId: string): DesktopPreparation | null;
   associated(room: string, requestId: string, messageId: string, prepared: string): boolean;
+  /** Persisted user message body by room identity, for image authority re-checks. */
+  message(room: string, messageId: string): { readonly body: string } | null;
+  /** Enrollment-time adoption binding for a pre-existing Desktop message. */
+  adopted(room: string, requestId: string, messageId: string, body: string): boolean;
 }
 export interface DesktopAssetFiles {
   enroll(

@@ -14,6 +14,7 @@ vi.mock('node:fs', async (original) => {
 import { snapshotCodingDatabase } from '@runnets/store-sqlite';
 import { captureProfileBackupAssets } from '@runnets/tools-node';
 import { fullBackupFixture } from '../../test-fixtures/profile-backup.test.js';
+import { emptyPluginBackupInventory } from '@runnets/domain';
 const roots: string[] = [];
 afterEach(async () => {
   const actual = await vi.importActual<typeof fs>('node:fs');
@@ -110,6 +111,7 @@ it('reserves two independent Git archive occurrences sharing one closure before 
             {
               inventory,
               desktop,
+              plugins: emptyPluginBackupInventory(),
               profile: f.directory,
               managed: join(f.directory, 'worktrees'),
               databaseBytes: fs.statSync(frozen).size,

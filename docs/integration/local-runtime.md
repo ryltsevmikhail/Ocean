@@ -447,9 +447,15 @@ pnpm exec vitest run --maxWorkers=2 apps/cli/src/acp/{agent,agent-provider,permi
 OCEAN_SANDBOX_NATIVE=1 pnpm exec vitest run --maxWorkers=1 apps/cli/src/local-runtime/{vote-process-native,decision-native,decision-crash,binder-netns-native,endpoint-native}.test.ts apps/cli/src/ocean/{room-tui-coding-native,remote-shutdown-native}.test.ts packages/tools-node/src/sandbox-native.test.ts
 node --test apps/desktop/qa/window-close.test.mjs
 pnpm --filter @ocean/desktop bundle
-node apps/desktop/qa/entrypoint.mjs
+OCEAN_QA_CLI=/absolute/installed/apps/cli/dist/main.js node apps/desktop/qa/current.mjs
 node apps/desktop/qa/smoke.mjs
 ```
+
+The historical `apps/desktop/qa/entrypoint.mjs` step recorded above was retired in
+RC2 (it waited for a removed cancellation control); `qa/current.mjs` is the
+maintained replacement for that two-window acceptance run, so the entry above is
+the current equivalent, not a re-execution of the old script. On Wayland,
+`WAYLAND_DISPLAY` must be an absolute socket path.
 
 Clean root check passed 1,251 tests in 222 files, with 62 skipped. The development workspace included a separate atlas suite and passed 1,324 in 223 files with the same skips. The explicit process and access matrix passed 107 in 21 files. This includes the actual CLI and ACP stdio owner-busy exit 3, separate-profile session updates, exact review, stale endpoint refusal, bounded reads and observation backpressure. The opt-in native run passed 27 in 8 files, including journal recovery, foreign UID and mount refusal, live kernel socket attestation, sandbox containment and observable cgroup cleanup on supported paths.
 

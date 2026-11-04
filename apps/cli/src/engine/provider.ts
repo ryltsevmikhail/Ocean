@@ -1,9 +1,11 @@
 /**
- * Provider wiring for CLI hosts.
+ * Provider wiring for env-only hosts (CLI, TUI, ACP).
  *
  * Key resolution belongs to the host: the adapter receives the value and never
  * reads the environment, so the key cannot leak into an event, a log line or an
- * error message.
+ * error message. This is an explicitly *external* credential source: the
+ * runtime-owned settings API never copies it into the private Ocean store, and
+ * an explicit owner disconnect in the shared runtime blocks it.
  */
 
 import type { ProviderPort } from '@runnets/provider-core';

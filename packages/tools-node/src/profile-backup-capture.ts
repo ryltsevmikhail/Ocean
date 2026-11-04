@@ -18,6 +18,7 @@ import { archiveCodingAssetTree } from './coding-asset-archive.js';
 import { archivePartialCodingGit } from './coding-git-partial-archive.js';
 import { archiveProfileGit } from './profile-backup-git.js';
 import { captureDesktopAssets, archiveDesktopAssets } from './desktop-assets.js';
+import { archivePluginBackupFiles } from './plugin-backup-files.js';
 import type { CodingDependencyTree } from './coding-dependency-types.js';
 import { verifyProfileAssetArchive } from './profile-backup-verify.js';
 import { captureProfileLineage } from './profile-lineage-capture.js';
@@ -43,6 +44,7 @@ export function profileBackupIdentity(catalog: ProfileBackupAssetCatalog) {
     recovery: catalog.recovery.hash,
     dependencies: catalog.dependencies.hash,
     desktop: catalog.desktop?.hash ?? null,
+    plugins: catalog.plugins.hash,
   };
 }
 /** One ownership-held graph. The callback remains inside the original source-observation lifetime. */
@@ -111,6 +113,11 @@ export async function captureProfileBackupAssets(
             join(destination, 'desktop'),
           )
         : null;
+      const plugins = archivePluginBackupFiles(
+        source.plugins,
+        source.profile,
+        join(destination, 'plugins'),
+      );
       if (partition.lineage && basename(destination) !== 'assets')
         throw Error('invalid_profile_backup_preparation');
       const lineage = partition.lineage
@@ -124,6 +131,7 @@ export async function captureProfileBackupAssets(
         recovery,
         dependencies,
         desktop,
+        plugins,
         git,
       };
       session.budget.charge('catalog', { metadata: Buffer.byteLength(JSON.stringify(body)) + 80 });

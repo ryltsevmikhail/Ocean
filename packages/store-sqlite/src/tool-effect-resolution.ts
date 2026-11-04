@@ -7,10 +7,16 @@ export function createEffectResolutions(db: DatabaseSync): void {
     PRIMARY KEY(task_run_id,attempt_id,id)
   ) STRICT`);
 }
-/** Original uncertain outcome is never rewritten; only its exact apply resolution excludes a hold. */
+/**
+ * An uncertain effect keeps the global hold until its exact owner resolution
+ * exists. Only two writers create a resolution row, and each validates the
+ * effect first (`coding_apply` reconciliation, service-plugin operation
+ * acknowledgement). The original uncertain outcome is never rewritten; only
+ * its exact resolution excludes the hold.
+ */
 export function unresolvedEffectSql(alias: string): string {
   return `${alias}.outcome IN ('started','uncertain') AND NOT (
-    ${alias}.outcome='uncertain' AND ${alias}.tool='coding_apply' AND EXISTS (
+    ${alias}.outcome='uncertain' AND EXISTS (
       SELECT 1 FROM tool_effect_resolutions_v1 r WHERE r.id=${alias}.id
       AND r.task_run_id=${alias}.task_run_id AND r.attempt_id=${alias}.attempt_id
       AND r.fingerprint=${alias}.fingerprint))`;

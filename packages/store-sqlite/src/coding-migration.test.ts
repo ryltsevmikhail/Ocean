@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, it } from 'vitest';
-import { initializeSchema } from './schema.js';
+import { SCHEMA_VERSION, initializeSchema } from './schema.js';
 const dbs: DatabaseSync[] = [];
 afterEach(() => {
   for (const db of dbs.splice(0)) db.close();
@@ -29,7 +29,9 @@ it('migrates frozen released schema 5 without granting bots rights or changing o
   initializeSchema(db);
   for (const [name, rows] of before)
     expect(db.prepare('SELECT * FROM "' + name + '"').all()).toEqual(rows);
-  expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe('14');
+  expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe(
+    String(SCHEMA_VERSION),
+  );
   expect(db.prepare('SELECT * FROM ocean_coding_tasks').all()).toEqual([]);
   expect(db.prepare('SELECT * FROM ocean_coding_receipts').all()).toEqual([]);
   expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
@@ -46,5 +48,7 @@ it('rolls back a failed 5→7 migration and permits retry without losing legacy 
   expect(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys).toBe(1);
   db.exec('DROP TABLE ocean_coding_receipts');
   initializeSchema(db);
-  expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe('14');
+  expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value).toBe(
+    String(SCHEMA_VERSION),
+  );
 });

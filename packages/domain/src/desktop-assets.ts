@@ -78,14 +78,33 @@ export function validDesktopAttachment(a: unknown): a is DesktopAttachment {
     v.mime.length <= 100
   );
 }
-const marker = '\n\n[Ocean Desktop attachments v1]\n';
+/**
+ * Display-only marker appended by the Desktop preparation.
+ *
+ * Never model authority and never model text: the runtime strips it and resolves
+ * image bytes from the durable preparation operation instead.
+ */
+export const DESKTOP_ATTACHMENT_MARKER = '\n\n[Ocean Desktop attachments v1]\n';
+export const hasDesktopAttachmentMarker = (body: string): boolean =>
+  body.includes(DESKTOP_ATTACHMENT_MARKER);
+/**
+ * Model-visible text: everything before the first marker. Anything at or after a
+ * marker is display-only evidence, so pasted marker text cannot reach a model.
+ */
+export function desktopAttachmentText(body: string): string {
+  const index = body.indexOf(DESKTOP_ATTACHMENT_MARKER);
+  return index < 0 ? body : body.slice(0, index);
+}
 export function decodeDesktopAttachments(
   body: string,
 ): { body: string; requestId: string; files: DesktopAttachment[] } | null {
-  const index = body.lastIndexOf(marker);
+  const index = body.lastIndexOf(DESKTOP_ATTACHMENT_MARKER);
   if (index < 0) return null;
   try {
-    const value = JSON.parse(body.slice(index + marker.length)) as Record<string, unknown>;
+    const value = JSON.parse(body.slice(index + DESKTOP_ATTACHMENT_MARKER.length)) as Record<
+      string,
+      unknown
+    >;
     if (
       value['version'] !== 1 ||
       !desktopUuid(value['requestId']) ||
@@ -106,5 +125,5 @@ export function encodeDesktopAttachments(
   requestId: string,
   files: readonly DesktopAttachment[],
 ): string {
-  return body + marker + JSON.stringify({ version: 1, requestId, files });
+  return body + DESKTOP_ATTACHMENT_MARKER + JSON.stringify({ version: 1, requestId, files });
 }

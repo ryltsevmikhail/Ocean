@@ -79,3 +79,20 @@ test('a denied group signal reports the permission error', async (t) => {
   }
   assert.equal(absent(-proc.pid), true);
 });
+
+test('dispose awaits a pnpm-style child in another group of the owned session', async () => {
+  const code = `
+    const {spawn} = require('node:child_process');
+    const child = spawn('python3', ['-c', 'import os,time; os.setpgrp(); print(os.getpid(),flush=True); time.sleep(60)'], {stdio:'inherit'});
+    setInterval(() => {}, 1000);
+  `;
+  const group = launchDesktopGroup(process.execPath, ['-e', code], {});
+  const childPid = Number(String((await once(group.proc.stdout, 'data'))[0]).trim());
+  try {
+    await group.dispose(500);
+    assert.equal(absent(childPid), true);
+  } finally {
+    if (!absent(childPid)) process.kill(childPid, 'SIGKILL');
+    await group.dispose(1000);
+  }
+});

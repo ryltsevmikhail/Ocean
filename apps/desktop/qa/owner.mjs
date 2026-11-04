@@ -1,70 +1,178 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  appendFileSync,
+  readFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { setTimeout } from 'node:timers/promises';
 
 // Only the isolated foreground owner receives the synthetic provider and test key.
-export async function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'ocean-gui-'));
+export async function fixture(options = {}) {
+  const root = mkdtempSync(join(options.root ?? tmpdir(), 'ocean-gui-'));
   const profile = join(root, 'profile'),
-    run = join(root, 'run'),
     workspace = join(root, 'workspace');
-  mkdirSync(run, { mode: 0o700 });
-  mkdirSync(workspace);
-  const cli = resolve('apps/cli/dist/main.js');
-  const env = { PATH: process.env.PATH, XDG_RUNTIME_DIR: run };
+  const env = { PATH: process.env.PATH };
+  for (const [key, folder] of Object.entries({
+    HOME: 'home',
+    XDG_CONFIG_HOME: 'config',
+    XDG_DATA_HOME: 'data',
+    XDG_CACHE_HOME: 'cache',
+    XDG_STATE_HOME: 'state',
+    XDG_RUNTIME_DIR: 'run',
+    TMPDIR: 'tmp',
+  })) {
+    env[key] = join(root, folder);
+    mkdirSync(env[key], { mode: 0o700 });
+  }
+  mkdirSync(workspace, { mode: 0o700 });
+  const cli = resolve(options.cli ?? process.env.OCEAN_QA_CLI ?? 'apps/cli/dist/main.js');
+  // Owner-only environment (for example a fixture credential reference); it must not
+  // leak into the renderer or the CLI command environment.
+  const extraEnv = options.extraEnv ?? {};
   const args = ['--profile', profile, '--json'];
   function command(...words) {
-    const out = execFileSync(process.execPath, [cli, ...words, ...args], { env, encoding: 'utf8' });
+    let out,
+      code = 0;
+    try {
+      out = execFileSync(process.execPath, [cli, ...words, ...args], { env, encoding: 'utf8' });
+    } catch (error) {
+      code = error.status;
+      out = error.stdout;
+      appendFileSync(
+        join(root, 'commands.jsonl'),
+        JSON.stringify({ cli, words: [...words, ...args], code, output: out }) + '\n',
+      );
+      throw error;
+    }
+    appendFileSync(
+      join(root, 'commands.jsonl'),
+      JSON.stringify({ cli, words: [...words, ...args], code, output: out }) + '\n',
+    );
     return JSON.parse(out).data;
   }
   command('init', '--workspace', workspace);
-  const owner = spawn(
-    process.execPath,
-    [
-      '--import',
-      resolve('apps/desktop/qa/provider.mjs'),
-      '--import',
-      resolve('apps/desktop/qa/drop-reply.mjs'),
-      cli,
-      'runtime',
-      'start',
-      ...args,
-    ],
-    {
-      env: { ...env, DEEPSEEK_API_KEY: 'fixture-only', OCEAN_TEST_LOG: join(root, 'requests') },
+  let owner,
+    identity,
+    exit,
+    log = '';
+  async function start() {
+    log = '';
+    // A QA owner entry may compose the same runtime in-process (deterministic fake
+    // transports) while still publishing the authenticated endpoint Desktop uses.
+    const ownerEntry = options.ownerEntry;
+    const spawnArgs = ownerEntry
+      ? [ownerEntry, ...(options.ownerEntryArgs ?? []), '--profile', profile]
+      : [
+          '--import',
+          resolve('apps/desktop/qa/provider.mjs'),
+          '--import',
+          resolve('apps/desktop/qa/drop-reply.mjs'),
+          cli,
+          'runtime',
+          'start',
+          ...args,
+        ];
+    owner = spawn(process.execPath, spawnArgs, {
+      env: {
+        ...env,
+        DEEPSEEK_API_KEY: 'fixture-only',
+        OCEAN_TEST_LOG: join(root, 'requests'),
+        ...(options.modelLog ? { OCEAN_TEST_MODEL_LOG: '1' } : {}),
+        ...extraEnv,
+        ...(options.ownerEnv === undefined ? {} : options.ownerEnv(root)),
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-  const exit = new Promise((resolve) => owner.once('close', resolve));
-  let log = '';
-  owner.stdout.on('data', (b) => (log += b));
-  owner.stderr.on('data', (b) => (log += b));
-  async function close() {
-    owner.kill('SIGKILL');
+    });
+    const stat = readFileSync('/proc/' + owner.pid + '/stat', 'utf8');
+    identity = { pid: owner.pid, start: stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19] };
+    exit = new Promise((resolve) =>
+      owner.once('close', (code, signal) => resolve({ code, signal })),
+    );
+    owner.stdout.on('data', (b) => (log += b));
+    owner.stderr.on('data', (b) => (log += b));
+    for (let i = 0; i < 200; i++) {
+      if (log.includes('"ready"')) return;
+      if (owner.exitCode !== null) break;
+      await setTimeout(50);
+    }
+    const failure = Error('owner startup failed ' + log);
+    try {
+      await stop();
+    } catch (error) {
+      failure.cause = error;
+      await retire(error);
+    }
+    writeFileSync(join(root, 'startup-error.log'), String(failure), { mode: 0o600 });
+    throw failure;
+  }
+  async function stop() {
+    if (owner.exitCode === null) command('runtime', 'stop');
     await exit;
-    rmSync(root, { recursive: true, force: true });
+    writeFileSync(join(root, 'owner.log'), log, { mode: 0o600 });
+    writeFileSync(join(root, 'owner-' + owner.pid + '.log'), log, { mode: 0o600 });
   }
-  for (let i = 0; i < 200; i++) {
-    if (log.includes('"ready"')) return { root, profile, env, command, close };
-    if (owner.exitCode !== null) break;
-    await setTimeout(50);
+  async function retire(error) {
+    let sameOwner = false;
+    try {
+      const stat = readFileSync('/proc/' + identity.pid + '/stat', 'utf8');
+      sameOwner = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19] === identity.start;
+    } catch (readError) {
+      if (readError.code !== 'ENOENT') throw readError;
+    }
+    if (sameOwner) owner.kill('SIGKILL');
+    const outcome = await exit;
+    // Retirement of this process is not confirmation of an Ocean effect's cancellation.
+    // Keep startup/stop diagnostics and all uncertain fixture state for inspection.
+    writeFileSync(join(root, 'owner.log'), log, { mode: 0o600 });
+    writeFileSync(join(root, 'owner-' + owner.pid + '.log'), log, { mode: 0o600 });
+    writeFileSync(join(root, 'cleanup-stop-error.log'), String(error), { mode: 0o600 });
+    writeFileSync(
+      join(root, 'cleanup-owner-exit.json'),
+      JSON.stringify(
+        {
+          ...identity,
+          signalRequested: sameOwner ? 'SIGKILL' : null,
+          outcome,
+        },
+        null,
+        2,
+      ),
+      { mode: 0o600 },
+    );
   }
-  await close();
-  throw Error('owner startup failed ' + log);
+  async function close() {
+    try {
+      await stop();
+    } catch (error) {
+      await retire(error);
+    }
+    if (!(options.preserve ?? process.env.OCEAN_QA_PRESERVE === '1'))
+      rmSync(root, { recursive: true, force: true });
+  }
+  if (options.autoStart !== false) await start();
+  return {
+    root,
+    profile,
+    env,
+    cli,
+    get owner() {
+      return owner;
+    },
+    command,
+    close,
+    stop,
+    start,
+  };
 }
 export function windowEnv(f) {
   const result = { ...f.env, OCEAN_DESKTOP_PROFILE: f.profile };
-  for (const key of [
-    'HOME',
-    'DISPLAY',
-    'DBUS_SESSION_BUS_ADDRESS',
-    'LANG',
-    'XAUTHORITY',
-    'XDG_SESSION_TYPE',
-  ]) {
+  for (const key of ['DISPLAY', 'LANG', 'XAUTHORITY', 'XDG_SESSION_TYPE']) {
     if (process.env[key]) result[key] = process.env[key];
   }
   if (process.env.WAYLAND_DISPLAY)

@@ -11,6 +11,7 @@ import { verifyProfileAssetArchive, withProfileArchive } from './profile-backup-
 import { restoreCodingDependencyTask } from './coding-dependency-archive.js';
 import { restoreCodingAssetTree } from './coding-asset-restore.js';
 import { restoreDesktopAssets } from './desktop-assets.js';
+import { restorePluginBackupFiles } from './plugin-backup-files.js';
 /** Exact inert archive evidence copy, checked against the first private metadata and byte observation. */
 export function copyEvidence(source: CodingAssetCapture, destination: string): ProfileBackupOutput {
   const output = new ProfileBackupOutput(destination),
@@ -120,6 +121,7 @@ export function restoreProfileBackupAssets(
   source: string,
   destination: string,
   expected: ProfileBackupAssetIdentity,
+  profile?: string,
 ) {
   if (destination === source || destination.startsWith(source + '/'))
     throw Error('invalid_profile_backup_destination');
@@ -151,6 +153,11 @@ export function restoreProfileBackupAssets(
         restoreCodingAssetTree(join(source, 'recovery', name), join(destination, 'recovery', name));
       if (catalog.desktop)
         restoreDesktopAssets(join(source, 'desktop'), join(destination, 'desktop'));
+      if (catalog.plugins) {
+        // Verified declarative copies only; a restore never activates a connection.
+        if (profile === undefined) throw Error('invalid_backup');
+        restorePluginBackupFiles(join(source, 'plugins'), profile);
+      }
       output.write('relationships.json', catalog);
     });
     output!.publish();

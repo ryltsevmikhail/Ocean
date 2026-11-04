@@ -53,6 +53,14 @@ export {
 export * from './local-runtime-paths.js';
 export * from './local-runtime-framing.js';
 export * from './local-runtime-client.js';
+export * from './local-provider-client.js';
+export * from './local-broadcast-client.js';
+export {
+  createProviderSecretStore,
+  providerCredentialDirectory,
+  PROVIDER_SECRET_FILE,
+  PROVIDER_CREDENTIAL_SUFFIX,
+} from './provider-secret-store.js';
 
 export {
   archivePartialCodingGit,
@@ -80,6 +88,8 @@ export {
 } from './desktop-assets.js';
 export type { DesktopAssetCapture, DesktopAssetCatalog } from './desktop-assets.js';
 export { desktopAssetFiles, desktopLegacyRoot } from './desktop-enrollment.js';
+export { parseImageHeader, type ImageHeader } from './image-header.js';
+export { desktopImageResolver, type DesktopImageAuthorityStore } from './desktop-image-resolver.js';
 export * from './local-desktop-client.js';
 
 export { captureProfileBackupAssets, type ProfileBackupCapture } from './profile-backup-capture.js';
@@ -137,3 +147,21 @@ export {
 export { deriveLineagePartition } from './profile-lineage-partition.js';
 export { verifyLineageArchives } from './profile-lineage-verify.js';
 export { readLineageFile, type LineageFileCapture } from './profile-lineage-file.js';
+
+export {
+  createPluginInstallStore,
+  createEnvironmentCredentialReferences,
+  pluginDirectory,
+  pluginManifestBytes,
+  type PluginInstallStore,
+} from './plugin-install-store.js';
+export {
+  archivePluginBackupFiles,
+  verifyPluginBackupFiles,
+  restorePluginBackupFiles,
+  pluginVersionDirectory,
+  pluginBackupHash,
+  type PluginBackupAssetCatalog,
+  type PluginBackupFile,
+} from './plugin-backup-files.js';
+export { localPluginClient, type LocalPluginClient } from './local-plugin-client.js';

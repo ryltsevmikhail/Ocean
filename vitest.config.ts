@@ -19,11 +19,13 @@ export default defineConfig({
       '@runnets/contracts': source('contracts'),
       '@runnets/provider-core': source('provider-core'),
       '@runnets/provider-deepseek': source('provider-deepseek'),
+      '@runnets/integrations-executor': source('integrations-executor'),
     },
   },
   test: {
     environment: 'node',
     include: ['packages/*/src/**/*.test.ts', 'apps/*/src/**/*.test.ts'],
+    setupFiles: ['./test-fixtures/no-network.ts'],
     reporters: ['default'],
   },
 });

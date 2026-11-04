@@ -26,6 +26,8 @@ export interface ProfileBackupAssetIdentity {
   readonly recovery: string;
   readonly dependencies: string;
   readonly desktop: string | null;
+  /** Digest of the verified plugin manifest archive; absent on pre-17 backups. */
+  readonly plugins?: string;
 }
 export type ProfileBackupManifest =
   | (ProfileBackupBase & { readonly format: 1 })
@@ -60,11 +62,11 @@ export function validProfileBackupManifest(value: unknown): value is ProfileBack
   const summary = value['summary'];
   if (
     !Number.isSafeInteger(summary['schema']) ||
-    ![5, 6, 7, 8, 9, 10, 11, 12, 13, 14].includes(Number(summary['schema'])) ||
+    ![5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].includes(Number(summary['schema'])) ||
     !['rooms', 'messages', 'pendingEffects', 'unfinishedRuns', 'heldRooms'].every((k) =>
       count(summary[k]),
     ) ||
-    !['externalCodingAssets', 'externalDesktopAssets'].every(
+    !['externalCodingAssets', 'externalDesktopAssets', 'pluginAssets'].every(
       (k) => summary[k] === undefined || count(summary[k]),
     ) ||
     !Array.isArray(summary['positions']) ||
@@ -98,6 +100,7 @@ export function validProfileBackupManifest(value: unknown): value is ProfileBack
           'schema',
           'externalCodingAssets',
           'externalDesktopAssets',
+          'pluginAssets',
           'rooms',
           'messages',
           'positions',
@@ -109,10 +112,13 @@ export function validProfileBackupManifest(value: unknown): value is ProfileBack
   )
     return false;
   const assets = value['assets'];
+  if (!object(assets)) return false;
+  const keys = Object.keys(assets).sort();
+  const base = 'catalog,codingInventory,dependencies,desktop,desktopInventory,recovery,worktrees';
+  const withPlugins =
+    'catalog,codingInventory,dependencies,desktop,desktopInventory,plugins,recovery,worktrees';
   return (
-    object(assets) &&
-    Object.keys(assets).sort().join() ===
-      'catalog,codingInventory,dependencies,desktop,desktopInventory,recovery,worktrees' &&
+    (keys.join() === base || keys.join() === withPlugins) &&
     [
       'catalog',
       'codingInventory',
@@ -121,7 +127,8 @@ export function validProfileBackupManifest(value: unknown): value is ProfileBack
       'recovery',
       'dependencies',
     ].every((k) => sha(assets[k])) &&
-    (assets['desktop'] === null || sha(assets['desktop']))
+    (assets['desktop'] === null || sha(assets['desktop'])) &&
+    (assets['plugins'] === undefined || sha(assets['plugins']))
   );
 }
 import { validProfileBackupLineage, type ProfileBackupLineage } from './profile-lineage.js';

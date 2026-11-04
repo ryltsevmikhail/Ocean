@@ -21,6 +21,7 @@ export interface LocalTurnReceipt extends LocalReceiptQuery {
   readonly runId: string | null;
 }
 const turnStates = [
+  'queued',
   'accepted',
   'dispatching',
   'prepared',

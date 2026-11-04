@@ -12,20 +12,26 @@ export class RuntimeTurns {
   readonly #runs: RoomRuntimeRuns;
   #uncertain = false;
   #draining = false;
+  /** Broadcast children are owned by the broadcast runner, not by this session's jobs. */
+  #external: ((runId: string) => AbortController | undefined) | null = null;
   readonly #chat: DirectChatService;
-  readonly #provider: ProviderPort | null;
+  /** A getter, so each newly admitted turn captures the current immutable activation. */
+  readonly #provider: () => ProviderPort | null;
   constructor(
     chat: DirectChatService,
-    provider: ProviderPort | null,
+    provider: ProviderPort | null | (() => ProviderPort | null),
     runs: RoomRuntimeRuns,
     instance: string,
   ) {
     this.#runs = runs;
     this.#queries = new RuntimeQueries(runs, instance);
     this.#chat = chat;
-    this.#provider = provider;
+    this.#provider = typeof provider === 'function' ? provider : () => provider;
   }
 
+  attachControllers(resolve: (runId: string) => AbortController | undefined): void {
+    this.#external = resolve;
+  }
   dispatch(
     method: string,
     params: Record<string, unknown>,
@@ -38,7 +44,7 @@ export class RuntimeTurns {
         const admitted = this.#chat.submit(
           {
             ...params,
-            provider: this.#provider,
+            provider: this.#provider(),
             signal: controller.signal,
             emit: () => {},
           },
@@ -88,7 +94,7 @@ export class RuntimeTurns {
           params,
           detached,
           typeof params['runId'] === 'string'
-            ? this.#jobs.get(params['runId'])?.controller
+            ? (this.#jobs.get(params['runId'])?.controller ?? this.#external?.(params['runId']))
             : undefined,
         );
     }

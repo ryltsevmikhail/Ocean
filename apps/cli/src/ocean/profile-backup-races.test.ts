@@ -11,6 +11,7 @@ vi.mock('node:fs', async (original) => {
 import { snapshotCodingDatabase } from '@runnets/store-sqlite';
 import { captureProfileBackupAssets } from '@runnets/tools-node';
 import { fullBackupFixture, byteHash } from '../../test-fixtures/profile-backup.test.js';
+import { emptyPluginBackupInventory } from '@runnets/domain';
 const roots: string[] = [];
 afterEach(async () => {
   const actual = await vi.importActual<typeof fs>('node:fs');
@@ -78,6 +79,7 @@ it.each(['combined', 'hardlink-logical'])(
               {
                 inventory,
                 desktop,
+                plugins: emptyPluginBackupInventory(),
                 profile: f.directory,
                 managed: join(f.directory, 'worktrees'),
                 databaseBytes: fs.statSync(frozen).size,
@@ -120,6 +122,7 @@ it.each(['tree', 'git-index', 'configuration', 'replacement'])(
               {
                 inventory,
                 desktop,
+                plugins: emptyPluginBackupInventory(),
                 profile: f.directory,
                 managed: join(f.directory, 'worktrees'),
                 databaseBytes: fs.statSync(frozen).size,

@@ -88,11 +88,12 @@ it('shares one real backup budget across the lineage chain without deduplicating
       try {
         await stores.snapshotCodingDatabase(
           join(profile, 'runtime.sqlite'),
-          (value, desktop, databaseBytes, restoration) => {
+          (value, desktop, databaseBytes, restoration, plugins) => {
             prepared = prepareProfileBackupAssets(
               {
                 inventory: value,
                 desktop,
+                plugins,
                 profile,
                 managed: join(profile, 'worktrees'),
                 databaseBytes,

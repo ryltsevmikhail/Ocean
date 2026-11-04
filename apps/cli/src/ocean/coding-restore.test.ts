@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import { CodingTaskService, ConversationService } from '@runnets/application';
 import { InMemoryProjectLeases } from '@runnets/store';
+import { SCHEMA_VERSION } from '@runnets/store-sqlite';
 import { backupProfile, restoreProfile } from './snapshots.js';
 import { createRuntime } from '../runtime.js';
 const roots: string[] = [];
@@ -92,7 +93,7 @@ it('backup keeps schema7 task/rights; restored runtime refuses all coding author
   );
   const snapshot = join(root, 'backup'),
     restored = join(root, 'restored');
-  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(14);
+  expect((await backupProfile(profile, snapshot)).summary.schema).toBe(SCHEMA_VERSION);
   restoreProfile(snapshot, restored);
   const copy = openSqliteStore({ path: join(restored, 'runtime.sqlite') });
   expect(copy.coding.atomic((tx) => tx.task('task'))).toEqual(created.ok ? created.value : null);

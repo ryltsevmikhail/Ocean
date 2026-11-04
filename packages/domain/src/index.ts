@@ -18,7 +18,11 @@ export * from './side-effect.js';
 
 export * from './conversations.js';
 
+export * from './image-content.js';
+
 export * from './chat-turn.js';
+
+export * from './broadcast.js';
 
 export * from './room-address.js';
 
@@ -53,3 +57,10 @@ export {
   type ProfileBackupSummary,
 } from './profile-backup.js';
 export * from './profile-lineage.js';
+
+export * from './plugin-catalog.js';
+export * from './plugin-connection.js';
+export * from './plugin-grant.js';
+export * from './plugin-operation.js';
+
+export * from './plugin-backup.js';

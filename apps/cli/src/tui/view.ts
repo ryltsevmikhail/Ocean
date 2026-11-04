@@ -24,6 +24,7 @@ export interface FrameInput {
   readonly runs: readonly RunViewData[];
   readonly model: string;
   readonly provider: string | null;
+  readonly batch?: string | undefined;
   readonly size: Size;
 }
 function dimensions(size: Size): Size {
@@ -45,6 +46,10 @@ function runLabel(run: LocalRunSnapshot): string {
   return run.runId + ' [v' + run.version + ']';
 }
 function status(input: FrameInput): string {
+  const base = statusText(input);
+  return input.batch ? `${base} · ${input.batch}` : base;
+}
+function statusText(input: FrameInput): string {
   const selected = input.runs[input.ui.selectedIndex];
   if (selected?.remote) {
     const run = selected.remote;

@@ -20,6 +20,15 @@ import {
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/** Build-recorded bundle inventory for the one pre-bundled runtime adapter. */
+export interface ReleaseBundleRecord {
+  readonly adapter: string;
+  readonly entry: string;
+  readonly integrity: string;
+  readonly integritySha256: string;
+  readonly files: Readonly<Record<string, string>>;
+  readonly identities: Readonly<Record<string, string>>;
+}
 export interface ReleaseManifest {
   readonly format: 1;
   readonly version: string;
@@ -29,6 +38,8 @@ export interface ReleaseManifest {
   readonly arch: 'x64';
   readonly lockfileSha256: string;
   readonly files: Readonly<Record<string, { sha256: string; mode: number }>>;
+  /** Present when the archive ships the pre-bundled Executor adapter. */
+  readonly bundle?: ReleaseBundleRecord;
 }
 export function sha256(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -105,7 +116,35 @@ function manifestOf(files: Map<string, { body: Buffer; mode: number }>): Release
   }
   for (const name of ['bin/ocean', 'apps/cli/dist/main.js', 'LICENSE', 'NOTICE', 'package.json'])
     if (!files.has(name)) throw new Error('invalid_manifest');
+  validateBundle(m, files);
   return m;
+}
+/**
+ * Cross-check the optional bundled-adapter record against the shipped bytes.
+ * Per-file archive integrity is the manifest map above; this keeps the published
+ * bundle facts anchored to the same bytes the installed adapter re-verifies.
+ */
+function validateBundle(
+  m: ReleaseManifest,
+  files: Map<string, { body: Buffer; mode: number }>,
+): void {
+  const b = m.bundle;
+  if (b === undefined) return;
+  const base = 'node_modules/@runnets/integrations-executor/',
+    integrity = files.get(base + 'dist/bundle-integrity.json');
+  if (
+    b.adapter !== '@runnets/integrations-executor' ||
+    b.entry !== 'dist/index.js' ||
+    b.integrity !== 'dist/bundle-integrity.json' ||
+    !/^[a-f0-9]{64}$/.test(b.integritySha256) ||
+    integrity === undefined ||
+    sha256(integrity.body) !== b.integritySha256 ||
+    typeof b.files[b.entry] !== 'string' ||
+    typeof b.identities['@executor-js/sdk'] !== 'string' ||
+    !files.has(base + 'package.json') ||
+    !files.has(base + 'LICENSE')
+  )
+    throw new Error('invalid_manifest');
 }
 function durable(path: string): void {
   const fd = openSync(path, 'r');
@@ -123,31 +162,22 @@ function syncTree(path: string): void {
 }
 function safeParent(path: string): void {
   if (!isAbsolute(path) || resolve(path) !== path) throw new Error('invalid_prefix');
-  let at = path;
-  while (at !== '/') {
+  for (let at = path; at !== '/'; at = dirname(at))
     if (existsSync(at) && lstatSync(at).isSymbolicLink()) throw new Error('invalid_prefix');
-    at = dirname(at);
-  }
 }
 function switchCurrent(base: string, version: string): void {
   const current = join(base, 'current');
-  if (
-    existsSync(current) ||
-    (() => {
-      try {
-        lstatSync(current);
-        return true;
-      } catch {
-        return false;
-      }
-    })()
-  ) {
-    if (
-      !lstatSync(current).isSymbolicLink() ||
-      !/^releases\/[a-zA-Z0-9.-]+$/.test(readlinkSync(current))
-    )
-      throw new Error('unmanaged_current');
+  let currentStat: ReturnType<typeof lstatSync> | null = null;
+  try {
+    currentStat = lstatSync(current);
+  } catch {
+    currentStat = null;
   }
+  if (
+    currentStat !== null &&
+    (!currentStat.isSymbolicLink() || !/^releases\/[a-zA-Z0-9.-]+$/.test(readlinkSync(current)))
+  )
+    throw new Error('unmanaged_current');
   const temp = join(base, '.current-' + randomUUID());
   symlinkSync('releases/' + version, temp);
   try {

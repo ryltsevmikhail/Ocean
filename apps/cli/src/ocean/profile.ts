@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, openSync, closeSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
+import { desktopImageResolver } from '@runnets/tools-node';
 import { assertProfileFiles } from './private-files.js';
 import { createRuntime, type Runtime, type RuntimeOptions } from '../runtime.js';
 
@@ -8,7 +10,15 @@ import { createRuntime, type Runtime, type RuntimeOptions } from '../runtime.js'
 export function openOceanProfile(
   profile: string | undefined,
   initialize = false,
-  options: Pick<RuntimeOptions, 'codingTools' | 'requireUnpublished'> = {},
+  options: Pick<
+    RuntimeOptions,
+    | 'codingTools'
+    | 'requireUnpublished'
+    | 'imageResolver'
+    | 'pluginTransport'
+    | 'pluginEnv'
+    | 'pluginMutationsAllowed'
+  > = {},
 ): Runtime {
   if (process.env['RUNNE_DB'] !== undefined || process.env['RUNNE_MODE'] !== undefined)
     throw new Error('Select Ocean --profile without RUNNE_DB or RUNNE_MODE');
@@ -19,7 +29,18 @@ export function openOceanProfile(
   if (initialize) mkdirSync(directory, { recursive: true, mode: 0o700 });
   assertProfileFiles(directory);
   if (initialize && !existsSync(path)) closeSync(openSync(path, 'wx', 0o600));
-  return createRuntime({ ...options, mode: 'durable', dbPath: path, restoredAccess: true });
+  // Every durable profile host (runtime, CLI/TUI fallback) composes the same
+  // runtime image authority; offline sends must not lose attachment history.
+  const canonical = resolve(directory);
+  const profileId = createHash('sha256').update(canonical).digest('hex');
+  return createRuntime({
+    ...options,
+    imageResolver:
+      options.imageResolver ?? ((store) => desktopImageResolver(store, canonical, profileId)),
+    mode: 'durable',
+    dbPath: path,
+    restoredAccess: true,
+  });
 }
 /** The host verifies a real directory before binding its canonical root to the profile. */
 export function canonicalWorkspace(path: string): string {

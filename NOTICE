@@ -22,4 +22,78 @@ OpenCode source code is vendored in this repository.
 Ocean is a separate project. It is not a fork of OpenCode and is not
 endorsed by or affiliated with the OpenCode project.
 
+EXECUTOR SDK — PINNED PATCHED DEPENDENCY
+========================================
 
+Ocean's RC2 service-plugin transport (`packages/integrations-executor`) depends
+on the Executor SDK and its MCP/OpenAPI plugins. The npm tarballs ship no
+LICENSE file; the upstream project's MIT license text and exact copyright line
+are reproduced below and in `packages/integrations-executor/THIRD_PARTY_LICENSES/executor-MIT.txt`.
+
+  Project:    Executor (UsefulSoftwareCo/executor)
+  Commit:     3cf6e54659cb34ac731fe3cf747ca139be769b93 (LICENSE retrieved 2026-11-04)
+  License:    MIT
+  Copyright (c) 2026 Rhys Sullivan
+
+Pinned artifacts:
+
+  @executor-js/sdk@1.6.11
+    tarball integrity sha512-CKdvjdf3zgUiId+gpIxtAFmr6L8lPoIyrp7MoR35MnQhiTI00b+syOxTw8iLXRkMsRM755629dXp/AwPkjv7Jg==
+    tarball shasum f232d29b473b340d2e4b1a3aacdf653f3ace3867
+    patched dist chunk `dist/chunk-Q3W5ARXY.js` sha256
+    6d3d22c97454dde48daacce07d901b174a642a480efee0b8c73fe31aa6d3a0b9
+    (pristine chunk sha256 4fd9504fb58aa5aaf509f1007892550f16a65cc3408948a92c7ad5064685cd82)
+  @executor-js/plugin-openapi@1.6.11
+  @executor-js/plugin-mcp@1.6.11
+  effect@4.0.0-beta.59 (MIT, Effect-TS)
+  @effect/platform-node-shared@4.0.0-beta.59 (MIT, Effect-TS)
+
+Patch notice: the installed `@executor-js/sdk@1.6.11` bundle is NOT pristine
+upstream bytes. One 18-line block was replaced by two lines to remove a
+reactive OAuth refresh-and-replay that sent a second upstream business request
+after an HTTP 401, bypassing policy, approval, annotation and argument
+validation. The patch lives at `patches/@executor-js__sdk@1.6.11.patch`, sha256
+e1c1bfa9a41049321f45747f3ae8907d89604fca06872ec0a4871483db1b9fad, and is
+applied by pnpm's `patchedDependencies`. The upstream MIT terms and copyright
+notice continue to apply to the patched artifact; the modification is recorded
+here and in `patches/README.md`. The runtime refuses to enable execution unless
+the installed chunk matches the pinned patched digest above.
+
+Packaged release verification: the release archive does not ship the Executor
+`node_modules` tree. `pnpm package:release` first asserts the installed patched
+chunk digest, the patch digest, the lockfile `patch_hash` records, the pinned
+SDK/plugin/Effect/`@effect/platform-node-shared` versions and the pinned
+rolldown version; it then pre-bundles the adapter into
+`node_modules/@runnets/integrations-executor/dist/**` and records
+`bundle-integrity.json` (pinned versions, patched-chunk and patch digests, and
+the SHA-256 of every emitted chunk). The release manifest records the same file
+inventory and SHA-256 values. At admission the packaged adapter re-hashes every
+bundled chunk, requires the recorded chunk set to be exactly the shipped one,
+and cross-checks the recorded pins against its own constants; a missing,
+unreadable or mismatching proof refuses qualification. Source/workspace runs
+instead hash the installed `@executor-js/sdk` chunk. Neither layout accepts a
+host- or caller-supplied identity, and verification never enables execution:
+execution stays disabled unless a host explicitly enables it after a successful
+proof.
+
+MIT License (Executor, https://github.com/UsefulSoftwareCo/executor)
+
+Copyright (c) 2026 Rhys Sullivan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

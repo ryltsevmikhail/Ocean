@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { initializeSchema } from './schema.js';
+import { SCHEMA_VERSION, initializeSchema } from './schema.js';
 import { SqliteCodingApprovalStore } from './coding-approval-storage.js';
 const databases: DatabaseSync[] = [];
 afterEach(() => {
@@ -82,7 +82,7 @@ it('adds approval tables transactionally to schema 7', () => {
   );
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '14',
+    String(SCHEMA_VERSION),
   );
   expect(db.prepare('SELECT count(*) AS n FROM ocean_coding_approvals').get()?.['n']).toBe(0);
 });

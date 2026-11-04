@@ -59,6 +59,8 @@ export async function runOceanCommand(
     if (command !== 'tui' && !diagnostic) {
       const remote = await routeProfileCommand(args, options.input ?? process.stdin, output, error);
       if (remote !== null) return remote;
+      // Broadcast and plugin state are runtime-owned; the CLI is only a client.
+      if (command === 'broadcast' || command === 'plugin') throw Error('runtime_absent');
     }
     if (['doctor', 'backup', 'restore'].includes(command)) {
       const result = await runOperations(diagnostic ? { ...args, staticDoctor: true } : args);
@@ -265,6 +267,10 @@ export async function runOceanCommand(
             'provider_unavailable',
             'recovery_required',
             'context_limit',
+            'model_image_unsupported',
+            'image_unavailable',
+            'image_too_large',
+            'request_too_large',
             'review_conflict',
             'review_unavailable',
             'approval_required',

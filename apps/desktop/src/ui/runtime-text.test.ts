@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import type { Run } from '../protocol.js';
-import { feedbackText, historyState, runText, turnText } from './runtime-text.js';
+import { feedbackText, historyState, receiptLabel, runText, turnText } from './runtime-text.js';
 
 const source = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
 it('suppresses only runtime_absent feedback while the welcome screen is shown', () => {
@@ -18,6 +18,7 @@ it('suppresses only runtime_absent feedback while the welcome screen is shown', 
 });
 it('translates every turn status without exposing run metadata', () => {
   const expected = {
+    queued: 'В очереди рассылки',
     accepted: 'Запрос принят',
     dispatching: 'Готовим ответ…',
     prepared: '@review отвечает…',
@@ -52,4 +53,16 @@ it('keeps technical metadata out of cancellation labels and separates alerts fro
   expect(feedback).toContain('role="alert" class="runtime-error"');
   expect(feedback).toContain('role="status"');
   expect(feedback).toContain(':title="receipt"');
+});
+
+it('never renders a successful receipt as unconfirmed', () => {
+  expect(receiptLabel('Принято · msg_1 · tr_1')).toBe('Сообщение принято');
+  expect(receiptLabel('Принято · Всем · 2 участников · message_1')).toBe('Рассылка принята');
+  expect(receiptLabel('Всем · 2 участников · message_1', true)).toBe('Рассылка принята');
+  expect(receiptLabel('Квитанция не подтверждена · request_1')).toBe('Квитанция не подтверждена');
+  expect(receiptLabel('Квитанция рассылки не подтверждена · request_1', false)).toBe(
+    'Квитанция не подтверждена',
+  );
+  expect(receiptLabel('Принято · msg_1', false)).toBe('Сообщение принято');
+  expect(source('./RuntimeFeedback.vue')).toContain('receiptLabel(receipt, accepted)');
 });

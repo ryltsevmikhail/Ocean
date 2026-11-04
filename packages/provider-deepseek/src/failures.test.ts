@@ -177,11 +177,13 @@ describe('DeepSeekProvider failures', () => {
 });
 
 describe('DeepSeekProvider metadata', () => {
-  it('advertises the deepseek provider, models and capabilities', () => {
+  it('advertises only the currently documented chat-completions models', () => {
     const target = new DeepSeekProvider({ apiKey: 'sk-test-secret' });
     expect(target.id).toBe('deepseek');
     expect(target.models).toEqual(DEEPSEEK_MODELS);
-    expect(target.models).toContain('deepseek-flash');
+    expect(target.models).toEqual(['deepseek-flash', 'deepseek-v4-pro']);
+    expect(target.models).not.toContain('deepseek-chat');
+    expect(target.models).not.toContain('deepseek-reasoner');
     expect(target.capabilities).toEqual({
       streaming: true,
       reasoning: true,
@@ -190,8 +192,9 @@ describe('DeepSeekProvider metadata', () => {
     });
   });
 
-  it('accepts a host-configured model list', () => {
+  it('accepts a host-configured model list without inventing capabilities', () => {
     const target = new DeepSeekProvider({ apiKey: 'sk-test-secret', models: ['custom-model'] });
     expect(target.models).toEqual(['custom-model']);
+    expect(target.capabilities.streaming).toBe(true);
   });
 });

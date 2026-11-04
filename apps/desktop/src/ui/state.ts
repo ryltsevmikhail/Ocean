@@ -4,22 +4,41 @@ import { pages, useRoomFeed } from './room-feed.js';
 import { call, SendFailure, submitDraft } from './bridge.js';
 import { explain } from './dom.js';
 import { feedbackText } from './runtime-text.js';
+import { loadProviderStatus } from './provider-state.js';
+import { unavailableFeedback } from './provider-feedback.js';
+import {
+  abandonBroadcast,
+  broadcastBatch,
+  broadcastBlocksSending,
+  broadcastBusy,
+  continueBroadcast,
+  pendingBroadcast,
+  readBroadcast,
+  sendOwnedBroadcast,
+} from './broadcast-state.js';
+import { createOceanTeam } from './ocean-team.js';
+import { BROADCAST_RECIPIENT } from './broadcast-mode.js';
+import { sendBlockedHint } from './broadcast-text.js';
 
 export function useDesktop() {
   const bots = ref<Bot[]>([]),
     rooms = ref<Room[]>([]);
   const sent = ref(0),
     receipt = ref(''),
+    receiptAccepted = ref(false),
     admittedRun = ref<string | null>(null),
     uncertain = ref(false);
   const unconfirmed = new Map<string, Extract<Command, { op: 'send' }>>();
   const previews = ref<Record<string, string>>({});
-  const { history, runs, readError, active, open } = useRoomFeed((id, latest) => {
-    previews.value[id] =
-      (latest.author === 'bot' ? label(latest.authorBotId) : 'Вы') +
-      ' · ' +
-      latest.body.slice(0, 120);
-  });
+  const { history, runs, readError, active, open } = useRoomFeed(
+    (id, latest) => {
+      previews.value[id] =
+        (latest.author === 'bot' ? label(latest.authorBotId) : 'Вы') +
+        ' · ' +
+        latest.body.slice(0, 120);
+    },
+    async (id) => readBroadcast(id),
+  );
   const drafts = new Map<string, string>();
   const room = ref<Room>(),
     recipient = ref(''),
@@ -31,14 +50,6 @@ export function useDesktop() {
     sending = ref(false),
     feedbackError = ref(false);
   const feedbackCode = ref('');
-  const dialog = ref<'' | 'room' | 'bot'>(''),
-    selected = ref<string[]>([]),
-    title = ref('Ocean Team'),
-    kind = ref<'group' | 'direct'>('group');
-  const handle = ref(''),
-    name = ref(''),
-    role = ref(''),
-    model = ref('deepseek-flash');
   const memberIds = computed(() =>
     room.value?.kind === 'group' ? room.value.botIds : [room.value?.botId],
   );
@@ -61,7 +72,9 @@ export function useDesktop() {
       await action();
     } catch (error) {
       feedbackCode.value = error instanceof Error ? error.message : String(error);
-      feedback.value = explain(error);
+      feedback.value =
+        unavailableFeedback(feedbackCode.value, room.value, recipient.value, bots.value) ??
+        explain(error);
       feedbackError.value = true;
     } finally {
       busy.value = false;
@@ -72,12 +85,19 @@ export function useDesktop() {
       if (room.value) drafts.set(room.value.id, draft.value);
       draft.value = r ? (drafts.get(r.id) ?? '') : '';
       const original = r && unconfirmed.get(r.id);
-      recipient.value = original?.to ?? '';
-      receipt.value = original ? 'Квитанция не подтверждена · ' + original.requestId : '';
+      const originalBroadcast = r ? pendingBroadcast(r.id) : undefined;
+      recipient.value = original?.to ?? (originalBroadcast ? BROADCAST_RECIPIENT : '');
+      receiptAccepted.value = false;
+      receipt.value = original
+        ? 'Квитанция не подтверждена · ' + original.requestId
+        : originalBroadcast
+          ? 'Квитанция рассылки не подтверждена · ' + originalBroadcast.requestId
+          : '';
       admittedRun.value = null;
     }
     room.value = r;
-    uncertain.value = r ? unconfirmed.has(r.id) : false;
+    uncertain.value = r ? unconfirmed.has(r.id) || pendingBroadcast(r.id) !== undefined : false;
+    if (r) void readBroadcast(r.id);
     open(r?.id);
   }
   const loadBots = () =>
@@ -89,6 +109,7 @@ export function useDesktop() {
     try {
       bots.value = await loadBots();
       runtimeReady.value = true;
+      await loadProviderStatus();
     } catch (error) {
       runtimeReady.value = false;
       throw error;
@@ -103,53 +124,16 @@ export function useDesktop() {
   }
   onMounted(() => void guard(() => refresh()));
   const uuid = () => crypto.randomUUID();
-  async function team() {
-    for (const h of ['dev', 'review']) {
-      if (!bots.value.some((b) => b.handle === h)) {
-        await call({
-          op: 'bot',
-          requestId: uuid(),
-          handle: h,
-          name: h,
-          role: h === 'dev' ? 'Разработчик' : 'Ревьюер',
-          model: 'deepseek-flash',
-        });
-        bots.value = await loadBots();
-      }
-    }
-    const group = await call({
-      op: 'group',
-      requestId: uuid(),
-      title: 'Ocean Team',
-      bots: bots.value.filter((b) => ['dev', 'review'].includes(b.handle)).map((b) => b.id),
+  const team = () =>
+    createOceanTeam({
+      readBots: loadBots,
+      setBots: (next) => {
+        bots.value = next;
+      },
+      currentBots: () => bots.value,
+      refresh,
+      requestId: uuid,
     });
-    await refresh(group.data.id);
-  }
-  async function create() {
-    if (dialog.value === 'bot') {
-      await call({
-        op: 'bot',
-        requestId: uuid(),
-        handle: handle.value,
-        name: name.value,
-        role: role.value,
-        model: model.value,
-      });
-      await refresh();
-    } else {
-      const item =
-        kind.value === 'direct'
-          ? await call({ op: 'direct', requestId: uuid(), bot: selected.value[0] ?? '' })
-          : await call({
-              op: 'group',
-              requestId: uuid(),
-              title: title.value,
-              bots: [...selected.value],
-            });
-      await refresh(item.data.id);
-    }
-    dialog.value = '';
-  }
   async function send(attachments: string[] = []) {
     const r = room.value;
     if (!r) return;
@@ -166,6 +150,7 @@ export function useDesktop() {
     try {
       const result = await submitDraft(command);
       admittedRun.value = result.runId;
+      receiptAccepted.value = true;
       receipt.value = 'Принято · ' + result.messageId + ' · ' + (result.runId ?? 'recorded');
       unconfirmed.delete(r.id);
       uncertain.value = false;
@@ -179,14 +164,43 @@ export function useDesktop() {
       ) {
         unconfirmed.delete(r.id);
         uncertain.value = false;
+        receiptAccepted.value = false;
         if (original) receipt.value = '';
       } else {
         unconfirmed.set(r.id, command);
         uncertain.value = true;
+        receiptAccepted.value = false;
         receipt.value = 'Квитанция не подтверждена · ' + command.requestId;
       }
       throw error;
     }
+  }
+  async function broadcastTurn(attachments: string[]) {
+    const r = room.value;
+    if (!r) return;
+    const outcome = await sendOwnedBroadcast({
+      room: r.id,
+      text: draft.value,
+      attachments,
+    });
+    if (outcome.kind === 'unconfirmed') {
+      uncertain.value = true;
+      receiptAccepted.value = false;
+      receipt.value = 'Квитанция рассылки не подтверждена · ' + outcome.requestId;
+      throw Error('outcome_unknown');
+    }
+    if (outcome.kind === 'refused') {
+      receiptAccepted.value = false;
+      if (outcome.retried) receipt.value = '';
+      uncertain.value = false;
+      throw Error(outcome.code);
+    }
+    receiptAccepted.value = true;
+    receipt.value =
+      'Всем · ' + outcome.batch.recipients.length + ' участников · ' + outcome.batch.messageId;
+    uncertain.value = false;
+    draft.value = '';
+    sent.value++;
   }
   async function stop(r: Run) {
     await guard(async () => {
@@ -234,6 +248,7 @@ export function useDesktop() {
     busy,
     active,
     receipt,
+    receiptAccepted,
     readError,
     uncertain,
     shownRun: computed(() => {
@@ -244,21 +259,26 @@ export function useDesktop() {
       return latest && byMessage.get(latest.id);
     }),
     sent,
-    dialog,
-    selected,
-    title,
-    kind,
-    handle,
-    name,
-    role,
-    model,
     label,
     roomName,
     guard,
     read,
     refresh,
     team,
-    create,
+    broadcastBatch,
+    broadcastBusy,
+    broadcastBlocksSending,
+    broadcastBlockedHint: computed(() => sendBlockedHint(broadcastBatch.value, recipient.value)),
+    continueBroadcast,
+    abandonBroadcast,
+    sendBroadcast: async (attachments: string[]) => {
+      sending.value = true;
+      try {
+        await broadcastTurn(attachments);
+      } finally {
+        sending.value = false;
+      }
+    },
     send: async (attachments: string[]) => {
       sending.value = true;
       try {

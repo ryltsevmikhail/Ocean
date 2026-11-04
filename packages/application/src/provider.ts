@@ -6,9 +6,36 @@
  * knows about a specific vendor, and the runtime consumes only this contract.
  */
 
+import type { ImageMediaType } from '@runnets/domain';
+
+/** Provider-neutral text content. Legacy messages keep a plain string instead. */
+export interface TextPart {
+  readonly type: 'text';
+  readonly text: string;
+}
+
+/**
+ * Runtime-resolved image bytes. Never a host path, URL, marker or base64 DTO:
+ * the resolver verifies persisted authority and hashes before constructing this.
+ */
+export interface ImagePart {
+  readonly type: 'image';
+  readonly mediaType: ImageMediaType;
+  readonly bytes: Uint8Array;
+  readonly attachmentId: string;
+  readonly roomId: string;
+  readonly sha256: string;
+  readonly width: number;
+  readonly height: number;
+}
+
+export type ContentPart = TextPart | ImagePart;
+/** Only `user` messages may carry image parts. */
+export type ChatContent = string | readonly ContentPart[];
+
 export interface ChatMessage {
   readonly role: 'system' | 'user' | 'assistant' | 'tool';
-  readonly content: string;
+  readonly content: ChatContent;
   readonly reasoning?: string;
   readonly toolCalls?: readonly ToolCall[];
   readonly toolCallId?: string;
@@ -24,6 +51,13 @@ export interface ToolDefinition {
   readonly name: string;
   readonly description: string;
   readonly parameters: Readonly<Record<string, unknown>>;
+}
+
+/** Modalities an adapter documents for one model. Unknown metadata stays conservative. */
+export type ModelInputModality = 'text' | 'image';
+export interface ProviderModelInfo {
+  readonly id: string;
+  readonly inputModalities: readonly ModelInputModality[];
 }
 
 export interface ModelRequest {
@@ -108,6 +142,14 @@ export interface ProviderPort {
   readonly id: string;
   readonly models: readonly string[];
   readonly capabilities: ProviderCapabilities;
+  /** Documented per-model input capabilities; absent metadata never claims images. */
+  readonly modelInfo?: readonly ProviderModelInfo[];
+  /**
+   * Exact UTF-8 size of the adapter's serialized request body. The application
+   * pre-check and the adapter hard gate share the adapter's one serializer, so an
+   * image-capable provider must implement it.
+   */
+  requestBytes?(request: ModelRequest): number;
   stream(request: ModelRequest): AsyncIterable<ProviderEvent>;
 }
 

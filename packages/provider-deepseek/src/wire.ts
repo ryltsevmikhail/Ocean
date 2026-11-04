@@ -6,10 +6,12 @@
  * so a vendor shape change fails as a typed error instead of a crash.
  */
 
-import type { ModelRequest, TokenUsage } from '@runnets/provider-core';
+import type { ChatContent, ChatMessage, ModelRequest, TokenUsage } from '@runnets/provider-core';
 
 export const DEEPSEEK_DEFAULT_ORIGIN = 'https://api.deepseek.com';
 export const DEEPSEEK_CHAT_PATH = '/chat/completions';
+/** Metadata-only model discovery used by an explicit owner connection check. */
+export const DEEPSEEK_MODELS_PATH = '/models';
 
 export interface StreamDelta {
   readonly content: string | null;
@@ -31,13 +33,36 @@ function readCount(value: unknown): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+/** Fail closed instead of silently dropping a part the vendor may not accept. */
+class WireContentError extends Error {}
+/**
+ * Image parts are legal only in user messages. A data URL is built from the
+ * runtime-verified sniffed media type and the exact bytes; no marker text,
+ * filename, caption or host path is used as a substitute.
+ */
+function wireContent(message: ChatMessage): string | readonly unknown[] {
+  const content: ChatContent = message.content;
+  if (typeof content === 'string') return content;
+  if (message.role !== 'user' && content.some((part) => part.type === 'image'))
+    throw new WireContentError('image content is only allowed in user messages');
+  return content.map((part) =>
+    part.type === 'text'
+      ? { type: 'text', text: part.text }
+      : {
+          type: 'image_url',
+          image_url: {
+            url: `data:${part.mediaType};base64,${Buffer.from(part.bytes).toString('base64')}`,
+          },
+        },
+  );
+}
 /** Build the streaming request body; `stream_options` makes DeepSeek emit usage. */
 export function buildRequestBody(request: ModelRequest): string {
   const body = {
     model: request.model,
     messages: request.messages.map((message) => ({
       role: message.role,
-      content: message.content,
+      content: wireContent(message),
       ...(message.reasoning === undefined ? {} : { reasoning_content: message.reasoning }),
       ...(message.toolCallId === undefined ? {} : { tool_call_id: message.toolCallId }),
       ...(message.toolCalls === undefined
@@ -65,6 +90,12 @@ export function buildRequestBody(request: ModelRequest): string {
   };
   return JSON.stringify(body);
 }
+
+/** One serializer: the application pre-check and the adapter hard gate share it. */
+export function serializedBodyBytes(request: ModelRequest): number {
+  return Buffer.byteLength(buildRequestBody(request), 'utf8');
+}
+export { WireContentError };
 
 /** Read token usage from a chunk; null when the field is absent or unusable. */
 export function readUsage(value: unknown): TokenUsage | null {
