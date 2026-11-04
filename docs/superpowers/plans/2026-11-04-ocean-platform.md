@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`; остальные задачи B–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; остальные задачи B–H пока запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -382,26 +382,53 @@ Each task's numbered steps are red test → run → minimal implementation → g
 **Files:** Create domain/{room-model-policy,room-model-policy.test}.ts; application/{room-model-policy,room-model-policy.test}.ts; store-sqlite/{room-model-policy-storage,room-model-policy-schema}.ts; modify conversation ports/stores/migrations and provider activation/bot-binding services.
 **Interfaces:** `RoomModelPolicy {roomId:string;cloudTransfer:'allow'|'deny';revision:number}`; `RoomModelPolicyService.set({workspaceId,roomId,requestId,expectedRevision,cloudTransfer}):ConversationResult<RoomModelPolicy>`; pure `admitModelTransfer(policy,identity):ConversationResult<void>`. Separate from existing text_only RoomExecutionPolicy.
 
-- [ ] Tests deny cloud membership/binding and dispatch before context transmission, local unavailable makes zero cloud calls, rebind of a bot in any deny room refuses, and setting deny on existing cloud members conflicts without partial write. Add explicit host-identity refusal in deny rooms unless test-only policy supplies local evidence; host source does not prove locality.
-- [ ] Deny transition also conflicts on durable frozen cloud/unknown work: queued bindings and accepted/dispatching/prepared/uncertain activations, even after current bot rebind or text-only review. Do not use activeChatTurn alone: it omits reviewed uncertainty. A successful policy change never claims cleanup; unresolved cloud work may block deny indefinitely. Add first-send and between-round barriers. No current member-removal API exists; preserve its future obligations without adding it here.
-- [ ] Run `pnpm exec vitest run --config vitest.source.config.ts packages/domain/src/room-model-policy.test.ts packages/application/src/room-model-policy.test.ts` red.
-- [ ] Implement transactional policy/receipt/CAS and member-room checks, including group creation/member mutation paths. Existing and newly created rooms persist allow/revision 1 (historical behavior), not new grants. Missing policy after migration refuses. Atomic create-with-deny and immediate per-dispatch revocation remain future contracts. Production activation must classify kind from canonical connection, never the display name. D must consume admitModelTransfer for delegation; no D scheduler here.
-- [ ] Run green plus binding/activation tests and `pnpm build`; commit Task 14. This independently testable policy need not wait for graphical settings.
+- [x] Tests deny cloud membership/binding and dispatch before context transmission, local unavailable makes zero cloud calls, rebind of a bot in any deny room refuses, and setting deny on existing cloud members conflicts without partial write. Add explicit host-identity refusal in deny rooms unless test-only policy supplies local evidence; host source does not prove locality.
+- [x] Deny transition also conflicts on durable frozen cloud/unknown work: queued bindings and accepted/dispatching/prepared/uncertain activations, even after current bot rebind or text-only review. Do not use activeChatTurn alone: it omits reviewed uncertainty. A successful policy change never claims cleanup; unresolved cloud work may block deny indefinitely. Add first-send and between-round barriers. No current member-removal API exists; preserve its future obligations without adding it here.
+- [x] Run `pnpm exec vitest run --config vitest.source.config.ts packages/domain/src/room-model-policy.test.ts packages/application/src/room-model-policy.test.ts` red.
+- [x] Implement transactional policy/receipt/CAS and member-room checks, including group creation/member mutation paths. Existing and newly created rooms persist allow/revision 1 (historical behavior), not new grants. Missing policy after migration refuses. Atomic create-with-deny and immediate per-dispatch revocation remain future contracts. Production activation must classify kind from canonical connection, never the display name. D must consume admitModelTransfer for delegation; no D scheduler here.
+- [x] Run green plus binding/activation tests and `pnpm build`; commit Task 14. This independently testable policy need not wait for graphical settings.
 
 ### Task 15: Negotiated model/binding RPCs and legacy compatibility
 
 **Files:** Create contracts/src/{local-model-connections,local-model-connections.test}.ts, tools-node/src/{local-model-connections-client,local-model-connections-client.test}.ts, CLI local-runtime/model-settings.ts; modify relevant index.ts, existing provider-settings.ts/host.ts/query projections and hello negotiation files found at the final A3 seam.
-**Interfaces:** Feature `model.connections-v1`; methods modelConnections.list/set/check/disconnect/removeSavedKey, bots.createBound/setModelBinding/listBound, runs.modelExecution, rooms.setModelPolicy. DTO validators mirror exact Task 5/6/14 inputs; only new views carry BoundBot, connection metadata and usage completeness. Neither key bytes nor secret refs appear in output.
+**Interfaces:** Feature `model.connections-v1`; methods modelConnections.list/set/check/disconnect/removeSavedKey, bots.createBound/setModelBinding/listBound, runs.modelExecution, rooms.getModelPolicy/setModelPolicy. DTO validators mirror exact Task 5/6/14 inputs; only new views carry BoundBot, connection metadata and usage completeness. Neither key bytes nor secret refs appear in output.
 
 - [ ] Before editing transport, verify accepted A3 `1a99fcb`: hello.clientFeatures allows at most 16 strings of length 1..64; current marker is plugin.session-authority-v1; legacy sockets receive filtered plugin.* hello/status capabilities and plugin.* is blocked before dispatch. Preserve this per-socket behavior. Do not grow frozen RC2 hello/status beyond 64 or add every B method as a legacy capability; controller verified the frozen RC2 validator against cfa8490 apart from its first comment.
 - [ ] Create strict validator/old-client regression tests, including one host with concurrent legacy/current/B sockets, alternating status/plugin/B operations to prove negotiation cannot leak across sockets; run `pnpm exec vitest run --config vitest.source.config.ts packages/contracts/src/local-model-connections.test.ts packages/tools-node/src/local-model-connections-client.test.ts` red.
 - [ ] Implement new negotiation gate before dispatch and bounded DTOs. Legacy provider.* response/request validators remain exact; translate default connection only. New methods absent feature → explicit unsupported; new client against old host disables these controls. Project internal model-dispatch entries for legacy sockets to existing redacted positional placeholders, preserving physical sequence and contiguous pagination; do not remove rows, renumber events or add a cursor to frozen DTOs. New fields remain in negotiated views only.
 - [ ] Compose BotModelBindingService metadata lookup over the same canonical profile transaction/draft as ConversationStore; no separate database snapshot or mutable catalog authority. Verify through the built runtime entry point.
+- [ ] Add rooms.getModelPolicy as a scoped metadata read of the actual stored policy and revision, so restarted clients can use set CAS without guessing or mutating to read. Missing policy refuses; keep frozen room DTOs exact.
 - [ ] New list/read views are metadata-only, with no credential activation/probe. Page connections and bound bots by exact ID (default50/max200 plus frame budget); bind profileVersion and connectionId in one canonical snapshot. runs.modelExecution is a fixed-size workspace/room/run-scoped committed view, separate from old DTOs. Derive usage completeness from request evidence categories, including estimated zero; totals alone are insufficient, and legacy prefix scope stays explicit.
 - [ ] Persist a versioned keyless original-request envelope with each new pending secret intent, preserving API family, method, exact null/number/omitted expected revision and key presence. Expose a separate recovery projection; recovery uses the same original method/request and matching key re-entry where required. Do not guess historical input, expose stored keys, change frozen receipts or add resumePending/receipt discovery in this first contract.
 - [ ] Before exposing settings, define owner-visible pending recovery: retain the exact request identity/payload needed for retry across disconnects, disclose when the key must be supplied again, and never treat a fresh requestId as permission to discard pending cleanup. Legacy missing intent needs explicit repair, not invented history.
 - [ ] Close Task5 review minor: unknown connection disconnect/remove must return `connection_not_found`, not `revision_conflict`; pin both cases before exposing the new RPC error contract.
 - [ ] Run green plus local-provider.test.ts and final A3 compatibility tests; `pnpm build`; commit Task 15. Process compatibility tests use built normal entry points and process config, not source alias imports.
+
+#### Task 15.1: Durable recovery envelopes and safe application reads
+
+**Parent:** Task 15 stays open until 15.1–15.3 are accepted. This is the first sequential implementation checkpoint, with a fresh worker and scoped review.
+**Files:** Application model-connection mutation/publication/validation/types and dedicated metadata/recovery/binding/model-execution read projections; store-sqlite canonical JSON migration and affected backup/schema fixtures; room-model-policy scoped read. No new socket methods, SDK or Desktop changes yet.
+
+- [ ] Persist the exact versioned keyless original-request envelope with new pending secret intents, validate consistency, preserve frozen receipt bytes and historical missing-envelope limits; no new resumePending API. Add schema/restore/reopen and two-owner replay/failed-publication regressions.
+- [ ] Implement metadata-only connection pages and bound-bot reads, room policy read and scoped model-execution projection over one committed event stream. Prove no credential/activation/probe effects, exact profileVersion/binding, real policy revision, explicit unknown usage counts and safe bounded projections. Final wire parsing is 15.2.
+- [ ] Fix the unknown-connection revision-error ordering. Run focused RED/GREEN, strict tests, required root gates and scoped review; commit this checkpoint. Resolve exact public application projection types before the wire worker starts.
+
+#### Task 15.2: Negotiated wire contract, SDK and runtime composition
+
+**Parent:** Task 15, after accepted 15.1.
+**Files:** Public contracts validators, tools-node client, CLI model-settings/read handlers and per-socket negotiation/projection seams identified above. Consume 15.1 application ports; preserve old protocol families.
+
+- [ ] Add the exact named methods and model.connections-v1 marker, bounded strict request/reply validators and client wrappers with unsupported refusal before wire use.
+- [ ] Preserve A3 plugin negotiation and frozen old-client limits; project internal model events to positional redactions for legacy sockets. Scope every request to its authenticated profile and requested room/run; never mutate shared query negotiation state.
+- [ ] Wire same canonical stores, supervise owner mutations/checks through runtime drain, preserve pending recovery and sanitize legacy provider_unverified status. Run focused RED/GREEN, strict tests, root gates and scoped review; commit.
+
+#### Task 15.3: Process compatibility and recovery acceptance
+
+**Parent:** Task 15, after accepted 15.2. This completes the parent only after all earlier Task15 requirements are covered.
+**Files:** Built runtime/client process fixtures and compatibility/recovery tests; product implemented/planned documentation. Source fixes only for demonstrated integration gaps, followed by scoped review.
+
+- [ ] Qualify simultaneous legacy/A3/model sockets and old safe/unsafe hosts, exact pending retry across disconnect/restart, two owners answering one original operation, changed-input refusal, paginated exact bindings, room-policy revision refresh and run evidence snapshots. Use real built entry points with synthetic keys/services and effect counters.
+- [ ] Freeze final evidence, run required root gates and built process suites, reconcile all parent Task15 checklist items and limitations. No live provider or installed GUI claim; those remain separately qualified. Commit and accept parent Task15 only after independent review.
 
 ### Task 16: Minimal connection and bot-binding settings UI
 
