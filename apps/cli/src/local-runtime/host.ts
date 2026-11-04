@@ -104,7 +104,7 @@ export async function startLocalRuntime(
       disabled: options.provider === null,
       providerSecretStore: options.providerSecretStore,
       credentialDir: options.credentialDir,
-      providerBaseUrl: options.providerBaseUrl,
+      providerHttpClient: options.providerHttpClient,
     });
     plugin.connections(runtime.plugins?.connections);
     const finalization = new RuntimeFinalization(
@@ -129,7 +129,7 @@ export async function startLocalRuntime(
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
       runtime.chat,
-      provider.activation,
+      provider.resolver,
       runtime.openRoomRuns(),
       identity.instanceId,
     );
@@ -145,7 +145,7 @@ export async function startLocalRuntime(
           : { grantedTools: runtime.pluginRuntime.tools }),
       },
       clock: systemClock,
-      provider: provider.activation,
+      resolver: provider.resolver,
       ...(images === undefined ? {} : { images }),
     });
     turns.attachControllers((runId) => broadcasts.controllerFor(runId));

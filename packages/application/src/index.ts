@@ -90,3 +90,6 @@ export * from './model-activation-types.js';
 
 export * from './model-activation.js';
 export * from './model-dispatch.js';
+
+export * from './provider-activation.js';
+export * from './model-activation-snapshot.js';

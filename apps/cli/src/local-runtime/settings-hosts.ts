@@ -23,10 +23,10 @@ export interface SettingsHostsInput {
   readonly disabled: boolean;
   readonly providerSecretStore?: ProviderHostInput['secretStore'] | undefined;
   readonly credentialDir?: string | undefined;
-  readonly providerBaseUrl?: string | undefined;
+  readonly providerHttpClient?: ProviderHostInput['httpClient'] | undefined;
 }
 
-/** Compose the provider activation getter and the plugin owner API. */
+/** Compose the provider activation resolver and the plugin owner API. */
 export function settingsHosts(input: SettingsHostsInput) {
   if (!input.runtime.providerConnections || !input.runtime.plugins)
     throw Error('durable_runtime_required');
@@ -41,7 +41,7 @@ export function settingsHosts(input: SettingsHostsInput) {
     mutationsAllowed: input.restore !== true,
     ...(input.providerSecretStore === undefined ? {} : { secretStore: input.providerSecretStore }),
     ...(input.credentialDir === undefined ? {} : { credentialDir: input.credentialDir }),
-    ...(input.providerBaseUrl === undefined ? {} : { baseUrl: input.providerBaseUrl }),
+    ...(input.providerHttpClient === undefined ? {} : { httpClient: input.providerHttpClient }),
   });
   const pluginRuntime = input.runtime.pluginRuntime;
   if (pluginRuntime === undefined) throw Error('durable_runtime_required');

@@ -1,3 +1,5 @@
+import type { ModelActivationSnapshot } from './model-dispatch.js';
+import type { BotModelBinding } from './model-binding.js';
 import type { Bot } from './conversations.js';
 export type ChatTurnStatus =
   | 'queued'
@@ -30,6 +32,8 @@ export interface ChatTurn {
   /** Present only for a broadcast child; `queued` children were never dispatched. */
   readonly broadcast?: ChatTurnBroadcastLink;
   readonly bot: Bot;
+  readonly modelBinding?: BotModelBinding;
+  readonly activation?: ModelActivationSnapshot;
   readonly status: ChatTurnStatus;
   /** Stable visible refusal code for a child/named model that was never dispatched. */
   readonly failureCode?: string;

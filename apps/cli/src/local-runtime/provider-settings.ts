@@ -10,6 +10,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   ProviderConnectionService,
+  ProviderActivationService,
+  injectedProviderActivation,
+  type ProviderActivationPort,
   requestCode,
   type ProviderConnectionStorePort,
   type ProviderCredential,
@@ -31,13 +34,15 @@ import {
   isLocalProviderSetRequest,
 } from '@runnets/contracts';
 import { createProviderSecretStore, providerCredentialDirectory } from '@runnets/tools-node';
+import type { HttpClient } from '@runnets/provider-core';
+import { createProviderActivationFactory } from './provider-activation-factory.js';
 import { PROVIDER_ENV_KEY } from '../engine/provider.js';
 import type { RuntimeReply } from './queries.js';
 
 export interface ProviderCredentialOptions {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Deterministic local transport seam for tests; never derived from wire input. */
-  readonly baseUrl?: string;
+  readonly httpClient?: HttpClient;
 }
 /** Adapter composition; only this module knows how a key becomes a provider snapshot. */
 export function createProviderCredentials(
@@ -66,7 +71,7 @@ function activation(
 ): ProviderCredential {
   const provider = new DeepSeekProvider({
     apiKey: key,
-    ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+    ...(options.httpClient === undefined ? {} : { httpClient: options.httpClient }),
   });
   return {
     source,
@@ -81,7 +86,7 @@ async function probe(
 ): Promise<ProviderProbeResult> {
   const result = await probeDeepSeekModels({
     apiKey: key,
-    ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+    ...(options.httpClient === undefined ? {} : { httpClient: options.httpClient }),
     signal,
   });
   const models = result.models.map((model) => model.id);
@@ -167,12 +172,12 @@ export interface ProviderHostInput {
   readonly mutationsAllowed: boolean;
   readonly secretStore?: ProviderSecretStorePort;
   readonly credentialDir?: string;
-  readonly baseUrl?: string;
+  readonly httpClient?: HttpClient;
 }
-/** Compose the durable settings service and the activation getter for turn admission. */
+/** Compose durable settings and a local resolver passed unchanged into turn admission. */
 export function providerHostSettings(input: ProviderHostInput): {
   readonly settings: ProviderSettings;
-  readonly activation: () => ProviderPort | null;
+  readonly resolver: ProviderActivationPort;
 } {
   const secrets =
     input.secretStore ??
@@ -182,7 +187,7 @@ export function providerHostSettings(input: ProviderHostInput): {
     secrets,
     credentials: createProviderCredentials({
       env: input.env,
-      ...(input.baseUrl === undefined ? {} : { baseUrl: input.baseUrl }),
+      ...(input.httpClient === undefined ? {} : { httpClient: input.httpClient }),
     }),
     clock: { now: () => new Date(input.now?.() ?? Date.now()) },
     nextId: () => randomUUID().replaceAll('-', ''),
@@ -192,6 +197,18 @@ export function providerHostSettings(input: ProviderHostInput): {
     disabled: input.disabled,
     mutationsAllowed: input.mutationsAllowed,
   });
-  service.initialize();
-  return { settings: new ProviderSettings(service), activation: service.activation() };
+  const resolver =
+    input.injected !== null || input.disabled
+      ? injectedProviderActivation(input.disabled ? null : input.injected)
+      : new ProviderActivationService({
+          connections: input.store.connections,
+          secrets,
+          factory: createProviderActivationFactory({
+            env: input.env,
+            ...(input.httpClient === undefined ? {} : { httpClient: input.httpClient }),
+          }),
+          restored: input.restored,
+          disabled: input.disabled,
+        });
+  return { settings: new ProviderSettings(service), resolver };
 }

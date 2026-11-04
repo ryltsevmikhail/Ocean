@@ -4,6 +4,7 @@ import {
   DomainError,
   type ModelActivationSnapshot,
 } from '@runnets/domain';
+import { freezeModelActivation, hostModelActivation } from './model-activation-snapshot.js';
 import type { TurnInput } from './types.js';
 
 export function modelNow(input: TurnInput): Date {
@@ -36,34 +37,17 @@ export function normalizeModelActivation(input: TurnInput): ModelActivationSnaps
     };
   } else {
     if (input.provider === null) throw DomainError.invalidArgument('provider is required');
-    const admittedAt = modelNow(input).toISOString();
-    snapshot = {
-      version: 1,
-      identity: { source: 'host', providerId: input.provider.id, modelId: input.model },
-      capabilities: {
-        tools: input.provider.capabilities.toolCalls === true,
-        streaming: input.provider.capabilities.streaming === true,
-        inputModalities: input.provider.modelInfo?.find((m) => m.id === input.model)
-          ?.inputModalities ?? ['text'],
-        contextTokens: null,
-        maxOutputTokens: null,
-        usage: input.provider.capabilities.usage === true ? 'reported' : 'unavailable',
-      },
-      limits: { maxModelRequests: legacy, requestTimeoutMs: 120000, turnTimeoutMs: 600000 },
-      admittedAt,
-      deadlineAt: new Date(Date.parse(admittedAt) + 600000).toISOString(),
-    };
+    snapshot = hostModelActivation(
+      input.provider,
+      input.model,
+      modelNow(input).toISOString(),
+      legacy,
+    );
   }
   if (
     snapshot.identity.providerId !== input.provider?.id ||
     snapshot.identity.modelId !== input.model
   )
     throw DomainError.invalidArgument('activation does not match provider/model');
-  // Canonical copying also detaches nested arrays. Deep freeze prevents later host mutation.
-  const copied = copyModelActivationSnapshot(snapshot);
-  Object.freeze(copied.identity);
-  Object.freeze(copied.capabilities.inputModalities);
-  Object.freeze(copied.capabilities);
-  Object.freeze(copied.limits);
-  return Object.freeze(copied);
+  return freezeModelActivation(snapshot);
 }

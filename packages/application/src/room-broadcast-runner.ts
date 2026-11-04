@@ -6,6 +6,10 @@
  */
 
 import type { BroadcastBatch, ChatTurn } from '@runnets/domain';
+import type { ProviderActivation, ProviderActivationPort } from './model-activation-types.js';
+import { freezeModelActivation } from './model-activation-snapshot.js';
+import { providerAdmits } from './provider-admission.js';
+import { admitImageRequest } from './image-content.js';
 import type { Clock } from './ports.js';
 import type { ConversationStore } from './conversation-ports.js';
 import type { ImageAssetResolverPort } from './image-content.js';
@@ -61,6 +65,8 @@ export function refuseBroadcastChild(
 }
 /** Runtime-owned image authority and capability/budget guard for one child. */
 export interface BroadcastContextPorts {
+  readonly resolver?: ProviderActivationPort;
+  readonly clock?: Clock;
   readonly images?: ImageAssetResolverPort | undefined;
   /** Returns a stable refusal code, or null when the frozen context may dispatch. */
   readonly guard?: ((messages: readonly ChatMessage[]) => string | null) | undefined;
@@ -72,7 +78,13 @@ export function admitBroadcastChild(
   turnId: string,
   ports: BroadcastContextPorts = {},
 ): BroadcastAdmitResult {
-  return store.atomic((tx) => {
+  const captured: { value: ProviderActivation | null; id: string | null } = {
+    value: null,
+    id: null,
+  };
+  const result = store.atomic<BroadcastAdmitResult>((tx) => {
+    captured.value = null;
+    captured.id = null;
     const batch = tx.broadcastBatch(batchId);
     if (batch === null || batch.state !== 'open') return { kind: 'closed' };
     const turns = tx.broadcastTurns(batch.id);
@@ -95,6 +107,35 @@ export function admitBroadcastChild(
       boundary.author !== 'user'
     )
       return refuse('broadcast_boundary_missing');
+    let activation: ProviderActivation | undefined;
+    let modelBinding = turn.modelBinding;
+    if (ports.resolver !== undefined) {
+      if (modelBinding === undefined) {
+        const current = tx.bot(turn.bot.id),
+          binding = tx.modelBinding(turn.bot.id);
+        if (
+          !current ||
+          current.provider !== turn.bot.provider ||
+          current.model !== turn.bot.model ||
+          binding?.connectionId !== `legacy:${turn.bot.provider}` ||
+          binding.modelId !== turn.bot.model
+        )
+          return refuse('provider_unavailable');
+        modelBinding = binding;
+      }
+      if (!ports.clock) throw Error('admission clock required');
+      const resolved = ports.resolver.resolve(
+        { bot: turn.bot, binding: modelBinding },
+        ports.clock.now().toISOString(),
+      );
+      if (!resolved.ok) return refuse(resolved.error.code);
+      activation = {
+        provider: resolved.value.provider,
+        snapshot: freezeModelActivation(resolved.value.snapshot),
+      };
+      if (!providerAdmits(activation.provider, turn.bot, activation.snapshot))
+        return refuse('provider_unavailable');
+    }
     const context = broadcastRoomContext(
       tx,
       room,
@@ -104,12 +145,43 @@ export function admitBroadcastChild(
       ports.images,
     );
     if (!context.ok) return refuse(context.error.code);
+    if (activation !== undefined) {
+      const images = admitImageRequest({
+        provider: activation.provider,
+        model: turn.bot.model,
+        messages: context.value,
+        capabilities: activation.snapshot.capabilities,
+      });
+      if (!images.ok) return refuse(images.error.code);
+    }
     const refusal = ports.guard?.(context.value) ?? null;
     if (refusal !== null) return refuse(refusal);
-    const accepted: ChatTurn = { ...turn, status: 'accepted' };
+    const accepted: ChatTurn = {
+      ...turn,
+      status: 'accepted',
+      ...(modelBinding === undefined ? {} : { modelBinding: { ...modelBinding } }),
+      ...(activation === undefined ? {} : { activation: activation.snapshot }),
+    };
+    captured.value = activation ?? null;
+    captured.id = turn.id;
     tx.putChatTurn(accepted);
     return { kind: 'admitted', value: { batch, turn: accepted, messages: context.value } };
   });
+  if (result.kind !== 'admitted' || ports.resolver === undefined) return result;
+  if (
+    !captured.value ||
+    captured.id !== result.value.turn.id ||
+    JSON.stringify(captured.value.snapshot) !== JSON.stringify(result.value.turn.activation)
+  )
+    throw Error('missing committed activation capture');
+  return {
+    kind: 'admitted',
+    value: {
+      ...result.value,
+      turn: { ...result.value.turn, activation: captured.value.snapshot },
+      activation: captured.value,
+    },
+  };
 }
 /** An uncertain child holds the room; the batch pauses for an explicit owner decision. */
 export function pauseBroadcastIfUncertain(

@@ -1,4 +1,4 @@
-import type { ChatTurn } from '@runnets/domain';
+import { copyModelActivationSnapshot, copyBotModelBinding, type ChatTurn } from '@runnets/domain';
 import type { ConversationTransaction } from '@runnets/application';
 import type { DatabaseSync } from 'node:sqlite';
 import { readText } from './rows.js';
@@ -20,6 +20,8 @@ export function decodeChatTurn(row: Record<string, unknown>): ChatTurn {
   const marker = 'continuationReviewId' in value ? value.continuationReviewId : null;
   if ('review_id' in row && row['review_id'] !== marker)
     throw new Error('Inconsistent continuation review');
+  if ('activation' in value) copyModelActivationSnapshot(value.activation);
+  if ('modelBinding' in value) copyBotModelBinding(value.modelBinding);
   return value as ChatTurn;
 }
 /** Chat phase updates share the surrounding conversation transaction and SQLite constraints. */

@@ -20,6 +20,7 @@ import {
   ok,
   REQUEST_PRE_CHECK_BYTES,
   utf8ByteLength,
+  type ModelCapabilities,
   type ConversationErrorCode,
   type ConversationResult,
 } from '@runnets/domain';
@@ -174,6 +175,7 @@ export function contentTextBytes(content: ChatContent): number {
 }
 
 export interface ImageAdmissionInput {
+  readonly capabilities?: ModelCapabilities;
   readonly provider: ProviderPort;
   readonly model: string;
   readonly messages: readonly ChatMessage[];
@@ -198,6 +200,7 @@ export function admitImageRequest(
   if (images.length === 0) return ok([]);
   const info = input.provider.modelInfo?.find((model) => model.id === input.model);
   if (
+    (input.capabilities !== undefined && !input.capabilities.inputModalities.includes('image')) ||
     info === undefined ||
     !info.inputModalities.includes('image') ||
     input.provider.requestBytes === undefined

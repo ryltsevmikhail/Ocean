@@ -89,6 +89,9 @@ export class RoomBroadcastService {
         );
       if (room.botIds.some((botId) => tx.bot(botId) === null))
         throw new Error('Missing room member');
+      const bindings = room.botIds.map((id) => tx.modelBinding(id));
+      if (bindings.some((binding) => binding === null))
+        return conversationFailure('provider_unavailable');
       const message: ConversationMessage = {
         id: this.#nextId(),
         workspaceId: input.workspaceId,
@@ -124,7 +127,8 @@ export class RoomBroadcastService {
           taskRunId: runId,
           inboundMessageId: message.id,
           readThroughSeq: message.seq,
-          bot,
+          bot: structuredClone(bot),
+          modelBinding: { ...bindings[position]! },
           status: 'queued',
           text: '',
           preparedVersion: null,

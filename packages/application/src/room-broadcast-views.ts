@@ -13,6 +13,7 @@ import {
   type BroadcastRecipient,
   type ChatTurn,
 } from '@runnets/domain';
+import type { ProviderActivation } from './model-activation-types.js';
 import type { ChatMessage } from './provider.js';
 
 export interface BroadcastScope {
@@ -61,6 +62,7 @@ export interface BroadcastBatchView {
   readonly updatedAt: string;
 }
 export interface BroadcastAdmission {
+  readonly activation?: ProviderActivation;
   readonly batch: BroadcastBatch;
   readonly turn: ChatTurn;
   readonly messages: readonly ChatMessage[];

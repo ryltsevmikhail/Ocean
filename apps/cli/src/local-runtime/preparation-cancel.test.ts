@@ -1,3 +1,4 @@
+import { injectedProviderActivation } from '@runnets/application';
 import { randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import {
@@ -51,11 +52,13 @@ it.each(['success', 'refusal', 'unknown'] as const)(
     const runs = new RoomRuntimeRuns(db.openRoomReads(Date.now), tasks);
     const owner = new RuntimeTurns(
       chat,
-      gatedProvider(
-        async () => {},
-        () => {
-          dispatches++;
-        },
+      injectedProviderActivation(
+        gatedProvider(
+          async () => {},
+          () => {
+            dispatches++;
+          },
+        ),
       ),
       runs,
       randomUUID(),

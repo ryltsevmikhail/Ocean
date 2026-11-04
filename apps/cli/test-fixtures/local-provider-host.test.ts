@@ -6,11 +6,12 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { vi } from 'vitest';
+import { fixtureProviderHttpClient } from './provider-http.js';
 import { openOceanProfile } from '../src/ocean/profile.js';
 import { startLocalRuntime, type LocalRuntimeHost } from '../src/local-runtime/host.js';
 import { connectLocalRuntime, localRuntimePaths } from '@runnets/tools-node';
 import type { LocalRuntimeClient } from '@runnets/tools-node';
-import type { ProviderPort } from '@runnets/application';
+import type { ProviderSecretStorePort, ProviderPort } from '@runnets/application';
 
 /** Deterministic vendor transport: bounded model list plus a gated chat stream. */
 export interface VendorFixture {
@@ -179,12 +180,14 @@ export async function startProviderHost(
   options: {
     readonly baseUrl: string;
     readonly restore?: boolean;
+    readonly secretStore?: ProviderSecretStorePort;
     readonly provider?: ProviderPort | null;
   },
 ): Promise<StartedHost> {
   const host = await startLocalRuntime({
     profile: fixture.profile,
-    providerBaseUrl: options.baseUrl,
+    ...(options.secretStore === undefined ? {} : { providerSecretStore: options.secretStore }),
+    ...(options.baseUrl ? { providerHttpClient: fixtureProviderHttpClient(options.baseUrl) } : {}),
     ...(options.provider === undefined ? {} : { provider: options.provider }),
     ...(options.restore === true ? { restore: true } : {}),
   });

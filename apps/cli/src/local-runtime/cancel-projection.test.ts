@@ -1,3 +1,4 @@
+import { injectedProviderActivation } from '@runnets/application';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { closeSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -100,7 +101,7 @@ it.each(['fresh', 'retry', 'changed binding'])(
     };
     const host = new RuntimeTurns(
       chat,
-      provider,
+      injectedProviderActivation(provider),
       new RoomRuntimeRuns(store.openRoomReads(Date.now), tasks),
       identity.instanceId,
     );
