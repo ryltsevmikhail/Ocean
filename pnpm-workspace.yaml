@@ -1,3 +1,25 @@
 packages:
   - packages/*
   - apps/*
+
+# pnpm 12 reads workspace settings from this file; a `pnpm` section in
+# package.json is ignored. The Executor SDK patch removes a reactive OAuth
+# refresh + replay in `@executor-js/sdk@1.6.11` that would otherwise send a
+# second business request after an upstream 401. See patches/README.md.
+patchedDependencies:
+  '@executor-js/sdk@1.6.11': patches/@executor-js__sdk@1.6.11.patch
+
+# The pinned Executor stack needs one Effect tree. Without this pin npm/pnpm
+# resolves `@effect/platform-node-shared` 4.1.x through the `^4.0.0-beta.59`
+# range and Node fails at runtime with `ERR_MODULE_NOT_FOUND
+# effect/dist/ByteSize.js`.
+overrides:
+  '@effect/platform-node-shared': 4.0.0-beta.59
+  effect: 4.0.0-beta.59
+
+# The pinned Executor/typeorm tree brings msgpackr's optional native
+# accelerator. It is a build-time optimization only; msgpackr's pure-JS
+# fallback is used, so the install script is explicitly not run (pnpm 12
+# refuses an install that silently ignores build scripts).
+allowBuilds:
+  msgpackr-extract: false

@@ -26,6 +26,9 @@
       "path": "packages/tools-node"
     },
     {
+      "path": "packages/integrations-executor"
+    },
+    {
       "path": "apps/cli"
     },
     {
