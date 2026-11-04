@@ -4,13 +4,14 @@ The current product architecture and priorities are specified in
 [Ocean platform architecture](ocean/platform-architecture.md), with its
 [implementation roadmap](superpowers/plans/2026-11-04-ocean-platform.md).
 Ocean has a shared local server and an in-repository Desktop client. Its own
-Runne-based loop calls model-provider APIs; Codex/Claude CLI engines are not
+Ocean engine calls cloud and local model-provider APIs; Codex/Claude CLI engines are not
 part of the accepted direction.
+Each bot has its own model connection; mixed cloud/local teams share the same runtime.
+Local model servers own weights and CPU/GPU inference, not Ocean task authority.
 
 The sections below describe the **inherited runtime baseline**, not the complete
 current product. In particular, its original client-boundary and process-local
 history limitations do not describe the later shared-runtime/room implementation.
-Rust Runne remains reference material, not a crate layout to reproduce.
 
 ## 1. State ownership
 
@@ -105,7 +106,7 @@ PID liveness protects cooperating host ownership, not execution containment.
 Replay/checkpoints reconstruct TaskRun state. Reconciliation converts interrupted
 claims to unknown outcomes, marks unfinished tasks for review and never relaunches
 a provider or tool. A lost conversation is not resumed using empty history.
-TUI lists recovered tasks, ACP warns a fresh session, and `runne status` displays
+TUI lists recovered tasks, ACP warns a fresh session, and the CLI status command displays
 retained states/effect metadata. No automatic unknown-effect resolution exists.
 
 ## 8. Client boundary
