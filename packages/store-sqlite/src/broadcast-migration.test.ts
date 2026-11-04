@@ -8,6 +8,7 @@ import {
 } from './schema.js';
 import { broadcastStorage } from './broadcast-storage.js';
 import { BROADCAST_TABLES } from './broadcast-schema.js';
+import { genuineSchema15, triggers } from '../test-fixtures/broadcast-v15.js';
 
 const databases: DatabaseSync[] = [];
 afterEach(() => {
@@ -24,6 +25,10 @@ function tables(db: DatabaseSync): string[] {
     .all()
     .map((row) => row['name'])
     .filter((name): name is string => typeof name === 'string');
+}
+function version(db: DatabaseSync): string | undefined {
+  return db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'] as
+    string | undefined;
 }
 const batch = {
   version: 1 as const,
@@ -97,8 +102,9 @@ function seedConversation(db: DatabaseSync) {
     );
   }
 }
+
 describe('broadcast migration 16', () => {
-  it('creates the batch table and admits a target-less user message plus queued children', () => {
+  it('creates the batch table and admits target-less user messages plus queued children', () => {
     const db = memory();
     expect(SCHEMA_VERSION).toBe(16);
     expect(tables(db)).toEqual(expect.arrayContaining([...BROADCAST_TABLES]));
@@ -109,7 +115,6 @@ describe('broadcast migration 16', () => {
     expect(storage.batchByRequest('req')).toEqual(batch);
     expect(storage.batchForRoom('room')).toEqual(batch);
     expect(storage.batch('missing')).toBeNull();
-    expect(storage.batchForRoom('unknown')).toBeNull();
     expect(storage.turns('batch1').map((turn) => turn.id)).toEqual(['turn1', 'turn2']);
     expect(
       db.prepare("SELECT target_bot_id FROM ocean_messages WHERE id='message1'").get(),
@@ -136,48 +141,88 @@ describe('broadcast migration 16', () => {
       }),
     ).not.toThrow();
   });
-  it('migrates a schema-15 profile preserving messages and turn rows', () => {
-    const db = memory();
-    seedConversation(db);
-    // Recreate the accepted schema-15 shape: no batch table, old message/turn checks.
-    db.exec(`DROP TABLE ocean_broadcast_batches;
-      UPDATE meta SET value='15' WHERE key='schema_version';`);
-    initializeSchema(db);
-    expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      String(SCHEMA_VERSION),
+  it('migrates a genuine schema-15 profile preserving reviewed, prepared and completed rows', () => {
+    const { db, turns, messages } = genuineSchema15();
+    // The fixture is genuinely schema 15: queued rows violate its real CHECK.
+    expect(version(db)).toBe('15');
+    expect(() =>
+      db.exec(
+        "INSERT INTO ocean_chat_turns VALUES('illegal','ws','room','tr_illegal','queued','{}',NULL)",
+      ),
+    ).toThrow(/CHECK constraint failed/);
+    expect(triggers(db)).toEqual(
+      expect.arrayContaining([
+        'ocean_review_immutable',
+        'ocean_review_turn',
+        'ocean_direct_member',
+        'ocean_direct_target',
+      ]),
     );
-    expect(tables(db)).toEqual(expect.arrayContaining([...BROADCAST_TABLES]));
+    initializeSchema(db);
+    expect(version(db)).toBe(String(SCHEMA_VERSION));
     expect(db.prepare('SELECT count(*) AS n FROM ocean_broadcast_batches').get()).toEqual({ n: 0 });
     expect(
-      db.prepare('SELECT id,body,seq,target_bot_id FROM ocean_messages ORDER BY seq').all(),
-    ).toEqual([
-      { id: 'older', body: 'older question', seq: 1, target_bot_id: null },
-      { id: 'message1', body: 'broadcast question', seq: 2, target_bot_id: null },
-    ]);
-    expect(db.prepare('SELECT id,status FROM ocean_chat_turns ORDER BY id').all()).toEqual([
-      { id: 'turn1', status: 'queued' },
-      { id: 'turn2', status: 'queued' },
-    ]);
+      db.prepare('SELECT id,status,payload,review_id FROM ocean_chat_turns ORDER BY id').all(),
+    ).toEqual(turns);
+    expect(db.prepare('SELECT * FROM ocean_messages ORDER BY seq').all()).toEqual(messages);
+    expect(
+      db.prepare("SELECT sql FROM sqlite_master WHERE name='ocean_chat_turns'").get()?.['sql'],
+    ).toContain("'queued'");
+    expect(triggers(db)).toEqual(
+      expect.arrayContaining([
+        'ocean_review_immutable',
+        'ocean_review_turn',
+        'ocean_direct_member',
+        'ocean_direct_target',
+      ]),
+    );
+    expect(db.prepare('PRAGMA integrity_check').get()?.['integrity_check']).toBe('ok');
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    // Reviewed uncertain turns no longer hold the room; prepared and uncertain still do.
+    expect(() =>
+      db.exec(
+        "INSERT INTO ocean_chat_turns VALUES('prepared2','ws','room','tr_prepared2','prepared','{}',NULL)",
+      ),
+    ).not.toThrow();
+    expect(() =>
+      db.exec(
+        "INSERT INTO ocean_chat_turns VALUES('prepared3','ws','direct','tr_prepared3','prepared','{}',NULL)",
+      ),
+    ).toThrow(/UNIQUE constraint failed/);
+    expect(() =>
+      db.exec(
+        "INSERT INTO ocean_chat_turns VALUES('queued1','ws','room','tr_queued1','queued','{}',NULL)",
+      ),
+    ).not.toThrow();
+    expect(() => db.exec("UPDATE ocean_chat_turns SET review_id=NULL WHERE id='turnR'")).toThrow(
+      /continuation review is immutable/,
+    );
+    expect(() =>
+      db.exec("UPDATE ocean_chat_turns SET review_id='missing' WHERE id='turnP'"),
+    ).toThrow(/continuation review has wrong turn/);
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   });
-  it('rolls back a failed migration and permits retry without losing legacy rows', () => {
-    const db = memory();
-    seedConversation(db);
-    db.exec(`DROP TABLE ocean_broadcast_batches;
-      UPDATE meta SET value='15' WHERE key='schema_version';
-      CREATE TABLE ocean_broadcast_batches(collision TEXT);`);
+  it('rolls back a failed genuine v15 migration and retries without losing rows', () => {
+    const { db, turns } = genuineSchema15();
+    db.exec('CREATE TABLE ocean_chat_turns_v16(collision TEXT)');
     expect(() => initializeSchema(db)).toThrow();
-    expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '15',
-    );
-    expect(db.prepare('SELECT count(*) AS n FROM ocean_messages').get()?.['n']).toBe(2);
-    db.exec('DROP TABLE ocean_broadcast_batches');
+    expect(version(db)).toBe('15');
+    expect(
+      db.prepare('SELECT id,status,payload,review_id FROM ocean_chat_turns ORDER BY id').all(),
+    ).toEqual(turns);
+    expect(db.prepare('SELECT count(*) AS n FROM ocean_messages').get()?.['n']).toBe(3);
+    expect(() =>
+      db.exec(
+        "INSERT INTO ocean_chat_turns VALUES('illegal2','ws','room','tr_illegal2','queued','{}',NULL)",
+      ),
+    ).toThrow(/CHECK constraint failed/);
+    db.exec('DROP TABLE ocean_chat_turns_v16');
     initializeSchema(db);
-    expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      String(SCHEMA_VERSION),
-    );
-    expect(broadcastStorage(db).turns('batch1')).toHaveLength(2);
-    expect(broadcastStorage(db).batch('batch1')).toBeNull();
+    expect(version(db)).toBe(String(SCHEMA_VERSION));
+    expect(
+      db.prepare('SELECT id,status,payload,review_id FROM ocean_chat_turns ORDER BY id').all(),
+    ).toEqual(turns);
+    expect(db.prepare('SELECT count(*) AS n FROM ocean_broadcast_batches').get()).toEqual({ n: 0 });
   });
   it('keeps bot messages targeted and direct messages target-guarded', () => {
     const db = memory();

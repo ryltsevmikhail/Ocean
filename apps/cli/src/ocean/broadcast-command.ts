@@ -25,28 +25,30 @@ function progressLines(batch: LocalBroadcastBatch): string[] {
         `@${child.handle}: ${child.state}${child.resultMessageId ? ' ' + child.resultMessageId : ''}`,
     );
 }
-async function waitForSettlement(
+/** Poll the durable batch until terminal; the whole wait is bounded by one deadline. */
+export async function waitForBroadcastSettlement(
   client: LocalRuntimeClient,
   scope: { workspaceId: string; roomId: string },
   batch: LocalBroadcastBatch,
   output: Writable,
   json: boolean,
   signal: AbortSignal,
+  timeoutMs = 120_000,
 ): Promise<LocalBroadcastBatch> {
+  const deadline = Date.now() + timeoutMs;
   let current = batch;
   let last = '';
   for (;;) {
     if (signal.aborted) throw Error('cancelled');
     if (current.state !== 'open') return current;
+    if (Date.now() > deadline) throw Error('broadcast_pending');
     const lines = progressLines(current);
     const rendered = lines.join('\n');
     if (!json && rendered !== last) {
       last = rendered;
       output.write(`Рассылка ${current.id} · ревизия ${current.revision}\n${rendered}\n`);
     }
-    const started = Date.now();
     await delay(250);
-    if (Date.now() - started > 120_000) throw Error('broadcast_pending');
     current = await client.broadcastGet({
       ...scope,
       batchId: current.id,
@@ -71,9 +73,13 @@ export async function runBroadcastCommand(
   const workspaceId = 'ws_ocean';
   const scope = { workspaceId, roomId };
   if (action === 'show') {
-    const batchId = args.positional[2] ?? args.flags.get('request-id');
-    if (batchId === undefined) throw Error('invalid_input');
-    const batch = await client.broadcastGet({ ...scope, batchId });
+    const batchId = args.positional[2];
+    const requestId = args.flags.get('request-id');
+    if (batchId === undefined && requestId === undefined) throw Error('invalid_input');
+    const batch = await client.broadcastGet({
+      ...scope,
+      ...(batchId === undefined ? { requestId: requestId! } : { batchId }),
+    });
     return { data: batch, code: batch.state === 'completed' ? 0 : 4 };
   }
   if (action === 'continue' || action === 'abandon') {
@@ -98,6 +104,6 @@ export async function runBroadcastCommand(
   });
   if (!json)
     output.write(`Рассылка ${submitted.id} принята: ${submitted.recipients.length} участников\n`);
-  const settled = await waitForSettlement(client, scope, submitted, error, json, signal);
+  const settled = await waitForBroadcastSettlement(client, scope, submitted, error, json, signal);
   return { data: settled, code: settled.state === 'completed' ? 0 : 4 };
 }

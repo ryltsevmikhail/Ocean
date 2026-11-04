@@ -1,6 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { afterEach, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
 import {
   broadcastProfile,
   settledBatch,
@@ -34,7 +33,14 @@ function chat(vendor: VendorFixture) {
   return vendor.requests.filter((request) => request.url === '/chat/completions');
 }
 it('broadcasts exactly one user message and one answer per participant with frozen contexts', async () => {
-  const { vendor, profile, started } = await fixture();
+  const vendor = await vendorFixture({ answer: (index) => 'participant answer ' + index });
+  const profile = await broadcastProfile();
+  const started = await startBroadcastHost(profile, vendor.url);
+  cleanups.push(async () => {
+    await started.stop();
+    await vendor.close();
+    profile.dispose();
+  });
   const requestId = 'broadcast-1';
   const submitted = await started.client.broadcastSubmit({
     workspaceId: 'ws_ocean',
@@ -55,9 +61,22 @@ it('broadcasts exactly one user message and one answer per participant with froz
     expect(messages.at(-1)).toEqual({ role: 'user', content: 'Вопрос обоим участникам' });
     expect(Object.hasOwn(body, 'tools')).toBe(false);
   }
-  // The second child's request cannot contain the first child's answer.
-  const firstAnswer = 'fixture answer';
-  expect(bodies[1] ? JSON.stringify(bodies[1]) : '').not.toContain('Ответ ' + profile.botIds[0]);
+  // Distinct per-child sentinel answers: the second request cannot contain the first answer.
+  expect(bodies[0] ? JSON.stringify(bodies[0]) : '').not.toContain('participant answer 1');
+  expect(bodies[1] ? JSON.stringify(bodies[1]) : '').not.toContain('participant answer 1');
+  expect(bodies[1] ? JSON.stringify(bodies[1]) : '').toContain('Вопрос обоим участникам');
+  const answers = (
+    await started.client.history({
+      workspaceId: 'ws_ocean',
+      roomId: profile.roomId,
+      after: 0,
+      limit: 50,
+    })
+  )
+    .filter((message) => message.author === 'bot')
+    .map((message) => message.body)
+    .sort();
+  expect(answers).toEqual(['participant answer 1', 'participant answer 2']);
   const historyReply = await started.client.history({
     workspaceId: 'ws_ocean',
     roomId: profile.roomId,
@@ -95,7 +114,6 @@ it('broadcasts exactly one user message and one answer per participant with froz
     }),
   ).rejects.toThrow('request_conflict');
   expect(chat(vendor)).toHaveLength(2);
-  expect(firstAnswer.length).toBeGreaterThan(0);
 });
 it('refuses new model turns while a batch holds the room but keeps notes available', async () => {
   const { vendor, profile, started } = await fixture();
@@ -149,9 +167,6 @@ it('never grants coding tools to broadcast children', async () => {
   const bodies = chat(vendor).map((request) => request.body);
   expect(bodies).toHaveLength(2);
   for (const body of bodies) expect(body).not.toContain('tools');
-  // No child turn carries a coding task or review binding.
-  const hash = createHash('sha256').update(profile.profile).digest('hex');
-  expect(hash).toHaveLength(64);
 });
 
 it('keeps existing per-child cancellation semantics and never claims remote stop', async () => {
@@ -217,6 +232,15 @@ it('keeps existing per-child cancellation semantics and never claims remote stop
     expectedRevision: settled.revision,
   });
   expect(abandoned.recipients.map((child) => child.state)).toEqual(['uncertain', 'not_started']);
+  // Never-dispatched children become terminal durably and disappear from the run list.
+  const afterAbandon = await started.client.listRuns({
+    workspaceId: 'ws_ocean',
+    roomId: profile.roomId,
+    limit: 50,
+  });
+  expect(afterAbandon.map((run) => run.turnStatus)).not.toContain('queued');
+  const batchRuns = afterAbandon.filter((run) => run.runId !== active.runId);
+  expect(batchRuns.every((run) => run.turnStatus !== 'queued')).toBe(true);
 });
 
 it('refuses only the child whose model the active provider cannot serve', async () => {

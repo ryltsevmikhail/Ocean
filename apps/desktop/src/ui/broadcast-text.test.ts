@@ -7,6 +7,7 @@ import {
   broadcastPaused,
   broadcastStateText,
   broadcastSummary,
+  sendBlockedHint,
 } from './broadcast-text.js';
 import type { BroadcastBatch } from '../protocol.js';
 
@@ -60,13 +61,10 @@ it('summarizes every batch and child state without transport metadata', () => {
   for (const state of Object.keys(broadcastChildText)) void state;
   expect(broadcastChildLine(batch.recipients[0]!)).toContain('@dev — Ответил');
   expect(broadcastChildLine(batch.recipients[1]!)).toContain('@review — Ожидает очереди');
-  expect(Object.keys(broadcastStateText)).toEqual([
-    'open',
-    'paused',
-    'completed',
-    'abandoned',
-    'refused',
-  ]);
+  expect(Object.keys(broadcastStateText)).toEqual(['open', 'paused', 'completed', 'abandoned']);
+  expect(sendBlockedHint(batch, 'dev')).toContain('рассылки');
+  expect(sendBlockedHint(batch, '')).toBe('');
+  expect(sendBlockedHint(null, 'dev')).toBe('');
   expect(broadcastPaused(batch)).toBe(true);
   expect(broadcastBlocksNewTurns(batch)).toBe(true);
   expect(broadcastBlocksNewTurns({ ...batch, state: 'completed' })).toBe(false);

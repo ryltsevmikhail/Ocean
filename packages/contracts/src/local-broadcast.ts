@@ -9,6 +9,8 @@
 
 import { localRuntimeRecord } from './local-runtime.js';
 
+/** Read-only subset advertised by restore-mode maintenance hosts. */
+export const LOCAL_BROADCAST_READ_METHODS = ['broadcasts.get', 'broadcasts.list'] as const;
 export const LOCAL_BROADCAST_METHODS = [
   'broadcasts.submit',
   'broadcasts.get',
@@ -21,7 +23,7 @@ export const BROADCAST_MAX_ATTACHMENTS = 4;
 export const BROADCAST_MAX_RECIPIENTS = 32;
 export const BROADCAST_MAX_BATCHES = 50;
 
-export type LocalBroadcastState = 'open' | 'paused' | 'completed' | 'abandoned' | 'refused';
+export type LocalBroadcastState = 'open' | 'paused' | 'completed' | 'abandoned';
 export type LocalBroadcastChildState =
   'queued' | 'running' | 'answered' | 'refused' | 'uncertain' | 'cancelled' | 'not_started';
 export interface LocalBroadcastChild {
@@ -78,13 +80,7 @@ const localId = (v: unknown): v is string =>
   typeof v === 'string' && v.trim().length > 0 && v.length <= 128;
 const position = (v: unknown): v is number =>
   typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
-const states: readonly LocalBroadcastState[] = [
-  'open',
-  'paused',
-  'completed',
-  'abandoned',
-  'refused',
-];
+const states: readonly LocalBroadcastState[] = ['open', 'paused', 'completed', 'abandoned'];
 const childStates: readonly LocalBroadcastChildState[] = [
   'queued',
   'running',

@@ -67,7 +67,10 @@ describe('broadcast recovery and owner decisions', () => {
     expect(abandoned.recipients.map((child) => child.state)).toEqual(['uncertain', 'not_started']);
     // Abandonment is not settlement or cancellation proof for the uncertain child.
     expect(abandoned.recipients[0]?.state).toBe('uncertain');
-    expect(f.store.atomic((tx) => tx.broadcastTurns(f.batch.id))[1]?.status).toBe('queued');
+    const after = f.store.atomic((tx) => tx.broadcastTurns(f.batch.id));
+    expect(after[1]).toMatchObject({ status: 'cancelled' });
+    expect(after[1]?.broadcast?.abandoned).toBe(true);
+    expect(after[0]?.status).toBe('uncertain');
   });
   it('refuses continuation while a relevant text-only hold remains, without settling anything', () => {
     const f = paused(true);
@@ -149,7 +152,6 @@ describe('broadcast recovery and owner decisions', () => {
         expectedRevision: 1,
       }),
     ).toThrow('batch_not_paused');
-    const abandonVote = { ...vote };
     fresh.store.atomic((tx) =>
       tx.putBroadcastBatch({
         ...tx.broadcastBatch(submitted.value.id)!,
@@ -157,7 +159,14 @@ describe('broadcast recovery and owner decisions', () => {
         revision: 2,
       }),
     );
-    expect(fresh.service.abandon(abandonVote)).toMatchObject({ state: 'abandoned', revision: 3 });
+    expect(
+      fresh.service.abandon({
+        workspaceId: 'ws',
+        roomId: fresh.roomId,
+        batchId: submitted.value.id,
+        expectedRevision: 2,
+      }),
+    ).toMatchObject({ state: 'abandoned', revision: 3 });
   });
   it('keeps completed children answered and never re-dispatches them after continue', () => {
     const f = paused(true);

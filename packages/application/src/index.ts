@@ -3,6 +3,7 @@ export * from './service.js';
 export * from './tools.js';
 export * from './command-commit.js';
 export * from './provider.js';
+export * from './provider-admission.js';
 export * from './provider-connection-ports.js';
 export * from './provider-connection-resolution.js';
 export * from './provider-connection-request.js';

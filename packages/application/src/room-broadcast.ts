@@ -80,7 +80,13 @@ export class RoomBroadcastService {
       if (room === null) return conversationFailure('unknown_room');
       if (room.kind !== 'group') return conversationFailure('invalid_input');
       if (tx.broadcastBatchForRoom(room.id) !== null) return conversationFailure('batch_open');
-      if (tx.activeChatTurn(room.id) !== null) return conversationFailure('batch_open');
+      // Any non-batch hold keeps its pre-existing recovery meaning: only doubts about a
+      // started turn are `recovery_required`, an ordinary in-flight turn is `room_busy`.
+      const active = tx.activeChatTurn(room.id);
+      if (active !== null)
+        return conversationFailure(
+          active.status === 'uncertain' ? 'recovery_required' : 'room_busy',
+        );
       if (room.botIds.some((botId) => tx.bot(botId) === null))
         throw new Error('Missing room member');
       const message: ConversationMessage = {
@@ -213,6 +219,16 @@ export class RoomBroadcastService {
       if (batch.state !== 'paused') throw Error('batch_not_paused');
       this.#assertRevision(batch, input.expectedRevision);
       const turns = tx.broadcastTurns(batch.id);
+      for (const turn of turns) {
+        if (turn.status !== 'queued' || turn.broadcast === undefined) continue;
+        // Never-dispatched siblings must not stay "queued" forever: terminalise durably and
+        // mark the abandonment so projections and run listings show not_started, not a phantom run.
+        tx.putChatTurn({
+          ...turn,
+          status: 'cancelled',
+          broadcast: { ...turn.broadcast, abandoned: true },
+        });
+      }
       const next: BroadcastBatch = {
         ...batch,
         state: 'abandoned',
@@ -220,7 +236,7 @@ export class RoomBroadcastService {
         updatedAt: this.#clock.now().toISOString(),
       };
       tx.putBroadcastBatch(next);
-      return broadcastView(next, turns);
+      return broadcastView(next, tx.broadcastTurns(batch.id));
     });
   }
   /** Runtime startup: every unfinished batch pauses; queued children stay held. */

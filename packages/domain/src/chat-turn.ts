@@ -13,6 +13,8 @@ export interface ChatTurnBroadcastLink {
   readonly version: 1;
   readonly batchId: string;
   readonly position: number;
+  /** Set only when an owner abandon terminalised a child that was never dispatched. */
+  readonly abandoned?: boolean;
 }
 /** Durable admission and publication facts; a retry never creates new execution authority. */
 export interface ChatTurn {

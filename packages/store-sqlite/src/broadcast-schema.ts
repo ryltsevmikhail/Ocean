@@ -31,25 +31,6 @@ export function migrateBroadcasts(db: DatabaseSync): void {
     CREATE INDEX ocean_chat_broadcast ON ocean_chat_turns(json_extract(payload,'$.broadcast.batchId'))
       WHERE json_extract(payload,'$.broadcast.version')=1;
 
-    CREATE TABLE ocean_messages_v16 (
-      id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL,room_id TEXT NOT NULL,
-      seq INTEGER NOT NULL CHECK(seq>=1),author TEXT NOT NULL CHECK(author IN ('user','bot')),
-      target_bot_id TEXT,body TEXT NOT NULL,created_at TEXT NOT NULL,
-      author_bot_id TEXT,turn_id TEXT,UNIQUE(room_id,seq),UNIQUE(turn_id),
-      CHECK((author='user' AND author_bot_id IS NULL AND turn_id IS NULL)
-        OR (author='bot' AND author_bot_id IS NOT NULL AND target_bot_id IS NOT NULL
-          AND author_bot_id=target_bot_id AND turn_id IS NOT NULL)),
-      FOREIGN KEY(workspace_id,room_id) REFERENCES ocean_rooms(workspace_id,id),
-      FOREIGN KEY(room_id,target_bot_id) REFERENCES ocean_members(room_id,bot_id),
-      FOREIGN KEY(room_id,turn_id) REFERENCES ocean_chat_turns(room_id,id)
-    ) STRICT;
-    INSERT INTO ocean_messages_v16 SELECT * FROM ocean_messages;
-    DROP TABLE ocean_messages;
-    ALTER TABLE ocean_messages_v16 RENAME TO ocean_messages;
-    CREATE TRIGGER ocean_direct_target BEFORE INSERT ON ocean_messages
-    WHEN (SELECT kind FROM ocean_rooms WHERE id=NEW.room_id)='direct' AND NEW.target_bot_id IS NULL
-    BEGIN SELECT RAISE(ABORT,'direct message requires a target'); END;
-
     CREATE TABLE IF NOT EXISTS ocean_broadcast_batches (
       id TEXT PRIMARY KEY,
       workspace_id TEXT NOT NULL,
@@ -59,7 +40,7 @@ export function migrateBroadcasts(db: DatabaseSync): void {
       message_id TEXT NOT NULL UNIQUE,
       boundary_seq INTEGER NOT NULL CHECK(boundary_seq>=1),
       recipients TEXT NOT NULL,
-      state TEXT NOT NULL CHECK(state IN ('open','paused','completed','abandoned','refused')),
+      state TEXT NOT NULL CHECK(state IN ('open','paused','completed','abandoned')),
       revision INTEGER NOT NULL CHECK(revision>=1),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,

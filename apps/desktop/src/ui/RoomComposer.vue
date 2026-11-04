@@ -14,6 +14,8 @@ const props = defineProps<{
   sending: boolean;
   active: Run | undefined;
   uncertain: boolean;
+  blocked: boolean;
+  blockedHint: string;
   sent: number;
 }>();
 const recipient = defineModel<string>('recipient', { required: true });
@@ -35,6 +37,8 @@ const sendDisabled = computed(
   () =>
     props.busy ||
     importing.value ||
+    // A batch holds model turns until the owner decides; Notes stay available.
+    (props.blocked && recipient.value !== '') ||
     (!props.uncertain && !draft.value.trim() && !files.value.length),
 );
 const { field, send, keydown } = useComposerInput(
@@ -155,6 +159,7 @@ function paste(event: ClipboardEvent) {
       >Всем: один вопрос, по одному ответу от каждого участника, без автоматических раундов.
       Приостановленную рассылку можно продолжить или оставить в панели рассылки.</small
     >
+    <small v-if="blocked && recipient !== ''" role="status">{{ blockedHint }}</small>
     <small v-if="importing" role="status">Прикрепляем файлы…</small>
     <p v-if="error" role="alert" class="runtime-error">{{ error }}</p>
   </form>

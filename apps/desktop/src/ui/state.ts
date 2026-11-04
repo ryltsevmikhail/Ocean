@@ -4,12 +4,8 @@ import { pages, useRoomFeed } from './room-feed.js';
 import { call, SendFailure, submitDraft } from './bridge.js';
 import { explain } from './dom.js';
 import { feedbackText } from './runtime-text.js';
-import {
-  loadProviderStatus,
-  providerModels,
-  requireProviderDefaultModel,
-} from './provider-state.js';
-import { retiredModelHint } from './provider-text.js';
+import { loadProviderStatus } from './provider-state.js';
+import { unavailableFeedback } from './provider-feedback.js';
 import {
   abandonBroadcast,
   broadcastBatch,
@@ -20,13 +16,16 @@ import {
   readBroadcast,
   sendOwnedBroadcast,
 } from './broadcast-state.js';
+import { createOceanTeam } from './ocean-team.js';
 import { BROADCAST_RECIPIENT } from './broadcast-mode.js';
+import { sendBlockedHint } from './broadcast-text.js';
 
 export function useDesktop() {
   const bots = ref<Bot[]>([]),
     rooms = ref<Room[]>([]);
   const sent = ref(0),
     receipt = ref(''),
+    receiptAccepted = ref(false),
     admittedRun = ref<string | null>(null),
     uncertain = ref(false);
   const unconfirmed = new Map<string, Extract<Command, { op: 'send' }>>();
@@ -73,26 +72,13 @@ export function useDesktop() {
       await action();
     } catch (error) {
       feedbackCode.value = error instanceof Error ? error.message : String(error);
-      feedback.value = unavailableFeedback(feedbackCode.value) ?? explain(error);
+      feedback.value =
+        unavailableFeedback(feedbackCode.value, room.value, recipient.value, bots.value) ??
+        explain(error);
       feedbackError.value = true;
     } finally {
       busy.value = false;
     }
-  }
-  /** A retired bot model is a different owner problem from a missing provider configuration. */
-  function unavailableFeedback(code: string): string | null {
-    if (code !== 'provider_unavailable' || !room.value) return null;
-    const r = room.value;
-    const candidates =
-      r.kind === 'direct' ? [r.botId] : recipient.value !== '' ? [recipient.value] : r.botIds;
-    for (const id of candidates) {
-      const hint = retiredModelHint(
-        bots.value.find((bot) => bot.id === id)?.model ?? null,
-        providerModels.value,
-      );
-      if (hint !== null) return hint;
-    }
-    return null;
   }
   function read(r: Room | undefined) {
     if (r?.id !== room.value?.id) {
@@ -101,6 +87,7 @@ export function useDesktop() {
       const original = r && unconfirmed.get(r.id);
       const originalBroadcast = r ? pendingBroadcast(r.id) : undefined;
       recipient.value = original?.to ?? (originalBroadcast ? BROADCAST_RECIPIENT : '');
+      receiptAccepted.value = false;
       receipt.value = original
         ? 'Квитанция не подтверждена · ' + original.requestId
         : originalBroadcast
@@ -137,29 +124,16 @@ export function useDesktop() {
   }
   onMounted(() => void guard(() => refresh()));
   const uuid = () => crypto.randomUUID();
-  async function team() {
-    const model = requireProviderDefaultModel();
-    for (const h of ['dev', 'review']) {
-      if (!bots.value.some((b) => b.handle === h)) {
-        await call({
-          op: 'bot',
-          requestId: uuid(),
-          handle: h,
-          name: h,
-          role: h === 'dev' ? 'Разработчик' : 'Ревьюер',
-          model,
-        });
-        bots.value = await loadBots();
-      }
-    }
-    const group = await call({
-      op: 'group',
-      requestId: uuid(),
-      title: 'Ocean Team',
-      bots: bots.value.filter((b) => ['dev', 'review'].includes(b.handle)).map((b) => b.id),
+  const team = () =>
+    createOceanTeam({
+      readBots: loadBots,
+      setBots: (next) => {
+        bots.value = next;
+      },
+      currentBots: () => bots.value,
+      refresh,
+      requestId: uuid,
     });
-    await refresh(group.data.id);
-  }
   async function send(attachments: string[] = []) {
     const r = room.value;
     if (!r) return;
@@ -176,6 +150,7 @@ export function useDesktop() {
     try {
       const result = await submitDraft(command);
       admittedRun.value = result.runId;
+      receiptAccepted.value = true;
       receipt.value = 'Принято · ' + result.messageId + ' · ' + (result.runId ?? 'recorded');
       unconfirmed.delete(r.id);
       uncertain.value = false;
@@ -189,10 +164,12 @@ export function useDesktop() {
       ) {
         unconfirmed.delete(r.id);
         uncertain.value = false;
+        receiptAccepted.value = false;
         if (original) receipt.value = '';
       } else {
         unconfirmed.set(r.id, command);
         uncertain.value = true;
+        receiptAccepted.value = false;
         receipt.value = 'Квитанция не подтверждена · ' + command.requestId;
       }
       throw error;
@@ -208,14 +185,17 @@ export function useDesktop() {
     });
     if (outcome.kind === 'unconfirmed') {
       uncertain.value = true;
+      receiptAccepted.value = false;
       receipt.value = 'Квитанция рассылки не подтверждена · ' + outcome.requestId;
       throw Error('outcome_unknown');
     }
     if (outcome.kind === 'refused') {
+      receiptAccepted.value = false;
       if (outcome.retried) receipt.value = '';
       uncertain.value = false;
       throw Error(outcome.code);
     }
+    receiptAccepted.value = true;
     receipt.value =
       'Всем · ' + outcome.batch.recipients.length + ' участников · ' + outcome.batch.messageId;
     uncertain.value = false;
@@ -268,6 +248,7 @@ export function useDesktop() {
     busy,
     active,
     receipt,
+    receiptAccepted,
     readError,
     uncertain,
     shownRun: computed(() => {
@@ -287,6 +268,7 @@ export function useDesktop() {
     broadcastBatch,
     broadcastBusy,
     broadcastBlocksSending,
+    broadcastBlockedHint: computed(() => sendBlockedHint(broadcastBatch.value, recipient.value)),
     continueBroadcast,
     abandonBroadcast,
     sendBroadcast: async (attachments: string[]) => {

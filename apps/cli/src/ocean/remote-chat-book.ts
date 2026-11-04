@@ -7,6 +7,7 @@ import { runView, type RunBookPort, type ScreenEntry, type BookOutcome } from '.
 import type { RoomConnection } from './room-connection.js';
 import { RemoteRoomView } from './remote-room-view.js';
 import { RemoteBroadcast } from './remote-broadcast.js';
+import { parseBroadcastPrompt } from './broadcast-prompt.js';
 
 export class RemoteChatRunBook implements RunBookPort {
   readonly #connection: RoomConnection;
@@ -91,29 +92,21 @@ export class RemoteChatRunBook implements RunBookPort {
   }
   /** Explicit broadcast actions; the same durable DTO backs every client. */
   async #broadcastCommand(prompt: string): Promise<string | null> {
-    if (prompt !== '/broadcast' && !prompt.startsWith('/broadcast ')) return null;
-    const words = prompt.split(/\s+/);
-    const target = words[1];
-    if (target === 'continue' || target === 'abandon') {
-      const [, , batchId, revision] = words;
-      const expectedRevision = Number(revision);
-      if (!batchId || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
-        return 'Use /broadcast ' + target + ' BATCH_ID REVISION';
-      const batch =
-        target === 'continue'
-          ? await this.#broadcast.continue(batchId, expectedRevision)
-          : await this.#broadcast.abandon(batchId, expectedRevision);
-      await this.#refresh(false);
-      return `Рассылка ${batch.id}: ${batch.state} · ревизия ${batch.revision}`;
-    }
-    if (prompt === '/broadcast' || prompt === '/broadcast show') {
+    const action = parseBroadcastPrompt(prompt);
+    if (action === null) return null;
+    if (action.kind === 'show') {
       await this.#refresh(false);
       return this.#broadcast.status() || 'В этой комнате нет рассылки.';
     }
-    const text = prompt.slice('/broadcast '.length).trim();
-    if (!text)
-      return 'Use /broadcast TEXT, /broadcast show, or /broadcast continue|abandon ID REV.';
-    const batch = await this.#broadcast.submit(text);
+    if (action.kind === 'vote') {
+      const batch =
+        action.action === 'continue'
+          ? await this.#broadcast.continue(action.batchId, action.expectedRevision)
+          : await this.#broadcast.abandon(action.batchId, action.expectedRevision);
+      await this.#refresh(false);
+      return `Рассылка ${batch.id}: ${batch.state} · ревизия ${batch.revision}`;
+    }
+    const batch = await this.#broadcast.submit(action.text);
     await this.#refresh(false);
     return `Рассылка принята: ${batch.id} · ${batch.recipients.length} участников`;
   }

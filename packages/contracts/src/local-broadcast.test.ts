@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BROADCAST_MAX_ATTACHMENTS,
   LOCAL_BROADCAST_METHODS,
+  LOCAL_BROADCAST_READ_METHODS,
   isLocalBroadcastBatch,
   isLocalBroadcastGet,
   isLocalBroadcastList,
@@ -130,4 +131,11 @@ describe('broadcast contract', () => {
       }),
     ).toBe(false);
   });
+});
+
+it('retires the refused batch state and exposes the restore-safe read methods', () => {
+  expect(LOCAL_BROADCAST_READ_METHODS).toEqual(['broadcasts.get', 'broadcasts.list']);
+  expect(isLocalBroadcastBatch({ ...batch, state: 'refused' })).toBe(false);
+  for (const state of ['open', 'paused', 'completed', 'abandoned'])
+    expect(isLocalBroadcastBatch({ ...batch, state })).toBe(true);
 });

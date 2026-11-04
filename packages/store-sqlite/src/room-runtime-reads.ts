@@ -9,8 +9,10 @@ import type { DatabaseSync } from 'node:sqlite';
 import { messageRow } from './conversation-rows.js';
 import { readInteger, readText, readNullableText } from './rows.js';
 
+const VISIBLE_TURN = `COALESCE(json_extract(payload,'$.broadcast.abandoned'),0)=0`;
 const BOUND_TURN = `FROM ocean_chat_turns
       WHERE workspace_id=? AND room_id=? AND task_run_id=?
+      AND ${VISIBLE_TURN}
       AND json_extract(payload,'$.workspaceId')=workspace_id AND json_extract(payload,'$.roomId')=room_id
       AND json_extract(payload,'$.taskRunId')=task_run_id AND json_extract(payload,'$.id')=id
       AND json_extract(payload,'$.status')=status`;
@@ -205,7 +207,8 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
       checkRoom(scope);
       for (const row of db
         .prepare(
-          'SELECT task_run_id FROM ocean_chat_turns WHERE room_id=? AND workspace_id=? AND id>? ORDER BY id LIMIT ?',
+          `SELECT task_run_id FROM ocean_chat_turns
+           WHERE room_id=? AND workspace_id=? AND id>? AND ${VISIBLE_TURN} ORDER BY id LIMIT ?`,
         )
         .iterate(scope.roomId, scope.workspaceId, after, limit))
         yield requireRun({ ...scope, runId: readText(row, 'task_run_id') });

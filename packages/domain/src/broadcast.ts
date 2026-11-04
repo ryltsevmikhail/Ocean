@@ -7,7 +7,7 @@
  * state alone: a `queued` child was never dispatched.
  */
 
-export type BroadcastState = 'open' | 'paused' | 'completed' | 'abandoned' | 'refused';
+export type BroadcastState = 'open' | 'paused' | 'completed' | 'abandoned';
 /** Per-recipient visible state projected from the durable child turn and batch state. */
 export type BroadcastChildStatus =
   'queued' | 'running' | 'answered' | 'refused' | 'uncertain' | 'cancelled' | 'not_started';
@@ -41,7 +41,7 @@ export interface BroadcastBatch {
   readonly updatedAt: string;
 }
 export function isBroadcastState(value: unknown): value is BroadcastState {
-  return ['open', 'paused', 'completed', 'abandoned', 'refused'].some((state) => state === value);
+  return ['open', 'paused', 'completed', 'abandoned'].some((state) => state === value);
 }
 export function isBroadcastRecipient(value: unknown): value is BroadcastRecipient {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -99,11 +99,14 @@ export function broadcastChildStatus(
     | 'failed'
     | 'uncertain'
     | 'cancelled',
+  abandoned = false,
 ): BroadcastChildStatus {
+  // Abandonment terminalises never-dispatched children; the explicit marker keeps them visible
+  // as not started without pretending a started child was cancelled or settled.
+  if (batch.state === 'abandoned' && (turnStatus === 'queued' || abandoned)) return 'not_started';
   switch (turnStatus) {
     case 'queued':
-      // A queued child of an abandoned/refused batch is explicitly not started; it never ran.
-      return batch.state === 'abandoned' || batch.state === 'refused' ? 'not_started' : 'queued';
+      return 'queued';
     case 'accepted':
     case 'dispatching':
     case 'prepared':

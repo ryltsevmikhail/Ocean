@@ -8,6 +8,7 @@ import {
   type ConversationResult,
 } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
+import { providerAdmits } from './provider-admission.js';
 import type { ConversationServiceDeps } from './conversations.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
 import { roomContext } from './room-context.js';
@@ -102,14 +103,7 @@ export function admitChat(
     const active = tx.activeChatTurn(room.id);
     if (active !== null)
       return conversationFailure(active.status === 'uncertain' ? 'recovery_required' : 'room_busy');
-    if (
-      provider === null ||
-      provider.id !== selected.provider ||
-      !provider.models.includes(selected.model) ||
-      !provider.capabilities.streaming ||
-      !provider.capabilities.usage
-    )
-      return conversationFailure('provider_unavailable');
+    if (!providerAdmits(provider, selected)) return conversationFailure('provider_unavailable');
     const context = roomContext(tx, room, selected, request.text);
     if (!context.ok) return context;
     const id = deps.nextId();

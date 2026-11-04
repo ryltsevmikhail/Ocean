@@ -22,7 +22,7 @@ import { RuntimeTurns } from './turns.js';
 import type { RuntimeOptions } from '../runtime.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
-import { drainBeforeDeadline } from './drain.js';
+import { assertRuntimeDrained } from './drain-supervision.js';
 import { RuntimeFinalization } from './finalization.js';
 import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
 import { LOCAL_PROVIDER_METHODS } from '@runnets/contracts';
@@ -187,21 +187,10 @@ export async function startLocalRuntime(
         state = 'draining';
         stopping = (async (): Promise<LocalRuntimeStop> => {
           try {
-            if (
-              (await drainBeforeDeadline(async () => {
-                const [jobs, extra, batch] = await Promise.all([
-                  turns.drain(),
-                  options.drain ? options.drain() : 'settled',
-                  broadcasts.drain(),
-                  decisions.drain(),
-                  panels.drain(),
-                  restoration.drain(),
-                  finalization.drain(),
-                ]);
-                return [jobs, extra, batch].every((s) => s === 'settled') ? 'settled' : 'uncertain';
-              }, drainDeadlineMs)) !== 'settled'
-            )
-              throw Error('stop_incomplete');
+            await assertRuntimeDrained(
+              [turns, broadcasts, options.drain, decisions, panels, restoration, finalization],
+              drainDeadlineMs,
+            );
             endpoint.check();
             if (!transport || !publication || !endpoint.matches('runtime.sock', transport.socketFd))
               throw Error('endpoint_changed');
@@ -251,10 +240,14 @@ export async function startLocalRuntime(
             return finalization.dispatch(method, params);
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
             return provider.settings.dispatch(method, params, detached);
+          if (method === 'broadcasts.submit') {
+            const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
+            if (code) return { error: { code } };
+          }
           if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
             return broadcasts.dispatch(method, params, detached);
           if (method === 'desktop.assets') return desktop(params, state !== 'ready');
-          if (method === 'turns.submit' || method === 'broadcasts.submit') {
+          if (method === 'turns.submit') {
             const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
             if (code) return { error: { code } };
           }

@@ -69,6 +69,10 @@ try {
   await panel.getByText(/Рассылка завершена/).waitFor();
   const summary = await panel.getByRole('status').innerText();
   assert.match(summary, /2 из 2 ответили/);
+  // A successful broadcast is never rendered as an unconfirmed receipt (M1 regression).
+  const feedback = await page.locator('#feedback').innerText();
+  assert.match(feedback, /Рассылка принята/);
+  assert.doesNotMatch(feedback, /Квитанция не подтверждена/);
   const handles = await panel
     .locator('li[data-state="answered"] .broadcast-handle')
     .allTextContents();
@@ -80,6 +84,7 @@ try {
     step: 'broadcast-completed',
     providerRequests: requests().length,
     summary,
+    feedback,
   });
 
   // Paused batch: kill the owner while the first child is in flight, restart, decide.

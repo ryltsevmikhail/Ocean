@@ -240,7 +240,7 @@ export const broadcastBatch = z
     messageId: id,
     boundarySeq: z.int().positive(),
     recipients: z.array(broadcastChild).min(2).max(32),
-    state: z.enum(['open', 'paused', 'completed', 'abandoned', 'refused']),
+    state: z.enum(['open', 'paused', 'completed', 'abandoned']),
     revision: z.int().positive(),
     createdAt: z.iso.datetime({ offset: true }),
     updatedAt: z.iso.datetime({ offset: true }),

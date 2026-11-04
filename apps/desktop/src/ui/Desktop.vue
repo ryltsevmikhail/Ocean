@@ -33,6 +33,7 @@ const {
   busy,
   active,
   receipt,
+  receiptAccepted,
   readError,
   uncertain,
   shownRun,
@@ -46,6 +47,8 @@ const {
   send,
   sendBroadcast,
   broadcastBusy,
+  broadcastBlocksSending,
+  broadcastBlockedHint,
   continueBroadcast,
   abandonBroadcast,
   stop,
@@ -192,6 +195,7 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
       <RuntimeFeedback
         :feedback="feedback"
         :receipt="receipt"
+        :accepted="receiptAccepted"
         :error="feedbackError"
         @refresh="guard(() => refresh())"
         :run="shownRun"
@@ -210,6 +214,8 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
         :busy="busy"
         :active="active"
         :uncertain="uncertain"
+        :blocked="broadcastBlocksSending"
+        :blocked-hint="broadcastBlockedHint"
         @send="(ids) => guard(() => send(ids))"
         @broadcast="(ids) => guard(() => sendBroadcast(ids))"
         @stop="stop"

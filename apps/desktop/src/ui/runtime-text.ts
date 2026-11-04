@@ -21,3 +21,16 @@ export function historyState(error: string, count: number, busy: boolean) {
 export function feedbackText(text: string, code: string, welcome: boolean) {
   return welcome && code === 'runtime_absent' ? '' : text;
 }
+
+/**
+ * One receipt contract for every successful submission: confidence is proven by
+ * the durable receipt, never by the wording, so a broadcast cannot fall into the
+ * unconfirmed branch of the shared feedback row.
+ */
+export function receiptLabel(receipt: string, accepted = false): string {
+  const confirmed = accepted || receipt.startsWith('Принято');
+  if (!confirmed) return 'Квитанция не подтверждена';
+  return receipt.includes('Всем') || receipt.startsWith('Принято · Всем')
+    ? 'Рассылка принята'
+    : 'Сообщение принято';
+}

@@ -5,6 +5,7 @@ import {
   LOCAL_PROVIDER_READ_METHODS,
   LOCAL_RESTORE_METHODS,
   LOCAL_BROADCAST_METHODS,
+  LOCAL_BROADCAST_READ_METHODS,
   LOCAL_ROOM_METHODS,
   PROFILE_METHODS,
 } from '@runnets/contracts';
@@ -24,7 +25,7 @@ export function runtimeCapabilities(restore: boolean): readonly string[] {
     ...PROFILE_METHODS,
     ...LOCAL_RESTORE_METHODS,
     ...(restore ? LOCAL_PROVIDER_READ_METHODS : LOCAL_PROVIDER_METHODS),
-    ...LOCAL_BROADCAST_METHODS,
+    ...(restore ? LOCAL_BROADCAST_READ_METHODS : LOCAL_BROADCAST_METHODS),
     ...(restore ? [] : LOCAL_FINALIZATION_METHODS),
     ...(restore ? ['restore.maintenance'] : []),
   ];

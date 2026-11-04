@@ -19,6 +19,7 @@ import {
   executeChatTurn,
   nextBroadcastChild,
   pauseBroadcastIfUncertain,
+  providerAdmits,
   refuseBroadcastChild,
   settleBroadcastBatch,
   type ChatTurnExecutionDeps,
@@ -26,7 +27,6 @@ import {
   type ProviderPort,
   type RoomBroadcastService,
 } from '@runnets/application';
-import type { ChatTurn } from '@runnets/domain';
 import type { RuntimeReply } from './queries.js';
 
 export interface RuntimeBroadcastsOptions {
@@ -40,16 +40,6 @@ const stable = (error: unknown): string => {
   const message = error instanceof Error ? error.message : '';
   return /^[a-z_]{1,64}$/.test(message) ? message : 'runtime_failure';
 };
-/** Admission for one child uses exactly the same rule as a single addressed turn. */
-function providerAdmits(provider: ProviderPort | null, turn: ChatTurn): provider is ProviderPort {
-  return (
-    provider !== null &&
-    provider.id === turn.bot.provider &&
-    provider.models.includes(turn.bot.model) &&
-    provider.capabilities.streaming === true &&
-    provider.capabilities.usage === true
-  );
-}
 export class RuntimeBroadcasts {
   readonly #service: RoomBroadcastService;
   readonly #execution: ChatTurnExecutionDeps;
@@ -124,7 +114,10 @@ export class RuntimeBroadcasts {
   #start(batchId: string): void {
     if (this.#jobs.has(batchId) || this.#draining) return;
     const controller = new AbortController();
-    const settled = this.#run(batchId, controller.signal);
+    // The durable batch is authoritative after a crash; never leave the promise unhandled.
+    const settled = this.#run(batchId, controller.signal).catch(() => {
+      this.#uncertain = true;
+    });
     this.#jobs.set(batchId, { controller, settled });
   }
   async #run(batchId: string, signal: AbortSignal): Promise<void> {
@@ -134,7 +127,7 @@ export class RuntimeBroadcasts {
         const next = nextBroadcastChild(this.#execution.store, batchId);
         if (next === null) return;
         const provider = this.#provider();
-        if (!providerAdmits(provider, next.turn)) {
+        if (!providerAdmits(provider, next.turn.bot)) {
           refuseBroadcastChild(this.#execution.store, batchId, next.turn.id);
           continue;
         }

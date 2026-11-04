@@ -5,7 +5,6 @@ export const broadcastStateText: Record<BroadcastBatch['state'], string> = {
   paused: 'Рассылка приостановлена',
   completed: 'Рассылка завершена',
   abandoned: 'Рассылка оставлена',
-  refused: 'Рассылка отклонена',
 };
 export const broadcastChildText: Record<BroadcastChild['state'], string> = {
   queued: 'Ожидает очереди',
@@ -32,4 +31,10 @@ export function broadcastPaused(batch: BroadcastBatch | null): boolean {
 }
 export function broadcastBlocksNewTurns(batch: BroadcastBatch | null): boolean {
   return batch?.state === 'open' || batch?.state === 'paused';
+}
+
+/** Why an addressed or broadcast send is blocked while a batch holds the room. */
+export function sendBlockedHint(batch: BroadcastBatch | null, recipient: string): string {
+  if (!broadcastBlocksNewTurns(batch) || recipient === '') return '';
+  return 'Панель рассылки ждёт решения: вопросы модели недоступны, заметка отправится без модели.';
 }

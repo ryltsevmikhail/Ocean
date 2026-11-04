@@ -20,7 +20,10 @@ export interface VendorFixture {
   release(): void;
   close(): Promise<void>;
 }
-export async function vendorFixture(): Promise<VendorFixture> {
+export async function vendorFixture(
+  options: { readonly answer?: (index: number) => string } = {},
+): Promise<VendorFixture> {
+  let answered = 0;
   const requests: { method: string; url: string; authorization: string; body: string }[] = [];
   let gate: Promise<void> | null = null;
   let release: (() => void) | null = null;
@@ -51,8 +54,10 @@ export async function vendorFixture(): Promise<VendorFixture> {
       if (url === '/chat/completions' && request.method === 'POST') {
         if (gate !== null) await gate;
         response.writeHead(200, { 'content-type': 'text/event-stream' });
+        answered += 1;
+        const answer = options.answer?.(answered) ?? 'fixture answer';
         response.write(
-          `data: ${JSON.stringify({ choices: [{ delta: { content: 'fixture answer' } }] })}\n\n`,
+          `data: ${JSON.stringify({ choices: [{ delta: { content: answer } }] })}\n\n`,
         );
         response.write(
           `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`,

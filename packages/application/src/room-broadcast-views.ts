@@ -101,7 +101,10 @@ export function broadcastView(
       const turn = byTurn.get(recipient.turnId);
       return {
         ...childIdentity(recipient),
-        state: turn === undefined ? 'not_started' : broadcastChildStatus(batch, turn.status),
+        state:
+          turn === undefined
+            ? 'not_started'
+            : broadcastChildStatus(batch, turn.status, turn.broadcast?.abandoned === true),
         resultMessageId: turn?.status === 'completed' ? 'reply_' + turn.id : null,
       };
     }),
