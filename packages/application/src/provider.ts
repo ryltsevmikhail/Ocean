@@ -6,6 +6,7 @@
  * knows about a specific vendor, and the runtime consumes only this contract.
  */
 
+import { emptyUsageObservation, observeUsage } from './usage-evidence.js';
 import type { CompletionStopReason, ImageMediaType, ModelUsageEvidence } from '@runnets/domain';
 
 /** Provider-neutral text content. Legacy messages keep a plain string instead. */
@@ -185,8 +186,7 @@ export async function collectReply(
 ): Promise<CollectedReply> {
   let text = '';
   let reasoning = '';
-  let usage: TokenUsage | null = null;
-  let usageEvidence: ModelUsageEvidence | null = null;
+  let observed = emptyUsageObservation();
   let stopReason: CompletionStopReason | null = null;
   let error: ProviderError | null = null;
 
@@ -202,12 +202,10 @@ export async function collectReply(
         reasoning += event.text;
         break;
       case 'usage':
-        usage = event.usage;
-        usageEvidence = { kind: 'actual', tokens: event.usage };
+        observed = observeUsage(observed, { kind: 'actual', tokens: event.usage });
         break;
       case 'usage_evidence':
-        usageEvidence = event.evidence;
-        usage = event.evidence.kind === 'actual' ? event.evidence.tokens : null;
+        observed = observeUsage(observed, event.evidence);
         break;
       case 'completed':
         stopReason = event.stopReason;
@@ -218,5 +216,18 @@ export async function collectReply(
     }
   }
 
+  if (observed.conflict) {
+    error ??= new ProviderError('unknown', 'conflicting model usage reports');
+    stopReason = null;
+  }
+  if (observed.positiveActual && error !== null && error.dispatch !== 'unknown') {
+    error = new ProviderError(error.code, error.message, {
+      retryable: error.retryable,
+      status: error.status,
+      dispatch: 'unknown',
+    });
+  }
+  const usageEvidence = observed.evidence;
+  const usage = usageEvidence?.kind === 'actual' ? usageEvidence.tokens : null;
   return { text, reasoning, usage, usageEvidence, stopReason, error };
 }

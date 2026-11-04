@@ -8,6 +8,7 @@ import {
   type ModelUsageEvidence,
   type ModelCompletionEvidence,
 } from './provider.js';
+import { emptyUsageObservation, observeUsage } from './usage-evidence.js';
 import { emitText } from './lifecycle.js';
 import { boundModelStream } from './bounded-stream.js';
 import { modelNow, normalizeModelActivation } from './model-activation.js';
@@ -22,21 +23,6 @@ export interface ModelRound {
   readonly completion: ModelCompletionEvidence;
   readonly stop: CompletionStopReason | null;
   readonly failure: ProviderError | null;
-}
-
-function copyTokens(tokens: TokenUsage): TokenUsage {
-  return {
-    inputTokens: tokens.inputTokens,
-    outputTokens: tokens.outputTokens,
-    totalTokens: tokens.totalTokens,
-  };
-}
-function copyUsage(evidence: ModelUsageEvidence): ModelUsageEvidence {
-  if (evidence.kind === 'unavailable') return { kind: evidence.kind, reason: evidence.reason };
-  const tokens = copyTokens(evidence.tokens);
-  return evidence.kind === 'actual'
-    ? { kind: evidence.kind, tokens }
-    : { kind: evidence.kind, tokens, estimator: evidence.estimator };
 }
 
 /** Explicit non-dispatch evidence for cancellation in the durable start/stream gap. */
@@ -76,7 +62,7 @@ export async function modelRound(
   let iterator: AsyncIterator<ProviderEvent> | undefined;
   let text = '',
     reasoning = '';
-  let usageEvidence: ModelUsageEvidence | null = null;
+  let usage = emptyUsageObservation();
   let stop: CompletionStopReason | null = null;
   let failure: ProviderError | null = null;
   let terminal = false;
@@ -96,6 +82,7 @@ export async function modelRound(
     iterator = events[Symbol.asyncIterator]();
     for (;;) {
       const next = await bound.next(iterator);
+      bound.assertWithinDeadline();
       if (next.done === true) break;
       if (terminal) throw new ProviderError('unknown', 'provider emitted after terminal event');
       const event = next.value;
@@ -115,10 +102,10 @@ export async function modelRound(
           emitText(input, 'agent_thought_chunk', event.text);
           break;
         case 'usage':
-          usageEvidence = { kind: 'actual', tokens: copyTokens(event.usage) };
+          usage = observeUsage(usage, { kind: 'actual', tokens: event.usage });
           break;
         case 'usage_evidence':
-          usageEvidence = copyUsage(event.evidence);
+          usage = observeUsage(usage, event.evidence);
           break;
         case 'completed':
           stop = event.stopReason;
@@ -134,22 +121,34 @@ export async function modelRound(
     }
   } catch (error) {
     framingBroken = terminal;
+    let observed = error;
+    try {
+      bound.assertWithinDeadline();
+    } catch (expired) {
+      observed = expired;
+    }
     failure =
-      error instanceof ProviderError
-        ? error
+      observed instanceof ProviderError
+        ? observed
         : new ProviderError('unknown', 'provider stream failed');
     // Even an earlier finish does not prove complete framing if next() fails.
     stop = null;
   } finally {
     bound.close(iterator);
   }
+  if (usage.conflict) failure ??= new ProviderError('unknown', 'conflicting model usage reports');
   const completion: ModelCompletionEvidence =
     failure !== null
-      ? { kind: inferenceObserved || framingBroken ? 'unknown' : failure.dispatch }
+      ? {
+          kind:
+            inferenceObserved || framingBroken || usage.positiveActual || usage.conflict
+              ? 'unknown'
+              : failure.dispatch,
+        }
       : stop === null
         ? { kind: 'unknown' }
         : { kind: 'terminal', stopReason: stop };
-  const normalizedUsage: ModelUsageEvidence = usageEvidence ?? {
+  const normalizedUsage: ModelUsageEvidence = usage.evidence ?? {
     kind: 'unavailable',
     reason:
       completion.kind === 'unknown'

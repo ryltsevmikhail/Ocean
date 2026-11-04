@@ -85,3 +85,36 @@ describe('collectReply', () => {
     });
   });
 });
+
+for (const weaker of [
+  { kind: 'unavailable', reason: 'not_reported' },
+  {
+    kind: 'estimated',
+    tokens: { inputTokens: 20, outputTokens: 20, totalTokens: 40 },
+    estimator: 'fixture',
+  },
+] as const) {
+  it(`conserves actual usage before ${weaker.kind} through the public provider collector`, async () => {
+    const reply = await collectReply(
+      eventsOf([
+        { type: 'usage', usage: USAGE },
+        { type: 'usage_evidence', evidence: weaker },
+      ]),
+    );
+    expect(reply.usage).toEqual(USAGE);
+    expect(reply.usageEvidence).toEqual({ kind: 'actual', tokens: USAGE });
+    expect(reply.error).toBeNull();
+  });
+}
+for (const dispatch of ['not_sent', 'rejected'] as const) {
+  it(`retains actual usage and surfaces contradictory ${dispatch} as unknown in collectReply`, async () => {
+    const reply = await collectReply(
+      eventsOf([
+        { type: 'usage', usage: USAGE },
+        { type: 'error', error: new ProviderError('network', 'contradiction', { dispatch }) },
+      ]),
+    );
+    expect(reply.usage).toEqual(USAGE);
+    expect(reply.error?.dispatch).toBe('unknown');
+  });
+}
