@@ -1,5 +1,6 @@
 import {
   ProviderError,
+  assertProviderTimeout,
   REQUEST_HARD_LIMIT_BYTES,
   fetchHttpClient,
   abortableChunks,
@@ -29,11 +30,7 @@ export function createOpenAIProvider(options: OpenAIProviderOptions): ProviderPo
     });
   const http = options.httpClient ?? fetchHttpClient;
   const timeoutMs = options.timeoutMs ?? 120000;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0)
-    throw new ProviderError('invalid_request', 'invalid OpenAI deadline', {
-      dispatch: 'not_sent',
-      retryable: false,
-    });
+  assertProviderTimeout(timeoutMs);
   return {
     id: 'openai',
     models: OPENAI_MODELS,

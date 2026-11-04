@@ -1,3 +1,4 @@
+import { createLocalActivationFactory } from './provider-local-factory.js';
 import {
   validModelConnectionEndpoint,
   type ModelConnectionDescriptor,
@@ -28,6 +29,7 @@ import type { ProviderCredentialOptions } from './provider-settings.js';
 export function createProviderActivationFactory(
   options: ProviderCredentialOptions,
 ): ModelCredentialFactory {
+  const local = createLocalActivationFactory(options.httpClient);
   const supported = (d: ModelConnectionDescriptor) =>
     (d.providerId === 'deepseek' ||
       (d.providerId === 'openai' && d.endpoint === OPENAI_ORIGIN) ||
@@ -87,34 +89,43 @@ export function createProviderActivationFactory(
     },
   });
   return {
+    localBootstrap: local.localBootstrap!,
     catalog: (d) =>
-      !supported(d)
-        ? []
-        : d.providerId === 'openai' || d.providerId === 'anthropic'
-          ? (d.providerId === 'openai' ? OPENAI_MODEL_INFO : ANTHROPIC_MODEL_INFO).map((model) => ({
-              modelId: model.id,
-              capabilities: {
-                tools: true,
-                streaming: true,
-                inputModalities: [...model.inputModalities],
-                contextTokens: model.contextTokens,
-                maxOutputTokens: model.maxOutputTokens,
-                usage: 'reported' as const,
-              },
-            }))
-          : DEEPSEEK_MODEL_INFO.map((model) => ({
-              modelId: model.id,
-              capabilities: {
-                tools: true,
-                streaming: true,
-                inputModalities: [...model.inputModalities],
-                contextTokens: null,
-                maxOutputTokens: null,
-                usage: 'reported',
-              },
-            })),
+      d.kind === 'local'
+        ? local.catalog(d)
+        : !supported(d)
+          ? []
+          : d.providerId === 'openai' || d.providerId === 'anthropic'
+            ? (d.providerId === 'openai' ? OPENAI_MODEL_INFO : ANTHROPIC_MODEL_INFO).map(
+                (model) => ({
+                  modelId: model.id,
+                  capabilities: {
+                    tools: true,
+                    streaming: true,
+                    inputModalities: [...model.inputModalities],
+                    contextTokens: model.contextTokens,
+                    maxOutputTokens: model.maxOutputTokens,
+                    usage: 'reported' as const,
+                  },
+                }),
+              )
+            : DEEPSEEK_MODEL_INFO.map((model) => ({
+                modelId: model.id,
+                capabilities: {
+                  tools: true,
+                  streaming: true,
+                  inputModalities: [...model.inputModalities],
+                  contextTokens: null,
+                  maxOutputTokens: null,
+                  usage: 'reported',
+                },
+              })),
     activate: (d, secret) =>
-      supported(d) && secret?.status === 'ok' ? activate(d, secret.key, 'saved') : null,
+      d.kind === 'local'
+        ? local.activate(d, secret)
+        : supported(d) && secret?.status === 'ok'
+          ? activate(d, secret.key, 'saved')
+          : null,
     external: (d) => {
       if (!supported(d) || d.providerId !== 'deepseek') return null;
       const key = options.env[PROVIDER_ENV_KEY];

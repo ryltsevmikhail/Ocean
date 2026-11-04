@@ -52,6 +52,7 @@ export class ModelConnectionMutations<T> {
     )
       throw Error('invalid_params');
     if (
+      !this.state.options.factory.localBootstrap?.acceptsDesired(descriptor) &&
       !this.state.options.factory
         .catalog(descriptor)
         .some((m) => m.modelId === descriptor.defaultModelId)
@@ -93,8 +94,10 @@ export class ModelConnectionMutations<T> {
       return this.#resume(pending, request, key);
     }
     const resolution = this.state.resolve(next);
-    if (oldRef !== null && resolution.credential === null) throw Error('provider_unverified');
-    if (!this.receipts.legacy && resolution.credential === null)
+    const bootstrap = this.state.options.factory.localBootstrap?.acceptsDesired(next) === true;
+    if (!bootstrap && oldRef !== null && resolution.credential === null)
+      throw Error('provider_unverified');
+    if (!bootstrap && !this.receipts.legacy && resolution.credential === null)
       throw Error('provider_unavailable');
     return this.#commit(next, current?.revision ?? null, request, resolution);
   }
@@ -110,6 +113,7 @@ export class ModelConnectionMutations<T> {
       ...current,
       intent: action === 'disconnect' ? 'disconnected' : 'active',
       secretRef: action === 'remove' ? null : current.secretRef,
+      localQualification: action === 'remove' ? null : current.localQualification,
       revision: current.revision + 1,
       requestId: request.requestId,
       binding: request.binding,
@@ -171,7 +175,8 @@ export class ModelConnectionMutations<T> {
     const resolution = this.state.resolve(next);
     if (
       (pending.pendingSecretChange?.action === 'replace' || next.auth === 'none') &&
-      resolution.credential === null
+      resolution.credential === null &&
+      this.state.options.factory.localBootstrap?.acceptsDesired(next) !== true
     )
       throw Error('provider_unverified');
     return this.#commit(next, pending.revision, request, resolution);

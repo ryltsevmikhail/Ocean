@@ -1,3 +1,4 @@
+import { migrateModelQualifications } from './model-qualification-schema.js';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { migrateDesktopAssets } from './desktop-schema.js';
@@ -111,4 +112,5 @@ export function applyMigrations(
   else
     for (const table of MODEL_CONNECTION_TABLES)
       if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 21) migrateModelQualifications(db);
 }

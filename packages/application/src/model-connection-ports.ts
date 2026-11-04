@@ -1,3 +1,4 @@
+import type { LocalModelQualification } from './model-local-qualification.js';
 import type { ProviderConnectionReceipt } from './provider-connection-ports.js';
 import type { ModelCheckMetadata, ModelConnectionStatus } from './model-connection-types.js';
 
@@ -15,6 +16,7 @@ export interface ModelConnectionRecord {
   readonly endpoint: string | null;
   readonly auth: 'api_key' | 'none';
   readonly defaultModelId: string | null;
+  readonly localQualification: LocalModelQualification | null;
   readonly secretRef: string | null;
   readonly intent: ModelConnectionIntent;
   /** Zero is reserved for a persisted inert placeholder. */
@@ -55,6 +57,7 @@ export function unconfiguredModelConnection(providerId: string): ModelConnection
     endpoint: providerId === 'deepseek' ? 'https://api.deepseek.com' : null,
     auth: 'api_key',
     defaultModelId: null,
+    localQualification: null,
     secretRef: null,
     intent: 'unconfigured',
     revision: 0,

@@ -40,6 +40,14 @@ export function resolveModelConnection(
     return no('restored', 'provider_restored');
   if (record.intent === 'pending') return no('unverified', 'provider_unverified');
   if (record.intent === 'disconnected') return no('disconnected', 'provider_disconnected');
+  if (record.auth === 'none' && record.secretRef !== null)
+    return no('unverified', 'provider_unverified');
+  if (
+    factory.localBootstrap?.acceptsDesired(record) === true &&
+    (record.localQualification === null ||
+      record.localQualification.modelId !== record.defaultModelId)
+  )
+    return no('unverified', 'provider_unverified');
   const selectedModel =
     selectedModelId === undefined
       ? undefined

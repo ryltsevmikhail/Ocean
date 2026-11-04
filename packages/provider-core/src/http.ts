@@ -37,7 +37,7 @@ export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 async function* decode(body: ReadableStream<Uint8Array> | null): AsyncIterable<string> {
   if (body === null) return;
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder('utf-8', { fatal: true });
   for await (const chunk of body) {
     const text = decoder.decode(chunk, { stream: true });
     if (text !== '') yield text;

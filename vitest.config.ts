@@ -21,6 +21,7 @@ export default defineConfig({
       '@runnets/provider-deepseek': source('provider-deepseek'),
       '@runnets/provider-openai': source('provider-openai'),
       '@runnets/provider-anthropic': source('provider-anthropic'),
+      '@runnets/provider-local': source('provider-local'),
       '@runnets/integrations-executor': source('integrations-executor'),
     },
   },

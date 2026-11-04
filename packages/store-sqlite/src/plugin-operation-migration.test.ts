@@ -23,7 +23,7 @@ afterEach(() => {
 
 describe('plugin operation migration 18', () => {
   it('creates the operations table and migrates a genuine schema-17 profile with zero operations', () => {
-    expect(SCHEMA_VERSION).toBe(20);
+    expect(SCHEMA_VERSION).toBe(21);
     const directory = mkdtempSync(join(tmpdir(), 'ocean-op-migration-'));
     directories.push(directory);
     const path = join(directory, 'runtime.sqlite');

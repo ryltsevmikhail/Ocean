@@ -1,3 +1,4 @@
+import { copyLocalQualification } from './model-local-qualification.js';
 import { readModelCheck } from './model-connection-results.js';
 import type { ModelConnectionRecord } from './model-connection-ports.js';
 
@@ -45,6 +46,15 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
       readModelCheck(value['lastCheck'], value['connectionId']) === null)
   )
     throw Error('connection_unverified');
+  const qualification =
+    value['localQualification'] === undefined || value['localQualification'] === null
+      ? null
+      : copyLocalQualification(value['localQualification']);
+  if (
+    qualification !== null &&
+    (value['kind'] !== 'local' || qualification.modelId !== value['defaultModelId'])
+  )
+    throw Error('connection_unverified');
   const change = value['pendingSecretChange'];
   if (
     change !== null &&
@@ -62,6 +72,7 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
     endpoint: value['endpoint'],
     auth: value['auth'],
     defaultModelId: value['defaultModelId'],
+    localQualification: qualification,
     secretRef: value['secretRef'],
     intent: value['intent'],
     revision: value['revision'],

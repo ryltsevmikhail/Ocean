@@ -138,6 +138,7 @@ export class ProviderConnectionService {
         endpoint: record.endpoint,
         auth: record.auth,
         defaultModelId: model,
+        localQualification: null,
       },
       key,
     );

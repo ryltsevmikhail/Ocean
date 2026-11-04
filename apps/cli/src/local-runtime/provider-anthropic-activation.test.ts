@@ -8,6 +8,7 @@ const descriptor = {
   endpoint: 'https://api.anthropic.com',
   auth: 'api_key' as const,
   defaultModelId: 'claude-haiku-5-5',
+  localQualification: null,
 };
 it('owns static pinned capacity and binds only the saved credential to canonical inference and probe', async () => {
   const calls: { url: string; auth: string | undefined }[] = [];

@@ -16,8 +16,8 @@ import { applyMigrations } from './schema-migrations.js';
 
 import { ownerBusy } from './maintenance-owner.js';
 import { userTables } from './schema-inspection.js';
-/** Schema 20 makes model connections canonical while preserving historic Bot JSON. */
-export const SCHEMA_VERSION = 20;
+/** Schema 21 adds explicit nullable local qualification to canonical model payloads. */
+export const SCHEMA_VERSION = 21;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 

@@ -1,5 +1,6 @@
 import {
   ProviderError,
+  assertProviderTimeout,
   REQUEST_HARD_LIMIT_BYTES,
   fetchHttpClient,
   abortableChunks,
@@ -33,11 +34,7 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): Prov
     });
   const http = options.httpClient ?? fetchHttpClient,
     timeoutMs = options.timeoutMs ?? 120000;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0)
-    throw new ProviderError('invalid_request', 'invalid Anthropic deadline', {
-      dispatch: 'not_sent',
-      retryable: false,
-    });
+  assertProviderTimeout(timeoutMs);
   return {
     id: 'anthropic',
     models: ANTHROPIC_MODELS,

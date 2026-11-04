@@ -1,3 +1,4 @@
+import { checkLocalConnection } from './model-local-check.js';
 import type { Clock } from './ports.js';
 import type { ModelConnectionStorePort, ModelConnectionRecord } from './model-connection-ports.js';
 import type { ModelCredentialFactory } from './model-credential-ports.js';
@@ -73,6 +74,8 @@ export class ModelConnectionReadModel {
   }
   async check(id: string, signal?: AbortSignal): Promise<ModelConnectionCheck> {
     const record = this.record(id);
+    if (this.options.factory.localBootstrap?.acceptsDesired(record) === true)
+      return checkLocalConnection(this, record, signal);
     const resolution = this.resolve(record);
     const checkedAt = this.options.clock.now().toISOString();
     const start = Date.now();

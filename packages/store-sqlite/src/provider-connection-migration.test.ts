@@ -64,7 +64,7 @@ const status = {
 describe('provider connection migration 15', () => {
   it('creates the metadata and receipt tables at the current schema version', () => {
     const db = memory();
-    expect(SCHEMA_VERSION).toBe(20);
+    expect(SCHEMA_VERSION).toBe(21);
     expect(tables(db)).toEqual(expect.arrayContaining([...PROVIDER_CONNECTION_TABLES]));
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
       String(SCHEMA_VERSION),
@@ -104,7 +104,9 @@ describe('provider connection migration 15', () => {
 
   it('refuses a database newer than the supported schema', () => {
     const db = memory();
-    db.exec("UPDATE meta SET value='21' WHERE key='schema_version'");
+    db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(
+      String(SCHEMA_VERSION + 1),
+    );
     expect(() => initializeSchema(db)).toThrow(/newer than the supported version/);
   });
 });

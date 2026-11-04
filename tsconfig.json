@@ -39,6 +39,9 @@
     },
     {
       "path": "packages/provider-anthropic"
+    },
+    {
+      "path": "packages/provider-local"
     }
   ]
 }

@@ -37,10 +37,10 @@ function fakeHttp(...scripts: readonly FakeScript[]): FakeHttp {
       next += 1;
       if (script.failWith !== undefined) throw script.failWith;
       const status = script.status ?? 200;
-      const chunks = script.chunks ?? [];
+      const chunks = script.chunks ?? (script.body === undefined ? [] : [script.body]);
       return {
         status,
-        ok: status < 400,
+        ok: status >= 200 && status < 300,
         text: async () => script.body ?? chunks.join(''),
         stream: () =>
           (async function* () {

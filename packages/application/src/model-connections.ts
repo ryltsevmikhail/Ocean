@@ -76,6 +76,7 @@ export class ModelConnectionService {
         endpoint: input.endpoint,
         auth: input.auth,
         defaultModelId: input.defaultModelId,
+        localQualification: null,
       },
       key,
     );

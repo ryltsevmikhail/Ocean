@@ -20,6 +20,7 @@ it('owns accurate static DeepSeek metadata without resolving credentials or chan
     endpoint: 'https://configured.invalid',
     auth: 'api_key' as const,
     defaultModelId: 'retired',
+    localQualification: null,
   });
   const models = factory.catalog(descriptor);
   expect(models.map((m) => m.modelId)).toEqual(DEEPSEEK_MODEL_INFO.map((m) => m.id));
@@ -61,6 +62,7 @@ it('uses the unchanged configured endpoint for chat and probe through the inject
     endpoint: 'https://configured.invalid/v1',
     auth: 'api_key' as const,
     defaultModelId: 'deepseek-flash',
+    localQualification: null,
   };
   const credential = factory.activate(descriptor, { status: 'ok', key: 'fixture-key' });
   expect(credential).not.toBeNull();
@@ -114,6 +116,7 @@ it.each(invalidPersistedEndpoints)(
       endpoint,
       auth: 'api_key' as const,
       defaultModelId: 'deepseek-flash',
+      localQualification: null,
     };
     const models = factory.catalog(descriptor);
     const saved = factory.activate(descriptor, {

@@ -8,6 +8,10 @@
 
 import {
   ProviderError,
+  assertProviderTimeout,
+  withAbort,
+  abortableChunks,
+  readBoundedText,
   REQUEST_HARD_LIMIT_BYTES,
   fetchHttpClient,
   type HttpClient,
@@ -87,6 +91,7 @@ export class DeepSeekProvider implements ProviderPort {
     this.models = options.models ?? DEEPSEEK_MODELS;
     this.#http = options.httpClient ?? fetchHttpClient;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    assertProviderTimeout(this.#timeoutMs);
   }
 
   stream(request: ModelRequest): AsyncIterable<ProviderEvent> {
@@ -127,29 +132,39 @@ export class DeepSeekProvider implements ProviderPort {
 
     let response: HttpResponse;
     try {
-      response = await this.#http.send({
-        url: `${this.#baseUrl}${DEEPSEEK_CHAT_PATH}`,
-        headers: {
-          authorization: `Bearer ${this.#apiKey}`,
-          'content-type': 'application/json',
-          accept: 'text/event-stream',
-        },
-        body,
-        ...(signal === null ? {} : { signal }),
-      });
+      response = await withAbort(
+        this.#http.send({
+          url: `${this.#baseUrl}${DEEPSEEK_CHAT_PATH}`,
+          redirect: 'manual',
+          headers: {
+            authorization: `Bearer ${this.#apiKey}`,
+            'content-type': 'application/json',
+            accept: 'text/event-stream',
+          },
+          body,
+          ...(signal === null ? {} : { signal }),
+        }),
+        signal ?? undefined,
+      );
     } catch (error) {
       yield { type: 'error', error: errorFromException(error, { cancelled, timeout }) };
       return;
     }
 
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
+      const body =
+        response.status >= 300 && response.status < 400
+          ? ''
+          : await readBoundedText(
+              abortableChunks(response.stream(), signal ?? undefined),
+              262144,
+            ).catch(() => '');
       yield { type: 'error', error: errorForStatus(response.status, messageFromBody(body)) };
       return;
     }
 
     try {
-      yield* mapStream(response.stream(), request.model);
+      yield* mapStream(abortableChunks(response.stream(), signal ?? undefined), request.model);
     } catch (error) {
       yield { type: 'error', error: errorFromException(error, { cancelled, timeout }) };
     }
