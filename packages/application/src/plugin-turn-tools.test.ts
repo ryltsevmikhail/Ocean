@@ -249,7 +249,7 @@ describe('granted plugin tool source', () => {
   it('cannot spend permission that was revoked after the tool list was resolved', async () => {
     const { fixture, connection, grant } = await fixtureWithGrant(['list_issues']);
     const tools = await fixture.tools.forTurn(turn(), new AbortController().signal);
-    fixture.access.revoke(grant.id, '2026-11-04T00:01:00.000Z');
+    fixture.access.revoke(grant.id);
     const result = await tools!.execute(
       { id: 'call_1', name: 'list_issues', arguments: '{}' },
       new AbortController().signal,

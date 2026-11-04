@@ -6,15 +6,16 @@
 import type {
   PluginAdmissionStorePort,
   PluginCatalogStorePort,
+  PluginConnectionRecord,
   PluginConnectionStorePort,
   PluginCredentialReferencePort,
   PluginDiscoveryConsentRecord,
   PluginInstallStorePort,
   PluginInstalledVersion,
-  PluginOperationStorePort,
   PluginRoomFacts,
 } from '../src/plugin-ports.js';
-import type { PluginGrantRecord } from '@runnets/domain';
+import type { PluginOperationStorePort } from '../src/plugin-operation-ports.js';
+import type { PluginGrantRecord, PluginOperationRecord } from '@runnets/domain';
 import {
   pluginFakeMaps,
   type PluginFakeMaps,

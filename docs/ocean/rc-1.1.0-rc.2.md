@@ -8,10 +8,12 @@ installed candidate. Stable 1.1 is **not** complete.
 
 Two facts frame this record:
 
-- The last chat-tool stage (plugins through actual chat) is **Task 6** and is not
-  part of this candidate. See [the Task 6 section](#task-6--final-chat-tool-stage-after-merge).
+- The last chat-tool stage (plugins through actual chat, **Task 6**) is integrated
+  and independently delta-reviewed; its evidence and limits are recorded in
+  [the Task 6 section](#task-6--plugins-through-actual-chat-integrated).
 - No live GitHub qualification exists. Plugin execution ships **disabled by
-  default**, and the live GitHub gate is explicitly unqualified.
+  default**, must be enabled by the owner through the documented steps, and the
+  live GitHub gate is explicitly unqualified.
 
 ## Immutable candidate
 
@@ -19,9 +21,9 @@ Two facts frame this record:
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Base                       | `v1.0.0` (Ocean 1.0)                                                                                                                 |
 | Candidate branch           | `codex/ocean-rc2`                                                                                                                    |
-| Frozen review revision     | `5d2e1c7` (final whole-branch review)                                                                                                |
-| Fix-wave revision          | `0f0af49` plus the local commit `fix: close the RC2 review wave` recorded with this document (exact SHA in the release report)       |
-| Schema                     | **17** (14 = installed RC1)                                                                                                          |
+| Whole-branch reviewed rev. | `5d2e1c7` (final review); fix-wave re-review accepted `3a89295`; Task 6 delta merged as `bf53606`                                    |
+| Candidate revision         | recorded with the artifacts built from the frozen clean revision (exact SHA in the release report and artifact manifest)             |
+| Schema                     | **18** (14 = installed RC1)                                                                                                          |
 | Frozen toolchain           | Node **v26.13.0** (exact `manifest.node` in the artifact), pnpm 12.16.1                                                              |
 | Platform                   | Linux x86_64, local filesystem, Wayland for the Desktop                                                                              |
 | Desktop artifact           | separate Electron package; not inside the CLI archive                                                                                |
@@ -148,9 +150,8 @@ abandoned`; children are persisted `queued` and then run. New model turns are
   request. The build now asserts exactly five valid `patch_hash` lockfile records
   and refuses malformed values.
 - **Pilot limits.** 1 MiB per message, discovery at most 4 MiB and 256 tools, 30 s
-  per call, at most 16 tools per grant. The chat-path limits — 16 plugin calls per
-  turn and 32 KiB model-visible output with explicit truncation — are Task 6
-  obligations, not implemented here.
+  per call, at most 16 tools per grant, 16 plugin calls per turn, and 32 KiB
+  model-visible output with explicit truncation (implemented in Task 6).
 - **Elicitation ruling.** The SDK's `source: "policy"` approval is accepted only
   when it names the exact address and canonical arguments of a dispatch already
   in flight in this host; a committed negative test covers the unbound case. That
@@ -259,7 +260,7 @@ transcript (`tsc -p tsconfig.tests.json --noEmit`) retained outside Git.
    rebuild, disposable install/migration/rollback, installed CLI/TUI/ACP and
    Electron GUI runs remain the release gates of Task 8.
 4. RC1 binary against a migrated schema-17 profile beyond the dry-run record.
-5. Task 6 scope (below).
+5. Live GitHub chat read (Task 6): no approved test connection/repository; unqualified.
 6. Native shard/native-skip coverage — not re-executed; skips remain skips.
 7. Disk-backed `TMPDIR`/native filesystem portability (RC1 §A6) — not re-probed.
 8. Vue/Electron wiring beyond helper tests — no Vue harness; Task 7 GUI runs are
@@ -284,8 +285,8 @@ transcript (`tsc -p tsconfig.tests.json --noEmit`) retained outside Git.
   secret reference (store is `0600`); the retired-model hint can mask a
   simultaneous provider outage (wording only).
 - The token-sealed internal constructor and `createInternalTransport` appear in
-  the adapter `.d.ts` but are unreachable at runtime; revisit with the Task 6
-  public seam.
+  the adapter `.d.ts` but are unreachable at runtime; Task 6 wires the public
+  plain-options seam (`resolveCredential`/`provision`) and does not widen it.
 - `source: "policy"` elicitation acceptance is safe for the read-only pilot only;
   stage-5 mutating plugins require exact-args owner confirmation (Task 6 gate).
 - Process-suite children are outside the parent in-process fetch guard; they use
@@ -348,45 +349,121 @@ expectations). This wave closes the rest:
   the rebind confirmation path, so the entry stays with a corrected contract and a
   regression pin.
 
-## Task 6 — final chat-tool stage (after merge)
+## Task 6 — plugins through actual chat (integrated)
 
-**Not part of this candidate.** Task 6 is the last chat-tool stage and merges
-after this wave; results must be recorded here only after that merge and its
-scoped delta review. It must deliver:
+Task 6 is integrated, independently delta-reviewed, and part of this candidate. It adds the
+read-only GitHub pilot path: a granted bot in a granted room can read issues from exactly one
+repository through a normal Ocean chat turn. It adds no write operation, OAuth/PKCE, second service
+or external catalog.
 
-- a task-independent granted-tool source that returns only the addressed bot's
-  allowed schemas, wired into the normal chat path;
-- `PluginCallAdmissionService` with the durable journal claim before transport and
-  atomic settlement, rechecking membership/connection generation/schema/pinned
-  version/repository;
-- the pilot chat limits: **16 calls per turn** and **32 KiB model-visible output
-  with explicit truncation**;
-- immutable name→endpoint binding and durable operation inspection;
-- zero business requests for denied/ungranted/revoked/wrong-bot/wrong-room/wrong-
-  repository/restored-permission paths, and no redispatch for drops/startup
-  recovery (including a different request id);
-- broadcast recipients keep their isolation and gain no plugin authority;
-- provider/plugin capabilities stay read-only in restore mode;
-- the live GitHub gate with an explicitly owner-approved test connection and
-  repository. Without that prerequisite the candidate ships with the gate visibly
-  unqualified.
+### Granted tools
 
-This section is a placeholder until the Task 6 merge; no Task 6 result is claimed
-here.
+- `packages/application/src/plugin-turn-tools.ts` resolves **only the addressed bot's active grants in
+  the addressed room** and returns the existing `TurnInput['tools']` shape (`definitions`,
+  bounded `instructions`, `execute`, `cleanupConfirmed: true`). The model sees only granted tool
+  names/schemas; a hallucinated name is refused before any claim.
+- The same source is used by normal (non-coding) room turns **and** broadcast children. Each child
+  resolves only its own bot's grants: no sibling/room leak and no coding authority. A child without a
+  grant behaves exactly as a plain text turn. Coding turns keep only the existing coding tools; ACP is
+  unchanged.
+- Immutable name→(plugin, connection, generation, endpoint, tool, schema digest) binding comes from
+  the grant/connection rows; transport arguments are re-derived from the grant, never taken from model
+  output as authority.
+
+### Transport and admission
+
+- The real pinned Executor transport is wired in `apps/cli/src/plugin-transport.ts` — the only place
+  that requests `enableExecution: true` — after re-verifying the pinned patched chunk per admission and
+  deriving the adapter build identity from `qualification().identities`.
+- Owner single-use metadata consent precedes the upstream connection: `discover()` calls the pure
+  declarative provisioner only after Ocean consumed the consent, and `invoke()` never provisions.
+- Admission runs one SQLite `BEGIN IMMEDIATE` transaction that rechecks membership, grant
+  active/revocation, exact connection generation, published schema digest, enabled/verified plugin
+  version, adapter build, repository constraint and credential presence, claims through
+  `SqliteToolJournal.claimNow` **and** inserts the durable operation row in the same transaction. Only
+  after commit does exactly one transport invocation happen. Settlement updates the operation row and
+  journal atomically; a settlement failure downgrades to `uncertain` (the claim keeps blocking replay).
+- Startup recovery lowers crashed `started` rows to `uncertain` — never to success, never to a replay
+  permission.
+
+### Durable operations and owner resolution
+
+- Migration **18** adds `ocean_plugin_operations` (one row per admitted invocation) with the immutable
+  binding, state (`started | observed | failed | not_started | uncertain | acknowledged`), bounded
+  argument copy/result summary/byte counts/truncation flag, monotonic revision and timestamps.
+  `SCHEMA_VERSION = 18`; `MAINTAINABLE_SCHEMAS` also admits 17. Migration, rollback and
+  preservation of a genuine schema-17 profile are tested; the profile-backup manifest admits 18.
+- `plugin operations list|show|acknowledge` is shared by CLI, TUI and Desktop. `acknowledge` is
+  explicit and versioned (expected-revision compare-and-set), keeps the uncertain record and its
+  original outcome code, releases exactly that effect's global journal hold, and never claims remote
+  certainty or retries. Restore-mode hosts serve `list`/`show` and refuse `acknowledge`
+  (`restore_restricted`).
+- While an uncertain operation holds the journal, further plugin claims are refused; ordinary text
+  turns are unaffected.
+
+### Limits
+
+16 plugin calls per turn (the 17th is visibly refused before admission/claim); 32 KiB model-visible
+output with an explicit UTF-8 byte-counting truncation marker (`[truncated: kept X of Y bytes]`);
+1 MiB request cap and 30 s per-call deadline enforced by the transport; bounded durable arguments
+(≤4 KiB) and result summaries (≤8 KiB); argument validation against the granted schema before claim.
+
+### Deterministic verification (local servers, real Task 4 adapter)
+
+All counters are MCP JSON-RPC over loopback; `tools/call` is the business request, every other method is
+discovery/session traffic. The allowed path (dev bot + work connection + one-repository grant reading an
+issue in normal chat) produced **exactly 1** `tools/call` with one durable `observed` operation and
+bounded output in each of: the real-adapter MCP integration test, the Desktop GUI, the CLI and the TUI.
+Every denial path produced **0** business requests: review bot without a grant, dev in another room,
+personal connection, another repository, ungranted/upstream-write tool name, revoked grant after tool
+resolution, restored old permission, stale connection generation, schema/plugin-version change, and a
+two-client race between resolution and admission.
+A dropped reply after dispatch produced exactly one attempt, one `uncertain` operation, and a retry
+under a different request identity was refused by the journal with zero further requests; a SIGKILL
+after claim is recovered as `uncertain` and never redispatched; acknowledgement releases the hold
+without retrying.
+
+### Desktop, CLI and TUI
+
+The same runtime services back all three clients. The Desktop "Плагины" settings surface pre-dates this
+stage; Task 6 adds the chat-time tool activity and the operations view, showing state, tool, exact
+connection generation, repository, immutable endpoint, bounded arguments/result and timestamps — no
+credential value and no raw provider payload.
+
+### Live GitHub gate — UNQUALIFIED
+
+No explicitly owner-approved test GitHub connection/repository exists, and neither `gh` nor any other
+application's token was used. Execution ships disabled by default. A guarded driver
+(`apps/desktop/qa/github-live-qualification.mjs`) exits `3` with "external prerequisite missing" unless
+`OCEAN_GITHUB_TEST_TOKEN_REF` (an environment variable name) and `OCEAN_GITHUB_TEST_REPOSITORY` are
+supplied by the owner; local loopback MCP/OpenAPI traffic is never presented as live GitHub acceptance.
+The pinned card declares exactly `list_issues` and `issue_read` with a one-repository constraint; the
+OpenAPI local qualification path uses a different (path-derived) tool naming, so it is recorded as
+transport qualification only, not as card acceptance.
+
+### Known limitations of this stage
+
+- The live GitHub read path remains unqualified until the owner supplies an approved test connection
+  and repository (enablement steps below).
+- Process-suite child processes are outside the parent in-process fetch guard (they use loopback/unix
+  sockets only).
+- Mutating tools remain stage-5 work: they require Ocean's exact-args owner confirmation before claim;
+  the read-only pilot's policy-source elicitation acceptance is not sufficient for them.
+- A captionless legacy unbound-marker message reconstructs as empty model content (no bytes, paths or
+  authority leak; live-vendor acceptance of empty user content is unverified).
 
 ### Owner enablement steps for the live GitHub gate
 
-1. Owner creates a dedicated test connection and **one** test repository, and
-   explicitly approves them for qualification (no credential import from another
-   application).
-2. Install and enable the pinned plugin (disabled by default), add a named
-   connection with an environment-variable reference, consent once to metadata
-   discovery, then grant the exact `list_issues`/`issue_read` tools plus
-   repository scope to the test bot/room.
-3. Run the chat path (requires Task 6) and record requests, results, refusals and
-   uncertainty separately from mocked/loopback evidence.
-4. If any step is unavailable, keep the gate unqualified — do not present mocked
-   GitHub traffic as live acceptance.
+1. Owner creates a dedicated test connection and **one** test repository, and explicitly approves them
+   for qualification (no credential import from another application).
+2. Set `OCEAN_GITHUB_TEST_TOKEN_REF` to the name of an environment variable holding that connection's
+   token, and `OCEAN_GITHUB_TEST_REPOSITORY=owner/name`; install and enable the pinned plugin (disabled
+   by default), add a named connection with that environment reference, consent once to metadata
+   discovery, then grant `list_issues`/`issue_read` for that repository to the test bot/room.
+3. Run the guarded qualification driver and a chat read; record requests, results, refusals and
+   uncertainty separately from the loopback evidence.
+4. If any step is unavailable, keep the gate unqualified — do not present mocked GitHub traffic as live
+   acceptance.
 
 ## Release decision
 

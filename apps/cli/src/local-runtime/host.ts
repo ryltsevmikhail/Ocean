@@ -35,8 +35,7 @@ import { RuntimeBroadcasts } from './broadcast.js';
 import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
 import { settingsHosts } from './settings-hosts.js';
-import { hostPluginTransport } from '../plugin-transport.js';
-import type { PluginConnectionStorePort, ServicePluginTransportPort } from '@runnets/application';
+import { hostPluginSettings } from './host-plugin.js';
 import type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
 export type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
 
@@ -57,19 +56,10 @@ export async function startLocalRuntime(
   const originalProfile = profileKey(paths);
   let decisions: RuntimeDecisions;
   let images: ImageAssetResolverPort | undefined;
-  let pluginConnections: PluginConnectionStorePort | undefined;
-  const pluginEnv = options.pluginEnv ?? process.env;
-  const pluginTransport: ServicePluginTransportPort = await hostPluginTransport({
-    transport: options.pluginTransport,
-    env: pluginEnv,
-    connections: () => pluginConnections,
-    ...(options.pluginEndpointOverride === undefined
-      ? {}
-      : { endpointOverride: options.pluginEndpointOverride }),
-  });
+  const plugin = await hostPluginSettings(options);
   const runtime = openOceanProfile(paths.profile, false, {
-    pluginTransport,
-    pluginEnv,
+    pluginTransport: plugin.transport,
+    pluginEnv: plugin.env,
     pluginMutationsAllowed: options.restore !== true,
     // This host alone validates and retires a surviving publication before serving.
     requireUnpublished: false,
@@ -116,7 +106,7 @@ export async function startLocalRuntime(
       credentialDir: options.credentialDir,
       providerBaseUrl: options.providerBaseUrl,
     });
-    pluginConnections = runtime.plugins?.connections;
+    plugin.connections(runtime.plugins?.connections);
     const finalization = new RuntimeFinalization(
       runtime.finalization,
       decisions.owner,
