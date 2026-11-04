@@ -118,3 +118,26 @@ it('continues and abandons the displayed batch with its revision', async () => {
   expect(broadcastError.value).toBe(true);
   expect(broadcastBusy.value).toBe(false);
 });
+
+it('classifies post-abandon and busy-room refusals as definite pre-commit refusals', async () => {
+  const abandoned = {
+    ...batch,
+    state: 'abandoned',
+    revision: 3,
+    recipients: [batch.recipients[0], { ...batch.recipients[1], state: 'not_started' }],
+  } as BroadcastBatch;
+  channel([ok([abandoned])]);
+  await readBroadcast('room_1');
+  for (const code of ['recovery_required', 'room_busy']) {
+    channel([fail(code)]);
+    const outcome = await sendOwnedBroadcast({
+      room: 'room_1',
+      text: 'следующий вопрос',
+      attachments: [],
+    });
+    expect(outcome).toMatchObject({ kind: 'refused', code, retried: false });
+    // The definite refusal must not be rendered as an unknown outcome or keep a retry binding.
+    expect(pendingBroadcast('room_1')).toBeUndefined();
+    expect(broadcastBatch.value?.state).toBe('abandoned');
+  }
+});

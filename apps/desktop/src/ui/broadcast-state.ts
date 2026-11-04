@@ -21,6 +21,7 @@ export async function readBroadcast(room: string): Promise<void> {
   }
 }
 export function resetBroadcastState(): void {
+  pending.clear();
   broadcastBatch.value = null;
   broadcastBusy.value = false;
   broadcastMessage.value = '';
@@ -106,6 +107,8 @@ export async function sendOwnedBroadcast(input: {
       'workspace_conflict',
       'unknown_room',
       'batch_open',
+      'recovery_required',
+      'room_busy',
       'runtime_draining',
       'provider_unavailable',
       'model_image_unsupported',

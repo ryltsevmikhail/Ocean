@@ -81,3 +81,24 @@ it('shows the durable batch and keeps the same request id after a lost reply', a
   const abandoned = await remote.abandon('batch_1', 3);
   expect(abandoned).toMatchObject({ state: 'abandoned' });
 });
+
+it('treats post-abandon and busy-room refusals as definite, not lost replies', async () => {
+  for (const code of ['recovery_required', 'room_busy']) {
+    const submitted: { text?: string }[] = [];
+    const client = {
+      broadcastList: async () => [batch],
+      broadcastSubmit: async (input: unknown) => {
+        submitted.push(input as { text: string });
+        throw Error(code);
+      },
+    };
+    const remote = new RemoteBroadcast(fakeConnection(client), {
+      workspaceId: 'ws_ocean',
+      roomId: 'room_1',
+    });
+    await expect(remote.submit('первый вопрос')).rejects.toThrow(code);
+    // A definite refusal clears the pending binding: different text is allowed next time.
+    await expect(remote.submit('другой текст')).rejects.toThrow(code);
+    expect(submitted.map((input) => input.text)).toEqual(['первый вопрос', 'другой текст']);
+  }
+});

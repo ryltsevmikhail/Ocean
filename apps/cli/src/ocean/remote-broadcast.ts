@@ -50,6 +50,8 @@ export class RemoteBroadcast {
           'workspace_conflict',
           'unknown_room',
           'batch_open',
+          'recovery_required',
+          'room_busy',
           'runtime_draining',
           'provider_unavailable',
           'model_image_unsupported',
