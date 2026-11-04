@@ -7,10 +7,12 @@ import type {
 import type { DatabaseSync } from 'node:sqlite';
 import { reviewStorage } from './review-storage.js';
 import { chatStorage } from './chat-storage.js';
+import { broadcastStorage } from './broadcast-storage.js';
 
 import { withImmediateTransaction } from './transaction.js';
 import { botRow, messageRow, roomRow, workspaceRow } from './conversation-rows.js';
 import { readText } from './rows.js';
+import { SCHEMA_VERSION } from './schema.js';
 
 /** SQLite writes and request receipts commit under one immediate write lock. */
 export class SqliteConversationStore implements ConversationStore {
@@ -19,6 +21,14 @@ export class SqliteConversationStore implements ConversationStore {
   constructor(db: DatabaseSync) {
     this.#db = db;
     this.#legacyKey = legacyReviewKey(db);
+  }
+  /** Pre-migration fixtures stay readable; the broadcast surface is current-schema only. */
+  #broadcastSurface() {
+    const row = this.#db.prepare("SELECT value FROM meta WHERE key='schema_version'").get();
+    const version = Number(row?.['value']);
+    return Number.isSafeInteger(version) && version < SCHEMA_VERSION
+      ? null
+      : broadcastStorage(this.#db);
   }
 
   /** Roll back profile, room, history and sequence allocation if any receipt write fails. */
@@ -38,6 +48,30 @@ export class SqliteConversationStore implements ConversationStore {
       work({
         ...chatStorage(db),
         ...reviewStorage(db),
+        ...(() => {
+          const broadcasts = this.#broadcastSurface();
+          if (broadcasts === null)
+            return {
+              broadcastBatch: () => null,
+              broadcastBatchByRequest: () => null,
+              broadcastBatchForRoom: () => null,
+              broadcastBatches: () => [],
+              broadcastOpenBatches: () => [],
+              putBroadcastBatch: () => {
+                throw Error('unsupported_schema');
+              },
+              broadcastTurns: () => [],
+            };
+          return {
+            broadcastBatch: (id) => broadcasts.batch(id),
+            broadcastBatchByRequest: (id) => broadcasts.batchByRequest(id),
+            broadcastBatchForRoom: (id) => broadcasts.batchForRoom(id),
+            broadcastBatches: (id, limit) => broadcasts.batches(id, limit),
+            broadcastOpenBatches: () => broadcasts.openBatches(),
+            putBroadcastBatch: (batch) => broadcasts.putBatch(batch),
+            broadcastTurns: (id) => broadcasts.turns(id),
+          };
+        })(),
         workspace() {
           const row = db.prepare('SELECT * FROM ocean_workspace WHERE singleton=1').get();
           return row === undefined ? null : workspaceRow(row);

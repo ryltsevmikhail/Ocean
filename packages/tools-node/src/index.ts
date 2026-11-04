@@ -54,6 +54,7 @@ export * from './local-runtime-paths.js';
 export * from './local-runtime-framing.js';
 export * from './local-runtime-client.js';
 export * from './local-provider-client.js';
+export * from './local-broadcast-client.js';
 export {
   createProviderSecretStore,
   providerCredentialDirectory,

@@ -76,6 +76,17 @@ export class AttachmentHost {
     const receipt = await this.client.prepare(c.room, c.requestId, c.text, c.to, ids);
     return { ...c, text: receipt.prepared, attachments: undefined };
   }
+  /** Broadcast uses the same runtime-owned preparation; the wire payload stays target-less. */
+  async prepareBroadcast(c: Extract<Command, { op: 'broadcast' }>) {
+    this.check(c.room);
+    const ids = c.attachments ?? [];
+    if (!ids.length) {
+      if (!c.text.trim()) throw Error('invalid_request');
+      return c;
+    }
+    const receipt = await this.client.prepare(c.room, c.requestId, c.text, null, ids);
+    return { ...c, text: receipt.prepared };
+  }
   async history(messages: Message[]) {
     return Promise.all(
       messages.map(async (m) => {

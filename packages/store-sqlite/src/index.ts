@@ -34,3 +34,4 @@ export {
   PROVIDER_CONNECTION_TABLES,
   migrateProviderConnections,
 } from './provider-connection-schema.js';
+export { BROADCAST_TABLES, migrateBroadcasts } from './broadcast-schema.js';

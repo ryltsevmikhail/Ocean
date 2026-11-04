@@ -6,7 +6,7 @@ type ChatStorage = Pick<
   ConversationTransaction,
   'chatTurn' | 'roomChatRun' | 'chatTurns' | 'activeChatTurn' | 'putChatTurn'
 >;
-function decode(row: Record<string, unknown>): ChatTurn {
+export function decodeChatTurn(row: Record<string, unknown>): ChatTurn {
   const value: unknown = JSON.parse(readText(row, 'payload'));
   if (
     value === null ||
@@ -27,7 +27,7 @@ export function chatStorage(db: DatabaseSync): ChatStorage {
   return {
     chatTurn(id) {
       const row = db.prepare('SELECT * FROM ocean_chat_turns WHERE id=?').get(id);
-      return row === undefined ? null : decode(row);
+      return row === undefined ? null : decodeChatTurn(row);
     },
     roomChatRun(workspaceId, roomId, runId) {
       const row = db
@@ -35,16 +35,16 @@ export function chatStorage(db: DatabaseSync): ChatStorage {
           'SELECT * FROM ocean_chat_turns WHERE task_run_id=? AND room_id=? AND workspace_id=?',
         )
         .get(runId, roomId, workspaceId);
-      return row === undefined ? null : decode(row);
+      return row === undefined ? null : decodeChatTurn(row);
     },
-    chatTurns: () => db.prepare('SELECT * FROM ocean_chat_turns').all().map(decode),
+    chatTurns: () => db.prepare('SELECT * FROM ocean_chat_turns').all().map(decodeChatTurn),
     activeChatTurn(roomId) {
       const row = db
         .prepare(
           "SELECT * FROM ocean_chat_turns WHERE room_id=? AND status IN ('accepted','dispatching','prepared','uncertain') AND review_id IS NULL",
         )
         .get(roomId);
-      return row === undefined ? null : decode(row);
+      return row === undefined ? null : decodeChatTurn(row);
     },
     putChatTurn(turn) {
       db.prepare(

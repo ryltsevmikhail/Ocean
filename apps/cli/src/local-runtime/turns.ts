@@ -12,6 +12,8 @@ export class RuntimeTurns {
   readonly #runs: RoomRuntimeRuns;
   #uncertain = false;
   #draining = false;
+  /** Broadcast children are owned by the broadcast runner, not by this session's jobs. */
+  #external: ((runId: string) => AbortController | undefined) | null = null;
   readonly #chat: DirectChatService;
   /** A getter, so each newly admitted turn captures the current immutable activation. */
   readonly #provider: () => ProviderPort | null;
@@ -27,6 +29,9 @@ export class RuntimeTurns {
     this.#provider = typeof provider === 'function' ? provider : () => provider;
   }
 
+  attachControllers(resolve: (runId: string) => AbortController | undefined): void {
+    this.#external = resolve;
+  }
   dispatch(
     method: string,
     params: Record<string, unknown>,
@@ -89,7 +94,7 @@ export class RuntimeTurns {
           params,
           detached,
           typeof params['runId'] === 'string'
-            ? this.#jobs.get(params['runId'])?.controller
+            ? (this.#jobs.get(params['runId'])?.controller ?? this.#external?.(params['runId']))
             : undefined,
         );
     }

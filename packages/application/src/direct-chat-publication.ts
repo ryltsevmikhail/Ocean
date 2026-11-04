@@ -45,7 +45,8 @@ export async function recoverChats(
 ): Promise<void> {
   const turns = store.atomic((tx) => tx.chatTurns());
   for (const turn of turns) {
-    if (['completed', 'failed', 'cancelled', 'uncertain'].includes(turn.status)) continue;
+    // A queued broadcast child was never dispatched; batch recovery owns its state.
+    if (['queued', 'completed', 'failed', 'cancelled', 'uncertain'].includes(turn.status)) continue;
     let state = await tasks.state(taskRunId(turn.taskRunId));
     if (
       turn.status === 'prepared' &&

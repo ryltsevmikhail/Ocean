@@ -63,10 +63,10 @@ const status = {
 describe('provider connection migration 15', () => {
   it('creates the metadata and receipt tables at the current schema version', () => {
     const db = memory();
-    expect(SCHEMA_VERSION).toBe(15);
+    expect(SCHEMA_VERSION).toBe(16);
     expect(tables(db)).toEqual(expect.arrayContaining([...PROVIDER_CONNECTION_TABLES]));
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '15',
+      String(SCHEMA_VERSION),
     );
   });
 
@@ -80,7 +80,7 @@ describe('provider connection migration 15', () => {
       INSERT INTO meta (key, value) VALUES ('legacy-marker', 'kept');`);
     initializeSchema(db);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '15',
+      String(SCHEMA_VERSION),
     );
     expect(db.prepare("SELECT value FROM meta WHERE key='legacy-marker'").get()?.['value']).toBe(
       'kept',
@@ -95,14 +95,14 @@ describe('provider connection migration 15', () => {
     db.exec(readFileSync(new URL('./fixtures/ocean-schema-v6.sql', import.meta.url), 'utf8'));
     initializeSchema(db);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '15',
+      String(SCHEMA_VERSION),
     );
     expect(tables(db)).toEqual(expect.arrayContaining([...PROVIDER_CONNECTION_TABLES]));
   });
 
   it('refuses a database newer than the supported schema', () => {
     const db = memory();
-    db.exec("UPDATE meta SET value='16' WHERE key='schema_version'");
+    db.exec("UPDATE meta SET value='17' WHERE key='schema_version'");
     expect(() => initializeSchema(db)).toThrow(/newer than the supported version/);
   });
 });

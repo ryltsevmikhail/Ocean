@@ -166,3 +166,41 @@ button.person:hover {
 .provider-panel .form-actions button {
   flex: 1 1 auto;
 }
+.broadcast-panel {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  font-size: 13px;
+}
+.broadcast-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+}
+.broadcast-panel[data-state='paused'] {
+  border-color: var(--accent);
+}
+.broadcast-panel ul {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+.broadcast-panel li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+}
+.broadcast-panel li[data-state='uncertain'] {
+  color: var(--accent);
+}
+.broadcast-warning {
+  color: var(--muted);
+  margin: 6px 0;
+}
+.broadcast-revision {
+  font-size: 12px;
+}

@@ -63,6 +63,7 @@ describe('schema initialization', () => {
       'events',
       'meta',
       'ocean_bots',
+      'ocean_broadcast_batches',
       'ocean_capture_receipts',
       'ocean_changesets',
       'ocean_chat_turns',

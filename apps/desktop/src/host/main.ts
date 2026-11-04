@@ -91,7 +91,12 @@ async function open() {
         if (asset.success) return { version: 1, ok: true, data: await media.handle(asset.data) };
         if (!parsed.success) return failure('invalid_request');
         const c = parsed.data;
-        const input = c.op === 'send' ? await media.prepare(c) : c;
+        const input =
+          c.op === 'send'
+            ? await media.prepare(c)
+            : c.op === 'broadcast'
+              ? await media.prepareBroadcast(c)
+              : c;
         if (c.op === 'send') phase = 'submit';
         const reply = await dispatch(client, input);
         phase = undefined;

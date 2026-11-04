@@ -12,6 +12,7 @@ export const HELP = [
   'F5: show or hide reasoning. F1: this help. Esc: close a panel or cancel a turn.',
   'Ctrl+J or Alt+Enter: new input line. Pasting text never sends it automatically.',
   '/new: independent task. /quit or Ctrl+C twice while idle: exit.',
+  '/broadcast TEXT: one question to every member. /broadcast show: batch state.',
   'While a task runs you can scroll or prepare your next message. Enter keeps a busy draft.',
 ];
 

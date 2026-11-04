@@ -67,6 +67,30 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
         expectedVersion: c.expectedVersion,
         requestId: c.requestId,
       });
+    case 'broadcast':
+      return client.broadcastSubmit({
+        workspaceId,
+        roomId: c.room,
+        requestId: c.requestId,
+        text: c.text,
+        ...(c.attachments === undefined ? {} : { attachments: c.attachments }),
+      });
+    case 'broadcast-list':
+      return client.broadcastList({ workspaceId, roomId: c.room });
+    case 'broadcast-continue':
+      return client.broadcastContinue({
+        workspaceId,
+        roomId: c.room,
+        batchId: c.batchId,
+        expectedRevision: c.expectedRevision,
+      });
+    case 'broadcast-abandon':
+      return client.broadcastAbandon({
+        workspaceId,
+        roomId: c.room,
+        batchId: c.batchId,
+        expectedRevision: c.expectedRevision,
+      });
     case 'provider':
       return client.providerStatus();
     case 'provider-check':

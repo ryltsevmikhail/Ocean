@@ -8,7 +8,7 @@ import { closeSync } from 'node:fs';
 import { recoverEndpoint, publishEndpoint } from './endpoint.js';
 import { profileKey, type EndpointLayout } from './endpoint-files.js';
 import type { ProviderPort, RuntimeRecovery } from '@runnets/application';
-import { LOCAL_RUNTIME_MAX_WAIT_MS, LOCAL_ROOM_METHODS } from '@runnets/contracts';
+import { LOCAL_RUNTIME_MAX_WAIT_MS } from '@runnets/contracts';
 import type {
   LocalRuntimeIdentity,
   LocalRuntimeStatus,
@@ -18,7 +18,6 @@ import { localRuntimePaths } from '@runnets/tools-node';
 import { CodingPanelQueries } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
-import { LOCAL_DECISION_METHODS } from '@runnets/contracts';
 import { RuntimeTurns } from './turns.js';
 import type { RuntimeOptions } from '../runtime.js';
 import { openOceanProfile } from '../ocean/profile.js';
@@ -27,6 +26,10 @@ import { drainBeforeDeadline } from './drain.js';
 import { RuntimeFinalization } from './finalization.js';
 import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
 import { LOCAL_PROVIDER_METHODS } from '@runnets/contracts';
+import { LOCAL_BROADCAST_METHODS } from '@runnets/contracts';
+import { systemClock } from '@runnets/store';
+import { RuntimeBroadcasts } from './broadcast.js';
+import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
 import { providerHostSettings } from './provider-settings.js';
 import type { ProviderSecretStorePort } from '@runnets/application';
@@ -137,22 +140,7 @@ export async function startLocalRuntime(
       protocol: 1,
       profileId: paths.profileId,
       instanceId: randomUUID(),
-      capabilities: [
-        'status',
-        'stop',
-        'turns.submit',
-        'desktop.assets',
-        'receipts.get',
-        'runs.get',
-        ...LOCAL_ROOM_METHODS,
-        ...LOCAL_DECISION_METHODS,
-        'coding.panel',
-        ...PROFILE_METHODS,
-        ...LOCAL_RESTORE_METHODS,
-        ...LOCAL_PROVIDER_METHODS,
-        ...(options.restore ? [] : LOCAL_FINALIZATION_METHODS),
-        ...(options.restore ? ['restore.maintenance'] : []),
-      ],
+      capabilities: runtimeCapabilities(options.restore === true),
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
@@ -161,6 +149,18 @@ export async function startLocalRuntime(
       runtime.openRoomRuns(),
       identity.instanceId,
     );
+    if (!runtime.broadcasts || !runtime.conversationStore) throw Error('durable_runtime_required');
+    const broadcasts = new RuntimeBroadcasts({
+      service: runtime.broadcasts,
+      execution: {
+        tasks: runtime.service,
+        store: runtime.conversationStore,
+        clock: systemClock,
+      },
+      clock: systemClock,
+      provider: provider.activation,
+    });
+    turns.attachControllers((runId) => broadcasts.controllerFor(runId));
     let databaseClosed = false;
     const descriptor = {
       protocol: 1 as const,
@@ -187,15 +187,16 @@ export async function startLocalRuntime(
           try {
             if (
               (await drainBeforeDeadline(async () => {
-                const [jobs, extra] = await Promise.all([
+                const [jobs, extra, batch] = await Promise.all([
                   turns.drain(),
                   options.drain ? options.drain() : 'settled',
+                  broadcasts.drain(),
                   decisions.drain(),
                   panels.drain(),
                   restoration.drain(),
                   finalization.drain(),
                 ]);
-                return jobs === 'settled' && extra === 'settled' ? 'settled' : 'uncertain';
+                return [jobs, extra, batch].every((s) => s === 'settled') ? 'settled' : 'uncertain';
               }, drainDeadlineMs)) !== 'settled'
             )
               throw Error('stop_incomplete');
@@ -248,8 +249,10 @@ export async function startLocalRuntime(
             return finalization.dispatch(method, params);
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
             return provider.settings.dispatch(method, params, detached);
+          if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
+            return broadcasts.dispatch(method, params, detached);
           if (method === 'desktop.assets') return desktop(params, state !== 'ready');
-          if (method === 'turns.submit') {
+          if (method === 'turns.submit' || method === 'broadcasts.submit') {
             const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
             if (code) return { error: { code } };
           }

@@ -53,6 +53,7 @@ export type ConversationErrorCode =
   | 'not_member'
   | 'unknown_room'
   | 'room_busy'
+  | 'batch_open'
   | 'recovery_required'
   | 'provider_unavailable'
   | 'context_limit';

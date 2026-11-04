@@ -273,6 +273,7 @@ export class TuiApp {
       runs: this.#book.views(),
       model: this.#book.model,
       provider: this.#book.providerId,
+      batch: this.#book.batchStatus?.(),
       size: this.#terminal.size(),
     };
   }

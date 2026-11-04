@@ -253,6 +253,8 @@ export class RunBook {
 }
 
 export interface RunBookPort {
+  /** Optional durable batch status line shown beside the room status. */
+  batchStatus?(): string;
   readonly model: string;
   readonly providerId: string | null;
   readonly runs: readonly ScreenEntry[];

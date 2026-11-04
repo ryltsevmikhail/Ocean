@@ -1,4 +1,5 @@
 import type {
+  ConversationStore,
   DesktopAssetStore,
   ProfileRebindStore,
   ProviderConnectionStorePort,
@@ -31,6 +32,7 @@ import {
   CodingChangesetService,
   ConversationService,
   DirectChatService,
+  RoomBroadcastService,
   ChatReviewService,
   reconcileInterrupted,
   recoverCodingFinalizations,
@@ -70,7 +72,11 @@ export interface Runtime {
   readonly codingChanges: CodingChangesetService;
   readonly service: TaskRunService;
   readonly conversations: ConversationService;
+  /** Durable conversation transaction surface used by the broadcast runner. */
+  readonly conversationStore?: ConversationStore;
   readonly chat: DirectChatService;
+  /** Durable broadcast admission/decisions; absent on the ephemeral host. */
+  readonly broadcasts?: RoomBroadcastService;
   readonly reviews: ChatReviewService;
   readonly durable: boolean;
   readonly toolJournal?: ToolJournalPort;
@@ -160,7 +166,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       new GitCodingApplyProject(),
       (task, tx) => codingApplyAdmission(task, tx, codingDeps),
     );
+    const broadcasts = new RoomBroadcastService({ ...deps, nextId: deps.nextId });
     const ready = chat.recover().then(() => {
+      // Unfinished batches pause only after started children were resolved by chat recovery.
+      broadcasts.recover();
       codingApply.recover();
       return reconcileInterrupted(service, store.tools);
     });
@@ -233,7 +242,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         snapshots: new GitCodingSnapshots(),
       }),
       conversations: new ConversationService(deps),
+      conversationStore: deps.store,
       chat,
+      broadcasts,
       reviews: new ChatReviewService({ ...deps, tasks: service, journal: store.tools }),
       durable: true,
       toolJournal: store.tools,

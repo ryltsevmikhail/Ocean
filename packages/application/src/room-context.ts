@@ -9,12 +9,16 @@ import {
 import type { ConversationTransaction } from './conversation-ports.js';
 import type { ChatMessage } from './provider.js';
 
-/** Peer bot replies remain attributed input data; only the selected bot owns assistant history. */
+/**
+ * Peer bot replies remain attributed input data; only the selected bot owns assistant history.
+ * `boundarySeq` freezes a broadcast child to history strictly before the batch user message.
+ */
 export function roomContext(
   tx: ConversationTransaction,
   room: Room,
   bot: Bot,
   text: string,
+  boundarySeq: number | null = null,
 ): ConversationResult<readonly ChatMessage[]> {
   const role =
     bot.role +
@@ -27,6 +31,7 @@ export function roomContext(
   for (;;) {
     const page = tx.history(room.id, after, 200);
     for (const message of page) {
+      if (boundarySeq !== null && message.seq >= boundarySeq) return finishContext(messages, text);
       let content = message.body;
       const own = message.author === 'bot' && message.authorBotId === bot.id;
       if (message.author === 'bot' && !own) {
@@ -44,8 +49,24 @@ export function roomContext(
     if (page.length < 200) break;
     after = page.at(-1)?.seq ?? after;
   }
+  return finishContext(messages, text);
+}
+function finishContext(
+  messages: ChatMessage[],
+  text: string,
+): ConversationResult<readonly ChatMessage[]> {
   messages.push({ role: 'user', content: text });
   if (!validConversationText(messages.map((m) => m.content).join('\n'), 65536))
     return conversationFailure('context_limit');
   return ok(messages);
+}
+/** Frozen batch context: history strictly before the boundary plus the one batch user message. */
+export function broadcastRoomContext(
+  tx: ConversationTransaction,
+  room: Room,
+  bot: Bot,
+  text: string,
+  boundarySeq: number,
+): ConversationResult<readonly ChatMessage[]> {
+  return roomContext(tx, room, bot, text, boundarySeq);
 }

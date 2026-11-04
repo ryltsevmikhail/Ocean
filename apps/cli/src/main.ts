@@ -25,6 +25,9 @@ Usage:
   ocean room group --name Team --bot dev --bot review
   ocean room list | ocean room members roomId
   ocean send roomId --text "message" [--to dev] [--request-id id] [--json]
+  ocean broadcast roomId --text "question" [--attachment id ...] [--json]
+  ocean broadcast show roomId batchId
+  ocean broadcast continue|abandon roomId batchId --revision N
   ocean history roomId | ocean tui --room roomId
   ocean run list | ocean run review taskRunId
   ocean run acknowledge taskRunId --text-only --review-version token --reason "..."
@@ -63,6 +66,7 @@ export async function main(argv: readonly string[]): Promise<number> {
       'bot',
       'room',
       'send',
+      'broadcast',
       'history',
       'run',
       'doctor',

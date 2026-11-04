@@ -175,7 +175,8 @@ export function desktopAssetStore(db: DatabaseSync): DesktopAssetStore {
       };
       return (
         Array.isArray(binding) &&
-        binding[0] === 'SendDirect' &&
+        // Broadcast user messages are legitimately target-less but share the same proof shape.
+        (binding[0] === 'SendDirect' || binding[0] === 'Broadcast') &&
         binding[1] === message['workspace_id'] &&
         binding[2] === room &&
         binding[3] === prepared &&

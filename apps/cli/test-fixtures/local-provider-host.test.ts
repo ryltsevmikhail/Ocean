@@ -15,22 +15,25 @@ import type { ProviderPort } from '@runnets/application';
 /** Deterministic vendor transport: bounded model list plus a gated chat stream. */
 export interface VendorFixture {
   readonly url: string;
-  readonly requests: { method: string; url: string; authorization: string }[];
+  readonly requests: { method: string; url: string; authorization: string; body: string }[];
   hold(): void;
   release(): void;
   close(): Promise<void>;
 }
 export async function vendorFixture(): Promise<VendorFixture> {
-  const requests: { method: string; url: string; authorization: string }[] = [];
+  const requests: { method: string; url: string; authorization: string; body: string }[] = [];
   let gate: Promise<void> | null = null;
   let release: (() => void) | null = null;
   const server = createServer((request, response) => {
     void (async () => {
       const url = request.url ?? '';
+      let body = '';
+      for await (const chunk of request) body += String(chunk);
       requests.push({
         method: request.method ?? '',
         url,
         authorization: String(request.headers.authorization ?? ''),
+        body,
       });
       if (url === '/models' && request.method === 'GET') {
         response.writeHead(200, { 'content-type': 'application/json' });
@@ -46,7 +49,6 @@ export async function vendorFixture(): Promise<VendorFixture> {
         return;
       }
       if (url === '/chat/completions' && request.method === 'POST') {
-        for await (const _chunk of request) void _chunk;
         if (gate !== null) await gate;
         response.writeHead(200, { 'content-type': 'text/event-stream' });
         response.write(

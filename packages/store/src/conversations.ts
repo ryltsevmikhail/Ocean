@@ -5,6 +5,7 @@ import type {
   ConversationTransaction,
 } from '@runnets/application';
 import type {
+  BroadcastBatch,
   ChatReview,
   RoomExecutionPolicy,
   ChatTurn,
@@ -24,6 +25,7 @@ interface State {
   rooms: Map<string, Room>;
   messages: Map<string, ConversationMessage>;
   receipts: Map<string, ConversationReceipt>;
+  broadcasts: Map<string, BroadcastBatch>;
 }
 // Immutable decision rows can share their preview strings between snapshots.
 function copyState({ decisions, ...conversation }: State): State {
@@ -41,6 +43,7 @@ export class InMemoryConversationStore implements ConversationStore {
     rooms: new Map(),
     messages: new Map(),
     receipts: new Map(),
+    broadcasts: new Map(),
   };
   #draft: State | null = null;
   readonly ownerDecisions = new InMemoryOwnerDecisions(
@@ -122,6 +125,27 @@ export class InMemoryConversationStore implements ConversationStore {
         if (state.messages.has(value.id)) throw new Error('duplicate message identity');
         state.messages.set(value.id, value);
       },
+      broadcastBatch: (id) => state.broadcasts.get(id) ?? null,
+      broadcastBatchByRequest: (requestId) =>
+        [...state.broadcasts.values()].find((b) => b.requestId === requestId) ?? null,
+      broadcastBatchForRoom: (roomId) =>
+        [...state.broadcasts.values()].find(
+          (b) => b.roomId === roomId && (b.state === 'open' || b.state === 'paused'),
+        ) ?? null,
+      broadcastBatches: (roomId, limit) =>
+        [...state.broadcasts.values()]
+          .filter((b) => b.roomId === roomId)
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+          .slice(0, limit),
+      broadcastOpenBatches: () =>
+        [...state.broadcasts.values()].filter((b) => b.state === 'open' || b.state === 'paused'),
+      putBroadcastBatch: (batch) => {
+        state.broadcasts.set(batch.id, batch);
+      },
+      broadcastTurns: (batchId) =>
+        [...state.turns.values()]
+          .filter((t) => t.broadcast?.batchId === batchId)
+          .sort((a, b) => (a.broadcast?.position ?? 0) - (b.broadcast?.position ?? 0)),
       receipt: (id) => state.receipts.get(id) ?? null,
       completeReviewRequest: (id, decisionId, binding, review) => {
         const old = state.receipts.get(id);

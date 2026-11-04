@@ -97,6 +97,8 @@ export function admitChat(
       tx.putReceipt(request.requestId, { binding, reply: { kind: 'message', data: record } });
       return ok({ record });
     }
+    // A durable batch holds the room between its children; only Notes stay available.
+    if (tx.broadcastBatchForRoom(room.id) !== null) return conversationFailure('batch_open');
     const active = tx.activeChatTurn(room.id);
     if (active !== null)
       return conversationFailure(active.status === 'uncertain' ? 'recovery_required' : 'room_busy');

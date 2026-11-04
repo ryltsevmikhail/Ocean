@@ -6,12 +6,14 @@ import { visibleControls } from '../tui/decision-panel.js';
 import { runView, type RunBookPort, type ScreenEntry, type BookOutcome } from '../tui/runs.js';
 import type { RoomConnection } from './room-connection.js';
 import { RemoteRoomView } from './remote-room-view.js';
+import { RemoteBroadcast } from './remote-broadcast.js';
 
 export class RemoteChatRunBook implements RunBookPort {
   readonly #connection: RoomConnection;
   readonly #view: RemoteRoomView;
   readonly #submission: RoomSubmission;
   readonly #decisions: RemoteDecisions;
+  readonly #broadcast: RemoteBroadcast;
   get decisionPanel() {
     return this.#decisions.panel;
   }
@@ -27,6 +29,7 @@ export class RemoteChatRunBook implements RunBookPort {
     this.#taskId = taskId;
     this.#submission = new RoomSubmission(connection, this.#view.scope, taskId);
     this.#decisions = new RemoteDecisions(connection, this.#view);
+    this.#broadcast = new RemoteBroadcast(connection, this.#view.scope);
   }
   get workspace() {
     return this.#view.workspace;
@@ -65,7 +68,12 @@ export class RemoteChatRunBook implements RunBookPort {
       return 'Draft kept. Press Enter again after the previous message appears in history.';
     return undefined;
   }
+  batchStatus(): string {
+    return this.#broadcast.status();
+  }
   async turn(_entry: ScreenEntry, prompt: string): Promise<BookOutcome> {
+    const broadcast = await this.#broadcastCommand(prompt);
+    if (broadcast !== null) return { kind: 'notice', status: broadcast };
     const status = await this.#decisions.handle(prompt);
     if (status !== null) return { kind: 'notice', status };
     const hold = this.holdDraft(prompt);
@@ -80,6 +88,34 @@ export class RemoteChatRunBook implements RunBookPort {
         ? 'admitted ' + receipt.runId
         : 'Message recorded without model dispatch · ' + receipt.messageId,
     };
+  }
+  /** Explicit broadcast actions; the same durable DTO backs every client. */
+  async #broadcastCommand(prompt: string): Promise<string | null> {
+    if (prompt !== '/broadcast' && !prompt.startsWith('/broadcast ')) return null;
+    const words = prompt.split(/\s+/);
+    const target = words[1];
+    if (target === 'continue' || target === 'abandon') {
+      const [, , batchId, revision] = words;
+      const expectedRevision = Number(revision);
+      if (!batchId || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+        return 'Use /broadcast ' + target + ' BATCH_ID REVISION';
+      const batch =
+        target === 'continue'
+          ? await this.#broadcast.continue(batchId, expectedRevision)
+          : await this.#broadcast.abandon(batchId, expectedRevision);
+      await this.#refresh(false);
+      return `Рассылка ${batch.id}: ${batch.state} · ревизия ${batch.revision}`;
+    }
+    if (prompt === '/broadcast' || prompt === '/broadcast show') {
+      await this.#refresh(false);
+      return this.#broadcast.status() || 'В этой комнате нет рассылки.';
+    }
+    const text = prompt.slice('/broadcast '.length).trim();
+    if (!text)
+      return 'Use /broadcast TEXT, /broadcast show, or /broadcast continue|abandon ID REV.';
+    const batch = await this.#broadcast.submit(text);
+    await this.#refresh(false);
+    return `Рассылка принята: ${batch.id} · ${batch.recipients.length} участников`;
   }
   async cancel(target?: LocalRunSnapshot) {
     if (!target) throw Error('Show the full admitted run ID and version before cancelling');
@@ -138,6 +174,7 @@ export class RemoteChatRunBook implements RunBookPort {
   #refresh(reset: boolean, changed = true) {
     const sync = this.#sync.then(async () => {
       await this.#connection.withClient((c) => this.#view.refresh(c, reset));
+      await this.#broadcast.refresh();
       await this.#decisions.refresh(reset || changed);
       if (reset) this.#resyncAt = Date.now() + 30000;
       this.#view.observationError('');

@@ -5,6 +5,17 @@ import { call, SendFailure, submitDraft } from './bridge.js';
 import { explain } from './dom.js';
 import { feedbackText } from './runtime-text.js';
 import { loadProviderStatus, providerDefaultModel } from './provider-state.js';
+import {
+  abandonBroadcast,
+  broadcastBatch,
+  broadcastBlocksSending,
+  broadcastBusy,
+  continueBroadcast,
+  pendingBroadcast,
+  readBroadcast,
+  sendOwnedBroadcast,
+} from './broadcast-state.js';
+import { BROADCAST_RECIPIENT } from './broadcast-mode.js';
 
 export function useDesktop() {
   const bots = ref<Bot[]>([]),
@@ -15,12 +26,15 @@ export function useDesktop() {
     uncertain = ref(false);
   const unconfirmed = new Map<string, Extract<Command, { op: 'send' }>>();
   const previews = ref<Record<string, string>>({});
-  const { history, runs, readError, active, open } = useRoomFeed((id, latest) => {
-    previews.value[id] =
-      (latest.author === 'bot' ? label(latest.authorBotId) : 'Вы') +
-      ' · ' +
-      latest.body.slice(0, 120);
-  });
+  const { history, runs, readError, active, open } = useRoomFeed(
+    (id, latest) => {
+      previews.value[id] =
+        (latest.author === 'bot' ? label(latest.authorBotId) : 'Вы') +
+        ' · ' +
+        latest.body.slice(0, 120);
+    },
+    async (id) => readBroadcast(id),
+  );
   const drafts = new Map<string, string>();
   const room = ref<Room>(),
     recipient = ref(''),
@@ -65,12 +79,18 @@ export function useDesktop() {
       if (room.value) drafts.set(room.value.id, draft.value);
       draft.value = r ? (drafts.get(r.id) ?? '') : '';
       const original = r && unconfirmed.get(r.id);
-      recipient.value = original?.to ?? '';
-      receipt.value = original ? 'Квитанция не подтверждена · ' + original.requestId : '';
+      const originalBroadcast = r ? pendingBroadcast(r.id) : undefined;
+      recipient.value = original?.to ?? (originalBroadcast ? BROADCAST_RECIPIENT : '');
+      receipt.value = original
+        ? 'Квитанция не подтверждена · ' + original.requestId
+        : originalBroadcast
+          ? 'Квитанция рассылки не подтверждена · ' + originalBroadcast.requestId
+          : '';
       admittedRun.value = null;
     }
     room.value = r;
-    uncertain.value = r ? unconfirmed.has(r.id) : false;
+    uncertain.value = r ? unconfirmed.has(r.id) || pendingBroadcast(r.id) !== undefined : false;
+    if (r) void readBroadcast(r.id);
     open(r?.id);
   }
   const loadBots = () =>
@@ -158,6 +178,30 @@ export function useDesktop() {
       throw error;
     }
   }
+  async function broadcastTurn(attachments: string[]) {
+    const r = room.value;
+    if (!r) return;
+    const outcome = await sendOwnedBroadcast({
+      room: r.id,
+      text: draft.value,
+      attachments,
+    });
+    if (outcome.kind === 'unconfirmed') {
+      uncertain.value = true;
+      receipt.value = 'Квитанция рассылки не подтверждена · ' + outcome.requestId;
+      throw Error('outcome_unknown');
+    }
+    if (outcome.kind === 'refused') {
+      if (outcome.retried) receipt.value = '';
+      uncertain.value = false;
+      throw Error(outcome.code);
+    }
+    receipt.value =
+      'Всем · ' + outcome.batch.recipients.length + ' участников · ' + outcome.batch.messageId;
+    uncertain.value = false;
+    draft.value = '';
+    sent.value++;
+  }
   async function stop(r: Run) {
     await guard(async () => {
       await call({
@@ -220,6 +264,19 @@ export function useDesktop() {
     read,
     refresh,
     team,
+    broadcastBatch,
+    broadcastBusy,
+    broadcastBlocksSending,
+    continueBroadcast,
+    abandonBroadcast,
+    sendBroadcast: async (attachments: string[]) => {
+      sending.value = true;
+      try {
+        await broadcastTurn(attachments);
+      } finally {
+        sending.value = false;
+      }
+    },
     send: async (attachments: string[]) => {
       sending.value = true;
       try {

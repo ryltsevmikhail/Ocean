@@ -115,3 +115,103 @@ describe('provider settings IPC contract', () => {
     ).toBe(false);
   });
 });
+
+describe('broadcast IPC contract', () => {
+  const batch = {
+    version: 1,
+    id: 'batch_1',
+    workspaceId: 'ws_ocean',
+    roomId: 'room_1',
+    requestId: crypto.randomUUID(),
+    messageId: 'message_1',
+    boundarySeq: 2,
+    recipients: [
+      {
+        botId: 'bot_1',
+        handle: 'dev',
+        name: 'Dev',
+        provider: 'deepseek',
+        model: 'deepseek-flash',
+        turnId: 'turn_1',
+        runId: 'tr_turn_1',
+        position: 0,
+        state: 'answered',
+        resultMessageId: 'reply_turn_1',
+      },
+      {
+        botId: 'bot_2',
+        handle: 'review',
+        name: 'Review',
+        provider: 'deepseek',
+        model: 'deepseek-flash',
+        turnId: 'turn_2',
+        runId: 'tr_turn_2',
+        position: 1,
+        state: 'queued',
+        resultMessageId: null,
+      },
+    ],
+    state: 'paused',
+    revision: 2,
+    createdAt: '2026-11-04T00:00:00.000Z',
+    updatedAt: '2026-11-04T00:00:01.000Z',
+  };
+  it('accepts explicit broadcast commands and bounded votes', () => {
+    expect(commands.safeParse({ op: 'broadcast-list', room: 'room_1' }).success).toBe(true);
+    expect(
+      commands.safeParse({
+        op: 'broadcast',
+        requestId: crypto.randomUUID(),
+        room: 'room_1',
+        text: 'question',
+      }).success,
+    ).toBe(true);
+    expect(
+      commands.safeParse({
+        op: 'broadcast',
+        requestId: crypto.randomUUID(),
+        room: 'room_1',
+        text: 'question',
+        attachments: ['att_1'],
+      }).success,
+    ).toBe(false);
+    expect(
+      commands.safeParse({
+        op: 'broadcast-continue',
+        room: 'room_1',
+        batchId: 'batch_1',
+        expectedRevision: 2,
+      }).success,
+    ).toBe(true);
+    expect(
+      commands.safeParse({
+        op: 'broadcast-abandon',
+        room: 'room_1',
+        batchId: 'batch_1',
+        expectedRevision: -1,
+      }).success,
+    ).toBe(false);
+  });
+  it('accepts only the metadata batch DTO and the new queued turn state', () => {
+    expect(outputs.broadcast.safeParse(batch).success).toBe(true);
+    expect(outputs['broadcast-list'].safeParse([batch]).success).toBe(true);
+    expect(outputs['broadcast-abandon'].safeParse(batch).success).toBe(true);
+    expect(outputs.broadcast.safeParse({ ...batch, key: 'sk-leak' }).success).toBe(false);
+    expect(outputs.broadcast.safeParse({ ...batch, state: 'running' }).success).toBe(false);
+    expect(
+      outputs.runs.safeParse([
+        {
+          turnId: 'turn_1',
+          messageId: 'message_1',
+          roomId: 'room_1',
+          runId: 'tr_turn_1',
+          version: 0,
+          performerId: 'bot_1',
+          turnStatus: 'queued',
+          taskStatus: 'not_created',
+          pendingDecisionIds: [],
+        },
+      ]).success,
+    ).toBe(true);
+  });
+});

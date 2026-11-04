@@ -17,6 +17,7 @@ import {
   PROVIDER_CONNECTION_TABLES,
   migrateProviderConnections,
 } from './provider-connection-schema.js';
+import { BROADCAST_TABLES, migrateBroadcasts } from './broadcast-schema.js';
 /** Additive migrations from every older supported schema; never guesses effect state. */
 export function applyMigrations(
   db: DatabaseSync,
@@ -90,5 +91,9 @@ export function applyMigrations(
   if (previousVersion < 15) migrateProviderConnections(db);
   else
     for (const table of PROVIDER_CONNECTION_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 16) migrateBroadcasts(db);
+  else
+    for (const table of BROADCAST_TABLES)
       if (!existing.has(table)) throw Error('database schema is missing table ' + table);
 }

@@ -63,6 +63,12 @@ export async function routeProfileCommand(
       );
       return 0;
     }
+    if (args.command === 'broadcast') {
+      const { runBroadcastCommand } = await import('./broadcast-command.js');
+      const result = await runBroadcastCommand(c, args, input, output, error, controller.signal);
+      output.write(JSON.stringify({ version: 1, ok: true, data: result.data }) + '\n');
+      return result.code;
+    }
     const { runFinalizationCommand } = await import('./finalization-command.js');
     const result =
       args.command === 'run'

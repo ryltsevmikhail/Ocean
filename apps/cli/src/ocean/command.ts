@@ -59,6 +59,8 @@ export async function runOceanCommand(
     if (command !== 'tui' && !diagnostic) {
       const remote = await routeProfileCommand(args, options.input ?? process.stdin, output, error);
       if (remote !== null) return remote;
+      // Broadcast state and its runner are runtime-owned; the CLI is only a client.
+      if (command === 'broadcast') throw Error('runtime_absent');
     }
     if (['doctor', 'backup', 'restore'].includes(command)) {
       const result = await runOperations(diagnostic ? { ...args, staticDoctor: true } : args);
