@@ -67,6 +67,26 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
         expectedVersion: c.expectedVersion,
         requestId: c.requestId,
       });
+    case 'provider':
+      return client.providerStatus();
+    case 'provider-check':
+      return client.providerCheck();
+    case 'provider-set':
+      return client.providerSet({
+        requestId: c.requestId,
+        model: c.model,
+        ...(c.key === undefined ? {} : { key: c.key }),
+      });
+    case 'provider-disconnect':
+      return client.providerDisconnect({
+        requestId: c.requestId,
+        expectedRevision: c.expectedRevision,
+      });
+    case 'provider-remove-key':
+      return client.providerRemoveSavedKey({
+        requestId: c.requestId,
+        expectedRevision: c.expectedRevision,
+      });
     case 'send':
       return client.submit({
         workspaceId,

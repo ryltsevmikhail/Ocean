@@ -129,3 +129,40 @@ button.person:hover {
 .person span {
   min-width: 0;
 }
+.provider-panel label {
+  display: block;
+  margin: 12px 0;
+}
+.provider-panel label input,
+.provider-panel label select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+.provider-panel .info-card {
+  margin: 12px 0;
+  display: grid;
+  gap: 6px;
+}
+.provider-panel .info-card[data-state='disconnected'] strong,
+.provider-panel .info-card[data-state='unverified'] strong,
+.provider-panel .info-card[data-state='invalid_model'] strong {
+  color: var(--accent);
+}
+.provider-panel .check-line,
+.provider-panel .muted {
+  font-size: 12px;
+  color: var(--muted);
+}
+.provider-panel .warning {
+  color: var(--accent);
+}
+.provider-panel .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.provider-panel .form-actions button {
+  flex: 1 1 auto;
+}

@@ -10,7 +10,7 @@ import {
 import { SqliteConversationStore } from './conversations.js';
 import { SqliteEventLog } from './event-log.js';
 import { createDurableIdGenerator } from './id-source.js';
-import { initializeSchema } from './schema.js';
+import { SCHEMA_VERSION, initializeSchema } from './schema.js';
 const dbs: DatabaseSync[] = [];
 afterEach(() => {
   for (const db of dbs.splice(0)) db.close();
@@ -82,7 +82,7 @@ it('preserves M2 replies, turns, TaskRun events and exact retry identity when mi
   const room = c.conversations.room('ws_test', '0002');
   initializeSchema(c.db);
   expect(c.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '14',
+    String(SCHEMA_VERSION),
   );
   expect(snapshot()).toEqual(before);
   expect(c.db.prepare('SELECT review_id FROM ocean_chat_turns').get()?.['review_id']).toBeNull();

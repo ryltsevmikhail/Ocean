@@ -1,4 +1,8 @@
-import type { DesktopAssetStore, ProfileRebindStore } from '@runnets/application';
+import type {
+  DesktopAssetStore,
+  ProfileRebindStore,
+  ProviderConnectionStorePort,
+} from '@runnets/application';
 import { runtimeServiceOver as serviceOver } from './runtime-service.js';
 import { codingTurnFactory, type CodingTurnFactoryDeps } from './coding-turn-factory.js';
 import {
@@ -53,6 +57,8 @@ export interface Runtime {
   readonly coding: CodingTaskService;
   /** Durable finalization store; absent on the ephemeral host. */
   readonly finalization?: CodingFinalizationStore;
+  /** Provider connection metadata; durable hosts own the only authoritative copy. */
+  readonly providerConnections?: ProviderConnectionStorePort;
   /** Current durable profile owner identity (lease owner); absent when ephemeral. */
   readonly ownerId?: string;
   readonly codingReview?: CodingReviewService;
@@ -161,6 +167,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return {
       restored,
       finalization: store.finalization,
+      providerConnections: store.providerConnections,
       ownerId: codingDeps.ownerId,
       openRebindStore: () => store.rebind,
       service,

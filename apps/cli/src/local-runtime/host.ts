@@ -1,13 +1,5 @@
 import { runtimeDesktopAssets, desktopSubmitRefusal } from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
-import {
-  restoredRuntimeAdmission,
-  restoreMarkerPresent,
-  runtimeIncomplete,
-} from '../runtime-restoration.js';
-import { readRestorationAuthority } from '@runnets/store-sqlite';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { LOCAL_RESTORE_METHODS } from '@runnets/contracts';
 import { profileCommand } from './profile-commands.js';
 import { PROFILE_METHODS } from '@runnets/contracts';
@@ -28,13 +20,16 @@ import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
 import { LOCAL_DECISION_METHODS } from '@runnets/contracts';
 import { RuntimeTurns } from './turns.js';
-import { createProviderFromEnv } from '../engine/provider.js';
 import type { RuntimeOptions } from '../runtime.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
 import { drainBeforeDeadline } from './drain.js';
 import { RuntimeFinalization } from './finalization.js';
 import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
+import { LOCAL_PROVIDER_METHODS } from '@runnets/contracts';
+import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
+import { providerHostSettings } from './provider-settings.js';
+import type { ProviderSecretStorePort } from '@runnets/application';
 export interface LocalRuntimeHost {
   readonly identity: LocalRuntimeIdentity;
   readonly recovery: RuntimeRecovery;
@@ -51,6 +46,12 @@ export interface LocalRuntimeHostOptions {
     'sandbox' | 'inspectSandbox'
   >;
   readonly provider?: ProviderPort | null;
+  /** Test-only private credential store; production derives a profile sibling directory. */
+  readonly providerSecretStore?: ProviderSecretStorePort;
+  /** Explicit credential-directory override for fixtures; production is deterministic. */
+  readonly credentialDir?: string;
+  /** Test-only deterministic vendor transport origin; never wire input. */
+  readonly providerBaseUrl?: string;
   /** Test-only deterministic clock; production omits it and uses Date.now (never wire input). */
   readonly now?: () => number;
   /** Additional host supervision joins runtime-owned execution before SQLite close. */
@@ -69,16 +70,7 @@ export async function startLocalRuntime(
   )
     throw Error('invalid_input');
   const paths = localRuntimePaths(options.profile);
-  const checkRestoration = () => {
-    if (runtimeIncomplete(paths.profile)) throw Error('recovery_required');
-    if (options.restore || !restoreMarkerPresent(paths.profile)) return;
-    // Ordinary host startup requires a verified ready epoch; inert quarantines never start.
-    const database = join(paths.profile, 'runtime.sqlite');
-    if (!existsSync(database)) throw Error('restore_restricted');
-    const { origin, active } = readRestorationAuthority(database);
-    if (!origin || !active) throw Error('restore_restricted');
-    restoredRuntimeAdmission(paths.profile, origin, undefined, active);
-  };
+  const checkRestoration = createRestorationCheck(paths, options.restore === true);
   checkRestoration();
   const originalProfile = profileKey(paths);
   let decisions: RuntimeDecisions;
@@ -112,6 +104,22 @@ export async function startLocalRuntime(
     if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
       throw Error('durable_runtime_required');
     const restored = options.restore === true || runtime.restored === true;
+    if (!runtime.providerConnections) throw Error('durable_runtime_required');
+    // Saved and environment credentials are resolved by the runtime, never by a client.
+    const provider = providerHostSettings({
+      store: runtime.providerConnections,
+      profile: paths.profile,
+      env: process.env,
+      now: options.now,
+      restored,
+      injected: options.provider ?? null,
+      mutationsAllowed: options.restore !== true,
+      ...(options.providerSecretStore === undefined
+        ? {}
+        : { secretStore: options.providerSecretStore }),
+      ...(options.credentialDir === undefined ? {} : { credentialDir: options.credentialDir }),
+      ...(options.providerBaseUrl === undefined ? {} : { baseUrl: options.providerBaseUrl }),
+    });
     const finalization = new RuntimeFinalization(
       runtime.finalization,
       decisions.owner,
@@ -141,6 +149,7 @@ export async function startLocalRuntime(
         'coding.panel',
         ...PROFILE_METHODS,
         ...LOCAL_RESTORE_METHODS,
+        ...LOCAL_PROVIDER_METHODS,
         ...(options.restore ? [] : LOCAL_FINALIZATION_METHODS),
         ...(options.restore ? ['restore.maintenance'] : []),
       ],
@@ -148,11 +157,7 @@ export async function startLocalRuntime(
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
       runtime.chat,
-      options.restore
-        ? null
-        : options.provider === undefined
-          ? createProviderFromEnv(process.env)
-          : options.provider,
+      provider.activation,
       runtime.openRoomRuns(),
       identity.instanceId,
     );
@@ -241,6 +246,8 @@ export async function startLocalRuntime(
             return { error: { code: 'restore_restricted' } };
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
             return finalization.dispatch(method, params);
+          if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
+            return provider.settings.dispatch(method, params, detached);
           if (method === 'desktop.assets') return desktop(params, state !== 'ready');
           if (method === 'turns.submit') {
             const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
@@ -286,13 +293,4 @@ export async function startLocalRuntime(
     }
     throw error;
   }
-}
-
-const MAINTENANCE_READS = new Set(
-  `rooms.list rooms.members history.list runs.list runs.events runs.result runs.get
-  receipts.get observe bots.list coding.show coding.diff coding.pending coding.panel
-  decisions.list decisions.get decisions.preview decisions.resolve`.split(/\s+/),
-);
-function maintenanceRead(method: string): boolean {
-  return MAINTENANCE_READS.has(method);
 }

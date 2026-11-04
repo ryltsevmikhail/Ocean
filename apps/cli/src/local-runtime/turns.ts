@@ -13,17 +13,18 @@ export class RuntimeTurns {
   #uncertain = false;
   #draining = false;
   readonly #chat: DirectChatService;
-  readonly #provider: ProviderPort | null;
+  /** A getter, so each newly admitted turn captures the current immutable activation. */
+  readonly #provider: () => ProviderPort | null;
   constructor(
     chat: DirectChatService,
-    provider: ProviderPort | null,
+    provider: ProviderPort | null | (() => ProviderPort | null),
     runs: RoomRuntimeRuns,
     instance: string,
   ) {
     this.#runs = runs;
     this.#queries = new RuntimeQueries(runs, instance);
     this.#chat = chat;
-    this.#provider = provider;
+    this.#provider = typeof provider === 'function' ? provider : () => provider;
   }
 
   dispatch(
@@ -38,7 +39,7 @@ export class RuntimeTurns {
         const admitted = this.#chat.submit(
           {
             ...params,
-            provider: this.#provider,
+            provider: this.#provider(),
             signal: controller.signal,
             emit: () => {},
           },

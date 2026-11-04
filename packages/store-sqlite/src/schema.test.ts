@@ -83,6 +83,8 @@ describe('schema initialization', () => {
       'ocean_messages',
       'ocean_owner_decisions',
       'ocean_profile_rebinds',
+      'ocean_provider_connections',
+      'ocean_provider_receipts',
       'ocean_rebind_observations',
       'ocean_receipts',
       'ocean_restore_origin',

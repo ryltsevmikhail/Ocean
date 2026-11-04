@@ -26,6 +26,13 @@ export interface ToolDefinition {
   readonly parameters: Readonly<Record<string, unknown>>;
 }
 
+/** Modalities an adapter documents for one model. Unknown metadata stays conservative. */
+export type ModelInputModality = 'text' | 'image';
+export interface ProviderModelInfo {
+  readonly id: string;
+  readonly inputModalities: readonly ModelInputModality[];
+}
+
 export interface ModelRequest {
   readonly tools?: readonly ToolDefinition[];
   readonly model: string;
@@ -107,6 +114,11 @@ export interface ProviderCapabilities {
 export interface ProviderPort {
   readonly id: string;
   readonly models: readonly string[];
+  /**
+   * Per-model capabilities the adapter documents (for example image input).
+   * Optional: a provider without metadata declares no confirmed extra modality.
+   */
+  readonly modelInfo?: readonly ProviderModelInfo[];
   readonly capabilities: ProviderCapabilities;
   stream(request: ModelRequest): AsyncIterable<ProviderEvent>;
 }

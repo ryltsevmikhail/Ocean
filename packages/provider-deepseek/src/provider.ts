@@ -13,6 +13,7 @@ import {
   type HttpResponse,
   type ModelRequest,
   type ProviderEvent,
+  type ProviderModelInfo,
   type ProviderPort,
 } from '@runnets/provider-core';
 
@@ -20,8 +21,27 @@ import { errorForStatus, errorFromException, messageFromBody } from './errors.js
 import { mapStream } from './stream.js';
 import { DEEPSEEK_CHAT_PATH, DEEPSEEK_DEFAULT_ORIGIN, buildRequestBody } from './wire.js';
 
-/** Models advertised when the host does not configure its own list. */
-export const DEEPSEEK_MODELS = ['deepseek-flash', 'deepseek-chat', 'deepseek-reasoner'] as const;
+/**
+ * Models advertised when the host does not configure its own list.
+ *
+ * The vendor documents exactly these two chat-completions ids; the discontinued
+ * `deepseek-chat`/`deepseek-reasoner` ids are never advertised again.
+ */
+export const DEEPSEEK_MODELS = ['deepseek-flash', 'deepseek-v4-pro'] as const;
+
+/** Documented per-model input modalities (vendor `GET /models` metadata). */
+export const DEEPSEEK_MODEL_INFO: readonly ProviderModelInfo[] = [
+  { id: 'deepseek-flash', inputModalities: ['text', 'image'] },
+  { id: 'deepseek-v4-pro', inputModalities: ['text'] },
+];
+
+/** Custom host model lists claim no capability this adapter can document. */
+function modelInfoFor(models: readonly string[]): readonly ProviderModelInfo[] {
+  return models.map(
+    (id) =>
+      DEEPSEEK_MODEL_INFO.find((known) => known.id === id) ?? { id, inputModalities: ['text'] },
+  );
+}
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -46,6 +66,7 @@ function combineSignals(
 export class DeepSeekProvider implements ProviderPort {
   readonly id = 'deepseek';
   readonly models: readonly string[];
+  readonly modelInfo: readonly ProviderModelInfo[];
   readonly capabilities = {
     streaming: true,
     reasoning: true,
@@ -64,6 +85,7 @@ export class DeepSeekProvider implements ProviderPort {
     this.#apiKey = options.apiKey;
     this.#baseUrl = (options.baseUrl ?? DEEPSEEK_DEFAULT_ORIGIN).replace(/\/+$/, '');
     this.models = options.models ?? DEEPSEEK_MODELS;
+    this.modelInfo = modelInfoFor(this.models);
     this.#http = options.httpClient ?? fetchHttpClient;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }

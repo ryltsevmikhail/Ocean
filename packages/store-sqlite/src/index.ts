@@ -8,6 +8,7 @@
  */
 
 export { openSqliteStore } from './store.js';
+export { SCHEMA_VERSION } from './schema.js';
 export type { OpenSqliteStoreOptions, SqliteStore } from './store.js';
 export type { Checkpoint, CheckpointStore } from './checkpoints.js';
 export type { RecoveryResult } from './recovery.js';
@@ -28,3 +29,8 @@ export { readRestorationAuthority } from './restoration-authority.js';
 export { readRestorationBackupState } from './restoration-backup.js';
 export { finalizationStore } from './coding-finalization-store.js';
 export { projectFinalizationHeld } from './coding-finalization-holds.js';
+export { SqliteProviderConnections } from './provider-connection-storage.js';
+export {
+  PROVIDER_CONNECTION_TABLES,
+  migrateProviderConnections,
+} from './provider-connection-schema.js';

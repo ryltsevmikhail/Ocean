@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { initializeSchema } from './schema.js';
+import { SCHEMA_VERSION, initializeSchema } from './schema.js';
 import { ConversationService } from '@runnets/application';
 import { SqliteConversationStore } from './conversations.js';
 
@@ -46,7 +46,7 @@ it('preserves actual M1 message rows, profiles, memberships and receipts in sche
   const history = s.history('w', '2');
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '14',
+    String(SCHEMA_VERSION),
   );
   expect(snapshot()).toEqual(before);
   expect(db.prepare('SELECT title FROM ocean_rooms').get()?.['title']).toBeNull();

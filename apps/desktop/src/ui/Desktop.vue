@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref } from 'vue';
 import Avatar from './Avatar.vue';
 import Appearance from './Appearance.vue';
 import RoomDetails from './RoomDetails.vue';
@@ -9,6 +9,8 @@ import RuntimeFeedback from './RuntimeFeedback.vue';
 import ProfilePanel from './ProfilePanel.vue';
 import RoomHistory from './RoomHistory.vue';
 import RoomComposer from './RoomComposer.vue';
+import RoomManager from './RoomManager.vue';
+import ProviderSettings from './ProviderSettings.vue';
 import { useDesktop } from './state.js';
 const {
   runtimeReady,
@@ -34,21 +36,12 @@ const {
   uncertain,
   shownRun,
   sent,
-  dialog,
-  selected,
-  title,
-  kind,
-  handle,
-  name,
-  role,
-  model,
   label,
   roomName,
   guard,
   read,
   refresh,
   team,
-  create,
   send,
   stop,
 } = useDesktop();
@@ -68,21 +61,8 @@ onBeforeUnmount(() => {
   wide.removeEventListener('change', adapt);
   oneColumn.removeEventListener('change', adapt);
 });
-const invalidHandle = computed(
-  () => !!handle.value && !/^[a-z][a-z0-9_-]{0,31}$/.test(handle.value),
-);
 const profile = ref<InstanceType<typeof ProfilePanel>>();
-const manager = ref<HTMLDialogElement>();
-watch(
-  dialog,
-  (value) => {
-    if (value) {
-      feedback.value = '';
-      manager.value?.showModal();
-    } else manager.value?.close();
-  },
-  { flush: 'post' },
-);
+const roomManager = ref<InstanceType<typeof RoomManager>>();
 </script>
 <template>
   <div class="shell" :class="{ 'with-details': details && room, 'show-rooms': roomList }">
@@ -101,10 +81,7 @@ watch(
           aria-label="Создать комнату"
           title="Создать комнату"
           :disabled="busy || !runtimeReady"
-          @click="
-            dialog = 'room';
-            selected = [];
-          "
+          @click="roomManager?.open('room')"
         >
           <Glyph name="plus" />
         </button>
@@ -136,7 +113,7 @@ watch(
         <ProfilePanel
           ref="profile"
           :busy="busy || !runtimeReady"
-          @bot="dialog = 'bot'"
+          @bot="roomManager?.open('bot')"
         /><Appearance />
       </footer>
     </aside>
@@ -150,6 +127,7 @@ watch(
           <h1>{{ roomName(room) }}</h1>
         </div>
         <div class="top-tools">
+          <ProviderSettings :busy="busy || !runtimeReady" />
           <button
             class="round"
             title="Обновить"
@@ -233,68 +211,5 @@ watch(
       @close="details = false"
     />
   </div>
-  <dialog ref="manager" aria-label="Создание" @cancel.prevent="!busy && (dialog = '')">
-    <form v-if="dialog" id="fields" @submit.prevent="guard(create)">
-      <small>{{ dialog === 'bot' ? 'НОВЫЙ БОТ' : 'НОВАЯ КОМНАТА' }}</small>
-      <h2>{{ dialog === 'bot' ? 'Добавить участника' : 'Кто в комнате' }}</h2>
-      <p class="form-copy">
-        {{
-          dialog === 'bot'
-            ? 'Бот получает переписку своей комнаты.'
-            : 'В группе вы выбираете, кому передать ход.'
-        }}
-      </p>
-      <template v-if="dialog === 'bot'"
-        ><p>{{ bots.map((b) => '@' + b.handle).join(' · ') }}</p>
-        <label
-          >Идентификатор<input
-            v-model="handle"
-            :aria-invalid="invalidHandle"
-            aria-describedby="handle-tip"
-            required
-            pattern="[a-z][a-z0-9_\-]{0,31}" /></label
-        ><small id="handle-tip" :class="{ warning: invalidHandle }"
-          >Начните с латинской буквы. Далее — строчные буквы, цифры, «-» или «_». Например,
-          dev-team.</small
-        ><label>Имя<input v-model="name" required /></label
-        ><label>Роль<textarea v-model="role" required></textarea></label
-        ><label>Модель<input v-model="model" required /></label
-      ></template>
-      <template v-else
-        ><label
-          >Тип<select v-model="kind" @change="selected = []">
-            <option value="group">Группа</option>
-            <option value="direct">Личная</option>
-          </select></label
-        ><label v-if="kind === 'group'">Название<input v-model="title" required /></label>
-        <fieldset>
-          <legend>Участники</legend>
-          <label v-for="b in bots" :key="b.id"
-            ><input
-              v-if="kind === 'group'"
-              v-model="selected"
-              type="checkbox"
-              :value="b.id"
-            /><input v-else type="radio" name="direct" @change="selected = [b.id]" />@{{
-              b.handle
-            }}</label
-          >
-        </fieldset></template
-      >
-      <p v-if="busy || feedback" :role="feedback ? 'alert' : 'status'">
-        {{ feedback || 'Запрос выполняется…' }}
-      </p>
-      <button type="button" :disabled="busy" @click="dialog = ''">Закрыть</button
-      ><button
-        class="primary"
-        :disabled="
-          busy ||
-          (dialog === 'bot' && invalidHandle) ||
-          (dialog === 'room' && selected.length < (kind === 'group' ? 2 : 1))
-        "
-      >
-        Создать
-      </button>
-    </form>
-  </dialog>
+  <RoomManager ref="roomManager" :bots="bots" :busy="busy" @created="guard(() => refresh())" />
 </template>

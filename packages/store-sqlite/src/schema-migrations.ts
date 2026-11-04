@@ -13,6 +13,10 @@ import { REVIEW_TABLES, migrateReviews } from './review-schema.js';
 import { migrateOwnerDecisions } from './owner-decisions.js';
 import { migrateRestoration } from './restore-origin.js';
 import { migrateCodingFinalizations } from './coding-finalization-schema.js';
+import {
+  PROVIDER_CONNECTION_TABLES,
+  migrateProviderConnections,
+} from './provider-connection-schema.js';
 /** Additive migrations from every older supported schema; never guesses effect state. */
 export function applyMigrations(
   db: DatabaseSync,
@@ -83,4 +87,8 @@ export function applyMigrations(
   if (previousVersion < 14) migrateCodingFinalizations(db);
   else if (!existing.has('ocean_coding_finalizations'))
     throw Error('database schema is missing finalization tables');
+  if (previousVersion < 15) migrateProviderConnections(db);
+  else
+    for (const table of PROVIDER_CONNECTION_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
 }

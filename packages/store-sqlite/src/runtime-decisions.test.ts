@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { initializeSchema } from './schema.js';
+import { SCHEMA_VERSION, initializeSchema } from './schema.js';
 it('upgrades a v10 profile atomically and refuses a damaged v11 decision table', () => {
   const db = new DatabaseSync(':memory:');
   try {
@@ -15,7 +15,7 @@ it('upgrades a v10 profile atomically and refuses a damaged v11 decision table',
     db.exec('DROP TABLE ocean_owner_decisions');
     initializeSchema(db);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '14',
+      String(SCHEMA_VERSION),
     );
     db.exec('DROP TABLE ocean_owner_decisions');
     expect(() => initializeSchema(db)).toThrow('missing table');

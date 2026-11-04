@@ -7,7 +7,9 @@
 
 export {
   DEEPSEEK_MODELS,
+  DEEPSEEK_MODEL_INFO,
   DeepSeekProvider,
   createDeepSeekProvider,
   type DeepSeekProviderOptions,
 } from './provider.js';
+export { probeDeepSeekModels, MAX_MODEL_PROBE_MS, type ModelProbeResult } from './models.js';

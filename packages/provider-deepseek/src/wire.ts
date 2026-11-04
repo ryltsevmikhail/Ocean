@@ -10,6 +10,8 @@ import type { ModelRequest, TokenUsage } from '@runnets/provider-core';
 
 export const DEEPSEEK_DEFAULT_ORIGIN = 'https://api.deepseek.com';
 export const DEEPSEEK_CHAT_PATH = '/chat/completions';
+/** Metadata-only model discovery used by an explicit owner connection check. */
+export const DEEPSEEK_MODELS_PATH = '/models';
 
 export interface StreamDelta {
   readonly content: string | null;

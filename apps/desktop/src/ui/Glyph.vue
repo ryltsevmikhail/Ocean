@@ -2,6 +2,8 @@
 defineProps<{ name: keyof typeof icons }>();
 const icons = {
   settings: 'M3 7h4 M11 7h10 M3 17h10 M17 17h4 M7 4h4v6H7z M13 14h4v6h-4z',
+  provider:
+    'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5 M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5',
   attachment: 'M8 12l6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8 M6 14l8-8',
   file: 'M6 2h8l4 4v16H6z M14 2v5h5',
   download: 'M12 3v12 M7 10l5 5 5-5 M4 17v4h16v-4',

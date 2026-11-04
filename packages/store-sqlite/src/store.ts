@@ -19,7 +19,8 @@ import { SqliteCodingApprovalStore } from './coding-approval-storage.js';
 import { SqliteCodingStore } from './coding-store.js';
 import type { CodingApprovalStore, CodingStore } from '@runnets/application';
 import { finalizationStore } from './coding-finalization-store.js';
-import type { CodingFinalizationStore } from '@runnets/application';
+import { SqliteProviderConnections } from './provider-connection-storage.js';
+import type { CodingFinalizationStore, ProviderConnectionStorePort } from '@runnets/application';
 /**
  * Public factory for the durable SQLite store.
  *
@@ -62,6 +63,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  readonly providerConnections: ProviderConnectionStorePort;
   readonly restoration: RestoreOriginStore;
   readonly rebind: ProfileRebindStore;
   readonly desktopAssets: DesktopAssetStore;
@@ -118,6 +120,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   let closed = false;
   const tools = new SqliteToolJournal(db);
   return {
+    providerConnections: new SqliteProviderConnections(db),
     restoration: restoreOriginStore(db),
     rebind: profileRebindStore(db, tools),
     desktopAssets: desktopAssetStore(db),

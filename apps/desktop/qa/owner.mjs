@@ -73,7 +73,12 @@ export async function fixture(options = {}) {
         ...args,
       ],
       {
-        env: { ...env, DEEPSEEK_API_KEY: 'fixture-only', OCEAN_TEST_LOG: join(root, 'requests') },
+        env: {
+          ...env,
+          DEEPSEEK_API_KEY: 'fixture-only',
+          OCEAN_TEST_LOG: join(root, 'requests'),
+          ...(options.modelLog ? { OCEAN_TEST_MODEL_LOG: '1' } : {}),
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );

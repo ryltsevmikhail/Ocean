@@ -47,6 +47,24 @@ export const commands = z.discriminatedUnion('op', [
     title: value(256),
     bots: z.array(id).min(2).max(32),
   }),
+  z.strictObject({ op: z.literal('provider') }),
+  z.strictObject({ op: z.literal('provider-check') }),
+  z.strictObject({
+    op: z.literal('provider-set'),
+    requestId,
+    key: z.string().min(1).max(512).optional(),
+    model: value(256),
+  }),
+  z.strictObject({
+    op: z.literal('provider-disconnect'),
+    requestId,
+    expectedRevision: z.int().nonnegative(),
+  }),
+  z.strictObject({
+    op: z.literal('provider-remove-key'),
+    requestId,
+    expectedRevision: z.int().nonnegative(),
+  }),
   z.strictObject({
     op: z.literal('send'),
     requestId,
@@ -118,6 +136,54 @@ const receipt = z.object({
 });
 const sendStage = z.enum(['preparation', 'refused']);
 export type SendStage = z.infer<typeof sendStage>;
+export const providerSource = z.enum(['saved', 'external', 'injected', 'none']);
+export const providerState = z.enum([
+  'connected',
+  'disconnected',
+  'unverified',
+  'absent',
+  'restored',
+  'invalid_model',
+]);
+export const providerCheckOutcome = z.enum([
+  'ok',
+  'auth',
+  'network',
+  'timeout',
+  'server',
+  'unavailable',
+]);
+const providerModel = z.string().min(1).max(256);
+export const providerCheckMetadata = z.object({
+  outcome: providerCheckOutcome,
+  httpStatus: z.int().min(100).max(599).nullable(),
+  durationMs: z.int().nonnegative(),
+  models: z.array(providerModel).max(200),
+  modelSupported: z.boolean(),
+  source: providerSource,
+  revision: z.int().nonnegative(),
+  checkedAt: z.iso.datetime({ offset: true }),
+});
+export const providerStatus = z
+  .object({
+    provider: z.string().min(1).max(64),
+    source: providerSource,
+    state: providerState,
+    model: providerModel.nullable(),
+    models: z.array(providerModel).max(200),
+    modelCapabilities: z
+      .array(z.object({ model: providerModel, imageInput: z.boolean() }))
+      .max(200),
+    revision: z.int().nonnegative(),
+    savedKey: z.boolean(),
+    writable: z.boolean(),
+    code: z
+      .string()
+      .regex(/^[a-z_]{1,64}$/)
+      .nullable(),
+    lastCheck: providerCheckMetadata.nullable(),
+  })
+  .strict();
 export const envelope = z.discriminatedUnion('ok', [
   z.object({ version: z.literal(1), ok: z.literal(true), data: z.unknown() }),
   z.object({
@@ -147,6 +213,14 @@ export const outputs = {
   bot: z.object({ kind: z.literal('bot'), data: bot }),
   send: receipt,
   receipt: receipt.nullable(),
+  provider: providerStatus,
+  'provider-set': providerStatus,
+  'provider-disconnect': providerStatus,
+  'provider-remove-key': providerStatus,
+  'provider-check': z.object({
+    status: providerStatus,
+    check: providerCheckMetadata.extend({ persisted: z.boolean() }),
+  }),
 };
 export type Bot = z.infer<typeof bot>;
 export type Room = z.infer<typeof roomDto>;
@@ -154,3 +228,5 @@ export type Message = z.infer<typeof message>;
 export type Run = z.infer<typeof run>;
 
 export type ProfileReport = z.infer<typeof outputs.status>;
+export type ProviderStatus = z.infer<typeof providerStatus>;
+export type ProviderCheck = z.infer<(typeof outputs)['provider-check']>['check'];

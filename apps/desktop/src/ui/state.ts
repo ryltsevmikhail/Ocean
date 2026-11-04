@@ -4,6 +4,7 @@ import { pages, useRoomFeed } from './room-feed.js';
 import { call, SendFailure, submitDraft } from './bridge.js';
 import { explain } from './dom.js';
 import { feedbackText } from './runtime-text.js';
+import { loadProviderStatus, providerDefaultModel } from './provider-state.js';
 
 export function useDesktop() {
   const bots = ref<Bot[]>([]),
@@ -31,14 +32,6 @@ export function useDesktop() {
     sending = ref(false),
     feedbackError = ref(false);
   const feedbackCode = ref('');
-  const dialog = ref<'' | 'room' | 'bot'>(''),
-    selected = ref<string[]>([]),
-    title = ref('Ocean Team'),
-    kind = ref<'group' | 'direct'>('group');
-  const handle = ref(''),
-    name = ref(''),
-    role = ref(''),
-    model = ref('deepseek-flash');
   const memberIds = computed(() =>
     room.value?.kind === 'group' ? room.value.botIds : [room.value?.botId],
   );
@@ -89,6 +82,7 @@ export function useDesktop() {
     try {
       bots.value = await loadBots();
       runtimeReady.value = true;
+      await loadProviderStatus();
     } catch (error) {
       runtimeReady.value = false;
       throw error;
@@ -104,6 +98,7 @@ export function useDesktop() {
   onMounted(() => void guard(() => refresh()));
   const uuid = () => crypto.randomUUID();
   async function team() {
+    const model = providerDefaultModel.value;
     for (const h of ['dev', 'review']) {
       if (!bots.value.some((b) => b.handle === h)) {
         await call({
@@ -112,7 +107,7 @@ export function useDesktop() {
           handle: h,
           name: h,
           role: h === 'dev' ? 'Разработчик' : 'Ревьюер',
-          model: 'deepseek-flash',
+          model,
         });
         bots.value = await loadBots();
       }
@@ -124,31 +119,6 @@ export function useDesktop() {
       bots: bots.value.filter((b) => ['dev', 'review'].includes(b.handle)).map((b) => b.id),
     });
     await refresh(group.data.id);
-  }
-  async function create() {
-    if (dialog.value === 'bot') {
-      await call({
-        op: 'bot',
-        requestId: uuid(),
-        handle: handle.value,
-        name: name.value,
-        role: role.value,
-        model: model.value,
-      });
-      await refresh();
-    } else {
-      const item =
-        kind.value === 'direct'
-          ? await call({ op: 'direct', requestId: uuid(), bot: selected.value[0] ?? '' })
-          : await call({
-              op: 'group',
-              requestId: uuid(),
-              title: title.value,
-              bots: [...selected.value],
-            });
-      await refresh(item.data.id);
-    }
-    dialog.value = '';
   }
   async function send(attachments: string[] = []) {
     const r = room.value;
@@ -244,21 +214,12 @@ export function useDesktop() {
       return latest && byMessage.get(latest.id);
     }),
     sent,
-    dialog,
-    selected,
-    title,
-    kind,
-    handle,
-    name,
-    role,
-    model,
     label,
     roomName,
     guard,
     read,
     refresh,
     team,
-    create,
     send: async (attachments: string[]) => {
       sending.value = true;
       try {

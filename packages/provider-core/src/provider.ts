@@ -10,6 +10,8 @@ export type {
   ProviderErrorCode,
   ProviderEvent,
   ProviderCapabilities,
+  ProviderModelInfo,
+  ModelInputModality,
   ProviderPort,
   CollectedReply,
 } from '@runnets/application';

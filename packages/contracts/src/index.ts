@@ -17,3 +17,4 @@ export * from './local-coding-views.js';
 export * from './local-desktop-assets.js';
 export * from './local-restore.js';
 export * from './local-finalization.js';
+export * from './local-provider.js';
