@@ -20,6 +20,39 @@ const guarded: [CommandType, CommandPayloads[CommandType]][] = [
 ];
 describe('model lifecycle fences', () => {
   for (const unknown of [false, true]) {
+    it.each([
+      ['missing cleanup', {}],
+      ['invalid string', { cleanup: 'unexpected' }],
+      ['undefined cleanup', { cleanup: undefined }],
+      ['array cleanup', { cleanup: ['forced'] }],
+      ['null cleanup', { cleanup: null }],
+      ['boolean cleanup', { cleanup: true }],
+      ['number cleanup', { cleanup: 1 }],
+      ['object cleanup', { cleanup: { kind: 'forced' } }],
+      ['null payload', null],
+      ['undefined payload', undefined],
+    ] as const)(
+      `rejects %s cleanup for ${unknown ? 'unknown' : 'pending'} inference`,
+      (_, payload) => {
+        let state = pending();
+        if (unknown)
+          state = apply(state, 'SettleModelRequest', {
+            ...settlement(),
+            completion: { kind: 'unknown' },
+          }).state;
+        const cancelling = apply(state, 'RequestCancel', { cause: 'user' }).state;
+        const result = decide(
+          cancelling,
+          cmd(
+            cancelling,
+            'CompleteCleanup',
+            payload as unknown as CommandPayloads['CompleteCleanup'],
+          ),
+        );
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.code).toBe('invariant_violation');
+      },
+    );
     it(`guards lifecycle and parking for ${unknown ? 'unknown' : 'pending'} inference`, () => {
       let state = pending();
       if (unknown)
@@ -61,9 +94,12 @@ describe('model lifecycle fences', () => {
       expect(
         decide(cancelling, cmd(cancelling, 'CompleteCleanup', { cleanup: 'completed' })).ok,
       ).toBe(false);
-      const forced = apply(cancelling, 'CompleteCleanup', { cleanup: 'forced' }).state;
-      expect(forced.terminal?.summary).toBe('forced');
-      expect(forced.modelExecution).toEqual(state.modelExecution);
+      const forced = apply(cancelling, 'CompleteCleanup', { cleanup: 'forced' });
+      expect(forced.events.map((event) => ({ type: event.type, payload: event.payload }))).toEqual([
+        { type: 'task_run.cancelled', payload: { cleanup: 'forced' } },
+      ]);
+      expect(forced.state.terminal?.summary).toBe('forced');
+      expect(forced.state.modelExecution).toEqual(state.modelExecution);
     });
   }
   it('allows cancel before start and confirmed cleanup after terminal settlement', () => {

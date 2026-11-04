@@ -35,7 +35,7 @@ export function guardModelDispatch(state: TaskRunState, command: AnyCommand): Re
       'BeginCheckpoint',
       'StartAttempt',
     ].includes(type) ||
-      (type === 'CompleteCleanup' && command.payload.cleanup === 'completed'))
+      (type === 'CompleteCleanup' && command.payload?.cleanup !== 'forced'))
   )
     return err(DomainError.invariant('model request completion is unresolved'));
   if (type === 'RecordUsage')
