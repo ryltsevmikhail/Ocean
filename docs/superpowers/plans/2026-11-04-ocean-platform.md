@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2, межпроцессная приёмка 15.3 и остальные задачи B–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`; межпроцессная приёмка 15.3 и остальные задачи B–H пока запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -418,9 +418,9 @@ Each task's numbered steps are red test → run → minimal implementation → g
 **Parent:** Task 15, after accepted 15.1.
 **Files:** Public contracts validators, tools-node client, CLI model-settings/read handlers and per-socket negotiation/projection seams identified above. Consume 15.1 application ports; preserve old protocol families.
 
-- [ ] Add the exact named methods and model.connections-v1 marker, bounded strict request/reply validators and client wrappers with unsupported refusal before wire use.
-- [ ] Preserve A3 plugin negotiation and frozen old-client limits; project internal model events to positional redactions for legacy sockets. Scope every request to its authenticated profile and requested room/run; never mutate shared query negotiation state.
-- [ ] Wire same canonical stores, supervise owner mutations/checks through runtime drain, preserve pending recovery and sanitize legacy provider_unverified status. Run focused RED/GREEN, strict tests, root gates and scoped review; commit.
+- [x] Add the exact named methods and model.connections-v1 marker, bounded strict request/reply validators and client wrappers with unsupported refusal before wire use.
+- [x] Preserve A3 plugin negotiation and frozen old-client limits; project internal model events to positional redactions for legacy sockets. Scope every request to its authenticated profile and requested room/run; never mutate shared query negotiation state.
+- [x] Wire same canonical stores, supervise owner mutations/checks through runtime drain, preserve pending recovery and sanitize legacy provider_unverified status. Run focused RED/GREEN, strict tests, root gates and scoped review; commit.
 
 #### Task 15.3: Process compatibility and recovery acceptance
 
