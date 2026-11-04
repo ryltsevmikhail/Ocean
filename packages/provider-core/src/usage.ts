@@ -24,14 +24,24 @@ export function validateTokenUsage(value: {
   return { inputTokens, outputTokens, totalTokens };
 }
 
-/** Repeated cumulative reports replace, never add; decreasing evidence is contradictory. */
-export function retainTokenUsage(previous: TokenUsage | null, next: TokenUsage): TokenUsage {
-  if (
+export interface TokenUsageRetention {
+  readonly usage: TokenUsage;
+  readonly conflict: boolean;
+}
+
+/** Retain an observed greatest-total tuple, never summed or componentwise invented. */
+export function retainTokenUsage(
+  previous: TokenUsage | null,
+  next: TokenUsage,
+): TokenUsageRetention {
+  const conflict =
     previous !== null &&
     (next.inputTokens < previous.inputTokens ||
       next.outputTokens < previous.outputTokens ||
-      next.totalTokens < previous.totalTokens)
-  )
-    throw new Error('contradictory token usage');
-  return next;
+      next.totalTokens < previous.totalTokens);
+  return {
+    usage:
+      conflict && previous !== null && previous.totalTokens >= next.totalTokens ? previous : next,
+    conflict,
+  };
 }

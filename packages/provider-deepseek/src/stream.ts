@@ -82,11 +82,9 @@ export async function* mapStream(
       if (record === null) throw malformedStream();
       const chunkUsage = readUsage(record['usage']);
       if (chunkUsage !== null) {
-        try {
-          usage = retainTokenUsage(usage, chunkUsage);
-        } catch {
-          throw malformedStream();
-        }
+        const retained = retainTokenUsage(usage, chunkUsage);
+        usage = retained.usage;
+        if (retained.conflict) throw malformedStream();
       }
       if (
         expectedModel !== undefined &&
@@ -95,6 +93,10 @@ export async function* mapStream(
       )
         throw malformedStream();
       if (record['error'] !== undefined) throw errorFromStreamPayload(record['error']);
+      if (stopReason !== null) {
+        const choices = record['choices'];
+        if (!Array.isArray(choices) || choices.length !== 0) throw malformedStream();
+      }
       try {
         tools.accept(record);
       } catch {

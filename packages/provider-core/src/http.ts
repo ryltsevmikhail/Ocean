@@ -15,6 +15,8 @@ export interface HttpRequest {
   /** Request body; absent for a bounded metadata GET. */
   readonly body?: string;
   readonly signal?: AbortSignal;
+  /** Fixed-resource adapters opt out of fetch redirects; omission preserves legacy policy. */
+  readonly redirect?: 'manual';
 }
 
 export interface HttpResponse {
@@ -72,6 +74,7 @@ export function createFetchHttpClient(fetchImpl: FetchLike = globalThis.fetch): 
           headers: request.headers,
           ...(request.body === undefined ? {} : { body: request.body }),
           ...(request.signal === undefined ? {} : { signal: request.signal }),
+          ...(request.redirect === undefined ? {} : { redirect: request.redirect }),
         };
         response = await fetchImpl(request.url, init);
       } catch (error) {

@@ -47,11 +47,9 @@ export async function* mapStream(
       if (record === null) throw malformedStream();
       const next = readUsage(record['usage']);
       if (next !== null) {
-        try {
-          usage = retainTokenUsage(usage, next);
-        } catch {
-          throw malformedStream();
-        }
+        const retained = retainTokenUsage(usage, next);
+        usage = retained.usage;
+        if (retained.conflict) throw malformedStream();
       }
       if (record['error'] !== undefined || record['model'] !== OPENAI_MODELS[0])
         throw malformedStream();

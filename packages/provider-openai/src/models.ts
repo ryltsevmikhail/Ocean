@@ -31,6 +31,7 @@ export async function probeOpenAIModels(
     const response = await withAbort(
       (options.httpClient ?? fetchHttpClient).send({
         url: `${OPENAI_ORIGIN}/v1/models`,
+        redirect: 'manual',
         method: 'GET',
         headers: { authorization: `Bearer ${options.apiKey}`, accept: 'application/json' },
         signal,

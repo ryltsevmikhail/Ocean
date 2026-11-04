@@ -130,3 +130,35 @@ describe('createFetchHttpClient', () => {
     expect(received).toBe(controller.signal);
   });
 });
+
+it.each([307, 308])(
+  'forwards explicit manual redirects to fetch and exposes HTTP %s without following',
+  async (status) => {
+    const calls: RequestInit[] = [];
+    const client = createFetchHttpClient(async (_url, init) => {
+      calls.push(init);
+      return new Response(null, {
+        status,
+        headers: { location: 'https://redirect.invalid/other' },
+      });
+    });
+    const response = await client.send({
+      url: 'https://example.test',
+      headers: {},
+      body: 'private-body',
+      redirect: 'manual',
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.redirect).toBe('manual');
+    expect(response).toMatchObject({ status, ok: false });
+  },
+);
+it('preserves the legacy default when no redirect policy is supplied', async () => {
+  let init: RequestInit | undefined;
+  const client = createFetchHttpClient(async (_url, options) => {
+    init = options;
+    return new Response(null, { status: 204 });
+  });
+  await client.send({ url: 'https://example.test', headers: {} });
+  expect(init).not.toHaveProperty('redirect');
+});

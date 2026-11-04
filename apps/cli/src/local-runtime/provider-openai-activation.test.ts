@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { createFetchHttpClient } from '@runnets/provider-core';
 import { createProviderActivationFactory } from './provider-activation-factory.js';
 const descriptor = {
   connectionId: 'openai-account',
@@ -95,3 +96,43 @@ it.each([
   ).toBeNull();
   expect(factory.external(d)).toBeNull();
 });
+
+it.each([
+  [307, 'https://api.openai.com/v1/other'],
+  [308, 'https://redirect.invalid/chat'],
+])(
+  'uses no-follow fetch policy for canonical inference and probe on HTTP %s',
+  async (status, location) => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const httpClient = createFetchHttpClient(async (url, init) => {
+      calls.push({ url, init });
+      return new Response(null, {
+        status: status as number,
+        headers: { location: location as string },
+      });
+    });
+    const factory = createProviderActivationFactory({ env: {}, httpClient });
+    const credential = factory.activate(descriptor, { status: 'ok', key: 'fixture-key' })!;
+    const events = [];
+    for await (const event of credential.provider.stream({
+      model: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'private transcript' }],
+    }))
+      events.push(event);
+    expect(events.at(-1)).toMatchObject({ type: 'error', error: { status, dispatch: 'unknown' } });
+    expect(await credential.check(new AbortController().signal)).toEqual({
+      outcome: 'unavailable',
+      httpStatus: status,
+      models: [],
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls.map((c) => c.url)).toEqual([
+      'https://api.openai.com/v1/chat/completions',
+      'https://api.openai.com/v1/models',
+    ]);
+    expect(calls.map((c) => c.init.redirect)).toEqual(['manual', 'manual']);
+    expect(calls.map((c) => c.init.method)).toEqual(['POST', 'GET']);
+    expect(calls[0]!.init.body).toContain('private transcript');
+    expect(calls[1]!.init.body).toBeUndefined();
+  },
+);

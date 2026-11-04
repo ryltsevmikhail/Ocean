@@ -70,6 +70,7 @@ export function createOpenAIProvider(options: OpenAIProviderOptions): ProviderPo
         const response = await withAbort(
           http.send({
             url: `${OPENAI_ORIGIN}/v1/chat/completions`,
+            redirect: 'manual',
             method: 'POST',
             headers: {
               authorization: `Bearer ${apiKey}`,
