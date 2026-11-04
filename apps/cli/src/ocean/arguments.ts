@@ -7,6 +7,11 @@ export interface OceanArguments {
   readonly textOnly: boolean;
   readonly bots: readonly string[];
   readonly attachments: readonly string[];
+  readonly tools: readonly string[];
+  /** Explicit owner acknowledgement of the group-visibility explanation. */
+  readonly groupVisibilityAcknowledged: boolean;
+  /** Explicit owner acknowledgement after the discovery endpoint was shown. */
+  readonly endpointAcknowledged: boolean;
 }
 const valueFlags = new Set([
   'profile',
@@ -39,6 +44,19 @@ const valueFlags = new Set([
   'batch',
   'revision',
   'attachment',
+  'plugin',
+  'connection',
+  'connection-id',
+  'credential-ref',
+  'credential-env',
+  'account',
+  'repo',
+  'repository',
+  'tool',
+  'grant',
+  'generation',
+  'search',
+  'version',
 ]);
 /** Parse once, rejecting ambiguous flags and duplicate options before accessing a profile. */
 export function oceanArguments(argv: readonly string[]): OceanArguments {
@@ -46,9 +64,12 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
   const positional: string[] = [];
   let json = false;
   let textOnly = false,
-    staticDoctor = false;
+    staticDoctor = false,
+    groupVisibilityAcknowledged = false,
+    endpointAcknowledged = false;
   const bots: string[] = [];
   const attachments: string[] = [];
+  const tools: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined) continue;
@@ -65,12 +86,22 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
       json = true;
       continue;
     }
+    if (token === '--acknowledge-group-visibility') {
+      if (groupVisibilityAcknowledged) throw Error('invalid_input');
+      groupVisibilityAcknowledged = true;
+      continue;
+    }
+    if (token === '--acknowledge-endpoint') {
+      if (endpointAcknowledged) throw Error('invalid_input');
+      endpointAcknowledged = true;
+      continue;
+    }
     if (token.startsWith('--')) {
       const key = token.slice(2);
       const value = argv[++i];
       if (
         !valueFlags.has(key) ||
-        (!['bot', 'attachment'].includes(key) && flags.has(key)) ||
+        (!['bot', 'attachment', 'tool'].includes(key) && flags.has(key)) ||
         value === undefined ||
         value.startsWith('--')
       )
@@ -78,6 +109,7 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
       flags.set(key, value);
       if (key === 'bot') bots.push(value);
       if (key === 'attachment') attachments.push(value);
+      if (key === 'tool') tools.push(value);
     } else positional.push(token);
   }
   if (flags.has('task') && !['send', 'tui'].includes(positional[0] ?? ''))
@@ -92,7 +124,10 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
     json,
     bots,
     attachments,
+    tools,
     textOnly,
+    groupVisibilityAcknowledged,
+    endpointAcknowledged,
   };
 }
 /** Required options fail before writes or model dispatch. */

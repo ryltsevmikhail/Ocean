@@ -7,7 +7,11 @@ import {
   readMaintenanceCodingInventory,
 } from './coding-backup-inventory.js';
 import { holdBackupObservation } from './backup-observation.js';
-import type { CodingBackupInventory } from '@runnets/domain';
+import type { CodingBackupInventory, PluginBackupInventory } from '@runnets/domain';
+import {
+  readMaintenancePluginInventory,
+  readPluginBackupInventory,
+} from './plugin-backup-inventory.js';
 import { unresolvedEffectSql } from './tool-effect-resolution.js';
 /** Local, non-dispatching inspection and exclusive SQLite online backup. */
 import { backup, DatabaseSync } from 'node:sqlite';
@@ -22,12 +26,14 @@ import { SCHEMA_VERSION } from './schema.js';
  * Must stay one step wide: bumping `SCHEMA_VERSION` adds the previous release (14
  * for RC1) so the update path can still doctor, back up and restore it.
  */
-const MAINTAINABLE_SCHEMAS = [5, 6, 10, 11, 12, 13, 14, SCHEMA_VERSION];
+const MAINTAINABLE_SCHEMAS = [5, 6, 10, 11, 12, 13, 14, 16, SCHEMA_VERSION];
 
 export interface DatabaseSummary {
   readonly schema: number;
   readonly externalCodingAssets?: number;
   readonly externalDesktopAssets?: number;
+  /** Verified plugin manifest files outside the database snapshot, when present. */
+  readonly pluginAssets?: number;
   readonly rooms: number;
   readonly messages: number;
   readonly positions: readonly { roomId: string; sequence: number }[];
@@ -53,8 +59,16 @@ function verify(db: DatabaseSync): void {
   )
     throw new Error('invalid_database');
 }
+function pluginAssetsCount(db: DatabaseSync): number {
+  const table = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ocean_plugin_versions'")
+    .get();
+  if (table === undefined) return 0;
+  return count(db, "SELECT count(*) AS n FROM ocean_plugin_versions WHERE state='installed'");
+}
 function summary(db: DatabaseSync): DatabaseSummary {
   verify(db);
+  const pluginAssets = pluginAssetsCount(db);
   const desktopAssets = Number(
     count(db, "SELECT count(*) AS n FROM meta WHERE key='desktop_assets_binding'") > 0 ||
       (schema(db) >= 12 &&
@@ -69,6 +83,7 @@ function summary(db: DatabaseSync): DatabaseSummary {
       ? { externalCodingAssets: count(db, 'SELECT count(*) AS n FROM ocean_worktrees') }
       : {}),
     ...(schema(db) >= 12 || desktopAssets ? { externalDesktopAssets: desktopAssets } : {}),
+    ...(pluginAssets > 0 ? { pluginAssets } : {}),
     rooms: count(db, 'SELECT count(*) AS n FROM ocean_rooms'),
     messages: count(db, 'SELECT count(*) AS n FROM ocean_messages'),
     positions: db
@@ -135,6 +150,7 @@ export type CodingSnapshotDestination =
       desktop: DesktopAssetInventory,
       databaseBytes: number,
       restoration: RestorationBackupState,
+      plugins: PluginBackupInventory,
     ) => string);
 type SnapshotFinalizer<T> = (
   snapshot: CodingDatabaseSnapshot<T>,
@@ -145,7 +161,11 @@ type SnapshotFinalizer<T> = (
 export async function snapshotCodingDatabase<T>(
   path: string,
   destination: CodingSnapshotDestination,
-  capture: (inventory: CodingBackupInventory, desktop: DesktopAssetInventory) => Promise<T>,
+  capture: (
+    inventory: CodingBackupInventory,
+    desktop: DesktopAssetInventory,
+    plugins: PluginBackupInventory,
+  ) => Promise<T>,
   finalize?: SnapshotFinalizer<T>,
 ): Promise<CodingDatabaseSnapshot<T>> {
   const result = await snapshotOwned(path, destination, capture, finalize);
@@ -155,7 +175,11 @@ export async function snapshotCodingDatabase<T>(
 async function snapshotOwned<T>(
   path: string,
   selection: CodingSnapshotDestination,
-  capture?: (inventory: CodingBackupInventory, desktop: DesktopAssetInventory) => Promise<T>,
+  capture?: (
+    inventory: CodingBackupInventory,
+    desktop: DesktopAssetInventory,
+    plugins: PluginBackupInventory,
+  ) => Promise<T>,
   finalize?: SnapshotFinalizer<T>,
 ): Promise<{ summary: DatabaseSummary; inventory?: CodingBackupInventory; assets?: T }> {
   if (!existsSync(path) || !lstatSync(path).isFile() || lstatSync(path).isSymbolicLink())
@@ -200,9 +224,14 @@ async function snapshotOwned<T>(
     )
       throw Error('desktop_assets_unbound');
     if (original.externalCodingAssets && !capture) throw new Error('coding_assets_unavailable');
+    if (original.pluginAssets && !capture) throw new Error('plugin_assets_unavailable');
     const initial =
       typeof selection === 'function'
-        ? { coding: readMaintenanceCodingInventory(db), desktop: desktopInventory(db) }
+        ? {
+            coding: readMaintenanceCodingInventory(db),
+            desktop: desktopInventory(db),
+            plugins: readMaintenancePluginInventory(db),
+          }
         : undefined;
     const destination =
       typeof selection === 'string'
@@ -213,6 +242,7 @@ async function snapshotOwned<T>(
             Number(db.prepare('PRAGMA page_count').get()?.['page_count']) *
               Number(db.prepare('PRAGMA page_size').get()?.['page_size']),
             restorationBackupState(db),
+            structuredClone(initial!.plugins),
           );
     if (existsSync(destination)) throw Error('destination_exists');
     await backup(db, destination);
@@ -235,7 +265,8 @@ async function snapshotOwned<T>(
         JSON.stringify(initial.desktop) !== JSON.stringify(desktop))
     )
       throw Error('snapshot_mismatch');
-    const assets = await capture(structuredClone(inventory), desktop);
+    const plugins = readPluginBackupInventory(destination);
+    const assets = await capture(structuredClone(inventory), desktop, structuredClone(plugins));
     frozen.verify();
     if (readCodingBackupInventory(destination).hash !== inventory.hash)
       throw Error('snapshot_mismatch');

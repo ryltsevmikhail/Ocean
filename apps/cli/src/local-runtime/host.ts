@@ -23,9 +23,6 @@ import { CodingPanelQueries } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
 import { RuntimeTurns } from './turns.js';
-import type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-types.js';
-
-export type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-types.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
 import { assertRuntimeDrained } from './drain-supervision.js';
@@ -37,7 +34,10 @@ import { systemClock } from '@runnets/store';
 import { RuntimeBroadcasts } from './broadcast.js';
 import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
-import { providerHostSettings } from './provider-settings.js';
+import { settingsHosts } from './settings-hosts.js';
+import type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
+export type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
+
 /** The existing runtime remains the only SQLite owner and recovery/effect journal executor. */
 export async function startLocalRuntime(
   options: LocalRuntimeHostOptions,
@@ -87,22 +87,20 @@ export async function startLocalRuntime(
     if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
       throw Error('durable_runtime_required');
     const restored = options.restore === true || runtime.restored === true;
-    if (!runtime.providerConnections) throw Error('durable_runtime_required');
-    // Saved and environment credentials are resolved by the runtime, never by a client.
-    const provider = providerHostSettings({
-      store: runtime.providerConnections,
+    // Saved/environment credentials and plugin state are resolved by the runtime, never by a client.
+    const { provider, plugins } = settingsHosts({
       profile: paths.profile,
+      runtime,
       env: process.env,
       now: options.now,
       restored,
+      restore: options.restore === true,
       injected: options.provider === undefined ? null : options.provider,
       disabled: options.provider === null,
-      mutationsAllowed: options.restore !== true,
-      ...(options.providerSecretStore === undefined
-        ? {}
-        : { secretStore: options.providerSecretStore }),
-      ...(options.credentialDir === undefined ? {} : { credentialDir: options.credentialDir }),
-      ...(options.providerBaseUrl === undefined ? {} : { baseUrl: options.providerBaseUrl }),
+      providerSecretStore: options.providerSecretStore,
+      credentialDir: options.credentialDir,
+      providerBaseUrl: options.providerBaseUrl,
+      pluginTransport: options.pluginTransport,
     });
     const finalization = new RuntimeFinalization(
       runtime.finalization,
@@ -220,19 +218,16 @@ export async function startLocalRuntime(
             return finalization.dispatch(method, params);
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
             return provider.settings.dispatch(method, params, detached);
-          if (method === 'broadcasts.submit') {
+          if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
+          if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
+            return broadcasts.dispatch(method, params, detached);
+          if (method === 'desktop.assets') return desktop(params, state !== 'ready');
+          if (method === 'turns.submit' || method === 'broadcasts.submit') {
             const code = desktopSubmitRefusal(
               runtime.desktopAssets!,
               params,
               method === 'broadcasts.submit',
             );
-            if (code) return { error: { code } };
-          }
-          if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
-            return broadcasts.dispatch(method, params, detached);
-          if (method === 'desktop.assets') return desktop(params, state !== 'ready');
-          if (method === 'turns.submit') {
-            const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
             if (code) return { error: { code } };
           }
           if (

@@ -111,6 +111,79 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
         requestId: c.requestId,
         expectedRevision: c.expectedRevision,
       });
+    case 'plugin-catalog':
+      return client.pluginCatalog(c.search === undefined ? {} : { search: c.search });
+    case 'plugin-inspect':
+      return client.pluginInspect({ pluginId: c.pluginId });
+    case 'plugin-install':
+      return client.pluginInstall({
+        pluginId: c.pluginId,
+        ...(c.version === undefined ? {} : { version: c.version }),
+      });
+    case 'plugin-repair':
+      return client.pluginRepair({
+        pluginId: c.pluginId,
+        ...(c.version === undefined ? {} : { version: c.version }),
+      });
+    case 'plugin-enable':
+      return client.pluginEnable({
+        pluginId: c.pluginId,
+        ...(c.version === undefined ? {} : { version: c.version }),
+      });
+    case 'plugin-disable':
+      return client.pluginDisable({ pluginId: c.pluginId });
+    case 'plugin-connections':
+      return client.pluginConnections();
+    case 'plugin-connection-add':
+      return client.pluginConnectionAdd({
+        name: c.name,
+        pluginId: c.pluginId,
+        credentialReference: c.credentialReference,
+        ...(c.accountLabel === undefined ? {} : { accountLabel: c.accountLabel }),
+      });
+    case 'plugin-connection-preview':
+      return client.pluginConnectionPreview({ connectionId: c.connectionId });
+    case 'plugin-connection-consent':
+      return client.pluginConnectionConsent({
+        connectionId: c.connectionId,
+        expectedGeneration: c.expectedGeneration,
+      });
+    case 'plugin-connection-discover':
+      return client.pluginConnectionDiscover({
+        connectionId: c.connectionId,
+        expectedGeneration: c.expectedGeneration,
+      });
+    case 'plugin-connection-disconnect':
+      return client.pluginConnectionDisconnect({ connectionId: c.connectionId });
+    case 'plugin-access-list':
+      return client.pluginAccessList({
+        ...(c.room === undefined ? {} : { roomId: c.room }),
+        ...(c.bot === undefined ? {} : { botId: c.bot }),
+      });
+    case 'plugin-access-preview':
+      return client.pluginAccessPreview({
+        workspaceId,
+        roomId: c.room,
+        botId: c.botId,
+        pluginId: 'github',
+        connectionId: c.connectionId,
+        tools: c.tools,
+        repository: c.repository,
+        acknowledgeGroupVisibility: c.acknowledgeGroupVisibility,
+      });
+    case 'plugin-access-grant':
+      return client.pluginAccessGrant({
+        workspaceId,
+        roomId: c.room,
+        botId: c.botId,
+        pluginId: 'github',
+        connectionId: c.connectionId,
+        tools: c.tools,
+        repository: c.repository,
+        acknowledgeGroupVisibility: c.acknowledgeGroupVisibility,
+      });
+    case 'plugin-access-revoke':
+      return client.pluginAccessRevoke({ grantId: c.grantId });
     case 'send':
       return client.submit({
         workspaceId,

@@ -158,12 +158,19 @@ describe('public qualification gate', () => {
   it('the package entry exports no internal gate seam', async () => {
     const entry = await import('./index.js');
     expect(Object.keys(entry).sort()).toEqual([
+      'ExecutorPluginSetup',
       'ExecutorServicePluginTransport',
+      'ExecutorSetupError',
       'ExecutorTransportOpenError',
       'PINNED_IDENTITIES',
     ]);
     expect('fromHost' in entry.ExecutorServicePluginTransport).toBe(false);
+    // The deliberate Task 5 setup seam is execution-disabled and exposes no
+    // internal gate: no dispatch methods, no pinned-verification helpers.
+    expect('discover' in entry.ExecutorPluginSetup.prototype).toBe(false);
+    expect('invoke' in entry.ExecutorPluginSetup.prototype).toBe(false);
     expect('verifyInstalledSdkChunk' in entry).toBe(false);
+    expect('createInternalTransport' in entry).toBe(false);
     expect('assessQualification' in entry).toBe(false);
   });
 

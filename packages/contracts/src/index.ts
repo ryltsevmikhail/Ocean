@@ -19,3 +19,6 @@ export * from './local-restore.js';
 export * from './local-finalization.js';
 export * from './local-provider.js';
 export * from './local-broadcast.js';
+export * from './local-plugins.js';
+export * from './local-plugins-validate.js';
+export * from './local-plugins-validate-grants.js';

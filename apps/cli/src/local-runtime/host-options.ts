@@ -1,11 +1,13 @@
 /**
- * Public local-runtime host surfaces.
- *
- * Split from the composition module so the composed start path stays within the
- * source-size bound while hosts keep one public entry point.
+ * Public host surface and options for the authenticated local runtime.
  */
 
-import type { ProviderPort, ProviderSecretStorePort, RuntimeRecovery } from '@runnets/application';
+import type {
+  ProviderPort,
+  RuntimeRecovery,
+  ProviderSecretStorePort,
+  ServicePluginTransportPort,
+} from '@runnets/application';
 import type {
   LocalRuntimeIdentity,
   LocalRuntimeStatus,
@@ -36,6 +38,8 @@ export interface LocalRuntimeHostOptions {
   readonly credentialDir?: string;
   /** Test-only deterministic vendor transport origin; never wire input. */
   readonly providerBaseUrl?: string;
+  /** Test-only deterministic service-plugin transport; production stays disabled. */
+  readonly pluginTransport?: ServicePluginTransportPort;
   /** Test-only deterministic clock; production omits it and uses Date.now (never wire input). */
   readonly now?: () => number;
   /** Additional host supervision joins runtime-owned execution before SQLite close. */

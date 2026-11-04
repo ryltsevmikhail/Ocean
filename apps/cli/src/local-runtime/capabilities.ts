@@ -1,6 +1,8 @@
 import {
   LOCAL_DECISION_METHODS,
   LOCAL_FINALIZATION_METHODS,
+  LOCAL_PLUGIN_METHODS,
+  LOCAL_PLUGIN_READ_METHODS,
   LOCAL_PROVIDER_METHODS,
   LOCAL_PROVIDER_READ_METHODS,
   LOCAL_RESTORE_METHODS,
@@ -25,6 +27,7 @@ export function runtimeCapabilities(restore: boolean): readonly string[] {
     ...PROFILE_METHODS,
     ...LOCAL_RESTORE_METHODS,
     ...(restore ? LOCAL_PROVIDER_READ_METHODS : LOCAL_PROVIDER_METHODS),
+    ...(restore ? LOCAL_PLUGIN_READ_METHODS : LOCAL_PLUGIN_METHODS),
     ...(restore ? LOCAL_BROADCAST_READ_METHODS : LOCAL_BROADCAST_METHODS),
     ...(restore ? [] : LOCAL_FINALIZATION_METHODS),
     ...(restore ? ['restore.maintenance'] : []),

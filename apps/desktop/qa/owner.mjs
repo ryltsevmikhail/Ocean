@@ -32,6 +32,9 @@ export async function fixture(options = {}) {
   }
   mkdirSync(workspace, { mode: 0o700 });
   const cli = resolve(options.cli ?? process.env.OCEAN_QA_CLI ?? 'apps/cli/dist/main.js');
+  // Owner-only environment (for example a fixture credential reference); it must not
+  // leak into the renderer or the CLI command environment.
+  const extraEnv = options.extraEnv ?? {};
   const args = ['--profile', profile, '--json'];
   function command(...words) {
     let out,
@@ -60,28 +63,32 @@ export async function fixture(options = {}) {
     log = '';
   async function start() {
     log = '';
-    owner = spawn(
-      process.execPath,
-      [
-        '--import',
-        resolve('apps/desktop/qa/provider.mjs'),
-        '--import',
-        resolve('apps/desktop/qa/drop-reply.mjs'),
-        cli,
-        'runtime',
-        'start',
-        ...args,
-      ],
-      {
-        env: {
-          ...env,
-          DEEPSEEK_API_KEY: 'fixture-only',
-          OCEAN_TEST_LOG: join(root, 'requests'),
-          ...(options.modelLog ? { OCEAN_TEST_MODEL_LOG: '1' } : {}),
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
+    // A QA owner entry may compose the same runtime in-process (deterministic fake
+    // transports) while still publishing the authenticated endpoint Desktop uses.
+    const ownerEntry = options.ownerEntry;
+    const spawnArgs = ownerEntry
+      ? [ownerEntry, ...(options.ownerEntryArgs ?? []), '--profile', profile]
+      : [
+          '--import',
+          resolve('apps/desktop/qa/provider.mjs'),
+          '--import',
+          resolve('apps/desktop/qa/drop-reply.mjs'),
+          cli,
+          'runtime',
+          'start',
+          ...args,
+        ];
+    owner = spawn(process.execPath, spawnArgs, {
+      env: {
+        ...env,
+        DEEPSEEK_API_KEY: 'fixture-only',
+        OCEAN_TEST_LOG: join(root, 'requests'),
+        ...(options.modelLog ? { OCEAN_TEST_MODEL_LOG: '1' } : {}),
+        ...extraEnv,
+        ...(options.ownerEnv === undefined ? {} : options.ownerEnv(root)),
       },
-    );
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     const stat = readFileSync('/proc/' + owner.pid + '/stat', 'utf8');
     identity = { pid: owner.pid, start: stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19] };
     exit = new Promise((resolve) =>
@@ -148,7 +155,7 @@ export async function fixture(options = {}) {
     if (!(options.preserve ?? process.env.OCEAN_QA_PRESERVE === '1'))
       rmSync(root, { recursive: true, force: true });
   }
-  await start();
+  if (options.autoStart !== false) await start();
   return {
     root,
     profile,

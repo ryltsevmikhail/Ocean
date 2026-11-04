@@ -25,6 +25,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['packages/*/src/**/*.test.ts', 'apps/*/src/**/*.test.ts'],
+    setupFiles: ['./test-fixtures/no-network.ts'],
     reporters: ['default'],
   },
 });

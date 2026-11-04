@@ -12,6 +12,7 @@ import RoomComposer from './RoomComposer.vue';
 import RoomManager from './RoomManager.vue';
 import BroadcastPanel from './BroadcastPanel.vue';
 import ProviderSettings from './ProviderSettings.vue';
+import PluginSettings from './PluginSettings.vue';
 import { useDesktop } from './state.js';
 const {
   runtimeReady,
@@ -138,7 +139,11 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
           <h1>{{ roomName(room) }}</h1>
         </div>
         <div class="top-tools">
-          <ProviderSettings :busy="busy || !runtimeReady" />
+          <ProviderSettings :busy="busy || !runtimeReady" /><PluginSettings
+            :busy="busy || !runtimeReady"
+            :room="room"
+            :bots="bots"
+          />
           <button
             class="round"
             title="Обновить"

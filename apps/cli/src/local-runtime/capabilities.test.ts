@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { LOCAL_BROADCAST_METHODS, LOCAL_BROADCAST_READ_METHODS } from '@runnets/contracts';
+import {
+  LOCAL_BROADCAST_METHODS,
+  LOCAL_BROADCAST_READ_METHODS,
+  LOCAL_PLUGIN_METHODS,
+  LOCAL_PLUGIN_READ_METHODS,
+} from '@runnets/contracts';
 import { runtimeCapabilities } from './capabilities.js';
 
 describe('runtime capabilities', () => {
@@ -15,5 +20,19 @@ describe('runtime capabilities', () => {
     for (const mutation of ['broadcasts.submit', 'broadcasts.continue', 'broadcasts.abandon'])
       expect(capabilities).not.toContain(mutation);
     expect(capabilities).toContain('restore.maintenance');
+  });
+  it('advertises every plugin owner mutation on a writable runtime', () => {
+    const capabilities = runtimeCapabilities(false);
+    for (const method of LOCAL_PLUGIN_METHODS) expect(capabilities).toContain(method);
+  });
+  it('advertises plugin reads only on a restore-mode maintenance host', () => {
+    const capabilities = runtimeCapabilities(true);
+    for (const method of LOCAL_PLUGIN_READ_METHODS) expect(capabilities).toContain(method);
+    for (const method of LOCAL_PLUGIN_METHODS)
+      if (!(LOCAL_PLUGIN_READ_METHODS as readonly string[]).includes(method))
+        expect(capabilities).not.toContain(method);
+    expect(capabilities).not.toContain('plugin.install');
+    expect(capabilities).not.toContain('plugin.access-grant');
+    expect(capabilities).not.toContain('plugin.repair');
   });
 });

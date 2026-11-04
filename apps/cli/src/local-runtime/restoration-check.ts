@@ -25,6 +25,7 @@ const MAINTENANCE_READS = new Set(
   `rooms.list rooms.members history.list runs.list runs.events runs.result runs.get
   receipts.get observe bots.list coding.show coding.diff coding.pending coding.panel
   decisions.list decisions.get decisions.preview decisions.resolve provider.status
+  plugin.catalog plugin.inspect plugin.connections plugin.access-list
   broadcasts.get broadcasts.list`.split(/\s+/),
 );
 /** A restore-mode maintenance host serves reads only; every mutation stays refused. */

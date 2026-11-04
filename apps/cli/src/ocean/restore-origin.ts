@@ -18,6 +18,10 @@ export function installRestoreOrigin(
   try {
     const store = openSqliteStore({ path });
     try {
+      // Restored plugin metadata is inert: no connection, grant or consent may
+      // survive the restore, so re-connection and re-grant are required before
+      // any network call could be admitted.
+      store.pluginConnections.invalidateRestored(new Date().toISOString());
       store.restoration.install({
         version: 1,
         snapshotId: hash(JSON.stringify(manifest)),

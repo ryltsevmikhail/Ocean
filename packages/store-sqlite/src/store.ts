@@ -20,6 +20,16 @@ import { SqliteCodingStore } from './coding-store.js';
 import type { CodingApprovalStore, CodingStore } from '@runnets/application';
 import { finalizationStore } from './coding-finalization-store.js';
 import { SqliteProviderConnections } from './provider-connection-storage.js';
+import { SqlitePluginCatalog } from './plugin-catalog-storage.js';
+import { SqlitePluginConnections } from './plugin-connection-storage.js';
+import { SqlitePluginAccess } from './plugin-access-storage.js';
+import { SqlitePluginAdmission } from './plugin-admission-storage.js';
+import type {
+  PluginAccessStorePort,
+  PluginAdmissionStorePort,
+  PluginCatalogStorePort,
+  PluginConnectionStorePort,
+} from '@runnets/application';
 import type { CodingFinalizationStore, ProviderConnectionStorePort } from '@runnets/application';
 /**
  * Public factory for the durable SQLite store.
@@ -64,6 +74,10 @@ export interface OpenSqliteStoreOptions {
 
 export interface SqliteStore {
   readonly providerConnections: ProviderConnectionStorePort;
+  readonly pluginCatalog: PluginCatalogStorePort;
+  readonly pluginConnections: PluginConnectionStorePort;
+  readonly pluginAccess: PluginAccessStorePort;
+  readonly pluginAdmission: PluginAdmissionStorePort;
   readonly restoration: RestoreOriginStore;
   readonly rebind: ProfileRebindStore;
   readonly desktopAssets: DesktopAssetStore;
@@ -121,6 +135,10 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   const tools = new SqliteToolJournal(db);
   return {
     providerConnections: new SqliteProviderConnections(db),
+    pluginCatalog: new SqlitePluginCatalog(db),
+    pluginConnections: new SqlitePluginConnections(db),
+    pluginAccess: new SqlitePluginAccess(db),
+    pluginAdmission: new SqlitePluginAdmission(db),
     restoration: restoreOriginStore(db),
     rebind: profileRebindStore(db, tools),
     desktopAssets: desktopAssetStore(db),

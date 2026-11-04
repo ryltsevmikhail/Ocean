@@ -19,7 +19,21 @@ function unique(values: readonly unknown[], limit: number): void {
 }
 /** Strict portable shapes precede semantic cross-reference checks and archive body decoding. */
 export function validateProfileCatalogShape(c: ProfileBackupAssetCatalog): void {
-  keys(c, 'format,inventory,desktopInventory,worktrees,recovery,dependencies,desktop,git,hash');
+  keys(c, 'format,inventory,desktopInventory,worktrees,recovery,dependencies,desktop,git,hash', [
+    'plugins',
+  ]);
+  if (c.plugins !== undefined) {
+    keys(c.plugins, 'format,inventoryHash,files,hash');
+    if (
+      c.plugins.format !== 1 ||
+      typeof c.plugins.inventoryHash !== 'string' ||
+      !/^([a-f0-9]{64})?$/.test(c.plugins.inventoryHash) ||
+      !Array.isArray(c.plugins.files) ||
+      c.plugins.files.length > 64
+    )
+      return bad();
+    for (const file of c.plugins.files) keys(file, 'pluginId,version,sha256,bytes');
+  }
   keys(c.inventory, 'format,tasks,worktrees,changesets,applications,hash');
   unique(
     c.inventory.tasks.map((t) => t.id),

@@ -57,3 +57,9 @@ export {
   type ProfileBackupSummary,
 } from './profile-backup.js';
 export * from './profile-lineage.js';
+
+export * from './plugin-catalog.js';
+export * from './plugin-connection.js';
+export * from './plugin-grant.js';
+
+export * from './plugin-backup.js';

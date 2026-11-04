@@ -35,3 +35,13 @@ export {
   migrateProviderConnections,
 } from './provider-connection-schema.js';
 export { BROADCAST_TABLES, migrateBroadcasts } from './broadcast-schema.js';
+
+export { SqlitePluginCatalog } from './plugin-catalog-storage.js';
+export { SqlitePluginConnections } from './plugin-connection-storage.js';
+export { SqlitePluginAccess } from './plugin-access-storage.js';
+export { SqlitePluginAdmission } from './plugin-admission-storage.js';
+export { PLUGIN_TABLES, migratePlugins } from './plugin-schema.js';
+export {
+  readPluginBackupInventory,
+  readMaintenancePluginInventory,
+} from './plugin-backup-inventory.js';
