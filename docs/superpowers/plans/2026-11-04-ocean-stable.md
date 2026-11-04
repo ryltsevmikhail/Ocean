@@ -5,7 +5,8 @@
 > [platform architecture](../../ocean/platform-architecture.md).
 > Retain completed fixes and qualification evidence. Outstanding native,
 > installed, live and publication gates move to stage F; they are not waived.
-> The current user request permits documentation only, not implementation or release.
+> Implementation and commit/push/merge are now authorized under the new plan;
+> release still requires the new qualification gates.
 
 Authority: AGENTS.md, RC2 specification and docs/ocean/rc-1.1.0-rc.2.md. User authorizes qualification, fixes, publication and installed update; preserve real data, credentials, RC1/RC2 and foreign worktrees.
 
