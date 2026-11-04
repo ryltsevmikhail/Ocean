@@ -1,6 +1,7 @@
 import type {
   ConversationStore,
   DesktopAssetStore,
+  ImageAssetResolverPort,
   ProfileRebindStore,
   ProviderConnectionStorePort,
 } from '@runnets/application';
@@ -85,6 +86,8 @@ export interface Runtime {
   close(): void;
 }
 export interface RuntimeOptions {
+  /** Runtime image authority factory; the store exists only after composition. */
+  readonly imageResolver?: (store: DesktopAssetStore) => ImageAssetResolverPort;
   readonly codingWorktreeDirectory?: string;
   readonly codingTools?: Pick<CodingTurnFactoryDeps, 'sandbox' | 'owner' | 'inspectSandbox'>;
   readonly requireUnpublished?: boolean;
@@ -121,10 +124,12 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       throw error;
     }
     const service = serviceOver(store.log, store.dedup, true, options.clock);
+    const images = options.imageResolver?.(store.desktopAssets);
     const deps = {
       store: store.conversations,
       clock: options.clock ?? systemClock,
       nextId: () => randomUUID().replaceAll('-', ''),
+      ...(images === undefined ? {} : { images }),
     };
     const codingDeps = {
       store: store.coding,

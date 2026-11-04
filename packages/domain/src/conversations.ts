@@ -56,7 +56,15 @@ export type ConversationErrorCode =
   | 'batch_open'
   | 'recovery_required'
   | 'provider_unavailable'
-  | 'context_limit';
+  | 'context_limit'
+  /** The selected model has no confirmed image input; no automatic switch. */
+  | 'model_image_unsupported'
+  /** A persisted image can no longer be authenticated (missing/corrupt/forged). */
+  | 'image_unavailable'
+  /** A verified image exceeds the documented side or aggregate byte budget. */
+  | 'image_too_large'
+  /** The exact serialized request cannot fit the vendor body limit. */
+  | 'request_too_large';
 export interface ConversationError {
   readonly code: ConversationErrorCode;
   readonly message: string;

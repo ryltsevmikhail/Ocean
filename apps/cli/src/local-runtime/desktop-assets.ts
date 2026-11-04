@@ -1,6 +1,7 @@
 import { DesktopAssetService, type DesktopAssetStore } from '@runnets/application';
 import { isDesktopCommand, type LocalDesktopReply } from '@runnets/contracts';
-import { desktopAssetFiles, desktopRootIdentity } from '@runnets/tools-node';
+import { desktopAssetFiles, desktopImageResolver, desktopRootIdentity } from '@runnets/tools-node';
+export { desktopImageResolver };
 export function runtimeDesktopAssets(store: DesktopAssetStore, profile: string, profileId: string) {
   const service = new DesktopAssetService(store, desktopAssetFiles(profile, profileId));
   return (

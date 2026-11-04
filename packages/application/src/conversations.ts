@@ -8,6 +8,7 @@ import {
   type ConversationResult,
   type Room,
 } from '@runnets/domain';
+import type { ImageAssetResolverPort } from './image-content.js';
 import type { Clock } from './ports.js';
 import type {
   ConversationCommand,
@@ -20,6 +21,11 @@ export interface ConversationServiceDeps {
   readonly store: ConversationStore;
   readonly nextId: () => string;
   readonly clock: Clock;
+  /**
+   * Runtime-owned image authority. Absent on hosts that cannot authenticate
+   * Desktop assets: an image-bearing marker is then refused, never dropped.
+   */
+  readonly images?: ImageAssetResolverPort | undefined;
 }
 
 /** Own workspace, profile and direct-history rules under one atomic adapter transaction. */

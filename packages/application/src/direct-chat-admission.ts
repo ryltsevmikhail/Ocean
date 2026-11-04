@@ -9,6 +9,7 @@ import {
 } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
 import type { ConversationServiceDeps } from './conversations.js';
+import { admitImageRequest } from './image-content.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
 import { roomContext } from './room-context.js';
 
@@ -110,11 +111,25 @@ export function admitChat(
       !provider.capabilities.usage
     )
       return conversationFailure('provider_unavailable');
-    const context = roomContext(tx, room, selected, request.text);
-    if (!context.ok) return context;
+    // The planned message identity is bound before content resolution so the
+    // runtime resolver can authenticate the exact body this admission commits.
     const id = deps.nextId();
     const messageId = deps.nextId();
     const seq = tx.nextSequence(room.id);
+    const context = roomContext(
+      tx,
+      room,
+      selected,
+      { text: request.text, messageId, phase: 'committing' },
+      deps.images,
+    );
+    if (!context.ok) return context;
+    const images = admitImageRequest({
+      provider,
+      model: selected.model,
+      messages: context.value,
+    });
+    if (!images.ok) return images;
     const turn: ChatTurn = {
       ...(request.taskId === undefined ? {} : { codingTaskId: request.taskId }),
       id,

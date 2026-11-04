@@ -195,5 +195,20 @@ export function desktopAssetStore(db: DatabaseSync): DesktopAssetStore {
         .get('prepare:' + room + ':' + requestId);
       return r ? (JSON.parse(String(r['result'])) as DesktopPreparation) : null;
     },
+    message(room, messageId) {
+      const r = db
+        .prepare("SELECT body FROM ocean_messages WHERE id=? AND room_id=? AND author='user'")
+        .get(messageId, room);
+      return r === undefined ? null : { body: String(r['body']) };
+    },
+    adopted(room, requestId, messageId, body) {
+      return (
+        db
+          .prepare(
+            'SELECT 1 FROM ocean_desktop_adopted WHERE message_id=? AND room=? AND request_id=? AND body=?',
+          )
+          .get(messageId, room, requestId, body) !== undefined
+      );
+    },
   };
 }

@@ -71,6 +71,9 @@ export async function currentWindow(f, label, executable) {
         )
           continue;
         const cmd = readFileSync('/proc/' + pid + '/cmdline', 'utf8').split('\0');
+        // A process with neither environment nor argv is mid-teardown: it cannot
+        // be a live Desktop child and would fail an otherwise unrelated audit race.
+        if (!pairs.length && cmd[0] === '') continue;
         if (!pairs.some(([key]) => key === 'HOME') && cmd[0]?.includes(' --type=')) {
           appendFileSync(
             join(f.root, 'children.jsonl'),

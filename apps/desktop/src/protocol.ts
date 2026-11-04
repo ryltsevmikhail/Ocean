@@ -229,6 +229,7 @@ export const broadcastChild = z.object({
   position: z.int().nonnegative(),
   state: broadcastChildState,
   resultMessageId: id.nullable(),
+  refusalCode: z.string().max(64).nullable().optional(),
 });
 export const broadcastBatch = z
   .object({
@@ -292,7 +293,6 @@ export type Bot = z.infer<typeof bot>;
 export type Room = z.infer<typeof roomDto>;
 export type Message = z.infer<typeof message>;
 export type Run = z.infer<typeof run>;
-
 export type ProfileReport = z.infer<typeof outputs.status>;
 export type ProviderStatus = z.infer<typeof providerStatus>;
 export type BroadcastBatch = z.infer<typeof broadcastBatch>;

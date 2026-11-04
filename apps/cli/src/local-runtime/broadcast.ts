@@ -17,12 +17,14 @@ import {
 import {
   admitBroadcastChild,
   executeChatTurn,
+  imageRefusalCode,
   nextBroadcastChild,
   pauseBroadcastIfUncertain,
   refuseBroadcastChild,
   settleBroadcastBatch,
   type ChatTurnExecutionDeps,
   type Clock,
+  type ImageAssetResolverPort,
   type ProviderPort,
   type RoomBroadcastService,
 } from '@runnets/application';
@@ -35,6 +37,8 @@ export interface RuntimeBroadcastsOptions {
   readonly clock: Clock;
   /** Task 1 activation snapshot getter; captured once per dispatched child. */
   readonly provider: () => ProviderPort | null;
+  /** Runtime image authority for frozen-context reconstruction and admission. */
+  readonly images?: ImageAssetResolverPort | undefined;
 }
 const stable = (error: unknown): string => {
   const message = error instanceof Error ? error.message : '';
@@ -55,6 +59,7 @@ export class RuntimeBroadcasts {
   readonly #execution: ChatTurnExecutionDeps;
   readonly #clock: Clock;
   readonly #provider: () => ProviderPort | null;
+  readonly #images: ImageAssetResolverPort | undefined;
   readonly #jobs = new Map<string, { controller: AbortController; settled: Promise<void> }>();
   readonly #children = new Map<string, AbortController>();
   #draining = false;
@@ -64,6 +69,7 @@ export class RuntimeBroadcasts {
     this.#execution = options.execution;
     this.#clock = options.clock;
     this.#provider = options.provider;
+    this.#images = options.images;
   }
   dispatch(
     method: string,
@@ -135,10 +141,18 @@ export class RuntimeBroadcasts {
         if (next === null) return;
         const provider = this.#provider();
         if (!providerAdmits(provider, next.turn)) {
-          refuseBroadcastChild(this.#execution.store, batchId, next.turn.id);
+          refuseBroadcastChild(
+            this.#execution.store,
+            batchId,
+            next.turn.id,
+            'provider_unavailable',
+          );
           continue;
         }
-        const admitted = admitBroadcastChild(this.#execution.store, batchId, next.turn.id);
+        const admitted = admitBroadcastChild(this.#execution.store, batchId, next.turn.id, {
+          ...(this.#images === undefined ? {} : { images: this.#images }),
+          guard: (messages) => imageRefusalCode(provider, next.turn.bot.model, messages),
+        });
         if (admitted.kind === 'closed') return;
         if (admitted.kind === 'refused') continue;
         const child = new AbortController();

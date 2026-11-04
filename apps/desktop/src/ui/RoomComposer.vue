@@ -4,6 +4,7 @@ import { useComposerInput } from './composer-input.js';
 import Glyph from './Glyph.vue';
 import AttachmentCard from './AttachmentCard.vue';
 import { useAttachments } from './composer-attachments.js';
+import { attachmentHint } from './image-hints.js';
 import type { Bot, Run } from '../protocol.js';
 import { BROADCAST_RECIPIENT } from './broadcast-mode.js';
 const props = defineProps<{
@@ -30,6 +31,15 @@ watch(
   () => {
     clear();
   },
+);
+const imageHint = computed(() =>
+  attachmentHint({
+    files: files.value,
+    members: props.members,
+    group: props.group,
+    recipient: recipient.value,
+    broadcast: BROADCAST_RECIPIENT,
+  }),
 );
 const sendDisabled = computed(
   () =>
@@ -144,10 +154,7 @@ function paste(event: ClipboardEvent) {
       </div>
     </div>
     <small id="composer-hint">Enter — отправить, Shift+Enter — новая строка</small>
-    <small v-if="files.length" class="attachment-note"
-      >Файлы сохраняются в комнате. Текст передаётся модели отрывками. Анализ изображений пока
-      недоступен.</small
-    >
+    <small v-if="imageHint" class="attachment-note">{{ imageHint }}</small>
     <small v-if="uncertain"
       >Повторная отправка проверит тот же запрос с теми же вложениями и адресатом.</small
     >

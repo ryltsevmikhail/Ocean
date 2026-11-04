@@ -34,6 +34,10 @@ const admissionRefusals = new Set([
   'recovery_required',
   'provider_unavailable',
   'context_limit',
+  'model_image_unsupported',
+  'image_unavailable',
+  'image_too_large',
+  'request_too_large',
 ]);
 async function open() {
   const userData = app.getPath('userData');
