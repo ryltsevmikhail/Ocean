@@ -60,6 +60,26 @@ describe('provider credential store', () => {
     expect(f.store.read(REF_B).status).toBe('ok');
   });
 
+  it('replaces the previous value in one atomic publication and keeps it on failure', () => {
+    const f = fixture();
+    f.store.write(REF_A, KEY_A);
+    f.store.replace(REF_A, REF_B, 'sk-fixture-store-key-b');
+    expect(f.store.read(REF_A)).toEqual({ status: 'absent' });
+    expect(f.store.read(REF_B)).toEqual({ status: 'ok', key: 'sk-fixture-store-key-b' });
+    const body = JSON.parse(readFileSync(join(f.directory, PROVIDER_SECRET_FILE), 'utf8')) as {
+      secrets: Record<string, unknown>;
+    };
+    expect(Object.keys(body.secrets)).toEqual([REF_B]);
+    chmodSync(f.directory, 0o500);
+    try {
+      expect(() => f.store.replace(REF_B, REF_A, KEY_A)).toThrow();
+    } finally {
+      chmodSync(f.directory, 0o700);
+    }
+    expect(f.store.read(REF_B)).toEqual({ status: 'ok', key: 'sk-fixture-store-key-b' });
+    expect(f.store.read(REF_A)).toEqual({ status: 'absent' });
+  });
+
   it('leaves an interrupted publication inert and never infers a value from a temp file', () => {
     const f = fixture();
     f.store.write(REF_A, KEY_A);

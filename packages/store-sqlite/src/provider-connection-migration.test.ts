@@ -130,6 +130,13 @@ describe('SQLite provider connection metadata', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM ocean_provider_connections').get()?.['n']).toBe(1);
   });
 
+  it('keeps a cancelled check outcome instead of dropping or rewriting it as timeout', () => {
+    const db = memory();
+    const connections = new SqliteProviderConnections(db);
+    connections.put({ ...row, lastCheck: { ...row.lastCheck!, outcome: 'cancelled' } }, null);
+    expect(connections.read('deepseek')?.lastCheck?.outcome).toBe('cancelled');
+  });
+
   it('persists the activated record and its idempotency receipt atomically', () => {
     const db = memory();
     const connections = new SqliteProviderConnections(db);

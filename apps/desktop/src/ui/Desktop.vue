@@ -61,6 +61,9 @@ onBeforeUnmount(() => {
   wide.removeEventListener('change', adapt);
   oneColumn.removeEventListener('change', adapt);
 });
+function created(roomId?: string) {
+  void guard(() => refresh(roomId));
+}
 const profile = ref<InstanceType<typeof ProfilePanel>>();
 const roomManager = ref<InstanceType<typeof RoomManager>>();
 </script>
@@ -211,5 +214,5 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
       @close="details = false"
     />
   </div>
-  <RoomManager ref="roomManager" :bots="bots" :busy="busy" @created="guard(() => refresh())" />
+  <RoomManager ref="roomManager" :bots="bots" :busy="busy" @created="created" />
 </template>

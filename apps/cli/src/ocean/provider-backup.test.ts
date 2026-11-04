@@ -65,9 +65,6 @@ it('backs up provider metadata but no credential path or bytes, and restores ine
   const archive = join(root, 'backup');
   const manifest = await backupProfile(profile, archive, {
     managedDirectory: join(root, 'worktrees'),
-  }).catch((error: unknown) => {
-    console.log('ARCHIVE', archive, readdirSync(archive), readdirSync(join(archive, 'assets')));
-    throw error;
   });
   expect(manifest.format).toBe(2);
   const archived = files(archive);

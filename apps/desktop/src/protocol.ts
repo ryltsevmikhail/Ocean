@@ -150,6 +150,7 @@ export const providerCheckOutcome = z.enum([
   'auth',
   'network',
   'timeout',
+  'cancelled',
   'server',
   'unavailable',
 ]);

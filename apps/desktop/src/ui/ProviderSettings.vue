@@ -4,6 +4,7 @@ import Glyph from './Glyph.vue';
 import { explain } from './dom.js';
 import {
   checkProvider,
+  clearProviderInput,
   disconnectProvider,
   loadProviderStatus,
   providerBusy,
@@ -27,8 +28,13 @@ import {
 defineProps<{ busy: boolean }>();
 const panel = ref<HTMLDialogElement>();
 function open() {
+  clearProviderInput();
   panel.value?.showModal();
   void loadProviderStatus();
+}
+function close() {
+  clearProviderInput();
+  panel.value?.close();
 }
 function capabilities(model: string): string {
   const entry = providerStatus.value?.modelCapabilities.find((item) => item.model === model);
@@ -40,10 +46,10 @@ function capabilities(model: string): string {
     <Glyph name="provider" />
   </button>
   <Teleport to="body">
-    <dialog ref="panel" class="provider-panel" aria-label="Провайдер">
+    <dialog ref="panel" class="provider-panel" aria-label="Провайдер" @cancel="close">
       <header>
         <small>ПРОВАЙДЕР</small
-        ><button class="round" aria-label="Закрыть провайдера" @click="panel?.close()">
+        ><button class="round" aria-label="Закрыть провайдера" @click="close">
           <Glyph name="close" />
         </button>
       </header>
@@ -52,7 +58,7 @@ function capabilities(model: string): string {
       <section v-else class="info-card" role="status" :data-state="providerStatus.state">
         <strong>{{ providerStatusLine(providerStatus) }}</strong>
         <p v-if="providerStatus.lastCheck" class="check-line">
-          {{ providerCheckLine(providerStatus.lastCheck) }}
+          {{ providerCheckLine(providerStatus.lastCheck, providerStatus) }}
         </p>
         <p v-if="providerStatus.code">{{ explain(providerStatus.code) }}</p>
         <p v-if="!providerStatus.writable">Изменение недоступно: профиль только для чтения.</p>
@@ -77,7 +83,7 @@ function capabilities(model: string): string {
           :disabled="busy || providerBusy || !providerStatus?.writable"
           aria-describedby="provider-key-tip" /></label
       ><small id="provider-key-tip" class="muted">{{
-        providerKeyHint(providerKey, providerStatus?.savedKey ?? false)
+        providerKeyHint(providerKey, providerStatus?.savedKey ?? false, providerStatus?.state)
       }}</small>
       <p v-if="providerStatus?.savedKey" class="muted">
         Ocean хранит собственный ключ. Внешний ключ окружения Ocean не изменяет и не удаляет.

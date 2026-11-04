@@ -153,7 +153,48 @@ describe('provider connection boundaries', () => {
     expect(f.secrets.values.size).toBe(0);
   });
 
-  it('surfaces an unavailable check without a network effect when no credential is active', async () => {
+  it('refuses a model-only change when the saved secret cannot be read', () => {
+    const f = fixture({ environment: true });
+    f.service.set(set);
+    const activations = f.credentials.bound.length;
+    f.secrets.readOverride = () => ({ status: 'unverified', reason: 'provider_secret_corrupt' });
+    expect(() => f.service.set({ requestId: 'set-model', model: 'deepseek-v4-pro' })).toThrow(
+      'provider_unverified',
+    );
+    // The saved reference is never dropped in favour of the environment credential.
+    expect(f.store.rows.get('deepseek')?.secretRef).not.toBeNull();
+    expect(f.service.status()).toMatchObject({
+      source: 'none',
+      state: 'unverified',
+      code: 'provider_secret_corrupt',
+      savedKey: true,
+      revision: 1,
+    });
+    expect(f.service.current()).toBeNull();
+    expect(f.credentials.bound).toHaveLength(activations);
+    f.secrets.readOverride = () => ({ status: 'absent' });
+    expect(() => f.service.set({ requestId: 'set-model-2', model: 'deepseek-flash' })).toThrow(
+      'provider_unverified',
+    );
+    expect(f.service.status()).toMatchObject({ state: 'unverified', savedKey: true });
+  });
+
+  it('keeps an explicit host force-off above an ambient environment credential', () => {
+    const f = fixture({ environment: true, disabled: true });
+    expect(f.service.status()).toMatchObject({
+      source: 'none',
+      state: 'absent',
+      model: 'deepseek-flash',
+      code: null,
+      writable: false,
+    });
+    expect(f.service.current()).toBeNull();
+    expect(f.service.activation()()).toBeNull();
+    expect(() => f.service.set(set)).toThrow('provider_unavailable');
+    expect(f.credentials.probes).toHaveLength(0);
+  });
+
+  it('surfaces a failed check without a network effect when no credential is active', async () => {
     const f = fixture();
     const result = await f.service.check();
     expect(result.check).toMatchObject({ outcome: 'unavailable', persisted: false });

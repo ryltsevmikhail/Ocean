@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProviderConnectionRecord } from './provider-connection-ports.js';
-import { resolveProviderConnection } from './provider-connection-resolution.js';
+import { readCheckMetadata, resolveProviderConnection } from './provider-connection-resolution.js';
 import {
   environmentCredential,
   fakeCredentials,
@@ -140,5 +140,24 @@ describe('provider connection truth table', () => {
       restored: false,
     });
     expect(result).toMatchObject({ state: 'absent', model: null, credential: null, revision: 0 });
+  });
+});
+
+describe('persisted check metadata normalization', () => {
+  const metadata = {
+    outcome: 'ok',
+    httpStatus: 200,
+    durationMs: 12,
+    models: ['deepseek-flash'],
+    modelSupported: true,
+    source: 'saved',
+    revision: 1,
+    checkedAt: '2026-11-04T00:00:00.000Z',
+  } as const;
+  it('keeps accepted metadata and rejects values outside the wire bounds', () => {
+    expect(readCheckMetadata(metadata)).toEqual(metadata);
+    expect(readCheckMetadata({ ...metadata, httpStatus: 599 })).not.toBeNull();
+    expect(readCheckMetadata({ ...metadata, httpStatus: 600 })).toBeNull();
+    expect(readCheckMetadata({ ...metadata, httpStatus: 99 })).toBeNull();
   });
 });

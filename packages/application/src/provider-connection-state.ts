@@ -32,6 +32,8 @@ export interface ProviderConnectionReadModelOptions {
   readonly credentials: ProviderCredentialPort;
   readonly clock: Clock;
   readonly injected?: ProviderPort | null;
+  /** Explicit host force-off: no provider activates, not even an environment credential. */
+  readonly disabled?: boolean;
   readonly restored?: boolean;
   readonly mutationsAllowed?: boolean;
 }
@@ -41,6 +43,7 @@ export class ProviderConnectionReadModel {
   readonly #credentials: ProviderCredentialPort;
   readonly #clock: Clock;
   readonly #injected: ProviderPort | null;
+  readonly #disabled: boolean;
   readonly #mutationsAllowed: boolean;
   #restored: boolean;
   #record: ProviderConnectionRecord | null = null;
@@ -51,6 +54,7 @@ export class ProviderConnectionReadModel {
     this.#credentials = options.credentials;
     this.#clock = options.clock;
     this.#injected = options.injected ?? null;
+    this.#disabled = options.disabled === true;
     this.#mutationsAllowed = options.mutationsAllowed ?? true;
     this.#restored = options.restored === true;
   }
@@ -68,6 +72,7 @@ export class ProviderConnectionReadModel {
   }
   /** Immutable activation for a newly admitted turn; null means provider_unavailable. */
   current(): ProviderPort | null {
+    if (this.#disabled) return null;
     if (this.#injected !== null) return this.#injected;
     return this.#resolution?.credential?.provider ?? null;
   }
@@ -92,7 +97,7 @@ export class ProviderConnectionReadModel {
       modelCapabilities: this.#credentials.modelCapabilities,
       revision: resolution.revision,
       savedKey: resolution.savedKey,
-      writable: this.#mutationsAllowed && this.#injected === null,
+      writable: this.#mutationsAllowed && this.#injected === null && !this.#disabled,
       code: resolution.code,
       lastCheck: record?.lastCheck ?? null,
     };
@@ -177,8 +182,9 @@ export class ProviderConnectionReadModel {
     const secret =
       secretRef === null || secretRef === undefined ? null : this.readSecret(secretRef);
     this.#record = record;
-    this.#resolution =
-      this.#injected === null
+    this.#resolution = this.#disabled
+      ? this.#disabledResolution(record)
+      : this.#injected === null
         ? resolveProviderConnection({
             record,
             secret,
@@ -187,6 +193,18 @@ export class ProviderConnectionReadModel {
             restored: this.#restored,
           })
         : this.#injectedResolution(record);
+  }
+  /** An explicitly forced-off host has no provider at all: environment values stay untapped. */
+  #disabledResolution(record: ProviderConnectionRecord | null): ProviderConnectionResolution {
+    return {
+      source: 'none',
+      state: 'absent',
+      code: null,
+      model: record?.model ?? this.#credentials.models[0] ?? null,
+      credential: null,
+      savedKey: record?.secretRef !== null && record?.secretRef !== undefined,
+      revision: record?.revision ?? 0,
+    };
   }
   #injectedResolution(record: ProviderConnectionRecord | null): ProviderConnectionResolution {
     const models = this.#credentials.models;

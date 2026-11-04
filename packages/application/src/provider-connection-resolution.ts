@@ -169,14 +169,16 @@ export function resolveProviderConnection(
 export function readCheckMetadata(value: unknown): ProviderCheckMetadata | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   const v = value as Record<string, unknown>;
-  const outcomes = ['ok', 'auth', 'network', 'timeout', 'server', 'unavailable'];
+  const outcomes = ['ok', 'auth', 'network', 'timeout', 'cancelled', 'server', 'unavailable'];
   const sources = ['saved', 'external', 'injected', 'none'];
   if (!outcomes.some((x) => x === v['outcome']) || !sources.some((x) => x === v['source']))
     return null;
   if (
     !(
       v['httpStatus'] === null ||
-      (Number.isSafeInteger(v['httpStatus']) && (v['httpStatus'] as number) >= 100)
+      (Number.isSafeInteger(v['httpStatus']) &&
+        (v['httpStatus'] as number) >= 100 &&
+        (v['httpStatus'] as number) <= 599)
     ) ||
     !Number.isSafeInteger(v['durationMs']) ||
     (v['durationMs'] as number) < 0 ||

@@ -21,6 +21,7 @@ export function fixture(
     restored?: boolean;
     mutationsAllowed?: boolean;
     injected?: ProviderConnectionServiceOptions['injected'];
+    disabled?: boolean;
     environment?: boolean;
   } = {},
 ) {
@@ -39,6 +40,7 @@ export function fixture(
       sha256,
       mutationsAllowed: options.mutationsAllowed ?? true,
       ...(options.restored === true ? { restored: true } : {}),
+      ...(options.disabled === true ? { disabled: true } : {}),
       ...(options.injected === undefined ? {} : { injected: options.injected }),
     });
   let service = build();

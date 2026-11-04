@@ -23,7 +23,8 @@ const MAX_MODEL_ID = 256;
 const MAX_BODY = 256 * 1024;
 const MODALITIES: readonly ModelInputModality[] = ['text', 'image'];
 
-export type ModelProbeOutcome = 'ok' | 'auth' | 'network' | 'timeout' | 'server' | 'unavailable';
+export type ModelProbeOutcome =
+  'ok' | 'auth' | 'network' | 'timeout' | 'cancelled' | 'server' | 'unavailable';
 export type ModelProbeResult =
   | {
       readonly outcome: 'ok';
@@ -79,6 +80,9 @@ function outcomeFor(status: number): Exclude<ModelProbeOutcome, 'ok'> {
   if (status >= 500) return 'server';
   return 'unavailable';
 }
+function callerCancelled(signal: AbortSignal | null | undefined): boolean {
+  return signal?.aborted === true;
+}
 function outcomeForError(error: unknown): Exclude<ModelProbeOutcome, 'ok'> {
   const name = error instanceof Error ? error.name : '';
   if (name === 'TimeoutError' || name === 'AbortError') return 'timeout';
@@ -98,8 +102,9 @@ function combine(signal: AbortSignal | null, timeout: AbortSignal | null): Abort
 }
 /** Probe the vendor model list; the credential stays inside this adapter call. */
 export async function probeDeepSeekModels(options: ModelProbeOptions): Promise<ModelProbeResult> {
-  // An owner-triggered check that was cancelled before dispatch is incomplete, not a pass.
-  if (options.signal?.aborted === true) return { outcome: 'timeout', httpStatus: null, models: [] };
+  // An owner-triggered check cancelled before dispatch is cancelled, not a deadline or a pass.
+  if (callerCancelled(options.signal))
+    return { outcome: 'cancelled', httpStatus: null, models: [] };
   const timeoutMs = Math.min(
     Math.max(options.timeoutMs ?? MAX_MODEL_PROBE_MS, 1),
     MAX_MODEL_PROBE_MS,
@@ -123,7 +128,12 @@ export async function probeDeepSeekModels(options: ModelProbeOptions): Promise<M
       ? { outcome: 'server', httpStatus: response.status, models: [] }
       : { outcome: 'ok', httpStatus: response.status, models };
   } catch (error) {
-    const outcome = timeout.aborted ? 'timeout' : outcomeForError(error);
+    const outcome =
+      timeout.aborted === true
+        ? 'timeout'
+        : callerCancelled(options.signal)
+          ? 'cancelled'
+          : outcomeForError(error);
     return { outcome, httpStatus: null, models: [] };
   }
 }

@@ -10,6 +10,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   ProviderConnectionService,
+  requestCode,
   type ProviderConnectionStorePort,
   type ProviderCredential,
   type ProviderCredentialPort,
@@ -89,10 +90,6 @@ async function probe(
     : { outcome: result.outcome, httpStatus: result.httpStatus, models };
 }
 
-const stableCode = (error: unknown, fallback: string): string => {
-  const message = error instanceof Error ? error.message : '';
-  return /^[a-z_]{1,64}$/.test(message) ? message : fallback;
-};
 /** Owner API over the authenticated socket; every reply is metadata only. */
 export class ProviderSettings {
   readonly #service: ProviderConnectionService;
@@ -137,7 +134,7 @@ export class ProviderSettings {
     try {
       return { result: await run() };
     } catch (error) {
-      return { error: { code: stableCode(error, 'outcome_unknown') } };
+      return { error: { code: requestCode(error, 'outcome_unknown') } };
     }
   }
 }
@@ -148,6 +145,8 @@ export interface ProviderHostInput {
   readonly now?: (() => number) | undefined;
   readonly restored: boolean;
   readonly injected: ProviderPort | null;
+  /** Explicit host force-off: no saved or environment credential may activate. */
+  readonly disabled: boolean;
   readonly mutationsAllowed: boolean;
   readonly secretStore?: ProviderSecretStorePort;
   readonly credentialDir?: string;
@@ -173,6 +172,7 @@ export function providerHostSettings(input: ProviderHostInput): {
     sha256: (text) => createHash('sha256').update(text).digest('hex'),
     restored: input.restored,
     injected: input.injected,
+    disabled: input.disabled,
     mutationsAllowed: input.mutationsAllowed,
   });
   service.initialize();

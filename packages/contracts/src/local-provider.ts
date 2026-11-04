@@ -15,7 +15,8 @@ export const LOCAL_PROVIDER_METHODS = [
   'provider.disconnect',
   'provider.removeSavedKey',
 ] as const;
-export type LocalProviderMethod = (typeof LOCAL_PROVIDER_METHODS)[number];
+/** Reads a restore-mode maintenance host can still serve; mutations stay refused there. */
+export const LOCAL_PROVIDER_READ_METHODS = ['provider.status'] as const;
 
 export const LOCAL_PROVIDER_KEY_MAX = 512;
 export const LOCAL_PROVIDER_MODEL_MAX = 256;
@@ -27,7 +28,7 @@ export type LocalProviderSource = 'saved' | 'external' | 'injected' | 'none';
 export type LocalProviderState =
   'connected' | 'disconnected' | 'unverified' | 'absent' | 'restored' | 'invalid_model';
 export type LocalProviderCheckOutcome =
-  'ok' | 'auth' | 'network' | 'timeout' | 'server' | 'unavailable';
+  'ok' | 'auth' | 'network' | 'timeout' | 'cancelled' | 'server' | 'unavailable';
 
 export interface LocalProviderCheckMetadata {
   readonly outcome: LocalProviderCheckOutcome;
@@ -63,7 +64,7 @@ export interface LocalProviderStatus {
   readonly lastCheck: LocalProviderCheckMetadata | null;
 }
 export interface LocalProviderCheckResult extends LocalProviderCheckMetadata {
-  /** False when a concurrent revision change made the result stale and unpersisted. */
+  /** False when nothing was stored: a stale revision or an external source with no row. */
   readonly persisted: boolean;
 }
 export interface LocalProviderCheckResponse {
@@ -158,7 +159,9 @@ function isCheckMetadata(v: unknown): v is LocalProviderCheckMetadata {
   return (
     localRuntimeRecord(v) &&
     onlyKeys(v, checkKeys) &&
-    ['ok', 'auth', 'network', 'timeout', 'server', 'unavailable'].some((x) => x === v['outcome']) &&
+    ['ok', 'auth', 'network', 'timeout', 'cancelled', 'server', 'unavailable'].some(
+      (x) => x === v['outcome'],
+    ) &&
     (v['httpStatus'] === null ||
       (position(v['httpStatus']) && v['httpStatus'] >= 100 && v['httpStatus'] <= 599)) &&
     position(v['durationMs']) &&

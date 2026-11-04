@@ -123,6 +123,12 @@ describe('local provider contract', () => {
       isLocalProviderCheckResponse({ status, check: { ...check.check, outcome: 'error' } }),
     ).toBe(false);
     expect(
+      isLocalProviderCheckResponse({
+        status,
+        check: { ...check.check, outcome: 'cancelled', httpStatus: null },
+      }),
+    ).toBe(true);
+    expect(
       isLocalProviderCheckResponse({ status, check: { ...check.check, httpStatus: 99 } }),
     ).toBe(false);
     expect(isLocalProviderCheckResponse({ status })).toBe(false);

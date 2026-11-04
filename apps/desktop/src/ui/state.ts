@@ -4,7 +4,12 @@ import { pages, useRoomFeed } from './room-feed.js';
 import { call, SendFailure, submitDraft } from './bridge.js';
 import { explain } from './dom.js';
 import { feedbackText } from './runtime-text.js';
-import { loadProviderStatus, providerDefaultModel } from './provider-state.js';
+import {
+  loadProviderStatus,
+  providerModels,
+  requireProviderDefaultModel,
+} from './provider-state.js';
+import { retiredModelHint } from './provider-text.js';
 
 export function useDesktop() {
   const bots = ref<Bot[]>([]),
@@ -54,11 +59,26 @@ export function useDesktop() {
       await action();
     } catch (error) {
       feedbackCode.value = error instanceof Error ? error.message : String(error);
-      feedback.value = explain(error);
+      feedback.value = unavailableFeedback(feedbackCode.value) ?? explain(error);
       feedbackError.value = true;
     } finally {
       busy.value = false;
     }
+  }
+  /** A retired bot model is a different owner problem from a missing provider configuration. */
+  function unavailableFeedback(code: string): string | null {
+    if (code !== 'provider_unavailable' || !room.value) return null;
+    const r = room.value;
+    const candidates =
+      r.kind === 'direct' ? [r.botId] : recipient.value !== '' ? [recipient.value] : r.botIds;
+    for (const id of candidates) {
+      const hint = retiredModelHint(
+        bots.value.find((bot) => bot.id === id)?.model ?? null,
+        providerModels.value,
+      );
+      if (hint !== null) return hint;
+    }
+    return null;
   }
   function read(r: Room | undefined) {
     if (r?.id !== room.value?.id) {
@@ -98,7 +118,7 @@ export function useDesktop() {
   onMounted(() => void guard(() => refresh()));
   const uuid = () => crypto.randomUUID();
   async function team() {
-    const model = providerDefaultModel.value;
+    const model = requireProviderDefaultModel();
     for (const h of ['dev', 'review']) {
       if (!bots.value.some((b) => b.handle === h)) {
         await call({

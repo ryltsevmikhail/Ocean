@@ -139,12 +139,28 @@ describe('probeDeepSeekModels', () => {
     expect(Date.now() - started).toBeLessThan(10_000);
   });
 
-  it('honours a caller abort as an incomplete bounded check', async () => {
-    const controller = new AbortController();
-    controller.abort();
+  it('reports a caller cancel as cancelled, not as the adapter deadline', async () => {
+    const aborted = new AbortController();
+    aborted.abort();
     const http = fakeHttp(async () => reply(200, '{"data":[]}'));
     expect(
-      await probeDeepSeekModels({ apiKey: API_KEY, httpClient: http, signal: controller.signal }),
-    ).toEqual({ outcome: 'timeout', httpStatus: null, models: [] });
+      await probeDeepSeekModels({ apiKey: API_KEY, httpClient: http, signal: aborted.signal }),
+    ).toEqual({ outcome: 'cancelled', httpStatus: null, models: [] });
+    const controller = new AbortController();
+    const pending = fakeHttp(
+      () =>
+        new Promise<HttpResponse>((_, reject) =>
+          controller.signal.addEventListener('abort', () =>
+            reject(Object.assign(Error('aborted'), { name: 'AbortError' })),
+          ),
+        ),
+    );
+    const probe = probeDeepSeekModels({
+      apiKey: API_KEY,
+      httpClient: pending,
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(probe).resolves.toEqual({ outcome: 'cancelled', httpStatus: null, models: [] });
   });
 });

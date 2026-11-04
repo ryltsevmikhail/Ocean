@@ -211,6 +211,17 @@ export function createProviderSecretStore(directory: string): ProviderSecretStor
       secrets.set(ref, key);
       publish(directory, serialize(secrets));
     },
+    replace(previous: string | null, ref: string, key: string): void {
+      if ((previous !== null && !validRef(previous)) || !validRef(ref) || !validKey(key))
+        throw Error('invalid_input');
+      ensureDirectory(directory);
+      const file = inspectFile(join(directory, PROVIDER_SECRET_FILE));
+      const secrets = (file.kind === 'ok' ? parseSecrets(file.text) : null) ?? new Map();
+      // One publication carries both the removal and the new value: no second effect can fail.
+      if (previous !== null) secrets.delete(previous);
+      secrets.set(ref, key);
+      publish(directory, serialize(secrets));
+    },
     remove(ref: string): void {
       if (!validRef(ref)) throw Error('invalid_input');
       if (inspectDirectory(directory) === 'absent') return;

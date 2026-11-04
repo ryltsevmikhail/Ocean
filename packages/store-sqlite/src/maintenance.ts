@@ -17,6 +17,13 @@ import { existsSync, chmodSync, lstatSync } from 'node:fs';
 import { acquireOwnership } from './ownership.js';
 import { SCHEMA_VERSION } from './schema.js';
 
+/**
+ * Shipped schema versions this binary may inspect and snapshot without migrating.
+ * Must stay one step wide: bumping `SCHEMA_VERSION` adds the previous release (14
+ * for RC1) so the update path can still doctor, back up and restore it.
+ */
+const MAINTAINABLE_SCHEMAS = [5, 6, 10, 11, 12, 13, 14, SCHEMA_VERSION];
+
 export interface DatabaseSummary {
   readonly schema: number;
   readonly externalCodingAssets?: number;
@@ -96,8 +103,7 @@ export function inspectDatabase(path: string): DatabaseInspection {
   try {
     db = new DatabaseSync(path, { readOnly: true });
     db.exec('BEGIN');
-    if (![5, 6, 10, 11, 12, 13, SCHEMA_VERSION].includes(schema(db)))
-      return { status: 'unsupported_schema' };
+    if (!MAINTAINABLE_SCHEMAS.includes(schema(db))) return { status: 'unsupported_schema' };
     if (ownerBusy(db)) return { status: 'owner_busy' };
     assertUnpublished(db);
     const result = summary(db);
@@ -159,8 +165,7 @@ async function snapshotOwned<T>(
   let release: (() => void) | undefined,
     frozen: ReturnType<typeof holdBackupObservation> | undefined;
   try {
-    if (![5, 6, 10, 11, 12, 13, SCHEMA_VERSION].includes(schema(db)))
-      throw new Error('unsupported_schema');
+    if (!MAINTAINABLE_SCHEMAS.includes(schema(db))) throw new Error('unsupported_schema');
     if (ownerBusy(db)) throw new Error('owner_busy');
     try {
       release = acquireOwnership(db, { id: randomUUID(), pid: process.pid }, alive, true);

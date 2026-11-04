@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import type { Bot } from '../protocol.js';
 import { call } from './bridge.js';
 import { explain } from './dom.js';
+import { submitCreation } from './room-create.js';
 import {
   loadProviderStatus,
   providerDefaultModel,
@@ -12,7 +13,7 @@ import {
 import { providerCapabilitySuffix } from './provider-text.js';
 
 const props = defineProps<{ bots: Bot[]; busy: boolean }>();
-const emit = defineEmits<{ created: [] }>();
+const emit = defineEmits<{ created: [roomId?: string] }>();
 const manager = ref<HTMLDialogElement>();
 const dialog = ref<'' | 'room' | 'bot'>('');
 const selected = ref<string[]>([]);
@@ -61,31 +62,21 @@ async function create() {
   feedback.value = '';
   feedbackError.value = false;
   try {
-    if (dialog.value === 'bot') {
-      await call({
-        op: 'bot',
-        requestId: crypto.randomUUID(),
+    const created = await submitCreation(
+      {
+        dialog: dialog.value === 'bot' ? 'bot' : 'room',
+        kind: kind.value,
+        selected: [...selected.value],
+        title: title.value,
         handle: handle.value,
         name: name.value,
         role: role.value,
         model: model.value || providerDefaultModel.value,
-      });
-    } else if (kind.value === 'direct') {
-      await call({
-        op: 'direct',
-        requestId: crypto.randomUUID(),
-        bot: selected.value[0] ?? '',
-      });
-    } else {
-      await call({
-        op: 'group',
-        requestId: crypto.randomUUID(),
-        title: title.value,
-        bots: [...selected.value],
-      });
-    }
+      },
+      call,
+    );
     dialog.value = '';
-    emit('created');
+    emit('created', created ?? undefined);
   } catch (error) {
     feedback.value = explain(error);
     feedbackError.value = true;

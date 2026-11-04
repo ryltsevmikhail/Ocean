@@ -8,6 +8,7 @@ import {
   providerSourceText,
   providerStateText,
   providerStatusLine,
+  retiredModelHint,
 } from './provider-text.js';
 
 const status: ProviderStatus = {
@@ -57,6 +58,30 @@ it('renders every normalized check outcome and never vendor text', () => {
   expect(providerCheckLine(check())).toBe(
     'Проверка: Список моделей получен · 2 моделей · выбранная модель поддерживается · 9 мс',
   );
+  expect(providerCheckLine({ ...check(), outcome: 'cancelled' })).toContain('отменена');
+});
+it('marks a persisted check as stale once the connection source or revision moved on', () => {
+  const saved = check();
+  const current = { revision: saved.revision, source: saved.source };
+  expect(providerCheckLine(saved, current)).toBe(
+    'Проверка: Список моделей получен · 2 моделей · выбранная модель поддерживается · 9 мс',
+  );
+  expect(providerCheckLine(saved, { revision: saved.revision + 1, source: 'saved' })).toContain(
+    'устарела',
+  );
+  expect(providerCheckLine(saved, { revision: saved.revision, source: 'external' })).toContain(
+    'устарела',
+  );
+});
+it('maps an unknown or removed bot model to clearer visible text', () => {
+  const retired = retiredModelHint('deepseek-chat', status.models);
+  expect(retired).toContain('deepseek-chat');
+  expect(retired).toContain('больше не');
+  expect(retired).not.toContain('sk-');
+  expect(retiredModelHint('deepseek-flash', status.models)).toBeNull();
+  // An unloaded provider status must not guess a model problem.
+  expect(retiredModelHint('deepseek-chat', [])).toBeNull();
+  expect(retiredModelHint(null, status.models)).toBeNull();
 });
 it('explains the masked key field without echoing a key', () => {
   expect(providerKeyHint('', false)).toContain('Введите ключ');
@@ -64,6 +89,12 @@ it('explains the masked key field without echoing a key', () => {
   expect(providerKeyHint('typed-value', false)).toContain('локальным runtime');
   expect(providerKeyHint('typed-value', true)).toContain('заменён');
   expect(providerKeyHint('typed-value', false)).not.toContain('typed-value');
+});
+it('explains the unverified saved key without promising a model-only change', () => {
+  const hint = providerKeyHint('', true, 'unverified');
+  expect(hint).toContain('Введите ключ заново');
+  expect(hint).not.toContain('Оставьте поле пустым');
+  expect(providerKeyHint('', false, 'unverified')).toContain('Введите ключ API');
 });
 it('declares documented model capabilities honestly', () => {
   expect(providerCapabilitySuffix(true)).toContain('изображения');

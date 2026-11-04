@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
@@ -136,6 +136,65 @@ it('keeps an explicit disconnect across a restart and blocks environment fallbac
   );
 });
 
+it('fails closed when the saved secret becomes unreadable instead of using the environment', async () => {
+  const envKey = 'sk-fixture-environment-key';
+  const f = await fixture(envKey);
+  await f.started.client.providerSet({
+    requestId: 'set-1',
+    key: 'sk-fixture-saved-key',
+    model: 'deepseek-flash',
+  });
+  const credentialFile = join(f.profile.credentialDir, 'providers.json');
+  writeFileSync(credentialFile, '{corrupt');
+  expect(await f.started.client.providerStatus()).toMatchObject({
+    source: 'none',
+    state: 'unverified',
+    code: 'provider_secret_corrupt',
+    savedKey: true,
+    revision: 1,
+  });
+  // A model-only owner action must never drop the unreadable reference and adopt the env key.
+  await expect(
+    f.started.client.providerSet({ requestId: 'model-only', model: 'deepseek-v4-pro' }),
+  ).rejects.toThrow('provider_unverified');
+  expect(await f.started.client.providerStatus()).toMatchObject({
+    source: 'none',
+    state: 'unverified',
+    savedKey: true,
+    revision: 1,
+  });
+  expect(readFileSync(credentialFile, 'utf8')).toBe('{corrupt');
+  // The ambient key present in the same environment cannot activate or dispatch a turn.
+  await expect(submit(f.started.client, f, 'blocked-turn')).rejects.toThrow('provider_unavailable');
+  expect(f.vendor.requests).toHaveLength(0);
+});
+
+it('keeps provider:null as an explicit force-off even with an ambient environment key', async () => {
+  const vendor = await vendorFixture();
+  const profile = await privateRoot();
+  vi.stubEnv('DEEPSEEK_API_KEY', 'sk-fixture-ambient-key');
+  const started = await startProviderHost(profile, { baseUrl: vendor.url, provider: null });
+  cleanups.push(async () => {
+    await started.stop();
+    await vendor.close();
+    profile.dispose();
+  });
+  expect(await started.client.providerStatus()).toMatchObject({
+    source: 'none',
+    state: 'absent',
+    model: 'deepseek-flash',
+    code: null,
+    writable: false,
+  });
+  await expect(
+    started.client.providerSet({ requestId: 'forced', key: 'sk-key', model: 'deepseek-flash' }),
+  ).rejects.toThrow('provider_unavailable');
+  await expect(
+    submit(started.client, { profile, vendor, started }, 'forced-off-turn'),
+  ).rejects.toThrow('provider_unavailable');
+  expect(vendor.requests).toHaveLength(0);
+});
+
 it('is idempotent, rejects conflicting payloads and guards stale revisions', async () => {
   const f = await fixture();
   const set = { requestId: 'set-1', key: 'sk-fixture-saved-key', model: 'deepseek-flash' };
@@ -169,6 +228,15 @@ it('serves reads on a restore-mode maintenance host and refuses every mutation',
   });
   const status = await started.client.providerStatus();
   expect(status).toMatchObject({ state: 'restored', source: 'none', writable: false });
+  // A restore-mode maintenance host advertises only the read it can actually serve.
+  expect(started.host.identity.capabilities).toContain('provider.status');
+  for (const refused of [
+    'provider.check',
+    'provider.set',
+    'provider.disconnect',
+    'provider.removeSavedKey',
+  ])
+    expect(started.host.identity.capabilities).not.toContain(refused);
   await expect(
     started.client.providerSet({ requestId: 'set-1', key: 'sk-key', model: 'deepseek-flash' }),
   ).rejects.toThrow('restore_restricted');

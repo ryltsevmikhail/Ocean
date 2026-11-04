@@ -1,12 +1,10 @@
 /**
  * Provider connection mutation service.
  *
- * Metadata and one-way request fingerprints live in durable state, credential
- * bytes live only in the private filesystem store, and host adapters turn them
- * into provider snapshots. Intent is persisted before any publication, an
- * unreadable or pending state fails closed instead of silently falling back to
- * the environment, and an explicit disconnect outranks a retained saved secret
- * and the environment alike.
+ * Metadata and one-way request fingerprints live in durable state while credential
+ * bytes live only in the private filesystem store. Intent is persisted before any
+ * publication; an unreadable or pending state fails closed instead of silently
+ * falling back to the environment, and an explicit disconnect outranks both.
  */
 
 import type { Clock } from './ports.js';
@@ -43,6 +41,8 @@ export interface ProviderConnectionServiceOptions {
   readonly restored?: boolean;
   /** Explicit host test seam; the injected provider is the session activation, read-only. */
   readonly injected?: ProviderPort | null;
+  /** Explicit host force-off: no provider may activate, including the environment. */
+  readonly disabled?: boolean;
   /** False on a restore-mode maintenance host: reads stay available, mutations refuse. */
   readonly mutationsAllowed?: boolean;
 }
@@ -56,6 +56,7 @@ export class ProviderConnectionService {
   readonly #nextId: () => string;
   readonly #sha256: Sha256;
   readonly #injected: boolean;
+  readonly #disabled: boolean;
   readonly #mutationsAllowed: boolean;
   readonly #state: ProviderConnectionReadModel;
   constructor(options: ProviderConnectionServiceOptions) {
@@ -66,6 +67,7 @@ export class ProviderConnectionService {
     this.#nextId = options.nextId;
     this.#sha256 = options.sha256;
     this.#injected = options.injected !== null && options.injected !== undefined;
+    this.#disabled = options.disabled === true;
     this.#mutationsAllowed = options.mutationsAllowed ?? true;
     this.#state = new ProviderConnectionReadModel(options);
   }
@@ -179,6 +181,7 @@ export class ProviderConnectionService {
   #assertWritable(): void {
     if (!this.#mutationsAllowed) throw Error('restore_restricted');
     if (this.#injected) throw Error('provider_injected');
+    if (this.#disabled) throw Error('provider_unavailable');
   }
   #assertRevision(record: ProviderConnectionRecord | null, expected: number): void {
     if ((record?.revision ?? 0) !== expected) throw Error('revision_conflict');
@@ -216,20 +219,18 @@ export class ProviderConnectionService {
       updatedAt: this.#clock.now().toISOString(),
     };
     this.#store.put(intent, record?.revision ?? null);
-    this.#writeEffect(() => this.#secrets.write(secretRef, key));
+    const previous = record?.secretRef ?? null;
+    // Replacement removes the previous private value in the same atomic publication, so a
+    // rotation can never leave the old secret behind or depend on a later purge that fails.
+    this.#writeEffect(() =>
+      previous === null
+        ? this.#secrets.write(secretRef, key)
+        : this.#secrets.replace(previous, secretRef, key),
+    );
     const published = this.#state.readSecret(secretRef);
     if (published === null || published.status !== 'ok' || published.key !== key)
       throw Error('provider_unverified');
-    const status = this.#finish(intent, key);
-    const previous = record?.secretRef;
-    if (previous !== null && previous !== undefined && previous !== secretRef) {
-      try {
-        this.#secrets.remove(previous);
-      } catch {
-        // An orphaned private value is inert; it is never activated again.
-      }
-    }
-    return status;
+    return this.#finish(intent, key);
   }
   #selectModel(
     record: ProviderConnectionRecord | null,
@@ -238,11 +239,15 @@ export class ProviderConnectionService {
   ): ProviderConnectionStatus {
     const secretRef = record?.secretRef ?? null;
     const secret = secretRef === null ? null : this.#state.readSecret(secretRef);
-    const readable = secret !== null && secret.status === 'ok';
+    // A saved reference that cannot be read must never be dropped in favour of the
+    // environment credential: keep it and fail closed until the owner supplies a key
+    // or explicitly removes the saved one.
+    if (secretRef !== null && (secret === null || secret.status !== 'ok'))
+      throw Error('provider_unverified');
     const next: ProviderConnectionRecord = {
       provider: this.#credentials.providerId,
       model,
-      secretRef: readable ? secretRef : null,
+      secretRef,
       intent: 'active',
       revision: (record?.revision ?? 0) + 1,
       requestId: set.requestId,
@@ -250,7 +255,7 @@ export class ProviderConnectionService {
       lastCheck: record?.lastCheck ?? null,
       updatedAt: this.#clock.now().toISOString(),
     };
-    const resolution = this.#state.resolutionFor(next, readable ? secret : null, false);
+    const resolution = this.#state.resolutionFor(next, secret, false);
     this.#state.activate(
       next,
       record?.revision ?? null,

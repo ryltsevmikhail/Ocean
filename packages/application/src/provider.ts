@@ -114,11 +114,6 @@ export interface ProviderCapabilities {
 export interface ProviderPort {
   readonly id: string;
   readonly models: readonly string[];
-  /**
-   * Per-model capabilities the adapter documents (for example image input).
-   * Optional: a provider without metadata declares no confirmed extra modality.
-   */
-  readonly modelInfo?: readonly ProviderModelInfo[];
   readonly capabilities: ProviderCapabilities;
   stream(request: ModelRequest): AsyncIterable<ProviderEvent>;
 }

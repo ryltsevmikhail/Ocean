@@ -11,7 +11,7 @@ import type {
   ProviderSecretRead,
   ProviderSecretStorePort,
 } from '../src/provider-connection-ports.js';
-import type { ChatMessage, ProviderEvent } from '../src/provider.js';
+import type { ProviderEvent } from '../src/provider.js';
 
 export interface FakeStore extends ProviderConnectionStorePort {
   readonly rows: Map<string, ProviderConnectionRecord>;
@@ -49,8 +49,10 @@ export interface FakeSecrets extends ProviderSecretStorePort {
   readonly values: Map<string, string>;
   readOverride: ((ref: string) => ProviderSecretRead | null) | null;
   writeFailure: Error | null;
+  replaceFailure: Error | null;
   removeFailure: Error | null;
   readonly writes: string[];
+  readonly replaces: { previous: string | null; ref: string }[];
 }
 export function fakeSecrets(): FakeSecrets {
   const values = new Map<string, string>();
@@ -58,8 +60,10 @@ export function fakeSecrets(): FakeSecrets {
     values,
     readOverride: null,
     writeFailure: null,
+    replaceFailure: null,
     removeFailure: null,
     writes: [],
+    replaces: [],
     read(ref) {
       const override = secrets.readOverride?.(ref);
       if (override !== null && override !== undefined) return override;
@@ -69,6 +73,12 @@ export function fakeSecrets(): FakeSecrets {
     write(ref, key) {
       if (secrets.writeFailure) throw secrets.writeFailure;
       secrets.writes.push(ref);
+      values.set(ref, key);
+    },
+    replace(previous, ref, key) {
+      if (secrets.replaceFailure) throw secrets.replaceFailure;
+      secrets.replaces.push({ previous, ref });
+      if (previous !== null) values.delete(previous);
       values.set(ref, key);
     },
     remove(ref) {
@@ -167,7 +177,4 @@ export function record(
     updatedAt: '2026-11-04T00:00:00.000Z',
     ...overrides,
   };
-}
-export function message(text: string): ChatMessage {
-  return { role: 'user', content: text };
 }

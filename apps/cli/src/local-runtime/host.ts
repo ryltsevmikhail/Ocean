@@ -26,6 +26,7 @@ import { listenLocalRuntime } from './server.js';
 import { drainBeforeDeadline } from './drain.js';
 import { RuntimeFinalization } from './finalization.js';
 import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
+import { LOCAL_PROVIDER_READ_METHODS } from '@runnets/contracts';
 import { LOCAL_PROVIDER_METHODS } from '@runnets/contracts';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
 import { providerHostSettings } from './provider-settings.js';
@@ -45,6 +46,7 @@ export interface LocalRuntimeHostOptions {
     NonNullable<RuntimeOptions['codingTools']>,
     'sandbox' | 'inspectSandbox'
   >;
+  /** `undefined` resolves saved/env; `null` forces every provider off; a value is read-only. */
   readonly provider?: ProviderPort | null;
   /** Test-only private credential store; production derives a profile sibling directory. */
   readonly providerSecretStore?: ProviderSecretStorePort;
@@ -112,7 +114,8 @@ export async function startLocalRuntime(
       env: process.env,
       now: options.now,
       restored,
-      injected: options.provider ?? null,
+      injected: options.provider === undefined ? null : options.provider,
+      disabled: options.provider === null,
       mutationsAllowed: options.restore !== true,
       ...(options.providerSecretStore === undefined
         ? {}
@@ -149,7 +152,7 @@ export async function startLocalRuntime(
         'coding.panel',
         ...PROFILE_METHODS,
         ...LOCAL_RESTORE_METHODS,
-        ...LOCAL_PROVIDER_METHODS,
+        ...(options.restore ? LOCAL_PROVIDER_READ_METHODS : LOCAL_PROVIDER_METHODS),
         ...(options.restore ? [] : LOCAL_FINALIZATION_METHODS),
         ...(options.restore ? ['restore.maintenance'] : []),
       ],

@@ -19,11 +19,11 @@ export const providerDefaultModel = computed<string>(
 export const providerCanSave = computed<boolean>(() => {
   const status = providerStatus.value;
   if (status === null || !status.writable) return false;
-  return providerKey.value.trim() !== '' || status.savedKey;
+  if (providerKey.value.trim() !== '') return true;
+  // An unreadable saved reference must be replaced or removed explicitly; an empty key
+  // never falls through to a model-only activation that could adopt the environment value.
+  return status.savedKey && status.state !== 'unverified';
 });
-export const providerKeyInvalid = computed<boolean>(
-  () => providerKey.value.trim() === '' && !(providerStatus.value?.savedKey ?? false),
-);
 function apply(status: ProviderStatus): void {
   providerStatus.value = status;
   if (status.model !== null) providerModel.value = status.model;
@@ -47,6 +47,16 @@ async function run(action: () => Promise<ProviderStatus>, success: string): Prom
   } finally {
     providerBusy.value = false;
   }
+}
+/** Drop a typed but never submitted key; the settings dialog never retains it after close. */
+export function clearProviderInput(): void {
+  providerKey.value = '';
+}
+/** The loaded provider model, or a fail-closed refusal instead of an empty wire value. */
+export function requireProviderDefaultModel(): string {
+  const model = providerDefaultModel.value;
+  if (model === '') throw Error('provider_unavailable');
+  return model;
 }
 /** Read-only refresh; a missing runtime leaves the settings panel unavailable, not broken. */
 export async function loadProviderStatus(): Promise<void> {
@@ -80,7 +90,8 @@ export async function checkProvider(): Promise<void> {
 export async function saveProvider(): Promise<void> {
   const status = providerStatus.value;
   if (status === null || !providerCanSave.value) {
-    providerMessage.value = 'Введите ключ API.';
+    providerMessage.value =
+      status?.state === 'unverified' ? explain('provider_unverified') : 'Введите ключ API.';
     providerError.value = true;
     return;
   }

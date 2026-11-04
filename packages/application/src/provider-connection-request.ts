@@ -10,7 +10,6 @@
 /** Matches the wire contract limits; duplicated because application cannot depend on contracts. */
 export const PROVIDER_KEY_MAX = 512;
 export const PROVIDER_MODEL_MAX = 256;
-export const PROVIDER_MODELS_MAX = 200;
 /** Hard bound for an explicit owner connection check. */
 export const PROVIDER_CHECK_TIMEOUT_MS = 10_000;
 

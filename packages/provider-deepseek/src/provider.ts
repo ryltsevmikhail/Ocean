@@ -35,14 +35,6 @@ export const DEEPSEEK_MODEL_INFO: readonly ProviderModelInfo[] = [
   { id: 'deepseek-v4-pro', inputModalities: ['text'] },
 ];
 
-/** Custom host model lists claim no capability this adapter can document. */
-function modelInfoFor(models: readonly string[]): readonly ProviderModelInfo[] {
-  return models.map(
-    (id) =>
-      DEEPSEEK_MODEL_INFO.find((known) => known.id === id) ?? { id, inputModalities: ['text'] },
-  );
-}
-
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 export interface DeepSeekProviderOptions {
@@ -66,7 +58,6 @@ function combineSignals(
 export class DeepSeekProvider implements ProviderPort {
   readonly id = 'deepseek';
   readonly models: readonly string[];
-  readonly modelInfo: readonly ProviderModelInfo[];
   readonly capabilities = {
     streaming: true,
     reasoning: true,
@@ -85,7 +76,6 @@ export class DeepSeekProvider implements ProviderPort {
     this.#apiKey = options.apiKey;
     this.#baseUrl = (options.baseUrl ?? DEEPSEEK_DEFAULT_ORIGIN).replace(/\/+$/, '');
     this.models = options.models ?? DEEPSEEK_MODELS;
-    this.modelInfo = modelInfoFor(this.models);
     this.#http = options.httpClient ?? fetchHttpClient;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }

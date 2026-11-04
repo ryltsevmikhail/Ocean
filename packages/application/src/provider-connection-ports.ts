@@ -12,7 +12,8 @@ import type { ProviderPort } from './provider.js';
 export type ProviderConnectionSource = 'saved' | 'external' | 'injected' | 'none';
 export type ProviderConnectionState =
   'connected' | 'disconnected' | 'unverified' | 'absent' | 'restored' | 'invalid_model';
-export type ProviderCheckOutcome = 'ok' | 'auth' | 'network' | 'timeout' | 'server' | 'unavailable';
+export type ProviderCheckOutcome =
+  'ok' | 'auth' | 'network' | 'timeout' | 'cancelled' | 'server' | 'unavailable';
 
 /** Persisted bounded check metadata; never vendor body text and never a key. */
 export interface ProviderCheckMetadata {
@@ -105,6 +106,11 @@ export interface ProviderSecretStorePort {
   read(ref: string): ProviderSecretRead;
   /** Atomic, fsynced publication; throws a stable code on an insecure store. */
   write(ref: string, key: string): void;
+  /**
+   * Publish `ref` while deleting `previous` in the same atomic publication, so a
+   * rotation can never leave a silently retained old value behind.
+   */
+  replace(previous: string | null, ref: string, key: string): void;
   /** Delete one opaque reference; the owner requested removing that value. */
   remove(ref: string): void;
 }

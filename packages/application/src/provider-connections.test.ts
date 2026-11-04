@@ -164,3 +164,44 @@ describe('provider connection service', () => {
     expect(JSON.stringify(status)).not.toContain('sk-fixture-next-key');
   });
 });
+
+describe('atomic saved-key replacement', () => {
+  it('rotates the private value in one atomic publication instead of a separate purge', () => {
+    const f = fixture();
+    f.service.set(set);
+    // A surviving remove failure proves rotation never depends on a second effect.
+    f.secrets.removeFailure = Error('remove unavailable');
+    const rotated = f.service.set({
+      requestId: 'set-2',
+      key: 'sk-fixture-rotated-key',
+      model: 'deepseek-flash',
+    });
+    expect(rotated).toMatchObject({ source: 'saved', state: 'connected', revision: 2 });
+    expect(f.secrets.replaces).toHaveLength(1);
+    expect(f.secrets.replaces[0]?.previous).toMatch(/^psec_/);
+    expect(f.secrets.replaces[0]?.ref).toMatch(/^psec_/);
+    expect(f.secrets.values.size).toBe(1);
+    expect([...f.secrets.values.values()]).toEqual(['sk-fixture-rotated-key']);
+  });
+
+  it('keeps the old value and fails closed when the replacement cannot be published', () => {
+    const f = fixture();
+    f.service.set(set);
+    const previousRef = f.store.rows.get('deepseek')?.secretRef;
+    f.secrets.replaceFailure = Error('fsync failed');
+    expect(() =>
+      f.service.set({ requestId: 'set-2', key: 'sk-fixture-next-key', model: 'deepseek-flash' }),
+    ).toThrow('provider_write_failed');
+    // Nothing was published: the old private value is untouched and no new bytes exist.
+    expect([...f.secrets.values.values()]).toEqual([set.key]);
+    expect(f.secrets.values.has(previousRef!)).toBe(true);
+    // The persisted intent fails closed until an explicit owner retry.
+    expect(f.service.status()).toMatchObject({
+      source: 'none',
+      state: 'unverified',
+      savedKey: true,
+      revision: 2,
+    });
+    expect(f.service.current()).toBeNull();
+  });
+});

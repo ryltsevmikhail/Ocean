@@ -13,8 +13,10 @@ import {
   providerModels,
   providerStatus,
   removeSavedProviderKey,
+  requireProviderDefaultModel,
   resetProviderState,
   saveProvider,
+  clearProviderInput,
 } from './provider-state.js';
 
 const status: ProviderStatus = {
@@ -109,6 +111,26 @@ it('applies a model-only change when a saved key already exists', async () => {
   expect(Object.hasOwn(sent, 'key')).toBe(false);
 });
 
+it('blocks a model-only save while the saved key is unverified', async () => {
+  const unverified = {
+    ...status,
+    source: 'none' as const,
+    state: 'unverified' as const,
+    code: 'provider_secret_corrupt',
+  };
+  const request = channel([ok(unverified)]);
+  await loadProviderStatus();
+  providerKey.value = '';
+  expect(providerCanSave.value).toBe(false);
+  await saveProvider();
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(providerError.value).toBe(true);
+  expect(providerMessage.value).toContain('не удалось подтвердить');
+  // Supplying a new key is still the explicit owner path back to a verified connection.
+  providerKey.value = 'sk-fixture-ui-key';
+  expect(providerCanSave.value).toBe(true);
+});
+
 it('refuses to save without a key or saved value and never calls the runtime', async () => {
   const missing = { ...status, source: 'none', state: 'absent', savedKey: false, revision: 0 };
   const request = channel([ok(missing)]);
@@ -140,6 +162,21 @@ it('checks the connection and reports a persisted normalized outcome', async () 
   expect(statusReply.success).toBe(true);
 });
 
+it('accepts a cancelled check outcome from the runtime', () => {
+  const cancelled = {
+    ...checkMetadata(),
+    outcome: 'cancelled' as const,
+    httpStatus: null,
+    revision: 3,
+  };
+  expect(
+    outputs['provider-check'].safeParse({
+      status: { ...status, lastCheck: cancelled },
+      check: { ...cancelled, persisted: true },
+    }).success,
+  ).toBe(true);
+});
+
 it('surfaces a stale check honestly and never claims it was saved', async () => {
   channel([
     ok(status),
@@ -168,6 +205,22 @@ it('sends guarded disconnect and saved-key deletion with the displayed revision'
     expectedRevision: 3,
   });
   expect(commands.safeParse(request.mock.calls[2]?.[0]).success).toBe(true);
+});
+
+it('clears a typed but unsubmitted key when the settings dialog closes', async () => {
+  channel([ok(status)]);
+  await loadProviderStatus();
+  providerKey.value = 'sk-fixture-unsubmitted';
+  clearProviderInput();
+  expect(providerKey.value).toBe('');
+  expect(JSON.stringify(providerStatus.value)).not.toContain('sk-fixture-unsubmitted');
+});
+
+it('refuses to build the team without a loaded provider model', async () => {
+  expect(() => requireProviderDefaultModel()).toThrow('provider_unavailable');
+  channel([ok(status)]);
+  await loadProviderStatus();
+  expect(requireProviderDefaultModel()).toBe('deepseek-flash');
 });
 
 it('disables owner mutations on a read-only provider host', async () => {
