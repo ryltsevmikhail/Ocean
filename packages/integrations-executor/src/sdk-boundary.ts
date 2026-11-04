@@ -42,6 +42,7 @@ import {
 import { dispatchBindingKey, elicitationAccepted } from './elicitation-binding.js';
 import { createAccess } from './sdk-access.js';
 import { createSetupOperations } from './sdk-setup.js';
+import { createMcpDispatchGuard } from './mcp-dispatch-guard.js';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
@@ -93,7 +94,9 @@ function toHostConnection(value: unknown): HostConnection {
 }
 
 export async function createExecutorHost(options: ExecutorHostOptions): Promise<ExecutorHost> {
+  const dispatchGuard = createMcpDispatchGuard();
   const guarded = createGuardedHttp({
+    fetchImpl: dispatchGuard.fetch,
     allowedOrigins: options.allowedOrigins,
     ...(options.requestLimitBytes === undefined
       ? {}
@@ -254,7 +257,9 @@ export async function createExecutorHost(options: ExecutorHostOptions): Promise<
         input.signal === undefined
           ? dispatch
           : Effect.raceFirst(dispatch, abortWhenSignalled(input.signal));
-      return toDispatchExit(await Effect.runPromiseExit(raced));
+      return await dispatchGuard.run(async () =>
+        toDispatchExit(await Effect.runPromiseExit(raced)),
+      );
     } finally {
       if (bindingKey !== null) {
         const count = (inFlightDispatches.get(bindingKey) ?? 1) - 1;

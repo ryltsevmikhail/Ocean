@@ -45,6 +45,7 @@ interface ProvisionHost {
     readonly description: string;
     readonly endpoint: string;
     readonly remoteTransport: 'streamable-http';
+    readonly versionNegotiation?: 'legacy';
     readonly authTemplates: readonly unknown[];
   }): Promise<string>;
   installOpenApi(input: {
@@ -117,11 +118,16 @@ function validateDescriptor(
   if (!authTemplates.some((candidate) => candidate.slug === template))
     refusal('internal_failure', 'connection template is not declared');
   if (descriptor.kind === 'mcp') {
+    if (descriptor.versionNegotiation !== undefined && descriptor.versionNegotiation !== 'legacy')
+      refusal('internal_failure', 'unsupported MCP negotiation policy');
     return {
       kind: 'mcp',
       integrationId: descriptor.integrationId,
       description: bounded(descriptor.description, 4096, 'description'),
       endpoint: httpsEndpoint(descriptor.endpoint, allowedOrigins),
+      ...(descriptor.versionNegotiation === undefined
+        ? {}
+        : { versionNegotiation: descriptor.versionNegotiation }),
       authTemplates,
       connection: { template, credentialReference: reference },
     };
@@ -175,6 +181,9 @@ export function createProvisioning(
                   description: validated.description,
                   endpoint: validated.endpoint,
                   remoteTransport: 'streamable-http',
+                  ...(validated.versionNegotiation === undefined
+                    ? {}
+                    : { versionNegotiation: validated.versionNegotiation }),
                   authTemplates: validated.authTemplates,
                 })
               : await host.installOpenApi({

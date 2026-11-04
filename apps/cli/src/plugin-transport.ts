@@ -28,7 +28,11 @@ export const GITHUB_MCP_AUTH_TEMPLATES: readonly ExecutorProvisionAuthTemplate[]
   {
     slug: 'bearer',
     type: 'apiKey',
-    headers: { Authorization: ['Bearer ', { type: 'variable', name: 'token' }] },
+    headers: {
+      Authorization: ['Bearer ', { type: 'variable', name: 'token' }],
+      'X-MCP-Tools': ['list_issues,issue_read'],
+      'X-MCP-Readonly': ['true'],
+    },
   },
 ];
 
@@ -38,6 +42,9 @@ export interface PluginConnectionFacts {
   readonly endpoint: string;
   /** Environment variable NAME only; the value never crosses this module. */
   readonly credentialReference: string;
+  readonly generation: number;
+  readonly pluginVersion: string;
+  readonly adapterVersion: string;
 }
 
 export interface ExecutorPluginTransportOptions {
@@ -91,6 +98,9 @@ export async function hostPluginTransport(
             pluginId: row.pluginId,
             endpoint: row.endpoint,
             credentialReference: row.credentialReference,
+            generation: row.generation,
+            pluginVersion: row.pluginVersion,
+            adapterVersion: row.adapterVersion,
           };
     },
     ...(input.endpointOverride === undefined ? {} : { endpointOverride: input.endpointOverride }),
@@ -130,11 +140,25 @@ export async function openExecutorPluginTransport(
       provision: (target): ExecutorProvision | null => {
         const facts = options.connection(target.connectionId);
         if (facts === null || facts.pluginId !== target.integrationId) return null;
+        const authority = target.authority;
+        if (
+          authority === undefined ||
+          authority.generation !== facts.generation ||
+          authority.endpoint !== facts.endpoint ||
+          authority.pluginVersion !== facts.pluginVersion ||
+          authority.adapterVersion !== facts.adapterVersion ||
+          authority.credentialReference !== facts.credentialReference ||
+          facts.endpoint !== shippedEndpoint()
+        )
+          return null;
         return {
           kind: 'mcp',
           integrationId: target.integrationId,
           description: 'GitHub issues (read-only remote MCP server)',
           endpoint: options.endpointOverride ?? facts.endpoint,
+          // Public SDK policy: modern header recovery can refresh/replay a call.
+          // The generic dispatch guard additionally refuses all hidden recovery.
+          versionNegotiation: 'legacy',
           authTemplates: GITHUB_MCP_AUTH_TEMPLATES,
           connection: { template: 'bearer', credentialReference: facts.credentialReference },
         };

@@ -43,6 +43,14 @@ export interface ServicePluginTarget {
   readonly integrationId: string;
   readonly connectionId: string;
   readonly owner: ServicePluginOwner;
+  /** Immutable Ocean authority snapshot, supplied only by the runtime owner. */
+  readonly authority?: {
+    readonly generation: number;
+    readonly endpoint: string;
+    readonly pluginVersion: string;
+    readonly adapterVersion: string;
+    readonly credentialReference: string;
+  };
 }
 
 /** A tool as exposed to the application: name, summary and JSON input schema. */
@@ -213,6 +221,8 @@ export interface ServicePluginTransportQualification {
  * allowlist and one isolated runtime; they never retry an invocation.
  */
 export interface ServicePluginTransportPort {
+  /** Local session proof only: never provisions or performs network I/O. */
+  readonly sessions?: ServicePluginSessions;
   /** Current qualification; safe to call at any time, performs no I/O. */
   qualification(): ServicePluginTransportQualification;
   /** Bounded discovery. Throws `ServicePluginDiscoveryRefusedError` to fail closed. */
@@ -226,4 +236,12 @@ export interface ServicePluginTransportPort {
     invocation: ServicePluginInvocation,
     options?: ServicePluginInvokeOptions,
   ): Promise<ServicePluginInvokeOutcome>;
+}
+
+export interface ServicePluginSessions {
+  ready(target: ServicePluginTarget): boolean;
+  /** The exact discovery receipt still has its original credential snapshot. */
+  current(catalog: ServicePluginCatalog): boolean;
+  /** Activate only after durable publication succeeds; no candidate is executable earlier. */
+  publish(catalog: ServicePluginCatalog, target: ServicePluginTarget): boolean;
 }

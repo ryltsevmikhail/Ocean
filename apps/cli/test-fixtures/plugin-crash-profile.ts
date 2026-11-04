@@ -24,16 +24,14 @@ afterEach(async () => {
 export const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 export const clock = { now: () => new Date('2026-11-04T00:00:00.000Z') };
 
-export const tools = [
-  {
-    name: 'list_issues',
-    description: 'List issues',
-    inputSchema: {
-      type: 'object',
-      properties: { owner: { type: 'string' }, repo: { type: 'string' } },
-    },
+export const tools = ['issue_read', 'list_issues'].map((name) => ({
+  name,
+  description: name,
+  inputSchema: {
+    type: 'object',
+    properties: { owner: { type: 'string' }, repo: { type: 'string' } },
   },
-];
+}));
 export const digest = sha256(canonicalJson([...tools]));
 
 export async function prepareProfile(): Promise<{

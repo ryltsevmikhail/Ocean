@@ -96,6 +96,7 @@ export async function rig(
       if (row === null || row.pluginId !== target.integrationId) return null;
       return {
         kind: 'mcp',
+        versionNegotiation: 'legacy',
         integrationId: target.integrationId,
         description: 'GitHub issues (read-only loopback fixture)',
         endpoint: server.endpoint,
@@ -112,6 +113,7 @@ export async function rig(
   });
   cleanups.push(() => inner.close());
   const transport: ServicePluginTransportPort = {
+    ...(inner.sessions === undefined ? {} : { sessions: inner.sessions }),
     qualification: () => inner.qualification(),
     discover: (target, discoverOptions) => inner.discover(target, discoverOptions),
     invoke: (target, invocation, invokeOpts) => {

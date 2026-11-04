@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { connect, type Socket } from 'node:net';
 import {
   LOCAL_RUNTIME_MAX_WAIT_MS,
+  LOCAL_PLUGIN_SESSION_AUTHORITY,
   isLocalRuntimeIdentity,
   isLocalReceiptQuery,
   isLocalRunQuery,
@@ -149,6 +150,11 @@ async function connectDescriptor(
       identity.profileId !== descriptor.profileId
     )
       throw Error('identity_mismatch');
+    if (
+      identity.capabilities.some((capability) => capability.startsWith('plugin.')) &&
+      !identity.capabilities.includes(LOCAL_PLUGIN_SESSION_AUTHORITY)
+    )
+      throw Error('plugin_runtime_upgrade_required');
     return {
       identity,
       ...localRestoreClient(peer.request.bind(peer)),

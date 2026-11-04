@@ -48,6 +48,7 @@ export const PLUGIN_PROTOCOL = {
 
 /** Fail-closed default: no SDK import, no host, no network request. */
 export class DisabledPluginTransport implements ServicePluginTransportPort {
+  readonly sessions = { ready: () => false, current: () => false, publish: () => false };
   readonly #reason: string;
   constructor(reason = 'execution_disabled') {
     this.#reason = reason;
@@ -189,7 +190,7 @@ export function composePluginRuntime(options: ComposePluginRuntimeOptions): Plug
     ...context,
   });
   connections.initialize();
-  const access = new PluginAccessService({ store: options.stores.access, ...context });
+  const access = new PluginAccessService({ store: options.stores.access, transport, ...context });
   const admission =
     options.stores.admission === undefined
       ? null
@@ -208,6 +209,7 @@ export function composePluginRuntime(options: ComposePluginRuntimeOptions): Plug
           grants: options.stores.access,
           connections: options.stores.connections,
           admission,
+          transport,
         });
   const operations =
     options.stores.operations === undefined

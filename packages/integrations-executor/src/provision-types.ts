@@ -25,6 +25,8 @@ export interface ExecutorMcpProvision {
   readonly integrationId: string;
   readonly description: string;
   readonly endpoint: string;
+  /** Explicit supported protocol policy; absent retains SDK negotiation. */
+  readonly versionNegotiation?: 'legacy';
   readonly authTemplates: readonly ExecutorProvisionAuthTemplate[];
   readonly connection: ExecutorProvisionConnection;
 }

@@ -44,6 +44,7 @@ async function openHarness(scenario: McpScenario): Promise<Harness> {
     description: 'Synthetic MCP server',
     endpoint: `${mcp.base}/mcp`,
     remoteTransport: 'streamable-http',
+    versionNegotiation: 'legacy',
     authTemplates: mcpAuthTemplates,
   });
   await host.createConnection({

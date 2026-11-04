@@ -92,6 +92,8 @@ export class SqlitePluginConnections implements PluginConnectionStorePort {
            plugin_version = coalesce(?, plugin_version),
            adapter_version = coalesce(?, adapter_version),
            generation = generation + 1,
+           schema_digest = NULL, tools = NULL, identity = NULL, identity_verified = 0,
+           last_discovery_at = NULL, consented_generation = NULL, consented_at = NULL,
            updated_at = ?
            WHERE id = ?`,
         )

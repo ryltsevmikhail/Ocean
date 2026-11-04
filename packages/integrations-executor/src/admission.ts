@@ -11,18 +11,21 @@ import type { ExecutorHost } from './host-types.js';
 import { runInvocation } from './invoke.js';
 import { normalizeAllowedOrigins } from './origins.js';
 import { verifyPinnedIntegrity } from './pinned-integrity.js';
-import { createProvisioning, type Provisioning } from './provision.js';
+import type { Provisioning } from './provision.js';
 import { createSetupCredentialProvider } from './setup-provider.js';
 import { createExecutorHost } from './sdk-boundary.js';
 import type { ExecutorTransportBackend } from './backend.js';
 import type { ExecutorTransportOpenOptions, ExecutorTransportStatus } from './status.js';
 import { ExecutorTransportOpenError, assessQualification, freezeStatus } from './status.js';
+import type { ServicePluginSessions } from '@runnets/application';
+import { createSessionBackend } from './sessions.js';
 
 export interface Admission {
   readonly backend: ExecutorTransportBackend;
   readonly status: ExecutorTransportStatus;
   /** Present only when a declarative provisioner was supplied. */
   readonly provisioning: Provisioning | null;
+  readonly sessions?: ServicePluginSessions;
 }
 
 /** Wrap an already-created host (tests / the future Task 5 host layer). */
@@ -75,21 +78,26 @@ export async function admit(options: ExecutorTransportOpenOptions): Promise<Admi
       `Executor transport cannot enable execution: ${status.reason ?? 'unqualified'}`,
     );
   }
-  const host = await createExecutorHost({
-    tenantId: options.tenantId,
-    subjectId: options.subjectId,
-    allowedOrigins,
-    // The writable session provider lets the consented discovery pass create
-    // the named connection with an environment-reference credential.
-    ...(options.provision === undefined ? {} : { providers: [createSetupCredentialProvider()] }),
-  });
-  const provisioning =
-    options.provision === undefined
-      ? null
-      : createProvisioning(host, {
-          allowedOrigins,
-          resolveCredential: options.resolveCredential ?? (() => null),
-          provision: options.provision,
-        });
-  return { backend: createBackend(host), status: freezeStatus(status), provisioning };
+  const createHost = () =>
+    createExecutorHost({
+      tenantId: options.tenantId,
+      subjectId: options.subjectId,
+      allowedOrigins,
+      // The writable session provider lets the consented discovery pass create
+      // the named connection with an environment-reference credential.
+      ...(options.provision === undefined ? {} : { providers: [createSetupCredentialProvider()] }),
+    });
+  if (options.provision !== undefined) {
+    const bound = createSessionBackend(
+      {
+        allowedOrigins,
+        resolveCredential: options.resolveCredential ?? (() => null),
+        provision: options.provision,
+      },
+      createHost,
+    );
+    return { ...bound, status: freezeStatus(status), provisioning: null };
+  }
+  const host = await createHost();
+  return { backend: createBackend(host), status: freezeStatus(status), provisioning: null };
 }

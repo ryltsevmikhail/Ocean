@@ -62,6 +62,7 @@ export function invalidatePluginPreview(): void {
 }
 export function pluginCanGrant(): boolean {
   return (
+    pluginSelectedConnection()?.readiness === 'ready' &&
     pluginSelectedConnection()?.schemaDigest !== null &&
     pluginSelectedConnection()?.schemaDigest !== undefined &&
     pluginRepository.value.trim() !== '' &&

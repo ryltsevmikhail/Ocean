@@ -158,6 +158,9 @@ function close() {
             <strong>{{ connection.name }}</strong> · поколение {{ connection.generation }} ·
             {{ connection.state }} · личность {{ connection.identityLabel }} · схема
             {{ connection.schemaDigest === null ? 'не опубликована' : 'опубликована' }}
+            <span v-if="connection.readiness === 'discovery_required'">
+              Требуется новое согласие на обнаружение, затем выдача доступа.
+            </span>
           </label>
           <small class="muted">credential: {{ connection.credentialReference }}</small>
         </li>

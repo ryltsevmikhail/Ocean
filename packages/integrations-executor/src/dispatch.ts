@@ -16,8 +16,9 @@
  *   failure was observed,
  * - unknown vendor error codes without a status are `uncertain` (fail closed).
  *
- * `not_started` is produced only by the adapter's own pre-dispatch checks in
- * `transport.ts`; it is never inferred from an SDK error tag.
+ * `not_started` is produced only by the adapter's own pre-dispatch checks or
+ * its HTTP counter proving that catalog recovery was blocked before dispatch;
+ * it is never inferred from an SDK error tag.
  */
 import type { ServicePluginInvokeOutcome, ServicePluginJson } from '@runnets/application';
 
@@ -28,7 +29,7 @@ export type ExecutorDispatchExit =
   | { readonly ok: true; readonly value: unknown }
   | {
       readonly ok: false;
-      readonly outcome: 'timeout' | 'interrupted' | 'failure';
+      readonly outcome: 'timeout' | 'interrupted' | 'failure' | 'not_started';
       readonly tag: string;
     };
 
@@ -104,6 +105,13 @@ export function classifyDispatchExit(
 ): ServicePluginInvokeOutcome {
   if (!exit.ok) {
     switch (exit.outcome) {
+      case 'not_started':
+        return {
+          kind: 'not_started',
+          invocationId,
+          code: 'catalog_unavailable',
+          detail: 'Catalog discovery required; no business request was sent.',
+        };
       case 'timeout':
         return uncertain(
           invocationId,

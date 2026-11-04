@@ -142,6 +142,7 @@ export const pluginConnectionView = z
     consentedGeneration: generation.nullable(),
     consentedAt: z.string().max(64).nullable(),
     lastDiscoveryAt: z.string().max(64).nullable(),
+    readiness: z.enum(['ready', 'discovery_required', 'disconnected']),
     createdAt: z.string().max(64),
     updatedAt: z.string().max(64),
   })

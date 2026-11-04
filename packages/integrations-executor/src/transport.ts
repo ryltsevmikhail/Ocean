@@ -17,6 +17,7 @@ import type {
   ServicePluginTarget,
   ServicePluginTransportPort,
   ServicePluginTransportQualification,
+  ServicePluginSessions,
 } from '@runnets/application';
 
 import { admit } from './admission.js';
@@ -59,6 +60,7 @@ function refusalDetail(status: ExecutorTransportStatus): string {
 }
 
 export class ExecutorServicePluginTransport implements ServicePluginTransportPort {
+  readonly sessions?: ServicePluginSessions;
   readonly #backend: ExecutorTransportBackend;
   readonly #status: ExecutorTransportStatus;
   /** Lazy provisioning hook; only `discover()` may create an upstream connection. */
@@ -74,6 +76,7 @@ export class ExecutorServicePluginTransport implements ServicePluginTransportPor
     status: ExecutorTransportStatus,
     token: typeof INTERNAL_CONSTRUCTION_TOKEN,
     ensure: ((target: Target) => Promise<void>) | null = null,
+    sessions?: ServicePluginSessions,
   ) {
     if (token !== INTERNAL_CONSTRUCTION_TOKEN) {
       throw new Error('Executor transport instances are created through its factories only');
@@ -81,6 +84,7 @@ export class ExecutorServicePluginTransport implements ServicePluginTransportPor
     this.#backend = backend;
     this.#status = freezeStatus(status);
     this.#ensure = ensure;
+    if (sessions !== undefined) this.sessions = sessions;
   }
 
   /** Public factory. Execution stays disabled unless explicitly enabled. */
@@ -93,6 +97,7 @@ export class ExecutorServicePluginTransport implements ServicePluginTransportPor
       admission.status,
       INTERNAL_CONSTRUCTION_TOKEN,
       admission.provisioning === null ? null : (target) => admission.provisioning!.ensure(target),
+      admission.sessions,
     );
   }
 

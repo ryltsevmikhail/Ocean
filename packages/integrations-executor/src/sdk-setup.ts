@@ -80,6 +80,9 @@ export function createSetupOperations(access: BoundaryAccess): HostSetupOperatio
           description: input.description,
           endpoint: input.endpoint,
           remoteTransport: input.remoteTransport,
+          ...(input.versionNegotiation === undefined
+            ? {}
+            : { versionNegotiation: input.versionNegotiation }),
           authenticationTemplate: input.authTemplates,
         }),
         'mcp.addServer',

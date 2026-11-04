@@ -34,6 +34,7 @@ const connection = {
   state: 'active' as const,
   generation: 1,
   schemaDigest: null,
+  readiness: 'discovery_required',
   tools: [],
   consented: false,
   consentedGeneration: null,

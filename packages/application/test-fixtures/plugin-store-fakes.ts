@@ -138,6 +138,13 @@ export function fakeConnectionStore(maps: PluginFakeMaps): PluginConnectionStore
         ...row,
         ...patch,
         generation: row.generation + 1,
+        schemaDigest: null,
+        tools: null,
+        identity: null,
+        identityVerified: false,
+        lastDiscoveryAt: null,
+        consentedGeneration: null,
+        consentedAt: null,
         updatedAt: at,
       };
       maps.connections.set(id, clone(changed));

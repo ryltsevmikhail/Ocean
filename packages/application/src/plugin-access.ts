@@ -16,6 +16,8 @@ import {
   type PluginGrantScope,
 } from '@runnets/domain';
 import { pluginGrantExplanation } from './plugin-visibility.js';
+import { pluginSessionReady } from './plugin-session-authority.js';
+import type { ServicePluginTransportPort } from './service-plugin-transport.js';
 import {
   PluginRefusedError,
   type PluginAccessStorePort,
@@ -25,6 +27,7 @@ import {
 
 export interface PluginAccessServiceOptions extends PluginServiceContext {
   readonly store: PluginAccessStorePort;
+  readonly transport?: ServicePluginTransportPort;
 }
 
 export interface PluginGrantRequest {
@@ -70,9 +73,11 @@ export interface PluginGrantView {
 export class PluginAccessService {
   readonly #store: PluginAccessStorePort;
   readonly #context: PluginServiceContext;
+  readonly #transport: Pick<ServicePluginTransportPort, 'sessions'>;
 
   constructor(options: PluginAccessServiceOptions) {
     this.#store = options.store;
+    this.#transport = options.transport ?? {};
     this.#context = {
       clock: options.clock,
       nextId: options.nextId,
@@ -219,6 +224,7 @@ export class PluginAccessService {
     if (connection.pluginVersion !== enabled.version) return deny('plugin_version_changed');
     if (connection.schemaDigest === null || connection.tools === null)
       return deny('schema_unavailable');
+    if (!pluginSessionReady(this.#transport, connection)) return deny('discovery_required');
     if (!validPluginRepository(input.repository)) return deny('invalid_repository');
     const declared = new Set(enabled.manifest.operations.map((operation) => operation.tool));
     const discovered = new Set(connection.tools.map((tool): string => tool.name));

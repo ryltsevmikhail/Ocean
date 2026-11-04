@@ -104,6 +104,7 @@ export interface HostMcpInput {
   readonly endpoint: string;
   /** Pinned to a loopback HTTP transport; stdio (local process) is refused. */
   readonly remoteTransport: 'streamable-http';
+  readonly versionNegotiation?: 'legacy';
   readonly authTemplates: readonly unknown[];
 }
 

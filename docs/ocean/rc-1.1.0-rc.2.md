@@ -1,5 +1,9 @@
 # Ocean 1.1 RC2 candidate record
 
+Later stable-source work: the [2026-11-04 GitHub pilot qualification](github-pilot.md)
+repairs discovery, session authority and hidden MCP retries. It does not change
+the frozen RC2 artifact or its historical qualification status recorded here.
+
 Status: **RC2 candidate under final qualification; not a release decision.** This
 records what the RC2 candidate implements, what it deliberately leaves open, and
 which evidence classes it rests on. It is explicit about planned versus

@@ -5,7 +5,6 @@
 // to the private fixture log so CLI/TUI/Desktop evidence is attributable.
 import { appendFileSync } from 'node:fs';
 import { startLocalRuntime } from '../../cli/dist/local-runtime/host.js';
-import { openExecutorPluginTransport } from '../../cli/dist/plugin-transport.js';
 import { deterministicProvider, startGithubMcpServer } from './github-fixture.mjs';
 
 const profileIndex = process.argv.indexOf('--profile');
@@ -21,21 +20,11 @@ const record = (entry) => {
 
 const mcp = await startGithubMcpServer();
 record({ kind: 'mcp-ready', endpoint: mcp.endpoint, counts: mcp.counts });
-const transport = await openExecutorPluginTransport({
-  env: process.env,
-  connection: () => ({
-    pluginId: 'github',
-    endpoint: mcp.endpoint,
-    credentialReference: 'OCEAN_GITHUB_WORK_TOKEN',
-  }),
-  endpointOverride: endpointOverride ?? mcp.endpoint,
-});
-record({ kind: 'transport', qualification: transport.qualification() });
 const provider = deterministicProvider();
 const host = await startLocalRuntime({
   profile,
   provider,
-  pluginTransport: transport,
+  pluginEndpointOverride: endpointOverride ?? mcp.endpoint,
   pluginEnv: process.env,
 });
 record({ kind: 'ready', instanceId: host.identity.instanceId, mcpCounts: mcp.counts });
