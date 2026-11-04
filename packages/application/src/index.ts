@@ -62,3 +62,10 @@ export * from './coding-finalization-recovery.js';
 export * from './coding-finalization-result.js';
 
 export * from './service-plugin-transport.js';
+
+export * from './plugin-ports.js';
+export * from './plugin-json.js';
+export * from './plugin-catalog.js';
+export * from './plugin-connections.js';
+export * from './plugin-access.js';
+export * from './plugin-admission.js';

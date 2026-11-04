@@ -7,7 +7,6 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { closeSync } from 'node:fs';
 import { recoverEndpoint, publishEndpoint } from './endpoint.js';
 import { profileKey, type EndpointLayout } from './endpoint-files.js';
-import type { ProviderPort, RuntimeRecovery } from '@runnets/application';
 import { LOCAL_RUNTIME_MAX_WAIT_MS } from '@runnets/contracts';
 import type {
   LocalRuntimeIdentity,
@@ -19,7 +18,6 @@ import { CodingPanelQueries } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
 import { RuntimeTurns } from './turns.js';
-import type { RuntimeOptions } from '../runtime.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
 import { drainBeforeDeadline } from './drain.js';
@@ -31,37 +29,10 @@ import { systemClock } from '@runnets/store';
 import { RuntimeBroadcasts } from './broadcast.js';
 import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
-import { providerHostSettings } from './provider-settings.js';
-import type { ProviderSecretStorePort } from '@runnets/application';
-export interface LocalRuntimeHost {
-  readonly identity: LocalRuntimeIdentity;
-  readonly recovery: RuntimeRecovery;
-  readonly closed: Promise<void>;
-  status(): LocalRuntimeStatus;
-  stop(): Promise<LocalRuntimeStop>;
-}
-export interface LocalRuntimeHostOptions {
-  readonly profile: string;
-  readonly restore?: boolean;
-  /** Host-only composition. Providers and coding authority never arrive over the wire. */
-  readonly codingTools?: Pick<
-    NonNullable<RuntimeOptions['codingTools']>,
-    'sandbox' | 'inspectSandbox'
-  >;
-  /** `undefined` resolves saved/env; `null` forces every provider off; a value is read-only. */
-  readonly provider?: ProviderPort | null;
-  /** Test-only private credential store; production derives a profile sibling directory. */
-  readonly providerSecretStore?: ProviderSecretStorePort;
-  /** Explicit credential-directory override for fixtures; production is deterministic. */
-  readonly credentialDir?: string;
-  /** Test-only deterministic vendor transport origin; never wire input. */
-  readonly providerBaseUrl?: string;
-  /** Test-only deterministic clock; production omits it and uses Date.now (never wire input). */
-  readonly now?: () => number;
-  /** Additional host supervision joins runtime-owned execution before SQLite close. */
-  readonly drain?: () => Promise<'settled' | 'uncertain'>;
-  readonly drainDeadlineMs?: number;
-}
+import { settingsHosts } from './settings-hosts.js';
+import type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
+export type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
+
 /** The existing runtime remains the only SQLite owner and recovery/effect journal executor. */
 export async function startLocalRuntime(
   options: LocalRuntimeHostOptions,
@@ -108,22 +79,20 @@ export async function startLocalRuntime(
     if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
       throw Error('durable_runtime_required');
     const restored = options.restore === true || runtime.restored === true;
-    if (!runtime.providerConnections) throw Error('durable_runtime_required');
-    // Saved and environment credentials are resolved by the runtime, never by a client.
-    const provider = providerHostSettings({
-      store: runtime.providerConnections,
+    // Saved/environment credentials and plugin state are resolved by the runtime, never by a client.
+    const { provider, plugins } = settingsHosts({
       profile: paths.profile,
+      runtime,
       env: process.env,
       now: options.now,
       restored,
+      restore: options.restore === true,
       injected: options.provider === undefined ? null : options.provider,
       disabled: options.provider === null,
-      mutationsAllowed: options.restore !== true,
-      ...(options.providerSecretStore === undefined
-        ? {}
-        : { secretStore: options.providerSecretStore }),
-      ...(options.credentialDir === undefined ? {} : { credentialDir: options.credentialDir }),
-      ...(options.providerBaseUrl === undefined ? {} : { baseUrl: options.providerBaseUrl }),
+      providerSecretStore: options.providerSecretStore,
+      credentialDir: options.credentialDir,
+      providerBaseUrl: options.providerBaseUrl,
+      pluginTransport: options.pluginTransport,
     });
     const finalization = new RuntimeFinalization(
       runtime.finalization,
@@ -251,6 +220,7 @@ export async function startLocalRuntime(
             return finalization.dispatch(method, params);
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
             return provider.settings.dispatch(method, params, detached);
+          if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
           if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
             return broadcasts.dispatch(method, params, detached);
           if (method === 'desktop.assets') return desktop(params, state !== 'ready');

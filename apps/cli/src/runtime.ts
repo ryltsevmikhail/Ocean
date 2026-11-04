@@ -1,6 +1,10 @@
 import type {
   ConversationStore,
   DesktopAssetStore,
+  PluginAccessStorePort,
+  PluginAdmissionStorePort,
+  PluginCatalogStorePort,
+  PluginConnectionStorePort,
   ProfileRebindStore,
   ProviderConnectionStorePort,
 } from '@runnets/application';
@@ -61,6 +65,13 @@ export interface Runtime {
   readonly finalization?: CodingFinalizationStore;
   /** Provider connection metadata; durable hosts own the only authoritative copy. */
   readonly providerConnections?: ProviderConnectionStorePort;
+  /** Authoritative plugin catalog/connection/grant stores; durable hosts only. */
+  readonly plugins?: {
+    readonly catalog: PluginCatalogStorePort;
+    readonly connections: PluginConnectionStorePort;
+    readonly access: PluginAccessStorePort;
+    readonly admission: PluginAdmissionStorePort;
+  };
   /** Current durable profile owner identity (lease owner); absent when ephemeral. */
   readonly ownerId?: string;
   readonly codingReview?: CodingReviewService;
@@ -177,6 +188,12 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       restored,
       finalization: store.finalization,
       providerConnections: store.providerConnections,
+      plugins: {
+        catalog: store.pluginCatalog,
+        connections: store.pluginConnections,
+        access: store.pluginAccess,
+        admission: store.pluginAdmission,
+      },
       ownerId: codingDeps.ownerId,
       openRebindStore: () => store.rebind,
       service,

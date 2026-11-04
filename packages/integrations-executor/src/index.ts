@@ -12,3 +12,12 @@ export type {
   ExecutorTransportStatus,
 } from './transport.js';
 export { PINNED_IDENTITIES } from './pinned-identity.js';
+export {
+  ExecutorPluginSetup,
+  ExecutorSetupError,
+  type ExecutorIntegrationInstall,
+  type ExecutorConnectionSetup,
+  type ExecutorPluginSetupOptions,
+  type ExecutorPluginSetupStatus,
+  type ExecutorSetupFailureCode,
+} from './setup.js';

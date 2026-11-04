@@ -7,6 +7,7 @@ import { runView, type RunBookPort, type ScreenEntry, type BookOutcome } from '.
 import type { RoomConnection } from './room-connection.js';
 import { RemoteRoomView } from './remote-room-view.js';
 import { RemoteBroadcast } from './remote-broadcast.js';
+import { RemotePlugins } from './remote-plugins.js';
 
 export class RemoteChatRunBook implements RunBookPort {
   readonly #connection: RoomConnection;
@@ -14,6 +15,7 @@ export class RemoteChatRunBook implements RunBookPort {
   readonly #submission: RoomSubmission;
   readonly #decisions: RemoteDecisions;
   readonly #broadcast: RemoteBroadcast;
+  readonly #plugins: RemotePlugins;
   get decisionPanel() {
     return this.#decisions.panel;
   }
@@ -30,6 +32,7 @@ export class RemoteChatRunBook implements RunBookPort {
     this.#submission = new RoomSubmission(connection, this.#view.scope, taskId);
     this.#decisions = new RemoteDecisions(connection, this.#view);
     this.#broadcast = new RemoteBroadcast(connection, this.#view.scope);
+    this.#plugins = new RemotePlugins(connection, this.#view.scope);
   }
   get workspace() {
     return this.#view.workspace;
@@ -72,6 +75,8 @@ export class RemoteChatRunBook implements RunBookPort {
     return this.#broadcast.status();
   }
   async turn(_entry: ScreenEntry, prompt: string): Promise<BookOutcome> {
+    const plugin = await this.#plugins.handle(prompt);
+    if (plugin !== null) return { kind: 'notice', status: plugin };
     const broadcast = await this.#broadcastCommand(prompt);
     if (broadcast !== null) return { kind: 'notice', status: broadcast };
     const status = await this.#decisions.handle(prompt);

@@ -102,12 +102,13 @@ export async function backupProfileV2(
   try {
     await snapshotCodingDatabase(
       join(profile, 'runtime.sqlite'),
-      (inventory, desktop, databaseBytes, state) => {
+      (inventory, desktop, databaseBytes, state, plugins) => {
         restoration = state;
         prepared = prepareProfileBackupAssets(
           {
             inventory,
             desktop,
+            plugins,
             profile,
             managed: liveManagedDirectory(profile, state, managed),
             databaseBytes,
@@ -179,7 +180,7 @@ export function restoreProfileV2(
         preserveProfileRestoreLineage(from, join(to, 'restore-lineage'), manifest);
       copyProfileBackupDatabase(join(from, 'runtime.sqlite'), output, manifest);
       syncFile(join(to, 'runtime.sqlite'));
-      restoreProfileBackupAssets(join(from, 'assets'), join(to, 'assets'), manifest.assets);
+      restoreProfileBackupAssets(join(from, 'assets'), join(to, 'assets'), manifest.assets, to);
       installRestoreOrigin(to, manifest);
       atomicPrivateJson(join(to, 'restore-guard.json'), {
         state: 'ready',

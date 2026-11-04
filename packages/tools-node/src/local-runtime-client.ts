@@ -32,6 +32,7 @@ import { localRoomClient, validatedParams, type LocalRoomClient } from './local-
 import { localDecisionClient, type LocalDecisionClient } from './local-decision-client.js';
 import { localProviderClient, type LocalProviderClient } from './local-provider-client.js';
 import { localBroadcastClient, type LocalBroadcastClient } from './local-broadcast-client.js';
+import { localPluginClient, type LocalPluginClient } from './local-plugin-client.js';
 export interface LocalRuntimeClient
   extends
     LocalRestoreClient,
@@ -42,6 +43,7 @@ export interface LocalRuntimeClient
     LocalPanelClient,
     LocalProviderClient,
     LocalBroadcastClient,
+    LocalPluginClient,
     LocalFinalizationClient {
   readonly identity: LocalRuntimeIdentity;
   submit(request: LocalTurnRequest): Promise<LocalTurnReceipt>;
@@ -156,6 +158,11 @@ async function connectDescriptor(
       ...localDecisionClient(peer.request.bind(peer)),
       ...localFinalizationClient(peer.request.bind(peer)),
       ...localBroadcastClient((method, params) => peer.request(method, params)),
+      ...localPluginClient((method, params, timeout) =>
+        timeout === undefined
+          ? peer.request(method, params)
+          : peer.request(method, params, timeout),
+      ),
       ...localProviderClient((method, params, timeout) =>
         timeout === undefined
           ? peer.request(method, params)

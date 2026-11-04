@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, it } from 'vitest';
 import { prepareProfileBackupAssets, type ProfileBackupSource } from '@runnets/tools-node';
+import { emptyPluginBackupInventory } from '@runnets/domain';
 
 it('refuses an origin-bearing preparation that lacks the frozen lineage reader', () => {
   const root = mkdtempSync(join(tmpdir(), 'lineage-required-'));
@@ -43,6 +44,7 @@ it('refuses an origin-bearing preparation that lacks the frozen lineage reader',
         applications: [],
       },
       desktop: {},
+      plugins: emptyPluginBackupInventory(),
       profile: join(root, 'profile'),
       managed: join(root, 'managed'),
       databaseBytes: 1,

@@ -15,6 +15,7 @@ import type { ProfileBackupAssets, ProfileBackupAssetCatalog } from './profile-b
 import { verifyCodingAssetArchive } from './coding-asset-archive.js';
 import { verifyCodingDependencyArchive } from './coding-dependency-archive.js';
 import { verifyDesktopAssetArchive } from './desktop-assets.js';
+import { verifyPluginBackupFiles } from './plugin-backup-files.js';
 import { verifyPartialCodingGitArchive } from './coding-git-partial-archive.js';
 import { verifyProfileGit } from './profile-backup-git.js';
 import { verifyProfileRecovery } from './profile-backup-recovery.js';
@@ -29,6 +30,7 @@ const identity = (catalog: ProfileBackupAssetCatalog): ProfileBackupAssetIdentit
   recovery: catalog.recovery.hash,
   dependencies: catalog.dependencies.hash,
   desktop: catalog.desktop?.hash ?? null,
+  ...(catalog.plugins ? { plugins: catalog.plugins.hash } : {}),
 });
 function names(path: string): string[] {
   const fd = privateAssetDirectory(path);
@@ -132,9 +134,12 @@ export function verifyProfileAssetArchive(
     }
     validateProfileCatalogShape(catalog);
     const { hash, ...body } = catalog;
+    const catalogKeys =
+      catalog.plugins === undefined
+        ? 'dependencies,desktop,desktopInventory,format,git,hash,inventory,recovery,worktrees'
+        : 'dependencies,desktop,desktopInventory,format,git,hash,inventory,plugins,recovery,worktrees';
     if (
-      Object.keys(catalog).sort().join() !==
-        'dependencies,desktop,desktopInventory,format,git,hash,inventory,recovery,worktrees' ||
+      Object.keys(catalog).sort().join() !== catalogKeys ||
       catalog.format !== 2 ||
       hash !== profileHash(body) ||
       profileHash(identity(catalog)) !== profileHash(expected) ||
@@ -153,6 +158,7 @@ export function verifyProfileAssetArchive(
         'dependencies',
         ...(catalog.desktop ? ['desktop'] : []),
         'git',
+        ...(catalog.plugins ? ['plugins'] : []),
         'recovery',
         'worktrees',
       ]
@@ -262,13 +268,18 @@ export function verifyProfileAssetArchive(
         profileHash(desktop.inventory) !== profileHash(catalog.desktopInventory)
       )
         return bad();
-    } else if (
-      catalog.desktopInventory.binding ||
-      catalog.desktopInventory.messages.length ||
-      catalog.desktopInventory.operations.length ||
-      catalog.desktopInventory.uploads.length
-    )
-      return bad();
+    }
+    if (catalog.plugins) {
+      verifyPluginBackupFiles(join(directory, 'plugins'), catalog.plugins);
+    }
+    if (!catalog.desktop)
+      if (
+        catalog.desktopInventory.binding ||
+        catalog.desktopInventory.messages.length ||
+        catalog.desktopInventory.operations.length ||
+        catalog.desktopInventory.uploads.length
+      )
+        return bad();
     const result = { catalog, identity: identity(catalog) };
     consume?.(structuredClone(result));
     return result;

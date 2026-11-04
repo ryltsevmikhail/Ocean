@@ -145,3 +145,21 @@ export {
 export { deriveLineagePartition } from './profile-lineage-partition.js';
 export { verifyLineageArchives } from './profile-lineage-verify.js';
 export { readLineageFile, type LineageFileCapture } from './profile-lineage-file.js';
+
+export {
+  createPluginInstallStore,
+  createEnvironmentCredentialReferences,
+  pluginDirectory,
+  pluginManifestBytes,
+  type PluginInstallStore,
+} from './plugin-install-store.js';
+export {
+  archivePluginBackupFiles,
+  verifyPluginBackupFiles,
+  restorePluginBackupFiles,
+  pluginVersionDirectory,
+  pluginBackupHash,
+  type PluginBackupAssetCatalog,
+  type PluginBackupFile,
+} from './plugin-backup-files.js';
+export { localPluginClient, type LocalPluginClient } from './local-plugin-client.js';

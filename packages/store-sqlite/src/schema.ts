@@ -16,7 +16,7 @@ import { applyMigrations } from './schema-migrations.js';
 
 import { ownerBusy } from './maintenance-owner.js';
 import { userTables } from './schema-inspection.js';
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
