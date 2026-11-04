@@ -65,3 +65,5 @@ export * from './plugin-grant.js';
 export * from './plugin-operation.js';
 
 export * from './plugin-backup.js';
+
+export * from './model-capabilities.js';

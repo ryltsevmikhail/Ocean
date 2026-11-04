@@ -1,4 +1,5 @@
-import type { ProviderCheckMetadata } from './provider-connection-ports.js';
+import type { ProviderConnectionReceipt } from './provider-connection-ports.js';
+import type { ModelCheckMetadata, ModelConnectionStatus } from './model-connection-types.js';
 
 export type ModelConnectionIntent = 'unconfigured' | 'active' | 'disconnected' | 'pending';
 export interface ModelSecretChange {
@@ -20,7 +21,7 @@ export interface ModelConnectionRecord {
   readonly revision: number;
   readonly requestId: string | null;
   readonly binding: string | null;
-  readonly lastCheck: ProviderCheckMetadata | null;
+  readonly lastCheck: ModelCheckMetadata | null;
   readonly updatedAt: string;
   readonly pendingSecretChange: ModelSecretChange | null;
   /** Eligibility for the designated old fallback; intent and saved-reference precedence still apply. */
@@ -31,6 +32,7 @@ export interface ModelConnectionRecord {
 export interface ModelConnectionReceipt {
   readonly binding: string;
   readonly result: ModelConnectionRecord;
+  readonly publicResult?: { readonly version: 1; readonly status: ModelConnectionStatus };
 }
 export interface ModelConnectionStorePort {
   list(): readonly ModelConnectionRecord[];
@@ -64,4 +66,14 @@ export function unconfiguredModelConnection(providerId: string): ModelConnection
     legacyEnvironment: providerId === 'deepseek',
     configuredAfterRestore: false,
   };
+}
+
+/** Explicit durable bridge for the frozen legacy receipt namespace. */
+export interface LegacyModelConnectionStorePort extends ModelConnectionStorePort {
+  legacyReceipt(requestId: string): ProviderConnectionReceipt | null;
+  activateLegacy(
+    record: ModelConnectionRecord,
+    expected: number | null,
+    receipt: { readonly requestId: string; readonly value: ProviderConnectionReceipt },
+  ): void;
 }

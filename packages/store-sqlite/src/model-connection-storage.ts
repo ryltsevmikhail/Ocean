@@ -1,9 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type {
-  ModelConnectionRecord,
-  ModelConnectionReceipt,
-  ModelConnectionStorePort,
+import {
+  type ModelConnectionRecord,
+  type ModelConnectionReceipt,
+  type LegacyModelConnectionStorePort,
+  type ProviderConnectionReceipt,
+  modelPublicResult,
 } from '@runnets/application';
+import { legacyProviderReceipt } from './legacy-provider-rows.js';
 import { withImmediateTransaction } from './transaction.js';
 import { decodeModelConnection, modelConnectionRecord } from './model-connection-record.js';
 
@@ -23,8 +26,19 @@ export function writeModelConnection(
   expected: number | null,
 ): void {
   const record = modelConnectionRecord(input);
-  if ((readModelConnection(db, record.connectionId)?.revision ?? null) !== expected)
-    throw Error('revision_conflict');
+  const current = readModelConnection(db, record.connectionId);
+  if (record.requestId !== null) {
+    if (current?.requestId !== record.requestId) assertModelReceiptAvailable(db, record.requestId);
+    if (
+      db
+        .prepare(
+          "SELECT connection_id FROM ocean_model_connections WHERE connection_id<>? AND json_extract(payload,'$.requestId')=?",
+        )
+        .get(record.connectionId, record.requestId)
+    )
+      throw Error('request_conflict');
+  }
+  if ((current?.revision ?? null) !== expected) throw Error('revision_conflict');
   db.prepare(
     `INSERT INTO ocean_model_connections VALUES(?,?) ON CONFLICT(connection_id)
     DO UPDATE SET payload=excluded.payload`,
@@ -43,7 +57,7 @@ export function assertModelReceiptAvailable(db: DatabaseSync, id: string): void 
     throw Error('request_conflict');
 }
 
-export class SqliteModelConnections implements ModelConnectionStorePort {
+export class SqliteModelConnections implements LegacyModelConnectionStorePort {
   readonly #db: DatabaseSync;
   constructor(db: DatabaseSync) {
     this.#db = db;
@@ -65,20 +79,81 @@ export class SqliteModelConnections implements ModelConnectionStorePort {
     expected: number | null,
     receipt: { readonly requestId: string; readonly value: ModelConnectionReceipt },
   ): void {
-    withImmediateTransaction(this.#db, () => {
-      assertModelReceiptAvailable(this.#db, receipt.requestId);
-      const result = modelConnectionRecord(receipt.value.result);
-      if (
-        result.connectionId !== record.connectionId ||
-        result.revision !== record.revision ||
-        typeof receipt.value.binding !== 'string'
-      )
-        throw Error('connection_unverified');
-      writeModelConnection(this.#db, record, expected);
+    const result = modelConnectionRecord(receipt.value.result);
+    if (
+      result.connectionId !== record.connectionId ||
+      result.revision !== record.revision ||
+      typeof receipt.value.binding !== 'string'
+    )
+      throw Error('connection_unverified');
+    const publicResult =
+      receipt.value.publicResult === undefined
+        ? undefined
+        : modelPublicResult(receipt.value.publicResult);
+    if (
+      publicResult !== undefined &&
+      (publicResult.status.connectionId !== record.connectionId ||
+        publicResult.status.revision !== record.revision)
+    )
+      throw Error('connection_unverified');
+    const payload = publicResult === undefined ? result : { version: 1, result, publicResult };
+    this.#activate(record, expected, receipt.requestId, () => {
       this.#db
         .prepare('INSERT INTO ocean_model_connection_receipts VALUES(?,?,?,?)')
-        .run(receipt.requestId, record.connectionId, receipt.value.binding, JSON.stringify(result));
+        .run(
+          receipt.requestId,
+          record.connectionId,
+          receipt.value.binding,
+          JSON.stringify(payload),
+        );
     });
+  }
+  activateLegacy(
+    record: ModelConnectionRecord,
+    expected: number | null,
+    receipt: { readonly requestId: string; readonly value: ProviderConnectionReceipt },
+  ): void {
+    if (
+      !record.legacyEnvironment ||
+      readModelConnection(this.#db, record.connectionId)?.legacyEnvironment === false ||
+      record.connectionId !== `legacy:${record.providerId}`
+    )
+      throw Error('provider_unverified');
+    this.#activate(record, expected, receipt.requestId, () => {
+      this.#db
+        .prepare('INSERT INTO ocean_provider_receipts VALUES(?,?,?,?)')
+        .run(
+          receipt.requestId,
+          record.providerId,
+          receipt.value.binding,
+          JSON.stringify(receipt.value),
+        );
+    });
+  }
+  #activate(
+    record: ModelConnectionRecord,
+    expected: number | null,
+    requestId: string,
+    receipt: () => void,
+  ): void {
+    withImmediateTransaction(this.#db, () => {
+      assertModelReceiptAvailable(this.#db, requestId);
+      writeModelConnection(this.#db, record, expected);
+      receipt();
+    });
+  }
+  legacyReceipt(id: string): ProviderConnectionReceipt | null {
+    const row = this.#db
+      .prepare('SELECT result FROM ocean_provider_receipts WHERE request_id=?')
+      .get(id);
+    if (row) return legacyProviderReceipt(row['result']);
+    if (
+      this.#db
+        .prepare('SELECT request_id FROM ocean_model_connection_receipts WHERE request_id=?')
+        .get(id)
+    )
+      throw Error('request_conflict');
+    return null;
   }
   receipt(id: string): ModelConnectionReceipt | null {
     if (
@@ -89,10 +164,36 @@ export class SqliteModelConnections implements ModelConnectionStorePort {
       .prepare('SELECT * FROM ocean_model_connection_receipts WHERE request_id=?')
       .get(id);
     if (!row) return null;
-    const result = decodeModelConnection(row['result']);
-    if (result.connectionId !== row['connection_id'] || typeof row['binding'] !== 'string')
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(row['result'] as string) as unknown;
+    } catch {
       throw Error('connection_unverified');
-    return { binding: row['binding'], result };
+    }
+    const envelope =
+      parsed !== null && typeof parsed === 'object' && 'version' in parsed
+        ? (parsed as Record<string, unknown>)
+        : null;
+    if (envelope !== null && envelope['version'] !== 1) throw Error('connection_unverified');
+    const result =
+      envelope === null
+        ? decodeModelConnection(row['result'])
+        : modelConnectionRecord(envelope['result']);
+    const publicResult =
+      envelope === null ? undefined : modelPublicResult(envelope['publicResult']);
+    if (
+      result.connectionId !== row['connection_id'] ||
+      typeof row['binding'] !== 'string' ||
+      (publicResult !== undefined &&
+        (publicResult.status.connectionId !== result.connectionId ||
+          publicResult.status.revision !== result.revision))
+    )
+      throw Error('connection_unverified');
+    return {
+      binding: row['binding'],
+      result,
+      ...(publicResult === undefined ? {} : { publicResult }),
+    };
   }
 }
 

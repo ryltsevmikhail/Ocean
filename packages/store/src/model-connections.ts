@@ -1,5 +1,6 @@
 import {
   modelConnectionRecord,
+  modelPublicResult,
   type ModelConnectionReceipt,
   type ModelConnectionRecord,
   type ModelConnectionStorePort,
@@ -27,8 +28,16 @@ export class InMemoryModelConnections implements ModelConnectionStorePort {
   put(record: ModelConnectionRecord, expected: number | null): void {
     const state = this.#state();
     const next = modelConnectionRecord(record);
-    if ((state.connections.get(next.connectionId)?.revision ?? null) !== expected)
-      throw Error('revision_conflict');
+    const current = state.connections.get(next.connectionId);
+    if (
+      next.requestId !== null &&
+      ((current?.requestId !== next.requestId && state.connectionReceipts.has(next.requestId)) ||
+        [...state.connections.values()].some(
+          (row) => row.connectionId !== next.connectionId && row.requestId === next.requestId,
+        ))
+    )
+      throw Error('request_conflict');
+    if ((current?.revision ?? null) !== expected) throw Error('revision_conflict');
     state.connections.set(next.connectionId, structuredClone(next));
   }
   activate(
@@ -45,7 +54,13 @@ export class InMemoryModelConnections implements ModelConnectionStorePort {
       typeof receipt.value.binding !== 'string'
     )
       throw Error('connection_unverified');
-    const value = structuredClone({ binding: receipt.value.binding, result });
+    const value = structuredClone({
+      binding: receipt.value.binding,
+      result,
+      ...(receipt.value.publicResult === undefined
+        ? {}
+        : { publicResult: modelPublicResult(receipt.value.publicResult) }),
+    });
     this.put(record, expected);
     state.connectionReceipts.set(receipt.requestId, value);
   }

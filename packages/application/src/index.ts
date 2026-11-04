@@ -78,3 +78,8 @@ export * from './plugin-operation-ports.js';
 export * from './plugin-operations.js';
 export * from './plugin-turn-tools.js';
 export * from './plugin-adapter-identity.js';
+
+export * from './model-connection-types.js';
+export * from './model-credential-ports.js';
+export * from './model-connections.js';
+export { modelPublicResult, readModelCheck } from './model-connection-results.js';

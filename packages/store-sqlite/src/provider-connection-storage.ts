@@ -11,6 +11,7 @@ import {
   legacyProviderReceipt,
 } from './legacy-provider-rows.js';
 import {
+  SqliteModelConnections,
   assertModelReceiptAvailable,
   readModelConnection,
   writeModelConnection,
@@ -19,8 +20,10 @@ import { withImmediateTransaction } from './transaction.js';
 
 export class SqliteProviderConnections implements ProviderConnectionStorePort {
   readonly #db: DatabaseSync;
+  readonly connections: SqliteModelConnections;
   constructor(db: DatabaseSync) {
     this.#db = db;
+    this.connections = new SqliteModelConnections(db);
   }
   read(provider: string): ProviderConnectionRecord | null {
     const record = readModelConnection(this.#db, `legacy:${provider}`);

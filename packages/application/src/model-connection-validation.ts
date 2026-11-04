@@ -1,4 +1,4 @@
-import { readCheckMetadata } from './provider-connection-resolution.js';
+import { readModelCheck } from './model-connection-results.js';
 import type { ModelConnectionRecord } from './model-connection-ports.js';
 
 const object = (v: unknown): v is Record<string, unknown> =>
@@ -17,6 +17,7 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
       value['connectionId'] !== `legacy:${value['providerId']}`) ||
     (value['kind'] !== 'cloud' && value['kind'] !== 'local') ||
     (value['auth'] !== 'api_key' && value['auth'] !== 'none') ||
+    (value['kind'] === 'cloud' && value['auth'] === 'none') ||
     !nullableText(value['endpoint']) ||
     !nullableText(value['defaultModelId']) ||
     !nullableText(value['secretRef']) ||
@@ -40,7 +41,8 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
         value['auth'] !== 'api_key')) ||
     (value['intent'] === 'unconfigured' &&
       (value['secretRef'] !== null || value['pendingSecretChange'] !== null)) ||
-    (value['lastCheck'] !== null && readCheckMetadata(value['lastCheck']) === null)
+    (value['lastCheck'] !== null &&
+      readModelCheck(value['lastCheck'], value['connectionId']) === null)
   )
     throw Error('connection_unverified');
   const change = value['pendingSecretChange'];
@@ -65,7 +67,7 @@ export function modelConnectionRecord(value: unknown): ModelConnectionRecord {
     revision: value['revision'],
     requestId: value['requestId'],
     binding: value['binding'],
-    lastCheck: readCheckMetadata(value['lastCheck']),
+    lastCheck: readModelCheck(value['lastCheck'], value['connectionId']),
     updatedAt: value['updatedAt'],
     pendingSecretChange:
       change === null

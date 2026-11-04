@@ -68,6 +68,8 @@ it('backs up provider metadata but no credential path or bytes, and restores ine
       {
         ...connection,
         connectionId: 'second',
+        requestId: null,
+        binding: null,
         legacyEnvironment: false,
         configuredAfterRestore: true,
       },
@@ -135,6 +137,28 @@ it('backs up provider metadata but no credential path or bytes, and restores ine
   // saved metadata or the environment automatically.
   const restoredService = new ProviderConnectionService({
     store: new (class {
+      readonly connections = {
+        list: () => [],
+        read: (id: string) => {
+          const store = openSqliteStore({ path: join(restoredDirectory, 'runtime.sqlite') });
+          try {
+            return store.modelConnections.read(id);
+          } finally {
+            store.close();
+          }
+        },
+        put: () => {
+          throw Error('restored');
+        },
+        activate: () => {
+          throw Error('restored');
+        },
+        activateLegacy: () => {
+          throw Error('restored');
+        },
+        receipt: () => null,
+        legacyReceipt: () => null,
+      };
       readonly #path = join(restoredDirectory, 'runtime.sqlite');
       read(provider: string) {
         const store = openSqliteStore({ path: this.#path });

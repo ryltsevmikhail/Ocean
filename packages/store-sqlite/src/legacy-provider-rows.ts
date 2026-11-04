@@ -1,5 +1,6 @@
 import {
   readCheckMetadata,
+  readModelCheck,
   unconfiguredModelConnection,
   type ModelConnectionRecord,
   type ProviderConnectionRecord,
@@ -51,7 +52,7 @@ export function canonicalProviderRecord(
     revision: record.revision,
     requestId: record.requestId,
     binding: record.binding,
-    lastCheck: record.lastCheck,
+    lastCheck: readModelCheck(record.lastCheck, current.connectionId),
     updatedAt: record.updatedAt,
   };
 }
@@ -67,7 +68,7 @@ export function legacyProviderRecord(
     revision: record.revision,
     requestId: record.requestId,
     binding: record.binding,
-    lastCheck: record.lastCheck,
+    lastCheck: record.lastCheck === null ? null : readCheckMetadata(record.lastCheck),
     updatedAt: record.updatedAt,
   };
 }
