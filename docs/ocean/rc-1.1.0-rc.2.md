@@ -218,7 +218,7 @@ introduced by RC2 test files added after `8e3ce79` (image/plugin/provider tests
 and fixtures); all 17 are fixed in this wave. The remaining 80 errors in 32 files
 are **not a v1.0.0 baseline**: only 3 of the 32 error files existed at `v1.0.0`
 (`command.test.ts` 1, `group.test.ts` 1, `review.test.ts` 2 = 4 errors). The
-other 76 errors in 30 files were introduced after `v1.0.0` **inside this branch**
+other 76 errors in 29 files were introduced after `v1.0.0` **inside this branch**
 by RC1/RC2 work, mostly RC2 provider/desktop suites. They are recorded per file
 and left unmodified so the fix wave does not churn unrelated RC1 tests. Full
 transcript (`tsc -p tsconfig.tests.json --noEmit`) retained outside Git.

@@ -86,8 +86,9 @@ binding to that exact message, is inert display text: the resolver reports it as
 unbound and everything from the marker onward is stripped. A genuine image message
 whose authority exists but whose blob, metadata or header is missing, replaced,
 corrupt or oversized still fails closed with zero bytes sent. The accepted
-`desktop-assets.test.ts` migration case seeds such a pre-fix row directly and
-proves the room stays usable.
+`desktop-assets.test.ts` migration case seeds such a pre-fix row directly, and the
+`image-binding.test.ts` regression proves the room stays usable (a later turn completes with the
+marker inert, no image part, no provider request for the forged bytes).
 
 `snapshotCodingDatabase(path, destination, callback)` now also supplies a bounded
 `DesktopAssetInventory` as the callback's second argument, independently of coding
