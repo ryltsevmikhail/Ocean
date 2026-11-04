@@ -7,18 +7,6 @@
  * an older authority snapshot.
  */
 
-/** Authority-relevant change classes; each one increments the connection generation. */
-export const PLUGIN_CONNECTION_GENERATION_CHANGES = Object.freeze([
-  'account',
-  'adapter',
-  'credential',
-  'endpoint',
-  'plugin',
-  'schema',
-] as const);
-export type PluginConnectionGenerationChange =
-  (typeof PLUGIN_CONNECTION_GENERATION_CHANGES)[number];
-
 const DIGEST = /^[a-f0-9]{64}$/;
 
 /** A schema digest is lowercase SHA-256 hex; it is published only from a complete discovery. */
@@ -26,21 +14,6 @@ export function validPluginSchemaDigest(value: unknown): value is string {
   return typeof value === 'string' && DIGEST.test(value);
 }
 export type PluginConnectionState = 'active' | 'disconnected';
-
-/**
- * Increment a generation. Only the six authority-bearing change classes may do
- * so; any other input is a programming error, not a silent no-op.
- */
-export function nextPluginConnectionGeneration(
-  generation: number,
-  change: PluginConnectionGenerationChange,
-): number {
-  if (!Number.isSafeInteger(generation) || generation < 1)
-    throw new RangeError('plugin connection generation must be a positive integer');
-  if (!PLUGIN_CONNECTION_GENERATION_CHANGES.includes(change))
-    throw new RangeError('unknown plugin connection change: ' + String(change));
-  return generation + 1;
-}
 
 const NAME = /^[a-z][a-z0-9_-]{0,63}$/;
 

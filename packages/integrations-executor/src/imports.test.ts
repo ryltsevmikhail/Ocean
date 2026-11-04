@@ -82,6 +82,28 @@ describe('package surface qualification', () => {
     }
   });
 
+  it('the public setup module keeps Executor/Effect types out of its declaration graph', async () => {
+    for (const file of ['setup.ts', 'setup-input.ts', 'setup-error.ts']) {
+      const source = await readFile(new URL(`../src/${file}`, import.meta.url), 'utf8');
+      expect(source.includes("from 'effect'"), file).toBe(false);
+      expect(source.includes('@executor-js'), file).toBe(false);
+      expect(source.includes('host-types'), file).toBe(false);
+    }
+    const setup = await readFile(new URL('../src/setup.ts', import.meta.url), 'utf8');
+    // A private constructor means only open() mints the class and the internal
+    // host facade never appears in dist/setup.d.ts.
+    expect(setup).toContain('private constructor(');
+    const { existsSync } = await import('node:fs');
+    const declaration = new URL('../dist/setup.d.ts', import.meta.url);
+    if (existsSync(declaration)) {
+      const text = await readFile(declaration, 'utf8');
+      expect(/from ['"]effect['"]/.test(text)).toBe(false);
+      expect(/from ['"]@executor-js/.test(text)).toBe(false);
+      expect(/from ['"]\.\/host-types\.js['"]/.test(text)).toBe(false);
+      expect(text.includes('private constructor();')).toBe(true);
+    }
+  });
+
   it('the entry point exposes no internal gate seam', async () => {
     const source = await readFile(new URL('../src/index.ts', import.meta.url), 'utf8');
     for (const internal of [

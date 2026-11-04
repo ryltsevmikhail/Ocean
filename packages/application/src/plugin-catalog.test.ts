@@ -80,6 +80,11 @@ describe('plugin catalog install', () => {
     expect(fixture.catalog.inspect('github').installState).toBe('corrupt');
   });
 
+  it('refuses a clean not_installed disable instead of inventing a corrupt view', () => {
+    const fixture = serviceFixture();
+    expect(() => fixture.catalog.disable({ pluginId: 'github' })).toThrow('not_installed');
+  });
+
   it('enables and disables an installed verified version', () => {
     const fixture = serviceFixture();
     fixture.catalog.install({ pluginId: 'github' });
@@ -87,6 +92,73 @@ describe('plugin catalog install', () => {
     expect(fixture.catalog.enabled('github')?.version).toBe(entry.version);
     expect(fixture.catalog.disable({ pluginId: 'github' }).enabled).toBe(false);
     expect(fixture.catalog.enabled('github')).toBeNull();
+  });
+
+  it('revokes grants on disable so a later same-version enable cannot restore them', async () => {
+    const fixture = serviceFixture();
+    fixture.state.members.add('ws_ocean|room_1|bot_dev');
+    fixture.state.rooms.set('room_1', {
+      id: 'room_1',
+      kind: 'direct',
+      title: null,
+      participantCount: 2,
+    });
+    const connection = await fixture.readyWorkingConnection();
+    const grant = fixture.access.grant({
+      workspaceId: 'ws_ocean',
+      roomId: 'room_1',
+      botId: 'bot_dev',
+      pluginId: 'github',
+      connectionId: connection.id,
+      tools: ['list_issues'],
+      repository: 'team/api',
+      acknowledgeGroupVisibility: false,
+    });
+    expect(fixture.state.grants.get(grant.id)?.state).toBe('active');
+    fixture.catalog.disable({ pluginId: 'github' });
+    expect(fixture.state.grants.get(grant.id)?.state).toBe('revoked');
+    fixture.catalog.enable({ pluginId: 'github' });
+    expect(fixture.state.grants.get(grant.id)?.state).toBe('revoked');
+    const denied = await fixture.admission.call({
+      workspaceId: 'ws_ocean',
+      roomId: 'room_1',
+      botId: 'bot_dev',
+      pluginId: 'github',
+      connectionId: connection.id,
+      grantId: grant.id,
+      tool: 'list_issues',
+      arguments: { owner: 'team', repo: 'api' },
+      claim: { invocationId: 'after-disable', taskRunId: 'run', attemptId: 'attempt' },
+    });
+    expect(denied.admitted).toBe(false);
+    expect(fixture.transport.invokeCalls).toBe(0);
+  });
+
+  it('revokes dormant authority when a restart reopens an enabled version', async () => {
+    const fixture = serviceFixture();
+    fixture.state.members.add('ws_ocean|room_1|bot_dev');
+    fixture.state.rooms.set('room_1', {
+      id: 'room_1',
+      kind: 'direct',
+      title: null,
+      participantCount: 2,
+    });
+    const connection = await fixture.readyWorkingConnection();
+    const grant = fixture.access.grant({
+      workspaceId: 'ws_ocean',
+      roomId: 'room_1',
+      botId: 'bot_dev',
+      pluginId: 'github',
+      connectionId: connection.id,
+      tools: ['list_issues'],
+      repository: 'team/api',
+      acknowledgeGroupVisibility: false,
+    });
+    expect(fixture.state.grants.get(grant.id)?.state).toBe('active');
+    expect(fixture.state.catalog.enabled('github')?.version).toBe(entry.version);
+    const restarted = fixture.restartWithAdapter(fixture.adapter);
+    expect(restarted.catalog.enabled('github')).toBeNull();
+    expect(fixture.state.grants.get(grant.id)?.state).toBe('revoked');
   });
 
   it('does not enable a version whose private copy was corrupted after install', () => {

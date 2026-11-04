@@ -34,7 +34,6 @@ import {
   type PluginRecoveryReport,
 } from './plugin-catalog-views.js';
 import { recoverPluginVersions } from './plugin-catalog-recovery.js';
-
 export interface PluginCatalogServiceOptions extends PluginServiceContext {
   readonly catalog: PluginCatalog;
   readonly store: PluginCatalogStorePort;
@@ -139,7 +138,64 @@ export class PluginCatalogService implements PluginVersionReadPort {
     this.#store.beginInstall(intent);
     let file;
     try {
-      file = this.#files.publish(entry.pluginId, entry.version, entry.manifest);
+      file =
+        existing === null
+          ? this.#files.publish(entry.pluginId, entry.version, entry.manifest)
+          : this.#files.repair(entry.pluginId, entry.version, entry.manifest);
+    } catch {
+      this.#store.setState(entry.pluginId, entry.version, 'interrupted');
+      throw pluginRefuse('install_failed');
+    }
+    if (file.sha256 !== manifestDigest || file.relativePath !== 'manifest.json') {
+      this.#store.setState(entry.pluginId, entry.version, 'corrupt');
+      throw pluginRefuse('install_unverified');
+    }
+    const read = this.#files.read(entry.pluginId, entry.version);
+    if (read.status !== 'ok' || read.sha256 !== manifestDigest) {
+      this.#store.setState(entry.pluginId, entry.version, 'corrupt');
+      throw pluginRefuse('install_unverified');
+    }
+    if (!this.#store.markVerified(entry.pluginId, entry.version, file, at))
+      throw pluginRefuse('install_failed');
+    return pluginInstalledView(this.#store.version(entry.pluginId, entry.version)!);
+  }
+
+  /**
+   * Explicit owner repair for a corrupt/interrupted install. Replaces the
+   * unverified private copy with a freshly verified one from the pinned card,
+   * re-verifies it and records the version installed and disabled. A verified
+   * install is never touched; a concurrent install intent is refused.
+   */
+  repair(input: { readonly pluginId: string; readonly version?: string }): PluginInstalledView {
+    this.#mutate();
+    const entry = this.#entry(input.pluginId, input.version);
+    this.#verifyEntry(entry);
+    const existing = this.#store.version(entry.pluginId, entry.version);
+    if (existing === null) throw pluginRefuse('not_installed');
+    if (existing.state === 'installing') throw pluginRefuse('install_in_progress');
+    if (existing.state === 'installed') throw pluginRefuse('already_installed');
+    const manifestDigest = pluginManifestDigest(entry.manifest, this.#context.sha256);
+    if (manifestDigest !== entry.manifestDigest) throw pluginRefuse('manifest_digest_mismatch');
+    if (!compatiblePluginAdapter(entry.adapter, this.#adapter))
+      throw pluginRefuse('adapter_incompatible');
+    const at = this.#now();
+    this.#store.beginInstall({
+      ...existing,
+      pluginId: entry.pluginId,
+      version: entry.version,
+      publisher: entry.publisher,
+      title: entry.title,
+      manifest: entry.manifest,
+      manifestDigest,
+      adapter: entry.adapter,
+      state: 'installing',
+      enabled: false,
+      fileDigest: null,
+      verifiedAt: null,
+    });
+    let file;
+    try {
+      file = this.#files.repair(entry.pluginId, entry.version, entry.manifest);
     } catch {
       this.#store.setState(entry.pluginId, entry.version, 'interrupted');
       throw pluginRefuse('install_failed');
@@ -189,29 +245,11 @@ export class PluginCatalogService implements PluginVersionReadPort {
     const entry = this.#entry(input.pluginId, undefined);
     this.#verifyEntry(entry);
     const enabled = this.#store.enabled(entry.pluginId);
-    if (enabled === null)
-      return pluginInstalledView(
-        this.#store.version(entry.pluginId, entry.version) ?? this.#missingView(entry),
-      );
-    this.#store.setEnabled(entry.pluginId, enabled.version, false, this.#now(), false);
+    if (enabled === null) throw pluginRefuse('not_installed');
+    // Disabling is an owner revocation action: dormant grants must not silently
+    // reactivate on a later same-version enable.
+    this.#store.setEnabled(entry.pluginId, enabled.version, false, this.#now(), true);
     return pluginInstalledView(this.#store.version(entry.pluginId, enabled.version)!);
-  }
-
-  #missingView(entry: PluginCatalogEntry): PluginInstalledVersion {
-    return {
-      pluginId: entry.pluginId,
-      version: entry.version,
-      publisher: entry.publisher,
-      title: entry.title,
-      manifest: entry.manifest,
-      manifestDigest: entry.manifestDigest,
-      adapter: entry.adapter,
-      state: 'corrupt',
-      enabled: false,
-      fileDigest: null,
-      installedAt: '',
-      verifiedAt: null,
-    };
   }
 
   #verifyFile(record: PluginInstalledVersion): void {

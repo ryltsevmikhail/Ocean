@@ -76,8 +76,8 @@ export function disconnectPluginConnection(
   const connection = deps.connection(connectionId);
   if (connection.state === 'disconnected')
     return { connection: deps.view(connection), revokedGrants: 0 };
-  const changed = deps.store.disconnect(connection.id, deps.now());
-  return { connection: deps.view(changed), revokedGrants: 0 };
+  const closed = deps.store.disconnect(connection.id, deps.now());
+  return { connection: deps.view(closed.connection), revokedGrants: closed.revokedGrants };
 }
 
 export interface ConnectionAddDeps {

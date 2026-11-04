@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Glyph from './Glyph.vue';
-import { explain } from './dom.js';
 import type { Bot, Room } from '../protocol.js';
 import {
   addPluginConnection,
@@ -32,7 +31,9 @@ import {
   pluginRepository,
   pluginSelectedConnection,
   pluginTools,
+  invalidatePluginPreview,
   previewPluginConsent,
+  repairPlugin,
   previewPluginGrant,
   revokePluginGrant,
 } from './plugin-state.js';
@@ -43,6 +44,10 @@ const entry = computed(
   () => pluginCatalog.value.find((candidate) => candidate.pluginId === 'github') ?? null,
 );
 const selected = computed(() => pluginSelectedConnection());
+// A grant preview belongs to the exact inputs it was computed for.
+watch([pluginConnectionId, pluginBotId, pluginRepository, pluginTools, pluginAck], () =>
+  invalidatePluginPreview(),
+);
 const roomId = computed(() => props.room?.id ?? '');
 const canGrant = computed(() => pluginCanGrant() && props.room !== undefined);
 function open() {
@@ -85,6 +90,13 @@ function close() {
             @click="installPlugin"
           >
             Установить</button
+          ><button
+            v-if="entry.installState === 'corrupt' || entry.installState === 'interrupted'"
+            data-testid="plugin-repair"
+            :disabled="busy || pluginBusy"
+            @click="repairPlugin"
+          >
+            Восстановить установку</button
           ><button
             data-testid="plugin-enable"
             :disabled="busy || pluginBusy || !entry.installed || entry.enabled"
@@ -273,7 +285,7 @@ function close() {
         :class="{ warning: pluginError }"
         data-testid="plugin-message"
       >
-        {{ pluginError ? explain(pluginMessage) : pluginMessage }}
+        {{ pluginMessage }}
       </p>
     </dialog>
   </Teleport>

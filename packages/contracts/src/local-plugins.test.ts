@@ -182,5 +182,48 @@ describe('local plugin contract', () => {
         scope: null,
       }),
     ).toBe(true);
+    const scope = {
+      workspaceId: 'ws_ocean',
+      roomId: 'room_1',
+      botId: 'bot_dev',
+      pluginId: 'github',
+      connectionId: 'conn_work',
+      connectionGeneration: 1,
+      tools: ['list_issues'],
+      repository: 'team/api',
+      schemaDigest: digest,
+      policyVersion: 1,
+    };
+    expect(
+      isLocalPluginGrantPreview({
+        allowed: true,
+        refusal: null,
+        explanation: 'explained',
+        groupVisibility: true,
+        participants: 3,
+        scope,
+      }),
+    ).toBe(true);
+    expect(
+      isLocalPluginGrantPreview({
+        allowed: true,
+        refusal: null,
+        explanation: 'explained',
+        groupVisibility: true,
+        participants: 3,
+        scope: { ...scope, connectionGeneration: 0 },
+      }),
+    ).toBe(false);
+    // A truncated scope is no longer accepted as "valid enough".
+    expect(
+      isLocalPluginGrantPreview({
+        allowed: true,
+        refusal: null,
+        explanation: 'explained',
+        groupVisibility: true,
+        participants: 3,
+        scope: { repository: 'team/api', tools: ['list_issues'], schemaDigest: digest },
+      }),
+    ).toBe(false);
   });
 });

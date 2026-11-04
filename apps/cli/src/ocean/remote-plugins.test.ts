@@ -48,7 +48,7 @@ const explanation =
   'Everyone in the group chat "Team" (3 participants) including every bot in it will see this answer.';
 
 function harness() {
-  const calls = { grant: [] as unknown[], revoke: 0, discover: 0 };
+  const calls = { grant: [] as unknown[], revoke: 0, discover: 0, consent: 0 };
   const client = {
     async pluginCatalog() {
       return [catalogEntry];
@@ -93,6 +93,29 @@ function harness() {
       calls.revoke++;
       return { id: 'grant_1', state: 'revoked' };
     },
+    async pluginConnectionPreview() {
+      return {
+        connectionId: 'conn_work',
+        name: 'work',
+        pluginId: 'github',
+        endpoint: 'https://api.githubcopilot.com/mcp/',
+        generation: 2,
+        consented: false,
+        prompt: 'Ocean will ask https://api.githubcopilot.com/mcp/ for tool metadata once.',
+      };
+    },
+    async pluginConnectionConsent() {
+      calls.consent++;
+      return {
+        connectionId: 'conn_work',
+        name: 'work',
+        pluginId: 'github',
+        endpoint: 'https://api.githubcopilot.com/mcp/',
+        generation: 2,
+        consented: true,
+        prompt: 'consented',
+      };
+    },
     async pluginConnectionDiscover() {
       calls.discover++;
       return { connection, revokedGrants: 0, authorityChanged: false };
@@ -129,11 +152,23 @@ describe('room TUI /plugin commands', () => {
     const confirmed = await plugins.handle(
       '/plugin grant conn_work bot_dev team/api list_issues ack',
     );
+    expect(confirmed).toContain('Everyone in the group chat "Team"');
     expect(confirmed).toContain('Granted grant_1');
     expect(calls.grant).toHaveLength(1);
     const revoke = await plugins.handle('/plugin revoke grant_1');
     expect(revoke).toContain('revoked');
     expect(calls.revoke).toBe(1);
+  });
+
+  it('shows the endpoint prompt before recording metadata consent', async () => {
+    const { plugins, calls } = harness();
+    const prompt = await plugins.handle('/plugin consent conn_work 2');
+    expect(prompt).toContain('https://api.githubcopilot.com/mcp/');
+    expect(prompt).toContain('ack to record this consent');
+    expect(calls.consent).toBe(0);
+    const recorded = await plugins.handle('/plugin consent conn_work 2 ack');
+    expect(recorded).toContain('Consent recorded');
+    expect(calls.consent).toBe(1);
   });
 
   it('discovers only with an explicit generation argument', async () => {

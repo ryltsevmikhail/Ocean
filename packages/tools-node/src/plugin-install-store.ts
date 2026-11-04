@@ -21,7 +21,7 @@ import type {
 
 const ID = /^[a-z][a-z0-9-]{0,63}$/;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]{1,32})?$/;
-const TEMP = /^\.tmp-[a-f0-9]{32}$/;
+const TEMP = /^\.tmp-(?:old-)?[a-f0-9]{32}$/;
 const DIRECTORY_FLAGS =
   fs.constants.O_RDONLY |
   fs.constants.O_DIRECTORY |
@@ -67,6 +67,44 @@ export function createPluginInstallStore(options: {
     assertSegment(version, VERSION);
     return join(root, pluginId, version);
   };
+  const publishFresh = (
+    pluginId: string,
+    version: string,
+    manifest: PluginManifest,
+  ): PluginInstalledFile => {
+    assertSegment(pluginId, ID);
+    assertSegment(version, VERSION);
+    fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+    const pluginRoot = join(root, pluginId);
+    const finalDirectory = versionDirectory(pluginId, version);
+    if (fs.existsSync(finalDirectory)) throw Error('install_conflict');
+    const temp = join(root, '.tmp-' + random());
+    fs.mkdirSync(temp, { mode: 0o700 });
+    const bytes = pluginManifestBytes(manifest);
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    try {
+      fs.writeFileSync(join(temp, 'manifest.json'), bytes, { mode: 0o600, flag: 'wx' });
+      const fileFd = fs.openSync(join(temp, 'manifest.json'), FILE_FLAGS);
+      try {
+        fs.fsyncSync(fileFd);
+      } finally {
+        fs.closeSync(fileFd);
+      }
+      fsyncDirectory(temp);
+      fs.mkdirSync(pluginRoot, { recursive: true, mode: 0o700 });
+      fs.renameSync(temp, finalDirectory);
+      fsyncDirectory(pluginRoot);
+      fsyncDirectory(root);
+    } catch (error) {
+      try {
+        fs.rmSync(temp, { recursive: true, force: true });
+      } catch {
+        // Leave an inert temp directory behind; sweepInterrupted removes it later.
+      }
+      throw error;
+    }
+    return { relativePath: 'manifest.json', sha256, bytes: bytes.length };
+  };
   return {
     sweepInterrupted(): number {
       if (!fs.existsSync(root)) return 0;
@@ -86,38 +124,41 @@ export function createPluginInstallStore(options: {
       return removed;
     },
     publish(pluginId: string, version: string, manifest: PluginManifest): PluginInstalledFile {
+      return publishFresh(pluginId, version, manifest);
+    },
+    repair(pluginId: string, version: string, manifest: PluginManifest): PluginInstalledFile {
       assertSegment(pluginId, ID);
       assertSegment(version, VERSION);
       fs.mkdirSync(root, { recursive: true, mode: 0o700 });
       const pluginRoot = join(root, pluginId);
       const finalDirectory = versionDirectory(pluginId, version);
-      if (fs.existsSync(finalDirectory)) throw Error('install_conflict');
-      const temp = join(root, '.tmp-' + random());
-      fs.mkdirSync(temp, { mode: 0o700 });
-      const bytes = pluginManifestBytes(manifest);
-      const sha256 = createHash('sha256').update(bytes).digest('hex');
-      try {
-        fs.writeFileSync(join(temp, 'manifest.json'), bytes, { mode: 0o600, flag: 'wx' });
-        const fileFd = fs.openSync(join(temp, 'manifest.json'), FILE_FLAGS);
-        try {
-          fs.fsyncSync(fileFd);
-        } finally {
-          fs.closeSync(fileFd);
-        }
-        fsyncDirectory(temp);
-        fs.mkdirSync(pluginRoot, { recursive: true, mode: 0o700 });
-        fs.renameSync(temp, finalDirectory);
+      let quarantine: string | null = null;
+      if (fs.existsSync(finalDirectory)) {
+        // Move the unverified copy aside first, never publish over live files.
+        quarantine = join(root, '.tmp-old-' + random());
+        fs.renameSync(finalDirectory, quarantine);
         fsyncDirectory(pluginRoot);
-        fsyncDirectory(root);
+      }
+      try {
+        const file = publishFresh(pluginId, version, manifest);
+        if (quarantine !== null) {
+          try {
+            fs.rmSync(quarantine, { recursive: true, force: true });
+          } catch {
+            // A leftover quarantine is inert and swept by sweepInterrupted later.
+          }
+        }
+        return file;
       } catch (error) {
-        try {
-          fs.rmSync(temp, { recursive: true, force: true });
-        } catch {
-          // Leave an inert temp directory behind; sweepInterrupted removes it later.
+        if (quarantine !== null && !fs.existsSync(finalDirectory)) {
+          try {
+            fs.renameSync(quarantine, finalDirectory);
+          } catch {
+            // Fail closed: the row remains corrupt/interrupted and repair can retry.
+          }
         }
         throw error;
       }
-      return { relativePath: 'manifest.json', sha256, bytes: bytes.length };
     },
     read(pluginId: string, version: string): PluginInstalledFileRead {
       const directory = versionDirectory(pluginId, version);

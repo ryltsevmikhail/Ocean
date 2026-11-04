@@ -86,6 +86,7 @@ export interface LocalPluginClient {
   pluginCatalog(query?: LocalPluginCatalogQuery): Promise<readonly LocalPluginCatalogView[]>;
   pluginInspect(query: LocalPluginInspectQuery): Promise<LocalPluginCatalogView>;
   pluginInstall(request: LocalPluginInstallRequest): Promise<LocalPluginInstalledView>;
+  pluginRepair(request: LocalPluginInstallRequest): Promise<LocalPluginInstalledView>;
   pluginEnable(request: LocalPluginInstallRequest): Promise<LocalPluginEnableResult>;
   pluginDisable(request: LocalPluginInspectQuery): Promise<LocalPluginInstalledView>;
   pluginConnections(): Promise<readonly LocalPluginConnectionView[]>;
@@ -121,6 +122,11 @@ export function localPluginClient(send: Send): LocalPluginClient {
     async pluginInstall(request) {
       return installedView(
         await send('plugin.install', validatedParams(request, isLocalPluginInstallRequest)),
+      );
+    },
+    async pluginRepair(request) {
+      return installedView(
+        await send('plugin.repair', validatedParams(request, isLocalPluginInstallRequest)),
       );
     },
     async pluginEnable(request) {

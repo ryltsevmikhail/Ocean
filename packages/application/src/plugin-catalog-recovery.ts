@@ -20,6 +20,7 @@ export function recoverPluginVersions(input: {
   const files = input.files;
   const at = input.at;
   let interrupted = 0,
+    repaired = 0,
     verified = 0,
     corrupt = 0,
     disabled = 0,
@@ -33,10 +34,28 @@ export function recoverPluginVersions(input: {
         interrupted++;
       }
       if (current.state === 'corrupt') {
-        corrupt++;
-        if (current.enabled)
-          revokedGrants += store.setEnabled(current.pluginId, current.version, false, at, true);
-        continue;
+        // A copy repaired outside this run (for example an owner restore) may
+        // verify again; otherwise corrupt stays terminal until explicit repair.
+        const recheck = files.read(current.pluginId, current.version);
+        if (recheck.status !== 'ok' || recheck.sha256 !== current.manifestDigest) {
+          corrupt++;
+          if (current.enabled)
+            revokedGrants += store.setEnabled(current.pluginId, current.version, false, at, true);
+          continue;
+        }
+        store.markVerified(
+          current.pluginId,
+          current.version,
+          { relativePath: 'manifest.json', sha256: recheck.sha256, bytes: recheck.bytes },
+          at,
+        );
+        current = {
+          ...current,
+          state: 'installed',
+          fileDigest: recheck.sha256,
+          verifiedAt: at,
+        };
+        repaired++;
       }
       const file = files.read(current.pluginId, current.version);
       if (file.status !== 'ok' || file.sha256 !== current.manifestDigest) {
@@ -63,23 +82,15 @@ export function recoverPluginVersions(input: {
       }
       verified++;
       // A restart never resumes an enabled version: verified versions open disabled.
-      // An adapter build that no longer matches the pinned card cannot ever be
-      // re-enabled, so its old authority is revoked instead of left dormant.
-      if (current.enabled) {
-        const incompatible = !compatiblePluginAdapter(current.adapter, input.adapter);
-        revokedGrants += store.setEnabled(
-          current.pluginId,
-          current.version,
-          false,
-          at,
-          incompatible,
-        );
-        disabled++;
-      } else if (!compatiblePluginAdapter(current.adapter, input.adapter)) {
-        // Dormant grants of an incompatible adapter are equally unusable: revoke them.
+      // Opening an interrupted authority also revokes its dormant grants and
+      // confirmations, so a later same-version enable cannot silently restore access
+      // the owner has not re-granted. An adapter build that no longer matches the
+      // pinned card is equally unusable and revokes its authority.
+      if (current.enabled || !compatiblePluginAdapter(current.adapter, input.adapter)) {
         revokedGrants += store.setEnabled(current.pluginId, current.version, false, at, true);
+        if (current.enabled) disabled++;
       }
     }
   }
-  return { interrupted, verified, corrupt, disabled, revokedGrants };
+  return { interrupted, repaired, verified, corrupt, disabled, revokedGrants };
 }

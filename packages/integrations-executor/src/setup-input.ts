@@ -33,7 +33,15 @@ export function bounded(value: unknown, max: number, what: string): string {
   return value;
 }
 
-/** Exact HTTPS endpoint that is also in the configured origin allowlist. */
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
+
+/**
+ * Exact endpoint that is also in the configured origin allowlist.
+ *
+ * Product catalog endpoints are HTTPS. Plain HTTP is accepted only for a
+ * loopback host so deterministic local fixtures can qualify this seam without
+ * any external egress; a credentialed or query-bearing URL is always refused.
+ */
 export function httpsEndpoint(value: unknown, allowedOrigins: readonly string[]): string {
   if (typeof value !== 'string' || value.length > 2048) invalidInput('endpoint is invalid');
   let url: URL;
@@ -42,14 +50,17 @@ export function httpsEndpoint(value: unknown, allowedOrigins: readonly string[])
   } catch {
     return invalidInput('endpoint is not an absolute URL');
   }
+  const loopback = LOOPBACK_HOSTS.has(url.hostname);
   if (
-    url.protocol !== 'https:' ||
+    (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) ||
     url.username !== '' ||
     url.password !== '' ||
     url.search !== '' ||
     url.hash !== ''
   )
-    invalidInput('endpoint must be HTTPS with no credentials, query or fragment');
+    invalidInput(
+      'endpoint must be HTTPS (or HTTP loopback) with no credentials, query or fragment',
+    );
   if (!allowedOrigins.includes(url.origin)) invalidInput('endpoint origin is not allowed');
   return value;
 }

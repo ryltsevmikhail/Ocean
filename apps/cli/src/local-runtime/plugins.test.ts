@@ -1,8 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { createHash } from 'node:crypto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   isLocalPluginCatalogView,
   isLocalPluginCatalogViews,
@@ -10,76 +6,7 @@ import {
   isLocalPluginDiscoveryResult,
   isLocalPluginInstalledView,
 } from '@runnets/contracts';
-import { openSqliteStore, type SqliteStore } from '@runnets/store-sqlite';
-import { canonicalJson } from '@runnets/domain';
-import { fakePluginTransport } from '../../../../packages/application/test-fixtures/plugin-fakes.js';
-import { runtimePluginsHost, type RuntimePlugins } from './plugins.js';
-
-const directories: string[] = [];
-const stores: SqliteStore[] = [];
-afterEach(() => {
-  for (const store of stores.splice(0)) store.close();
-  for (const directory of directories.splice(0))
-    rmSync(directory, { recursive: true, force: true });
-});
-const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
-
-function host(options: { restored?: boolean; env?: Record<string, string | undefined> } = {}) {
-  const directory = mkdtempSync(join(tmpdir(), 'ocean-plugin-host-'));
-  directories.push(directory);
-  const profile = join(directory, 'profile');
-  const store = openSqliteStore({ path: join(directory, 'runtime.sqlite') });
-  stores.push(store);
-  const tools = [
-    { name: 'list_issues', description: 'List issues', inputSchema: { type: 'object' } },
-    { name: 'issue_read', description: 'Read issue', inputSchema: { type: 'object' } },
-  ];
-  const digest = sha256(canonicalJson([...tools].sort((a, b) => (a.name < b.name ? -1 : 1))));
-  const transport = fakePluginTransport(
-    (target) => ({
-      target,
-      tools,
-      schemaDigest: digest,
-      account: { identity: 'octocat', verified: true },
-      discoveredAt: '2026-11-04T00:00:00.000Z',
-      completeness: 'complete',
-    }),
-    () => ({
-      kind: 'observed',
-      invocationId: 'inv',
-      code: 'ok',
-      result: { ok: true },
-      vendorErrorCode: null,
-    }),
-  );
-  const plugins = runtimePluginsHost({
-    profile,
-    stores: {
-      catalog: store.pluginCatalog,
-      connections: store.pluginConnections,
-      access: store.pluginAccess,
-    },
-    restored: options.restored ?? false,
-    env: options.env ?? { OCEAN_PLUGIN_TOKEN: 'fixture-only' },
-    transport,
-    now: () => Date.parse('2026-11-04T00:00:00.000Z'),
-  });
-  return { store, plugins, transport, profile, directory, tools, digest };
-}
-
-function data(reply: { result?: unknown; error?: { code: string } }): unknown {
-  if (reply.error) throw Error(reply.error.code);
-  return reply.result;
-}
-
-async function dispatch(
-  plugins: RuntimePlugins,
-  method: string,
-  params: Record<string, unknown> = {},
-): Promise<unknown> {
-  const reply = await plugins.dispatch(method, params);
-  return data(reply as { result?: unknown; error?: { code: string } });
-}
+import { dispatch, host } from '../../test-fixtures/plugin-host-fixture.js';
 
 describe('runtime plugin host dispatch', () => {
   it('installs the pinned card over the wire with zero transport requests', async () => {

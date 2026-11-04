@@ -1,6 +1,7 @@
 import {
   chmodSync,
   mkdirSync,
+  readdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -88,6 +89,22 @@ describe('private verified plugin installation copy', () => {
     expect(install.sweepInterrupted()).toBe(2);
     expect(install.read('github', entry.version).status).toBe('missing');
     void root;
+  });
+
+  it('repairs a corrupt version directory by atomically replacing it', () => {
+    const { profile, install } = store();
+    install.publish('github', entry.version, entry.manifest);
+    const directory = join(profile, 'plugins', 'github', entry.version);
+    const manifest = join(directory, 'manifest.json');
+    chmodSync(manifest, 0o644);
+    expect(install.read('github', entry.version).status).toBe('insecure');
+    const repaired = install.repair('github', entry.version, entry.manifest);
+    expect(repaired.sha256).toBe(entry.manifestDigest);
+    expect(install.read('github', entry.version)).toMatchObject({ status: 'ok' });
+    expect(statSync(manifest).mode & 0o777).toBe(0o600);
+    expect(
+      readdirSync(join(profile, 'plugins', 'github')).filter((name) => name.startsWith('.tmp-')),
+    ).toEqual([]);
   });
 
   it('never reads a credential value through the presence port', () => {

@@ -1,9 +1,11 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   SHIPPED_PLUGIN_CATALOG,
+  canonicalJson,
   emptyPluginBackupInventory,
   type PluginBackupInventory,
 } from '@runnets/domain';
@@ -70,6 +72,32 @@ describe('plugin backup asset archive', () => {
     const catalog = archivePluginBackupFiles(empty, profile, join(root, 'assets-empty'));
     expect(catalog.files).toEqual([]);
     expect(() => verifyPluginBackupFiles(join(root, 'assets-empty'), catalog)).not.toThrow();
+  });
+
+  it('archives two installed versions of one plugin (update state)', () => {
+    const { root, profile, inventory } = fixture();
+    const secondManifest = {
+      ...SHIPPED_PLUGIN_CATALOG.entries[0]!.manifest,
+      version: '1.1.0',
+    };
+    const secondDigest = createHash('sha256').update(canonicalJson(secondManifest)).digest('hex');
+    const second = {
+      ...inventory.versions[0]!,
+      version: '1.1.0',
+      manifestDigest: secondDigest,
+    };
+    // A second version of the same plugin is a normal update/version-switch state.
+    const install = createPluginInstallStore({ profile });
+    install.publish('github', second.version, secondManifest);
+    const twoVersions: PluginBackupInventory = {
+      format: 1,
+      versions: [inventory.versions[0]!, second],
+      hash: 'b'.repeat(64),
+    };
+    const archive = join(root, 'assets', 'plugins');
+    const catalog = archivePluginBackupFiles(twoVersions, profile, archive);
+    expect(catalog.files.map((file) => file.version).sort()).toEqual(['1.0.0', '1.1.0'].sort());
+    expect(() => verifyPluginBackupFiles(archive, catalog)).not.toThrow();
   });
 
   it('detects tampered or missing archive bytes', () => {

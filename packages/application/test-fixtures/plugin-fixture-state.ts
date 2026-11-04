@@ -4,7 +4,6 @@
  * failure seams tests use for interrupted/corrupt installs.
  */
 import type {
-  PluginAccessStorePort,
   PluginAdmissionStorePort,
   PluginCatalogStorePort,
   PluginConnectionStorePort,
@@ -20,13 +19,18 @@ import {
   type MockGrantConfirmation,
 } from './plugin-fake-state.js';
 import { fakeCatalogStore, fakeConnectionStore, fakeInstallFiles } from './plugin-store-fakes.js';
-import { fakeAccessStore, fakeAdmissionStore, fakeCredentials } from './plugin-authority-fakes.js';
+import {
+  fakeAccessStore,
+  fakeAdmissionStore,
+  fakeCredentials,
+  type FakeAccessStore,
+} from './plugin-authority-fakes.js';
 
 export interface PluginFixtureState {
   readonly catalog: PluginCatalogStorePort;
   readonly installFiles: PluginInstallStorePort;
   readonly connections: PluginConnectionStorePort;
-  readonly access: PluginAccessStorePort;
+  readonly access: FakeAccessStore;
   readonly admission: PluginAdmissionStorePort;
   readonly credentials: PluginCredentialReferencePort;
   readonly versions: Map<string, PluginInstalledVersion>;

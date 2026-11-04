@@ -10,6 +10,8 @@ export interface OceanArguments {
   readonly tools: readonly string[];
   /** Explicit owner acknowledgement of the group-visibility explanation. */
   readonly groupVisibilityAcknowledged: boolean;
+  /** Explicit owner acknowledgement after the discovery endpoint was shown. */
+  readonly endpointAcknowledged: boolean;
 }
 const valueFlags = new Set([
   'profile',
@@ -63,7 +65,8 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
   let json = false;
   let textOnly = false,
     staticDoctor = false,
-    groupVisibilityAcknowledged = false;
+    groupVisibilityAcknowledged = false,
+    endpointAcknowledged = false;
   const bots: string[] = [];
   const attachments: string[] = [];
   const tools: string[] = [];
@@ -86,6 +89,11 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
     if (token === '--acknowledge-group-visibility') {
       if (groupVisibilityAcknowledged) throw Error('invalid_input');
       groupVisibilityAcknowledged = true;
+      continue;
+    }
+    if (token === '--acknowledge-endpoint') {
+      if (endpointAcknowledged) throw Error('invalid_input');
+      endpointAcknowledged = true;
       continue;
     }
     if (token.startsWith('--')) {
@@ -119,6 +127,7 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
     tools,
     textOnly,
     groupVisibilityAcknowledged,
+    endpointAcknowledged,
   };
 }
 /** Required options fail before writes or model dispatch. */

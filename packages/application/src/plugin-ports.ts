@@ -54,7 +54,11 @@ export interface PluginCatalogStorePort {
   versions(pluginId: string): readonly PluginInstalledVersion[];
   version(pluginId: string, version: string): PluginInstalledVersion | null;
   enabled(pluginId: string): PluginInstalledVersion | null;
-  /** Persist install intent before the filesystem effect; replaces a corrupt row only. */
+  /**
+   * Persist install intent before the filesystem effect. A corrupt or
+   * interrupted row may be replaced explicitly; a verified install is never
+   * silently overwritten.
+   */
   beginInstall(version: PluginInstalledVersion): void;
   /** Mark the verified copy installed and disabled; false if the intent disappeared. */
   markVerified(
@@ -84,6 +88,11 @@ export type PluginInstalledFileRead =
 /** Private 0700/0600 copy inside the profile; publication is atomic (temp + rename). */
 export interface PluginInstallStorePort {
   publish(pluginId: string, version: string, manifest: PluginManifest): PluginInstalledFile;
+  /**
+   * Explicit owner repair: atomically replace an existing unverified version
+   * directory with a fresh verified copy of the pinned manifest bytes.
+   */
+  repair(pluginId: string, version: string, manifest: PluginManifest): PluginInstalledFile;
   read(pluginId: string, version: string): PluginInstalledFileRead;
 }
 
@@ -169,8 +178,14 @@ export interface PluginConnectionStorePort {
   consumeConsent(connectionId: string, generation: number, endpoint: string, at: string): boolean;
   /** Publish exclusively from a complete discovery; never from a refusal or a snapshot. */
   publishDiscovery(input: PluginDiscoveryPublication): PluginDiscoveryPublicationResult;
-  /** Idempotent: a disconnected connection stays disconnected at the same generation. */
-  disconnect(connectionId: string, at: string): PluginConnectionRecord;
+  /**
+   * Idempotent: a disconnected connection stays disconnected; the returned count
+   * is the number of active grants revoked by this call (never fabricated).
+   */
+  disconnect(
+    connectionId: string,
+    at: string,
+  ): { readonly connection: PluginConnectionRecord; readonly revokedGrants: number };
   /** Restored profiles: every connection and grant becomes inert before admission. */
   invalidateRestored(at: string): void;
 }
@@ -217,12 +232,6 @@ export interface PluginAccessStorePort {
   }): readonly PluginGrantRecord[];
   /** Immediate durable revoke; false when the grant is unknown or already revoked. */
   revoke(grantId: string, at: string): boolean;
-  /** Seed seam used by tests only: a pending confirmation a version switch must revoke. */
-  seedPendingConfirmation?(id: string, connectionId: string, generation: number, at: string): void;
-  pendingConfirmations?(): readonly {
-    readonly id: string;
-    readonly state: 'pending' | 'revoked' | 'consumed';
-  }[];
 }
 
 /** One SQLite immediate transaction immediately before transport dispatch. */

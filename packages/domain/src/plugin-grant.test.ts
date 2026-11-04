@@ -3,8 +3,6 @@ import {
   PLUGIN_GRANT_MAX_TOOLS,
   PLUGIN_POLICY_VERSION,
   validPluginGrantScope,
-  validPluginGrantTransition,
-  type PluginGrantRecord,
   type PluginGrantScope,
 } from './plugin-grant.js';
 
@@ -47,29 +45,5 @@ describe('exact plugin grant scope', () => {
     expect(validPluginGrantScope(scope({ repository: 'team' }))).toBe(false);
     expect(validPluginGrantScope(scope({ schemaDigest: 'B'.repeat(64) }))).toBe(false);
     expect(validPluginGrantScope(scope({ policyVersion: 0 }))).toBe(false);
-  });
-  it('only allows the durable active -> revoked transition', () => {
-    const record: PluginGrantRecord = {
-      id: 'grant_1',
-      ...scope(),
-      visibility: 'room',
-      state: 'active',
-      createdAt: '2026-11-04T00:00:00.000Z',
-      revokedAt: null,
-    };
-    expect(
-      validPluginGrantTransition(record, {
-        ...record,
-        state: 'revoked',
-        revokedAt: '2026-11-04T00:01:00.000Z',
-      }),
-    ).toBe(true);
-    expect(
-      validPluginGrantTransition(record, {
-        ...record,
-        state: 'revoked',
-        revokedAt: null,
-      }),
-    ).toBe(false);
   });
 });

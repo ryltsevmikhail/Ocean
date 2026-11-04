@@ -171,7 +171,6 @@ describe('public qualification gate', () => {
     expect('invoke' in entry.ExecutorPluginSetup.prototype).toBe(false);
     expect('verifyInstalledSdkChunk' in entry).toBe(false);
     expect('createInternalTransport' in entry).toBe(false);
-    expect('verifyInstalledSdkChunk' in entry).toBe(false);
     expect('assessQualification' in entry).toBe(false);
   });
 

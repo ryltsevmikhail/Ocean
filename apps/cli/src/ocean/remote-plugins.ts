@@ -20,7 +20,7 @@ interface PluginConnection {
 }
 
 const USAGE = [
-  'Use /plugin status, /plugin install, /plugin enable, /plugin disable,',
+  'Use /plugin status, /plugin install, /plugin repair, /plugin enable, /plugin disable,',
   '/plugin connect NAME CREDENTIAL_ENV, /plugin connections,',
   '/plugin consent ID GEN, /plugin discover ID GEN, /plugin disconnect ID,',
   '/plugin grants, /plugin grant CONNECTION BOT REPOSITORY TOOL[,TOOL] (ack)',
@@ -82,6 +82,12 @@ export class RemotePlugins {
         return lines.length === 0 ? 'No plugins configured.' : lines.join('\n');
       });
     }
+    if (action === 'repair') {
+      return withClient(async (client) => {
+        const repaired = await client.pluginRepair({ pluginId: 'github' });
+        return `Repaired github@${repaired.version} (verified, disabled).`;
+      });
+    }
     if (action === 'install' || action === 'enable' || action === 'disable') {
       return withClient(async (client) => {
         if (action === 'install') {
@@ -93,7 +99,7 @@ export class RemotePlugins {
           return `Enabled github@${enabled.installed.version} (revoked grants ${String(enabled.revokedGrants)}).`;
         }
         const disabled = await client.pluginDisable({ pluginId: 'github' });
-        return `Disabled github@${disabled.version}.`;
+        return `Disabled github@${disabled.version}; grants revoked.`;
       });
     }
     if (action === 'connections') {
@@ -105,7 +111,8 @@ export class RemotePlugins {
               .map(
                 (connection) =>
                   `${connection.id} "${connection.name}" gen=${String(connection.generation)} ` +
-                  `${connection.state} credential=${connection.credentialReference} ` +
+                  `${connection.state} endpoint=${connection.endpoint} ` +
+                  `credential=${connection.credentialReference} ` +
                   `schema=${connection.schemaDigest === null ? 'none' : 'published'}`,
               )
               .join('\n');
@@ -128,15 +135,26 @@ export class RemotePlugins {
       });
     }
     if (action === 'consent') {
-      const [connectionId, generation] = rest;
+      const [connectionId, generation, ack] = rest;
       if (!connectionId || generation === undefined) return USAGE;
       return withClient(async (client) => {
+        const prompt = await client.pluginConnectionPreview({ connectionId });
+        if (ack !== 'ack')
+          return (
+            prompt.prompt +
+            '\nSend /plugin consent ' +
+            connectionId +
+            ' ' +
+            generation +
+            ' ack to record this consent.'
+          );
         const preview = await client.pluginConnectionConsent({
           connectionId,
           expectedGeneration: Number(generation),
         });
         return (
-          'Consent recorded for ' +
+          prompt.prompt +
+          '\nConsent recorded for ' +
           preview.endpoint +
           ' generation ' +
           String(preview.generation) +
@@ -215,7 +233,12 @@ export class RemotePlugins {
           );
         }
         const grant = await client.pluginAccessGrant(request);
-        return 'Granted ' + grant.id + ' for repository ' + grant.repository + '.';
+        // Re-print the freshly computed explanation with the confirmation so a
+        // stale preview can never be the last thing the owner saw.
+        const fresh = await client.pluginAccessPreview(request);
+        return (
+          fresh.explanation + '\nGranted ' + grant.id + ' for repository ' + grant.repository + '.'
+        );
       });
     }
     if (action === 'revoke') {

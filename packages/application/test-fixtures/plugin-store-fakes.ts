@@ -36,7 +36,12 @@ export function fakeCatalogStore(maps: PluginFakeMaps): PluginCatalogStorePort {
     },
     beginInstall(version) {
       const existing = maps.versions.get(versionKey(version.pluginId, version.version));
-      if (existing !== undefined && existing.state !== 'corrupt') throw Error('already_installed');
+      if (
+        existing !== undefined &&
+        existing.state !== 'corrupt' &&
+        existing.state !== 'interrupted'
+      )
+        throw Error('already_installed');
       maps.versions.set(versionKey(version.pluginId, version.version), clone(version));
     },
     markVerified(pluginId, version, file, verifiedAt) {
@@ -82,6 +87,17 @@ export function fakeInstallFiles(maps: PluginFakeMaps): PluginInstallStorePort {
         maps.fileState.digestOverride ??
         maps.versions.get(versionKey(pluginId, version))?.manifestDigest ??
         '';
+      const bytes = JSON.stringify(manifest).length;
+      maps.files.set(versionKey(pluginId, version), {
+        manifest: clone(manifest),
+        bytes,
+        sha256: digest,
+      });
+      return { relativePath: 'manifest.json', sha256: digest, bytes };
+    },
+    repair(pluginId, version, manifest) {
+      if (maps.fileState.failure !== null) throw maps.fileState.failure;
+      const digest = maps.versions.get(versionKey(pluginId, version))?.manifestDigest ?? '';
       const bytes = JSON.stringify(manifest).length;
       maps.files.set(versionKey(pluginId, version), {
         manifest: clone(manifest),
@@ -197,7 +213,7 @@ export function fakeConnectionStore(maps: PluginFakeMaps): PluginConnectionStore
     disconnect(id, at) {
       const row = maps.connections.get(id);
       if (row === undefined) throw Error('connection_unknown');
-      if (row.state === 'disconnected') return clone(row);
+      if (row.state === 'disconnected') return { connection: clone(row), revokedGrants: 0 };
       const updated: PluginConnectionRecord = {
         ...row,
         state: 'disconnected',
@@ -205,10 +221,10 @@ export function fakeConnectionStore(maps: PluginFakeMaps): PluginConnectionStore
         updatedAt: at,
       };
       maps.connections.set(id, clone(updated));
-      revokeGrantsFor(maps, (grant) => grant.connectionId === id, at);
+      const revokedGrants = revokeGrantsFor(maps, (grant) => grant.connectionId === id, at);
       revokeConfirmationsFor(maps, (confirmation) => confirmation.connectionId === id);
       maps.consents.set(id, []);
-      return clone(updated);
+      return { connection: clone(updated), revokedGrants };
     },
     invalidateRestored(at) {
       for (const [id, row] of maps.connections) {

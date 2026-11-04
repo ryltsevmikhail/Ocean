@@ -1,28 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PLUGIN_CONNECTION_GENERATION_CHANGES,
-  nextPluginConnectionGeneration,
   pluginIdentityLabel,
   validPluginConnectionName,
   validPluginConnectionState,
   validPluginSchemaDigest,
 } from './plugin-connection.js';
 
-describe('plugin connection generation', () => {
-  it('bumps exactly one for every authority-relevant change', () => {
-    expect([...PLUGIN_CONNECTION_GENERATION_CHANGES].sort()).toEqual([
-      'account',
-      'adapter',
-      'credential',
-      'endpoint',
-      'plugin',
-      'schema',
-    ]);
-    for (const change of PLUGIN_CONNECTION_GENERATION_CHANGES)
-      expect(nextPluginConnectionGeneration(7, change)).toBe(8);
-    expect(() => nextPluginConnectionGeneration(0, 'account')).toThrow(RangeError);
-    expect(() => nextPluginConnectionGeneration(1, 'unrelated' as 'account')).toThrow(RangeError);
-  });
+describe('plugin connection validation', () => {
   it('accepts only bounded names and the two durable states', () => {
     expect(validPluginConnectionName('work')).toBe(true);
     expect(validPluginConnectionName('personal')).toBe(true);

@@ -51,6 +51,8 @@ export interface PluginEnableResult {
 
 export interface PluginRecoveryReport {
   readonly interrupted: number;
+  /** Corrupt rows whose private copy verified again at startup. */
+  readonly repaired: number;
   readonly verified: number;
   readonly corrupt: number;
   readonly disabled: number;

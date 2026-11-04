@@ -10,6 +10,7 @@ export const LOCAL_PLUGIN_METHODS = [
   'plugin.catalog',
   'plugin.inspect',
   'plugin.install',
+  'plugin.repair',
   'plugin.enable',
   'plugin.disable',
   'plugin.connections',

@@ -199,21 +199,24 @@ export class SqlitePluginConnections implements PluginConnectionStorePort {
       };
     });
   }
-  disconnect(connectionId: string, at: string): PluginConnectionRecord {
+  disconnect(
+    connectionId: string,
+    at: string,
+  ): { readonly connection: PluginConnectionRecord; readonly revokedGrants: number } {
     return withImmediateTransaction(this.#db, () => {
       const current = readConnection(this.#db, connectionId);
       if (current === null) throw Error('connection_unknown');
-      if (current.state === 'disconnected') return current;
+      if (current.state === 'disconnected') return { connection: current, revokedGrants: 0 };
       this.#db
         .prepare(
           `UPDATE ocean_plugin_connections
            SET state = 'disconnected', generation = generation + 1, updated_at = ? WHERE id = ?`,
         )
         .run(at, connectionId);
-      revokeGrantsForConnection(this.#db, connectionId, at);
+      const revokedGrants = revokeGrantsForConnection(this.#db, connectionId, at);
       revokeConfirmationsForConnection(this.#db, connectionId, at);
       deleteConsents(this.#db, connectionId);
-      return readConnection(this.#db, connectionId)!;
+      return { connection: readConnection(this.#db, connectionId)!, revokedGrants };
     });
   }
   invalidateRestored(at: string): void {

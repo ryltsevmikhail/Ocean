@@ -56,6 +56,10 @@ export function pluginSelectedConnection(): PluginConnectionView | null {
     pluginConnections.value.find((connection) => connection.id === pluginConnectionId.value) ?? null
   );
 }
+/** Any authority input change invalidates the previously shown explanation. */
+export function invalidatePluginPreview(): void {
+  pluginPreview.value = null;
+}
 export function pluginCanGrant(): boolean {
   return (
     pluginSelectedConnection()?.schemaDigest !== null &&
@@ -97,6 +101,13 @@ export async function installPlugin(): Promise<void> {
     return `Установлен github@${installed.version} (выключен).`;
   });
 }
+export async function repairPlugin(): Promise<void> {
+  await run(async () => {
+    const repaired = await call({ op: 'plugin-repair', pluginId: 'github' });
+    await loadPlugins();
+    return `Установка github@${repaired.version} восстановлена и проверена (выключена).`;
+  });
+}
 export async function enablePlugin(): Promise<void> {
   await run(async () => {
     const result = await call({ op: 'plugin-enable', pluginId: 'github' });
@@ -108,7 +119,7 @@ export async function disablePlugin(): Promise<void> {
   await run(async () => {
     const disabled = await call({ op: 'plugin-disable', pluginId: 'github' });
     await loadPlugins();
-    return `Выключен github@${disabled.version}.`;
+    return `Выключен github@${disabled.version}. Права на плагин отозваны.`;
   });
 }
 export async function addPluginConnection(): Promise<void> {
@@ -180,7 +191,7 @@ export async function disconnectPluginConnection(): Promise<void> {
     });
     pluginConsent.value = null;
     await loadPlugins();
-    return `Подключение «${result.connection.name}» отключено, права отозваны.`;
+    return `Подключение «${result.connection.name}» отключено, отозвано прав: ${String(result.revokedGrants)}.`;
   });
 }
 export async function previewPluginGrant(roomId: string): Promise<void> {

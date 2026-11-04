@@ -73,33 +73,3 @@ export function validPluginGrantScope(value: unknown): value is PluginGrantScope
     scope['policyVersion'] === PLUGIN_POLICY_VERSION
   );
 }
-
-/**
- * The only transition is active -> revoked with a timestamp; a revoked grant
- * can never be reactivated, widened or refreshed by anyone (model or host).
- */
-export function validPluginGrantTransition(
-  from: PluginGrantRecord,
-  to: PluginGrantRecord,
-): boolean {
-  if (from.state === 'revoked') return false;
-  if (from.id !== to.id || from.createdAt !== to.createdAt) return false;
-  if (
-    from.workspaceId !== to.workspaceId ||
-    from.roomId !== to.roomId ||
-    from.botId !== to.botId ||
-    from.pluginId !== to.pluginId ||
-    from.connectionId !== to.connectionId ||
-    from.connectionGeneration !== to.connectionGeneration ||
-    from.repository !== to.repository ||
-    from.schemaDigest !== to.schemaDigest ||
-    from.policyVersion !== to.policyVersion ||
-    from.visibility !== to.visibility ||
-    from.tools.length !== to.tools.length ||
-    from.tools.some((tool, index) => tool !== to.tools[index])
-  )
-    return false;
-  return (
-    to.state === 'revoked' && to.revokedAt !== null && Number.isFinite(Date.parse(to.revokedAt))
-  );
-}

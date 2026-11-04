@@ -6,7 +6,6 @@
  * VALUE where a reference name is required.
  */
 
-import { localRuntimeRecord } from './local-runtime.js';
 import type {
   LocalPluginCatalogQuery,
   LocalPluginCatalogView,
@@ -18,42 +17,25 @@ import type {
   LocalPluginDiscoveryResult,
   LocalPluginDisconnectResult,
   LocalPluginEnableResult,
-  LocalPluginGrantFilter,
-  LocalPluginGrantPreview,
-  LocalPluginGrantRequest,
-  LocalPluginGrantView,
   LocalPluginInspectQuery,
   LocalPluginInstallRequest,
   LocalPluginInstalledView,
   LocalPluginInstallState,
-  LocalPluginRevokeRequest,
 } from './local-plugins.js';
+import {
+  bounded,
+  connectionName,
+  credentialReference,
+  only,
+  optionalBounded,
+  pluginId,
+  position,
+  record,
+  sha,
+  strings,
+  version,
+} from './local-plugins-validate-base.js';
 
-const record = localRuntimeRecord;
-const bounded = (value: unknown, max: number): value is string =>
-  typeof value === 'string' && value.length > 0 && value.length <= max && !value.includes('\0');
-const optionalBounded = (value: unknown, max: number): boolean =>
-  value === undefined || bounded(value, max);
-const position = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-const digest = (value: unknown): value is string =>
-  typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-const strings = (value: unknown, max: number): value is readonly string[] =>
-  Array.isArray(value) && value.length <= max && value.every((entry) => bounded(entry, 128));
-const sha = (value: unknown): value is string => typeof value === 'string' && digest(value);
-const pluginId = (value: unknown): value is string =>
-  typeof value === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(value);
-const version = (value: unknown): value is string =>
-  typeof value === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]{1,32})?$/.test(value);
-const connectionName = (value: unknown): value is string =>
-  typeof value === 'string' && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
-const credentialReference = (value: unknown): value is string =>
-  typeof value === 'string' && /^[A-Z_][A-Z0-9_]{0,127}$/.test(value);
-
-function only(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  const names = Object.keys(value);
-  return names.length === keys.length && names.every((name) => keys.includes(name));
-}
 export function isLocalPluginCatalogQuery(value: unknown): value is LocalPluginCatalogQuery {
   return (
     record(value) &&
@@ -104,45 +86,9 @@ export function isLocalPluginConnectionRequest(
     Number(value['expectedGeneration']) >= 1
   );
 }
-export function isLocalPluginGrantRequest(value: unknown): value is LocalPluginGrantRequest {
-  return (
-    record(value) &&
-    only(value, [
-      'workspaceId',
-      'roomId',
-      'botId',
-      'pluginId',
-      'connectionId',
-      'tools',
-      'repository',
-      'acknowledgeGroupVisibility',
-    ]) &&
-    bounded(value['workspaceId'], 128) &&
-    bounded(value['roomId'], 128) &&
-    bounded(value['botId'], 128) &&
-    pluginId(value['pluginId']) &&
-    bounded(value['connectionId'], 128) &&
-    Array.isArray(value['tools']) &&
-    value['tools'].length >= 1 &&
-    value['tools'].length <= 16 &&
-    value['tools'].every((tool) => bounded(tool, 128)) &&
-    typeof value['repository'] === 'string' &&
-    /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})\/[A-Za-z0-9._-]{1,100}$/.test(value['repository']) &&
-    typeof value['acknowledgeGroupVisibility'] === 'boolean'
-  );
-}
-export function isLocalPluginGrantFilter(value: unknown): value is LocalPluginGrantFilter {
-  if (!record(value)) return false;
-  const keys = Object.keys(value);
-  if (!keys.every((key) => ['workspaceId', 'roomId', 'botId'].includes(key))) return false;
-  return keys.every((key) => bounded(value[key], 128));
-}
-export function isLocalPluginRevokeRequest(value: unknown): value is LocalPluginRevokeRequest {
-  return record(value) && only(value, ['grantId']) && bounded(value['grantId'], 128);
-}
-
 const installState = (value: unknown): value is LocalPluginInstallState =>
   value === 'installing' || value === 'installed' || value === 'interrupted' || value === 'corrupt';
+
 export function isLocalPluginInstalledView(value: unknown): value is LocalPluginInstalledView {
   return (
     record(value) &&
@@ -252,41 +198,4 @@ export function isLocalPluginDisconnectResult(
     position(value['revokedGrants'])
   );
 }
-export function isLocalPluginGrantView(value: unknown): value is LocalPluginGrantView {
-  return (
-    record(value) &&
-    bounded(value['id'], 128) &&
-    bounded(value['workspaceId'], 128) &&
-    bounded(value['roomId'], 128) &&
-    bounded(value['botId'], 128) &&
-    pluginId(value['pluginId']) &&
-    bounded(value['connectionId'], 128) &&
-    position(value['connectionGeneration']) &&
-    strings(value['tools'], 16) &&
-    bounded(value['repository'], 256) &&
-    sha(value['schemaDigest']) &&
-    position(value['policyVersion']) &&
-    bounded(value['visibility'], 4096) &&
-    (value['state'] === 'active' || value['state'] === 'revoked') &&
-    bounded(value['createdAt'], 64) &&
-    (value['revokedAt'] === null || bounded(value['revokedAt'], 64))
-  );
-}
-export function isLocalPluginGrants(value: unknown): value is readonly LocalPluginGrantView[] {
-  return Array.isArray(value) && value.length <= 200 && value.every(isLocalPluginGrantView);
-}
-export function isLocalPluginGrantPreview(value: unknown): value is LocalPluginGrantPreview {
-  if (!record(value)) return false;
-  return (
-    typeof value['allowed'] === 'boolean' &&
-    (value['refusal'] === null || bounded(value['refusal'], 64)) &&
-    bounded(value['explanation'], 4096) &&
-    typeof value['groupVisibility'] === 'boolean' &&
-    position(value['participants']) &&
-    (value['scope'] === null ||
-      (record(value['scope']) &&
-        bounded(value['scope']['repository'], 256) &&
-        strings(value['scope']['tools'], 16) &&
-        sha(value['scope']['schemaDigest'])))
-  );
-}
+export * from './local-plugins-validate-grants.js';

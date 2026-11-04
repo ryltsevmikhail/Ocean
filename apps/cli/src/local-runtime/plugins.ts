@@ -167,6 +167,11 @@ export class RuntimePlugins {
         const request = params;
         return this.#run(() => catalog.install(request));
       }
+      case 'plugin.repair': {
+        if (!isLocalPluginInstallRequest(params)) return invalid();
+        const request = params;
+        return this.#run(() => catalog.repair(request));
+      }
       case 'plugin.enable': {
         if (!isLocalPluginInstallRequest(params)) return invalid();
         const request = params;

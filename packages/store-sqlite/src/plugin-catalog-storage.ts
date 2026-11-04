@@ -50,7 +50,8 @@ export class SqlitePluginCatalog implements PluginCatalogStorePort {
   beginInstall(version: PluginInstalledVersion): void {
     withImmediateTransaction(this.#db, () => {
       const existing = readVersion(this.#db, version.pluginId, version.version);
-      if (existing !== null && existing.state !== 'corrupt') throw Error('already_installed');
+      if (existing !== null && existing.state !== 'corrupt' && existing.state !== 'interrupted')
+        throw Error('already_installed');
       this.#db
         .prepare('DELETE FROM ocean_plugin_versions WHERE plugin_id = ? AND version = ?')
         .run(version.pluginId, version.version);

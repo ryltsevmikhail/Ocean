@@ -4,7 +4,15 @@
 // with a deterministic in-process plugin transport, and a fixture credential
 // reference whose value must never appear in the UI, logs or DTOs.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import console from 'node:console';
@@ -159,11 +167,44 @@ try {
 
   // A disabled plugin cannot stay enabled silently after state reload.
   await dialog.locator('[data-testid=plugin-disable]').click();
-  await dialog.getByText('Выключен github@1.0.0.').waitFor();
+  await dialog.getByText('Права на плагин отозваны.').waitFor();
   evidence.steps.push({ step: 'disabled' });
 
+  // Corrupt the private verified copy: enabling fails closed, and the owner has a
+  // visible repair action rather than a dead profile.
+  chmodSync(join(f.profile, 'plugins', 'github', '1.0.0', 'manifest.json'), 0o644);
+  await dialog.locator('[data-testid=plugin-enable]').click();
+  const refusal = dialog.locator('[data-testid=plugin-message]');
+  await refusal.waitFor();
+  const refusalText = await refusal.innerText();
+  assert.match(refusalText, /повреждена|не проверена/);
+  evidence.steps.push({ step: 'corrupt-refused', refusal: refusalText });
+  await dialog.getByRole('button', { name: 'Закрыть плагины' }).click();
+  await page.getByRole('button', { name: 'Плагины' }).click();
+  const reopened = page.getByRole('dialog', { name: 'Плагины' });
+  await reopened.waitFor();
+  await reopened
+    .locator('[data-testid=plugin-card]')
+    .getByText(/Не установлен/)
+    .waitFor();
+  await reopened.locator('[data-testid=plugin-repair]').click();
+  await reopened
+    .getByText('Установка github@1.0.0 восстановлена и проверена (выключена).')
+    .waitFor();
+  evidence.steps.push({ step: 'repaired' });
+  await reopened.locator('[data-testid=plugin-enable]').click();
+  await reopened.getByText('Включён github@1.0.0. Отозвано прав: 0.').waitFor();
+  await page.screenshot({ path: join(f.root, '07-plugin-repaired.png') });
+  evidence.screenshots.push(join(f.root, '07-plugin-repaired.png'));
+  const repairedText = await reopened.innerText();
+  await reopened.locator('[data-testid=plugin-disable]').click();
+  await reopened.getByText('Права на плагин отозваны.').waitFor();
+  evidence.dialogText = (await reopened.innerText()) + '\n' + repairedText;
+  await reopened.getByRole('button', { name: 'Закрыть плагины' }).click();
+  evidence.steps.push({ step: 'repaired-then-disabled' });
+
   // The credential VALUE never reaches the UI, renderer console or page errors.
-  const dialogText = await dialog.innerText();
+  const dialogText = evidence.dialogText ?? '';
   const pageText = await page.evaluate(() => document.body.innerText);
   assert.equal(dialogText.includes(canary), false, 'dialog must not show the credential value');
   assert.equal(pageText.includes(canary), false, 'page must not show the credential value');

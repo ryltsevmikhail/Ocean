@@ -32,7 +32,7 @@ import {
   seedConversation,
   sha256,
   tools,
-} from './plugin-backup-fixtures.js';
+} from '../../test-fixtures/plugin-backup-fixtures.js';
 
 afterEach(cleanupFixture);
 

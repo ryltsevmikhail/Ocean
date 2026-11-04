@@ -44,7 +44,7 @@ describe('plugin grant preview and visibility', () => {
     expect(preview.groupVisibility).toBe(true);
     expect(preview.participants).toBe(4);
     expect(preview.explanation).toContain('Everyone in the group chat "Team"');
-    expect(preview.explanation).toContain('4 participants');
+    expect(preview.explanation).toContain('4 participant bots');
     expect(preview.explanation).toContain('team/api');
     expect(preview.explanation).toContain('work');
     expect(preview.explanation).toContain('bot_dev');

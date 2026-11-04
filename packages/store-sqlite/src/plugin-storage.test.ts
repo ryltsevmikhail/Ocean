@@ -32,7 +32,6 @@ function seedConversation(db: DatabaseSync): void {
 }
 const entry = SHIPPED_PLUGIN_CATALOG.entries[0]!;
 const at = '2026-11-04T00:00:00.000Z';
-
 function installVersion(
   catalog: SqlitePluginCatalog,
   version = entry.version,
@@ -62,7 +61,6 @@ function installVersion(
   ).toBe(true);
   return catalog.version('github', version)!;
 }
-
 function connection(digest: string | null = null): PluginConnectionRecord {
   return {
     id: 'conn_work',
@@ -204,10 +202,12 @@ describe('sqlite plugin connection storage', () => {
     connections.add(connection());
     access.atomic((tx) => tx.putGrant(grant()));
     const once = connections.disconnect('conn_work', at);
-    expect(once.state).toBe('disconnected');
+    expect(once.connection.state).toBe('disconnected');
+    expect(once.revokedGrants).toBe(1);
     expect(access.grants()[0]?.state).toBe('revoked');
     const twice = connections.disconnect('conn_work', at);
-    expect(twice.generation).toBe(once.generation);
+    expect(twice.connection.generation).toBe(once.connection.generation);
+    expect(twice.revokedGrants).toBe(0);
     connections.add({ ...connection(), id: 'conn_personal', name: 'personal' });
     connections.invalidateRestored(at);
     expect(connections.get('conn_personal')?.state).toBe('disconnected');

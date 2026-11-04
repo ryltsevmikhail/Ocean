@@ -98,6 +98,15 @@ export async function runPluginCommand(
         ]);
       return { data: entry, code: 0 };
     }
+    if (action === 'repair') {
+      const repaired = await client.pluginRepair(requestedVersion(args));
+      if (!args.json)
+        lines(output, [
+          `${repaired.pluginId} ${repaired.version} repaired ` +
+            `(verified=${String(repaired.verified)}, disabled)`,
+        ]);
+      return { data: repaired, code: 0 };
+    }
     if (action === 'install' || action === 'enable' || action === 'disable') {
       if (action === 'disable') {
         const installed = await client.pluginDisable({ pluginId: pluginId(args) });
@@ -162,13 +171,24 @@ export async function runPluginCommand(
       return { data: preview, code: 0 };
     }
     if (action === 'consent') {
-      const preview = await client.pluginConnectionConsent({
-        connectionId: connectionId(args),
+      const id = connectionId(args);
+      // The owner must see the exact endpoint before consent is recorded.
+      const preview = await client.pluginConnectionPreview({ connectionId: id });
+      if (!preview.consented && !args.json) lines(output, [preview.prompt]);
+      if (!args.endpointAcknowledged) {
+        error.write(
+          'consent not recorded: read the endpoint prompt above and repeat with ' +
+            '--acknowledge-endpoint\n',
+        );
+        return { data: preview, code: 4 };
+      }
+      const recorded = await client.pluginConnectionConsent({
+        connectionId: id,
         expectedGeneration: generation(args),
       });
       if (!args.json)
-        lines(output, [`consent recorded for generation ${String(preview.generation)}`]);
-      return { data: preview, code: 0 };
+        lines(output, [`consent recorded for generation ${String(recorded.generation)}`]);
+      return { data: recorded, code: 0 };
     }
     if (action === 'discover') {
       const result = await client.pluginConnectionDiscover({
@@ -188,7 +208,8 @@ export async function runPluginCommand(
       if (!args.json)
         lines(output, [
           `connection ${result.connection.id} ${result.connection.state} ` +
-            `generation ${String(result.connection.generation)}`,
+            `generation ${String(result.connection.generation)} ` +
+            `revoked grants ${String(result.revokedGrants)}`,
         ]);
       return { data: result, code: 0 };
     }
@@ -222,7 +243,7 @@ export async function runPluginCommand(
         return { data: preview, code: 4 };
       }
       // The owner sees exactly who can read the answer before confirming.
-      lines(output, [preview.explanation]);
+      if (!args.json) lines(output, [preview.explanation]);
       if (!request.acknowledgeGroupVisibility && preview.groupVisibility) {
         error.write(
           'grant not confirmed: pass --acknowledge-group-visibility after reading the explanation\n',

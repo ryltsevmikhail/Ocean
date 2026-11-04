@@ -7,6 +7,28 @@ import {
   PINNED_IDENTITIES,
   type ExecutorIntegrationInstall,
 } from './index.js';
+import { mcpAuthTemplates, startMcpServer } from '../test-fixtures/mcp-server.js';
+
+interface GuardedGlobal {
+  readonly __oceanBlockedFetches?: readonly string[];
+}
+const blockedFetches = () => (globalThis as GuardedGlobal).__oceanBlockedFetches ?? [];
+function expectNoExternalAttempts(): void {
+  expect(blockedFetches().filter((url) => !url.includes('127.0.0.1'))).toEqual([]);
+}
+/** Loopback-only fixture so connection creation never leaves the machine. */
+async function loopbackFixture() {
+  const mcp = await startMcpServer('ok');
+  return {
+    mcp,
+    tenant: { tenantId: 'tenant', subjectId: 'subject', allowedOrigins: [mcp.base] },
+    integration: {
+      ...github,
+      endpoint: `${mcp.base}/mcp`,
+      authTemplates: mcpAuthTemplates,
+    } as ExecutorIntegrationInstall,
+  };
+}
 
 const tenant = {
   tenantId: 'tenant',
@@ -106,14 +128,15 @@ describe('executor plugin setup seam', () => {
     }
   });
 
-  it('installs one integration and creates a connection from an environment reference', async () => {
+  it('installs one integration and creates a connection from an environment reference (loopback only)', async () => {
+    const fixture = await loopbackFixture();
     const setup = await ExecutorPluginSetup.open({
-      ...tenant,
+      ...fixture.tenant,
       resolveCredential: (reference) =>
         reference === 'OCEAN_GITHUB_WORK' ? 'fixture-token' : null,
     });
     try {
-      const installed = await setup.installIntegration(github);
+      const installed = await setup.installIntegration(fixture.integration);
       expect(installed.integrationId).toBe('github');
       const created = await setup.createConnection({
         integrationId: 'github',
@@ -123,6 +146,10 @@ describe('executor plugin setup seam', () => {
         credentialReference: 'OCEAN_GITHUB_WORK',
       });
       expect(created.connectionId).toBe('work');
+      // Network effect: the SDK performed its upstream connect/tool-sync against
+      // the loopback fixture only; no external host was attempted.
+      expect(fixture.mcp.counts.total).toBeGreaterThan(0);
+      expectNoExternalAttempts();
       // A missing environment reference is refused without leaking any value.
       await expect(
         setup.createConnection({
@@ -154,17 +181,19 @@ describe('executor plugin setup seam', () => {
       ).rejects.toSatisfy((error: unknown) => code(error) === 'invalid_input');
     } finally {
       await setup.close();
+      await fixture.mcp.close();
     }
   });
 
-  it('never puts a credential value into a failure message', async () => {
+  it('never puts a credential value into a failure message (loopback only)', async () => {
     const canary = 'CANARY_SETUP_CREDENTIAL_77af';
+    const fixture = await loopbackFixture();
     const setup = await ExecutorPluginSetup.open({
-      ...tenant,
+      ...fixture.tenant,
       resolveCredential: () => canary,
     });
     try {
-      await setup.installIntegration({ ...github, integrationId: 'second' });
+      await setup.installIntegration({ ...fixture.integration, integrationId: 'second' });
       await setup.createConnection({
         integrationId: 'second',
         connectionId: 'work',
@@ -187,8 +216,10 @@ describe('executor plugin setup seam', () => {
       }
       expect(message).not.toBe('');
       expect(message).not.toContain(canary);
+      expectNoExternalAttempts();
     } finally {
       await setup.close();
+      await fixture.mcp.close();
     }
   });
 

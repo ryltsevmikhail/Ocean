@@ -59,7 +59,7 @@ function verify(db: DatabaseSync): void {
   )
     throw new Error('invalid_database');
 }
-function pluginAssets(db: DatabaseSync): number {
+function pluginAssetsCount(db: DatabaseSync): number {
   const table = db
     .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ocean_plugin_versions'")
     .get();
@@ -68,6 +68,7 @@ function pluginAssets(db: DatabaseSync): number {
 }
 function summary(db: DatabaseSync): DatabaseSummary {
   verify(db);
+  const pluginAssets = pluginAssetsCount(db);
   const desktopAssets = Number(
     count(db, "SELECT count(*) AS n FROM meta WHERE key='desktop_assets_binding'") > 0 ||
       (schema(db) >= 12 &&
@@ -82,7 +83,7 @@ function summary(db: DatabaseSync): DatabaseSummary {
       ? { externalCodingAssets: count(db, 'SELECT count(*) AS n FROM ocean_worktrees') }
       : {}),
     ...(schema(db) >= 12 || desktopAssets ? { externalDesktopAssets: desktopAssets } : {}),
-    ...(pluginAssets(db) > 0 ? { pluginAssets: pluginAssets(db) } : {}),
+    ...(pluginAssets > 0 ? { pluginAssets } : {}),
     rooms: count(db, 'SELECT count(*) AS n FROM ocean_rooms'),
     messages: count(db, 'SELECT count(*) AS n FROM ocean_messages'),
     positions: db

@@ -120,6 +120,11 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
         pluginId: c.pluginId,
         ...(c.version === undefined ? {} : { version: c.version }),
       });
+    case 'plugin-repair':
+      return client.pluginRepair({
+        pluginId: c.pluginId,
+        ...(c.version === undefined ? {} : { version: c.version }),
+      });
     case 'plugin-enable':
       return client.pluginEnable({
         pluginId: c.pluginId,

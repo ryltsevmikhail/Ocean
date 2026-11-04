@@ -9,7 +9,15 @@ import type {
 } from '../src/plugin-ports.js';
 import { clone, revokeGrantsFor, type PluginFakeMaps } from './plugin-fake-state.js';
 
-export function fakeAccessStore(maps: PluginFakeMaps): PluginAccessStorePort {
+export interface FakeAccessStore extends PluginAccessStorePort {
+  seedPendingConfirmation(id: string, connectionId: string, generation: number, at: string): void;
+  pendingConfirmations(): readonly {
+    readonly id: string;
+    readonly state: 'pending' | 'revoked' | 'consumed';
+  }[];
+}
+
+export function fakeAccessStore(maps: PluginFakeMaps): FakeAccessStore {
   return {
     atomic<T>(work: (tx: PluginAccessTransaction) => T): T {
       return work({
@@ -42,7 +50,14 @@ export function fakeAccessStore(maps: PluginFakeMaps): PluginAccessStorePort {
           const grant = maps.grants.get(id);
           return grant === undefined ? null : clone(grant);
         },
-        putGrant: (record) => void maps.grants.set(record.id, clone(record)),
+        putGrant: (record) => {
+          // Mirror the real INSERT + table CHECK: no update of an existing row and a
+          // revoked grant must carry its revocation timestamp.
+          if (maps.grants.has(record.id)) throw Error('grant_exists');
+          if ((record.state === 'revoked') !== (record.revokedAt !== null))
+            throw Error('grant_check_failed');
+          maps.grants.set(record.id, clone(record));
+        },
         putGrantAndRevokePrevious(record, at) {
           maps.grants.set(record.id, clone(record));
           revokeGrantsFor(

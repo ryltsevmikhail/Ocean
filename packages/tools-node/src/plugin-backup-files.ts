@@ -104,7 +104,7 @@ export function archivePluginBackupFiles(
     if (entry.state !== 'installed') continue;
     const verified = readVerifiedManifest(profile, entry);
     const directory = join(destination, entry.pluginId, entry.version);
-    fs.mkdirSync(join(destination, entry.pluginId), { recursive: false, mode: 0o700 });
+    fs.mkdirSync(join(destination, entry.pluginId), { recursive: true, mode: 0o700 });
     fs.mkdirSync(directory, { recursive: false, mode: 0o700 });
     const output = join(directory, 'manifest.json');
     fs.writeFileSync(output, verified.bytes, { mode: 0o600, flag: 'wx' });

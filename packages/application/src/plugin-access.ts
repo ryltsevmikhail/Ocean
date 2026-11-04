@@ -134,26 +134,10 @@ export class PluginAccessService {
         createdAt: this.#now(),
         revokedAt: null,
       };
-      const current = tx.activeGrants({
-        workspaceId: record.workspaceId,
-        roomId: record.roomId,
-        botId: record.botId,
-        pluginId: record.pluginId,
-        connectionId: record.connectionId,
-        connectionGeneration: record.connectionGeneration,
-        tools: record.tools,
-        repository: record.repository,
-        schemaDigest: record.schemaDigest,
-      });
-      tx.putGrant(record);
-      for (const previous of current) {
-        if (previous.id === record.id) continue;
-        tx.putGrant({
-          ...previous,
-          state: 'revoked',
-          revokedAt: record.createdAt,
-        });
-      }
+      // One checked primitive: revoke the previous active grants for this
+      // bot/room/plugin and insert the new exact grant atomically. A separate
+      // insert-then-revoke loop cannot express the table CHECK constraint.
+      tx.putGrantAndRevokePrevious(record, record.createdAt);
       return grantView(record);
     });
   }

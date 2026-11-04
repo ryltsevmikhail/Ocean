@@ -25,7 +25,7 @@ export function pluginGrantExplanation(facts: PluginGrantVisibilityFacts): strin
         (facts.roomTitle ?? 'this room') +
         '" (' +
         String(facts.participantCount) +
-        ' participants) including every bot in it will see this answer'
+        ' participant bots) including every bot in it will see this answer'
       : 'Only you see this answer in the direct chat';
   return (
     audience +

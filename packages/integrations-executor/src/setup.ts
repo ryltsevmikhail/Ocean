@@ -18,7 +18,6 @@
  *
  * Plain types only: no Executor/Effect type appears in this module's surface.
  */
-import type { ExecutorHost, HostMcpInput } from './host-types.js';
 import { normalizeAllowedOrigins } from './origins.js';
 import {
   PINNED_IDENTITIES,
@@ -27,6 +26,18 @@ import {
 } from './pinned-identity.js';
 import { createExecutorHost } from './sdk-boundary.js';
 import { createSetupCredentialProvider } from './setup-provider.js';
+import type {
+  ExecutorConnectionSetup,
+  ExecutorIntegrationInstall,
+  ExecutorPluginSetupOptions,
+  ExecutorPluginSetupStatus,
+} from './setup-types.js';
+export type {
+  ExecutorConnectionSetup,
+  ExecutorIntegrationInstall,
+  ExecutorPluginSetupOptions,
+  ExecutorPluginSetupStatus,
+} from './setup-types.js';
 import { ExecutorSetupError } from './setup-error.js';
 import {
   bounded,
@@ -41,52 +52,33 @@ import {
 } from './setup-input.js';
 export { ExecutorSetupError } from './setup-error.js';
 export type { ExecutorSetupFailureCode } from './setup-error.js';
-
-export interface ExecutorPluginSetupOptions {
-  readonly tenantId: string;
-  readonly subjectId: string;
-  readonly allowedOrigins: readonly string[];
-  /**
-   * Host-supplied environment-reference resolver. It returns the credential
-   * value for one environment variable NAME, or null when absent. The value is
-   * used only inside the SDK host and never appears in a returned/error value.
-   */
-  readonly resolveCredential?: (reference: string) => string | null;
-}
-
-export interface ExecutorIntegrationInstall {
-  /** Catalog plugin id; also the deterministic integration slug Ocean addresses. */
-  readonly integrationId: string;
-  readonly name: string;
-  readonly description: string;
-  /** Exact HTTPS MCP endpoint. It must belong to the configured origin allowlist. */
-  readonly endpoint: string;
-  readonly authTemplates: readonly {
-    readonly slug: string;
-    readonly type: string;
-    readonly headers?: Readonly<Record<string, readonly unknown[]>>;
-  }[];
-}
-
-export interface ExecutorConnectionSetup {
-  readonly integrationId: string;
-  readonly connectionId: string;
-  readonly owner: 'user' | 'org';
-  readonly template: string;
-  /** Environment variable NAME only; the value is resolved host-side. */
-  readonly credentialReference: string;
-}
-
-export interface ExecutorPluginSetupStatus {
-  /** Literal: this seam can never turn execution on. */
-  readonly execution: 'disabled';
-  readonly pinned: Readonly<Record<string, string>>;
-}
-
 const SETUP_CONSTRUCTION_TOKEN: unique symbol = Symbol('executor-plugin-setup.internal');
+
+/**
+ * Plain, internal host facade. The concrete SDK host is structurally compatible;
+ * keeping this local interface means no Executor/Effect type can appear in this
+ * module's public declaration graph.
+ */
+interface SetupHost {
+  installMcp(input: {
+    readonly name: string;
+    readonly description: string;
+    readonly endpoint: string;
+    readonly remoteTransport: 'streamable-http';
+    readonly authTemplates: readonly unknown[];
+  }): Promise<string>;
+  createConnection(input: {
+    readonly integrationId: string;
+    readonly connectionId: string;
+    readonly owner: 'user' | 'org';
+    readonly template: string;
+    readonly value: string;
+  }): Promise<void>;
+  close(): Promise<void>;
+}
 const freeze = (value: Readonly<Record<string, string>>) => Object.freeze({ ...value });
 export class ExecutorPluginSetup {
-  readonly #host: ExecutorHost;
+  readonly #host: SetupHost;
   readonly #allowedOrigins: readonly string[];
   readonly #resolveCredential: ((reference: string) => string | null) | null;
   readonly #templates = new Map<string, ReadonlySet<string>>();
@@ -94,9 +86,14 @@ export class ExecutorPluginSetup {
   readonly #status: ExecutorPluginSetupStatus;
   #closed = false;
 
-  /** Not part of the product contract: only `open()` can supply the token. */
-  constructor(
-    host: ExecutorHost,
+  /**
+   * Not part of the public product contract: a private constructor keeps the
+   * internal `ExecutorHost`/Effect types out of the declaration graph, and the
+   * module-private token means product code cannot mint an instance from a
+   * forged status. Only `open()` constructs this class.
+   */
+  private constructor(
+    host: SetupHost,
     status: ExecutorPluginSetupStatus,
     allowedOrigins: readonly string[],
     resolveCredential: ((reference: string) => string | null) | null,
@@ -147,7 +144,7 @@ export class ExecutorPluginSetup {
         'installed Executor SDK chunk does not match the pinned patched digest',
       );
     }
-    let host: ExecutorHost;
+    let host: SetupHost;
     try {
       host = await createExecutorHost({
         tenantId,
@@ -204,7 +201,7 @@ export class ExecutorPluginSetup {
       templates.add(slug);
     }
     if (templates.size === 0) return invalidInput('at least one auth template is required');
-    const mcInput: HostMcpInput = {
+    const mcInput: Parameters<SetupHost['installMcp']>[0] = {
       name: bounded(input.name, 128, 'name'),
       description: bounded(input.description, 4096, 'description'),
       endpoint,
@@ -228,6 +225,12 @@ export class ExecutorPluginSetup {
   /**
    * Create one named connection using an environment-reference credential.
    * The reference must exist; the value never appears in an error or result.
+   *
+   * TASK 6 ORDERING OBLIGATION: `connections.create` performs one upstream MCP
+   * connect/tool-sync with the resolved credential. Task 6 must not call this
+   * before the owner's single-use metadata-discovery consent (or must explicitly
+   * treat this request as the consented discovery pass and count/attribute it);
+   * `installIntegration` itself is network-free.
    */
   async createConnection(
     input: ExecutorConnectionSetup,

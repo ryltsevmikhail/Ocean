@@ -21,3 +21,4 @@ export * from './local-provider.js';
 export * from './local-broadcast.js';
 export * from './local-plugins.js';
 export * from './local-plugins-validate.js';
+export * from './local-plugins-validate-grants.js';
