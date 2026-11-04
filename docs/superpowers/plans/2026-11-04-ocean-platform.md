@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; остальные задачи B–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2, межпроцессная приёмка 15.3 и остальные задачи B–H пока запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -409,9 +409,9 @@ Each task's numbered steps are red test → run → minimal implementation → g
 **Parent:** Task 15 stays open until 15.1–15.3 are accepted. This is the first sequential implementation checkpoint, with a fresh worker and scoped review.
 **Files:** Application model-connection mutation/publication/validation/types and dedicated metadata/recovery/binding/model-execution read projections; store-sqlite canonical JSON migration and affected backup/schema fixtures; room-model-policy scoped read. No new socket methods, SDK or Desktop changes yet.
 
-- [ ] Persist the exact versioned keyless original-request envelope with new pending secret intents, validate consistency, preserve frozen receipt bytes and historical missing-envelope limits; no new resumePending API. Add schema/restore/reopen and two-owner replay/failed-publication regressions.
-- [ ] Implement metadata-only connection pages and bound-bot reads, room policy read and scoped model-execution projection over one committed event stream. Prove no credential/activation/probe effects, exact profileVersion/binding, real policy revision, explicit unknown usage counts and safe bounded projections. Final wire parsing is 15.2.
-- [ ] Fix the unknown-connection revision-error ordering. Run focused RED/GREEN, strict tests, required root gates and scoped review; commit this checkpoint. Resolve exact public application projection types before the wire worker starts.
+- [x] Persist the exact versioned keyless original-request envelope with new pending secret intents, validate consistency, preserve frozen receipt bytes and historical missing-envelope limits; no new resumePending API. Add schema/restore/reopen and two-owner replay/failed-publication regressions.
+- [x] Implement metadata-only connection pages and bound-bot reads, room policy read and scoped model-execution projection over one committed event stream. Prove no credential/activation/probe effects, exact profileVersion/binding, real policy revision, explicit unknown usage counts and safe bounded projections. Final wire parsing is 15.2.
+- [x] Fix the unknown-connection revision-error ordering. Run focused RED/GREEN, strict tests, required root gates and scoped review; commit this checkpoint. Resolve exact public application projection types before the wire worker starts.
 
 #### Task 15.2: Negotiated wire contract, SDK and runtime composition
 
