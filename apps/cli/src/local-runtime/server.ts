@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { type Socket } from 'node:net';
 import type { EndpointLayout } from './endpoint-files.js';
 import { bindListener } from './listener.js';
+import { clientFeatures, clientIdentity, supportsPlugins } from './client-compatibility.js';
 import {
   isLocalRuntimeRequest,
   type LocalRuntimeDescriptor,
@@ -29,6 +30,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
     clients.add(socket);
     const detached = new AbortController();
     let authenticated = false;
+    let plugins = false;
     let stopping = false;
     let pending = 0;
     const handshakeTimeout = setTimeout(() => socket.destroy(), 5000);
@@ -62,9 +64,20 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
           socket.end();
           return;
         }
+        const features = clientFeatures(params);
+        if (features === null) {
+          reject('invalid_params');
+          stopping = true;
+          socket.end();
+          return;
+        }
+        plugins = supportsPlugins(features);
         authenticated = true;
         clearTimeout(handshakeTimeout);
-        writeLocalRuntimeFrame(socket, { id, result: operations.identity });
+        writeLocalRuntimeFrame(socket, {
+          id,
+          result: clientIdentity(operations.identity, plugins),
+        });
         return;
       }
       if (!authenticated) {
@@ -78,7 +91,10 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
         return;
       }
       if (method === 'status') {
-        writeLocalRuntimeFrame(socket, { id, result: operations.status() });
+        writeLocalRuntimeFrame(socket, {
+          id,
+          result: clientIdentity(operations.status(), plugins),
+        });
         return;
       }
       if (method === 'stop') {
@@ -93,6 +109,10 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             reject('stop_incomplete');
             socket.end();
           });
+        return;
+      }
+      if (method.startsWith('plugin.') && !plugins) {
+        reject('plugin_runtime_upgrade_required');
         return;
       }
       if (pending >= 128) {

@@ -143,7 +143,10 @@ async function connectDescriptor(
   });
   const peer = new Peer(socket);
   try {
-    const identity = await peer.request('hello', descriptor);
+    const identity = await peer.request('hello', {
+      ...descriptor,
+      clientFeatures: [LOCAL_PLUGIN_SESSION_AUTHORITY],
+    });
     if (
       !isLocalRuntimeIdentity(identity) ||
       identity.instanceId !== descriptor.instanceId ||

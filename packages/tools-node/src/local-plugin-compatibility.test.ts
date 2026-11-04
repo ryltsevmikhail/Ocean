@@ -31,9 +31,11 @@ it.each([
       capability: 'a'.repeat(64),
     };
     const methods: string[] = [];
+    const hellos: unknown[] = [];
     const server = createServer((socket) => {
       const frames = new LocalRuntimeFrames((raw) => {
-        const request = raw as { id: string; method: string };
+        const request = raw as { id: string; method: string; params: unknown };
+        hellos.push(request.params);
         methods.push(request.method);
         writeLocalRuntimeFrame(socket, {
           id: request.id,
@@ -61,6 +63,7 @@ it.each([
         peer?.close();
       } else await expect(connected).rejects.toThrow('plugin_runtime_upgrade_required');
       expect(methods).toEqual(['hello']);
+      expect(hellos).toEqual([{ ...descriptor, clientFeatures: ['plugin.session-authority-v1'] }]);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       rmSync(paths.directory, { recursive: true, force: true });
