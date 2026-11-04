@@ -71,3 +71,5 @@ export * from './model-capabilities.js';
 export * from './model-dispatch.js';
 export { decideModelDispatch } from './model-dispatch-decide.js';
 export { evolveModelDispatch } from './model-dispatch-evolve.js';
+
+export { copyActivation as copyModelActivationSnapshot } from './model-dispatch-validation.js';

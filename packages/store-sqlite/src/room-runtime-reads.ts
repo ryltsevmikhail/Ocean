@@ -9,6 +9,11 @@ import type { DatabaseSync } from 'node:sqlite';
 import { messageRow } from './conversation-rows.js';
 import { readInteger, readText, readNullableText } from './rows.js';
 
+// Null-status events advance version/accounting without changing lifecycle status.
+const STATUS_EVENT = `type NOT IN (${Object.entries(STATUS_AFTER_EVENT)
+  .filter(([, status]) => status === null)
+  .map(([type]) => `'${type}'`)
+  .join(',')})`;
 const VISIBLE_TURN = `COALESCE(json_extract(payload,'$.broadcast.abandoned'),0)=0`;
 const BOUND_TURN = `FROM ocean_chat_turns
       WHERE workspace_id=? AND room_id=? AND task_run_id=?
@@ -24,8 +29,8 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
     json_extract(payload,'$.binding.runId'), json_extract(payload,'$.binding.workspaceId'),
     json_extract(payload,'$.binding.roomId'),json_extract(payload,'$.binding.botId'),json_extract(payload,'$.binding.taskId'),json_extract(payload,'$.expiresAt'),id
   ) WHERE json_extract(payload,'$.status')='pending';
-  CREATE INDEX IF NOT EXISTS ocean_run_transitions ON events(aggregate_id, sequence)
-    WHERE type != 'attempt.usage_recorded';`);
+  CREATE INDEX IF NOT EXISTS ocean_run_status_events ON events(aggregate_id, sequence)
+    WHERE ${STATUS_EVENT};`);
   const checkRoom = ({ workspaceId, roomId }: Scope) => {
     if (
       !db
@@ -71,7 +76,7 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
     const version = headVersion(runId);
     const event = db
       .prepare(
-        "SELECT type FROM events WHERE aggregate_id=? AND type != 'attempt.usage_recorded' ORDER BY sequence DESC LIMIT 1",
+        `SELECT type FROM events WHERE aggregate_id=? AND ${STATUS_EVENT} ORDER BY sequence DESC LIMIT 1`,
       )
       .get(runId);
     const taskStatus = event

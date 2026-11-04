@@ -147,7 +147,7 @@ describe('runTurn', () => {
     expect(events.map((event) => event.type)).toContain('task_run.budget_exhausted');
   });
 
-  it('settles usage before a provider failure', async () => {
+  it('settles usage but holds unknown provider completion', async () => {
     const service = createService();
     const id = taskRunId('tr_engine03');
     await created(service, id);
@@ -168,11 +168,12 @@ describe('runTurn', () => {
       emit: () => {},
     });
 
-    expect(outcome.kind).toBe('failed');
+    expect(outcome.kind).toBe('uncertain');
     const final = await state(service, id);
-    expect(final.status).toBe('failed');
+    expect(final.status).toBe('reconciling');
     expect(final.budget.consumed.provider_tokens).toBe(6);
-    expect(final.terminal?.failure?.code).toBe('provider_error');
+    expect(final.terminal).toBeNull();
+    expect(final.modelExecution?.lastRequest.settlement?.completion).toEqual({ kind: 'unknown' });
   });
 
   it('fails a turn when the provider reports no usage', async () => {

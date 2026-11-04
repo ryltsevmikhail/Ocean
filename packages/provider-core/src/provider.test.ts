@@ -79,6 +79,7 @@ describe('collectReply', () => {
       text: '',
       reasoning: '',
       usage: null,
+      usageEvidence: null,
       stopReason: null,
       error: null,
     });

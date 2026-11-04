@@ -8,10 +8,13 @@
 import type { ToolService } from './tools.js';
 import type { TaskRunService } from './service.js';
 import type { TurnUpdate, StopReason } from './turn-update.js';
-import type { TaskRunId } from '@runnets/domain';
+import type { Clock } from './ports.js';
+import type { ModelActivationSnapshot, TaskRunId } from '@runnets/domain';
 import type { ChatMessage, ProviderPort } from './provider.js';
 
 export interface TurnInput {
+  readonly activation?: ModelActivationSnapshot;
+  readonly clock?: Clock;
   readonly beforeComplete?: (
     text: string,
     stopReason: 'end_turn' | 'max_tokens',

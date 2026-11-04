@@ -97,7 +97,8 @@ export async function settleUsage(
   attemptId: string,
   usage: TokenUsagePayload | null,
 ): Promise<TaskRunState> {
-  if (usage === null) return stateOf(input);
+  const state = await stateOf(input);
+  if (usage === null || state.modelExecution !== null) return state;
   return commit(input, 'RecordUsage', { attemptId, usage });
 }
 

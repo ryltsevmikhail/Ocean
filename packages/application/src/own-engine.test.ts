@@ -45,10 +45,14 @@ async function setup(scenario: Scenario) {
   const reviews: string[] = [];
   const trace: string[] = [];
   const claimsAtEffect: ToolEffectRecord[][] = [];
+  const modelSettlementsAtClaim: number[] = [];
   const journal: ToolJournalPort = {
     claim: async (callId, tool, context, fingerprint) => {
       // A caller that does not await the commit will execute before this boundary.
       await Promise.resolve();
+      modelSettlementsAtClaim.push(
+        (await service.events(id)).filter((e) => e.type === 'attempt.model_request_settled').length,
+      );
       records.push({ id: callId, tool, ...context, fingerprint, outcome: 'started' });
       trace.push('claim');
       return true;
@@ -146,6 +150,7 @@ async function setup(scenario: Scenario) {
     reviews,
     trace,
     claimsAtEffect,
+    modelSettlementsAtClaim,
     updates,
   };
 }
@@ -179,6 +184,10 @@ it('owns model -> tool -> model in one attempt and awaits the claim before the e
     ],
   ]);
   expect(h.trace).toEqual(['claim', 'effect', 'settle:completed']);
+  expect(h.modelSettlementsAtClaim).toEqual([1]);
+  expect(h.events.filter((e) => e.type === 'attempt.model_request_started')).toHaveLength(2);
+  expect(h.events.filter((e) => e.type === 'attempt.model_request_settled')).toHaveLength(2);
+  expect(h.events.filter((e) => e.type === 'attempt.usage_recorded')).toHaveLength(2);
   expect(h.records).toHaveLength(1);
   expect(h.records[0]?.outcome).toBe('completed');
 });

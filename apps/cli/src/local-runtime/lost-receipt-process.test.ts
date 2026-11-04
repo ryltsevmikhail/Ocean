@@ -131,9 +131,16 @@ it.runIf(process.platform === 'linux')(
       await vi.waitFor(async () =>
         expect(await peer('getRun', ref)).toMatchObject({
           turnStatus: 'uncertain',
-          taskStatus: 'failed',
+          taskStatus: 'reconciling',
         }),
       );
+      expect(await peer('getResult', ref)).toBeNull();
+      const events = (await peer('listEvents', { ...ref, after: 0, limit: 50 })) as {
+        type: string;
+      }[];
+      expect(events.map((e) => e.type)).toContain('attempt.model_request_settled');
+      expect(events.map((e) => e.type)).toContain('task_run.reconciling');
+      expect(events.map((e) => e.type)).not.toContain('task_run.failed');
       expect(readFileSync(join(profile, 'successor.calls'), 'utf8')).toBe('dispatch\n');
       console.info('Isolated positive control', receipt.runId, 'successor tripwire trips 1');
     } finally {

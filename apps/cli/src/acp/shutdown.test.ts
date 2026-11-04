@@ -22,11 +22,13 @@ it('preserves unknown provider cancellation before a disconnected host closes it
     async *stream(request) {
       const signal = request.signal;
       started();
+      yield { type: 'text_delta', text: 'partial' };
       await new Promise<void>((resolve) => {
         if (signal?.aborted) resolve();
         else signal?.addEventListener('abort', () => resolve(), { once: true });
       });
-      yield { type: 'completed', stopReason: 'cancelled', rawStopReason: null };
+      // A local transport abort cannot manufacture a provider terminal frame.
+      throw new Error('provider transport lost after local abort');
     },
   };
   const agent = new AcpAgent(new JsonRpcPeer({ input, output }), service, { provider });

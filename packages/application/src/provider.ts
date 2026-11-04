@@ -6,7 +6,7 @@
  * knows about a specific vendor, and the runtime consumes only this contract.
  */
 
-import type { CompletionStopReason, ImageMediaType } from '@runnets/domain';
+import type { CompletionStopReason, ImageMediaType, ModelUsageEvidence } from '@runnets/domain';
 
 /** Provider-neutral text content. Legacy messages keep a plain string instead. */
 export interface TextPart {
@@ -102,11 +102,16 @@ export class ProviderError extends Error {
   readonly code: ProviderErrorCode;
   readonly retryable: boolean;
   readonly status: number | null;
+  readonly dispatch: 'not_sent' | 'rejected' | 'unknown';
 
   constructor(
     code: ProviderErrorCode,
     message: string,
-    options: { readonly retryable?: boolean; readonly status?: number | null } = {},
+    options: {
+      readonly retryable?: boolean;
+      readonly status?: number | null;
+      readonly dispatch?: 'not_sent' | 'rejected' | 'unknown';
+    } = {},
   ) {
     super(message);
     this.name = 'ProviderError';
@@ -115,6 +120,7 @@ export class ProviderError extends Error {
       options.retryable ??
       (code === 'rate_limit' || code === 'server' || code === 'network' || code === 'timeout');
     this.status = options.status ?? null;
+    this.dispatch = options.dispatch ?? 'unknown';
   }
 }
 
@@ -123,6 +129,7 @@ export type ProviderEvent =
   | { readonly type: 'text_delta'; readonly text: string }
   | { readonly type: 'reasoning_delta'; readonly text: string }
   | { readonly type: 'usage'; readonly usage: TokenUsage }
+  | { readonly type: 'usage_evidence'; readonly evidence: ModelUsageEvidence }
   | {
       readonly type: 'completed';
       readonly stopReason: CompletionStopReason;
@@ -167,6 +174,7 @@ export interface CollectedReply {
   readonly text: string;
   readonly reasoning: string;
   readonly usage: TokenUsage | null;
+  readonly usageEvidence: ModelUsageEvidence | null;
   readonly stopReason: CompletionStopReason | null;
   readonly error: ProviderError | null;
 }
@@ -178,6 +186,7 @@ export async function collectReply(
   let text = '';
   let reasoning = '';
   let usage: TokenUsage | null = null;
+  let usageEvidence: ModelUsageEvidence | null = null;
   let stopReason: CompletionStopReason | null = null;
   let error: ProviderError | null = null;
 
@@ -194,6 +203,11 @@ export async function collectReply(
         break;
       case 'usage':
         usage = event.usage;
+        usageEvidence = { kind: 'actual', tokens: event.usage };
+        break;
+      case 'usage_evidence':
+        usageEvidence = event.evidence;
+        usage = event.evidence.kind === 'actual' ? event.evidence.tokens : null;
         break;
       case 'completed':
         stopReason = event.stopReason;
@@ -204,5 +218,5 @@ export async function collectReply(
     }
   }
 
-  return { text, reasoning, usage, stopReason, error };
+  return { text, reasoning, usage, usageEvidence, stopReason, error };
 }

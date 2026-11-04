@@ -87,3 +87,6 @@ export { modelPublicResult, readModelCheck } from './model-connection-results.js
 export * from './bot-model-binding.js';
 
 export * from './model-activation-types.js';
+
+export * from './model-activation.js';
+export * from './model-dispatch.js';

@@ -42,7 +42,7 @@ for (const cancel of [false, true]) {
     const provider: ProviderPort = {
       id: 'fake',
       models: ['fake'],
-      capabilities: { streaming: true, reasoning: false, usage: true },
+      capabilities: { streaming: true, reasoning: false, usage: true, toolCalls: true },
       async *stream(): AsyncIterable<ProviderEvent> {
         dispatches++;
         yield { type: 'tool_call', call: { id: 'one', name: 'read', arguments: '{}' } };

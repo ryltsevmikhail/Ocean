@@ -76,7 +76,7 @@ function provider(requests: ModelRequest[], text = 'Remembered'): ProviderPort {
   return {
     id: 'test',
     models: ['test'],
-    capabilities: { streaming: true, reasoning: true, usage: true },
+    capabilities: { streaming: true, reasoning: true, usage: true, toolCalls: true },
     async *stream(request) {
       requests.push(request);
       yield { type: 'reasoning_delta', text: 'private reasoning' };
