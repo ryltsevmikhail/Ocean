@@ -17,7 +17,8 @@
     "@runnets/store": "workspace:*",
     "@runnets/store-sqlite": "workspace:*",
     "@runnets/tools-node": "workspace:*",
-    "@runnets/provider-openai": "workspace:*"
+    "@runnets/provider-openai": "workspace:*",
+    "@runnets/provider-anthropic": "workspace:*"
   },
   "license": "Apache-2.0"
 }

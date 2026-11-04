@@ -215,6 +215,9 @@ importers:
       '@runnets/integrations-executor':
         specifier: workspace:*
         version: link:../../packages/integrations-executor
+      '@runnets/provider-anthropic':
+        specifier: workspace:*
+        version: link:../../packages/provider-anthropic
       '@runnets/provider-core':
         specifier: workspace:*
         version: link:../../packages/provider-core
@@ -298,6 +301,12 @@ importers:
       effect:
         specifier: 4.0.0-beta.59
         version: 4.0.0-beta.59
+
+  packages/provider-anthropic:
+    dependencies:
+      '@runnets/provider-core':
+        specifier: workspace:*
+        version: link:../provider-core
 
   packages/provider-core:
     dependencies:

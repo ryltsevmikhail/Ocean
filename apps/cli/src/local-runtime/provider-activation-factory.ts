@@ -15,6 +15,12 @@ import {
   OPENAI_ORIGIN,
   OPENAI_MODEL_INFO,
 } from '@runnets/provider-openai';
+import {
+  createAnthropicProvider,
+  probeAnthropicModels,
+  ANTHROPIC_ORIGIN,
+  ANTHROPIC_MODEL_INFO,
+} from '@runnets/provider-anthropic';
 import { PROVIDER_ENV_KEY } from '../engine/provider.js';
 import type { ProviderCredentialOptions } from './provider-settings.js';
 
@@ -23,7 +29,9 @@ export function createProviderActivationFactory(
   options: ProviderCredentialOptions,
 ): ModelCredentialFactory {
   const supported = (d: ModelConnectionDescriptor) =>
-    (d.providerId === 'deepseek' || (d.providerId === 'openai' && d.endpoint === OPENAI_ORIGIN)) &&
+    (d.providerId === 'deepseek' ||
+      (d.providerId === 'openai' && d.endpoint === OPENAI_ORIGIN) ||
+      (d.providerId === 'anthropic' && d.endpoint === ANTHROPIC_ORIGIN)) &&
     d.kind === 'cloud' &&
     d.auth === 'api_key' &&
     validModelConnectionEndpoint(d.kind, d.endpoint);
@@ -34,17 +42,30 @@ export function createProviderActivationFactory(
   ): ModelCredential => ({
     source,
     provider:
-      d.providerId === 'openai'
-        ? createOpenAIProvider({
+      d.providerId === 'anthropic'
+        ? createAnthropicProvider({
             apiKey: key,
             ...(options.httpClient === undefined ? {} : { httpClient: options.httpClient }),
           })
-        : new DeepSeekProvider({
-            apiKey: key,
-            baseUrl: d.endpoint!,
-            ...(options.httpClient === undefined ? {} : { httpClient: options.httpClient }),
-          }),
+        : d.providerId === 'openai'
+          ? createOpenAIProvider({
+              apiKey: key,
+              ...(options.httpClient === undefined ? {} : { httpClient: options.httpClient }),
+            })
+          : new DeepSeekProvider({
+              apiKey: key,
+              baseUrl: d.endpoint!,
+              ...(options.httpClient === undefined ? {} : { httpClient: options.httpClient }),
+            }),
     check: async (signal) => {
+      if (d.providerId === 'anthropic')
+        return probeAnthropicModels(
+          {
+            apiKey: key,
+            ...(options.httpClient === undefined ? {} : { httpClient: options.httpClient }),
+          },
+          signal,
+        );
       if (d.providerId === 'openai')
         return probeOpenAIModels(
           {
@@ -69,8 +90,8 @@ export function createProviderActivationFactory(
     catalog: (d) =>
       !supported(d)
         ? []
-        : d.providerId === 'openai'
-          ? OPENAI_MODEL_INFO.map((model) => ({
+        : d.providerId === 'openai' || d.providerId === 'anthropic'
+          ? (d.providerId === 'openai' ? OPENAI_MODEL_INFO : ANTHROPIC_MODEL_INFO).map((model) => ({
               modelId: model.id,
               capabilities: {
                 tools: true,

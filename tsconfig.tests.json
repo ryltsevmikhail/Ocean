@@ -16,7 +16,8 @@
       "@runnets/provider-core": ["packages/provider-core/src/index.ts"],
       "@runnets/provider-deepseek": ["packages/provider-deepseek/src/index.ts"],
       "@runnets/tools-node": ["packages/tools-node/src/index.ts"],
-      "@runnets/provider-openai": ["packages/provider-openai/src/index.ts"]
+      "@runnets/provider-openai": ["packages/provider-openai/src/index.ts"],
+      "@runnets/provider-anthropic": ["packages/provider-anthropic/src/index.ts"]
     }
   },
   "include": ["packages/*/src/**/*.ts", "apps/*/src/**/*.ts", "vitest.config.ts"]

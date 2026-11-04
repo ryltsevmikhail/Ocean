@@ -37,6 +37,9 @@
     },
     {
       "path": "../../packages/provider-openai"
+    },
+    {
+      "path": "../../packages/provider-anthropic"
     }
   ]
 }
