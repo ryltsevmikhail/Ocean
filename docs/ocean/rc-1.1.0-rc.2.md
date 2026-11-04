@@ -17,17 +17,26 @@ Two facts frame this record:
 
 ## Immutable candidate
 
-| Field                      | Value                                                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Base                       | `v1.0.0` (Ocean 1.0)                                                                                                                 |
-| Candidate branch           | `codex/ocean-rc2`                                                                                                                    |
-| Whole-branch reviewed rev. | `5d2e1c7` (final review); fix-wave re-review accepted `3a89295`; Task 6 delta merged as `bf53606`                                    |
-| Candidate revision         | recorded with the artifacts built from the frozen clean revision (exact SHA in the release report and artifact manifest)             |
-| Schema                     | **18** (14 = installed RC1)                                                                                                          |
-| Frozen toolchain           | Node **v26.13.0** (exact `manifest.node` in the artifact), pnpm 12.16.1                                                              |
-| Platform                   | Linux x86_64, local filesystem, Wayland for the Desktop                                                                              |
-| Desktop artifact           | separate Electron package; not inside the CLI archive                                                                                |
-| Owner-installed state kept | RC1 release `1.1.0-rc.1`, `current` symlink, inactive `ocean-rc-runtime` service, RC profile, key file — untouched by this candidate |
+| Field                      | Value                                                                                                                                                                                                     |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Base                       | `v1.0.0` (Ocean 1.0)                                                                                                                                                                                      |
+| Candidate branch           | `codex/ocean-rc2`                                                                                                                                                                                         |
+| Whole-branch reviewed rev. | `5d2e1c7` (final review); fix-wave re-review accepted `3a89295`; Task 6 delta merged as `bf53606`                                                                                                         |
+| Candidate revision         | recorded with the artifacts built from the frozen clean revision (exact SHA in the release report and artifact manifest)                                                                                  |
+| Schema                     | **18** (14 = installed RC1)                                                                                                                                                                               |
+| Frozen toolchain           | Node **v26.13.0** (exact `manifest.node` in the artifact), pnpm 12.16.1                                                                                                                                   |
+| Platform                   | Linux x86_64, local filesystem, Wayland for the Desktop                                                                                                                                                   |
+| Desktop artifact           | separate Electron package; not inside the CLI archive                                                                                                                                                     |
+| CLI/runtime archive        | `ocean-1.1.0-rc.2-linux-x64.tar.gz`, SHA-256 `0ea8ddddb762ce0adcaa7b3b8cd257e86c61bb60a783cbf03f3fb297811b98b1`, 1,359,637 bytes                                                                          |
+| Installer                  | `ocean-install.mjs`, SHA-256 `059f37166f3d784be27e43b2be4fc52a62bab1e2db1cd78cd1f664b38aad23c3`                                                                                                           |
+| Desktop artifact           | separate Electron package, app.asar SHA-256 `6d660ad648dc24c080b4c4a9a2765271710e4b20ba4a2d461731439c2f829b34`                                                                                            |
+| Installation               | new versioned directory `releases/1.1.0-rc.2` under `/home/ryltsevmg/.local/opt/ocean-rc`; `current` switched atomically; RC1 `1.1.0-rc.1` retained; launcher, systemd unit and `0600` key file unchanged |
+| Owner profile              | migrated schema 14 → 18 on start with data preserved (3 rooms, 2 bots, 22 messages, 9 turns); validated pre-upgrade format-2 backup and a raw file copy retained privately outside Git                    |
+
+This release record was written after the frozen artifact revision `5e10ec3`; the artifacts above
+were built from that revision and this documentation commit does not change them (the archive built
+at `5e10ec3` contains the documentation as of that revision, following the same convention as the RC1
+record).
 
 ## What RC2 implements
 
@@ -468,10 +477,69 @@ transport qualification only, not as card acceptance.
 4. If any step is unavailable, keep the gate unqualified — do not present mocked GitHub traffic as live
    acceptance.
 
+## Installed RC2 acceptance (2026-11-04)
+
+Performed on the owner's machine with the exact artifacts above and Node **v26.13.0**. The owner's
+real profile was migrated in place (validated format-2 pre-upgrade backup + raw copy retained
+privately), RC1 remains installed under `releases/1.1.0-rc.1`, and the launcher, systemd unit and
+`0600` key file are byte-unchanged.
+
+- **Migration/data preservation.** Pre-upgrade profile: schema 14, 3 rooms, 2 bots, 22 messages,
+  9 chat turns. After the RC2 runtime start: schema 18 with the same 3 rooms / 2 bots / 22 messages /
+  9 turns, and the plugin-operations table present. The installed client reads the rooms, bots and
+  history through the shared runtime. The pre-upgrade format-2 backup restores on a disposable
+  profile into schema 18 with the same counts.
+- **Provider connection.** Installed runtime reports `source: external` (environment key, never
+  persisted), `state: connected`, `model: deepseek-flash`, advertised models
+  `deepseek-flash`/`deepseek-v4-pro` with image-input capability metadata. One bounded live
+  `GET /models` check: HTTP 200, 850 ms, `modelSupported: true`, `persisted: false`.
+- **Real application.** The installed Desktop (RC2 release path) starts through the real launcher,
+  shows the owner's rooms and history with the details panel and composer accessible, and leaves the
+  runtime ready.
+- **Installed GUI layout.** On the installed Desktop binary with a private synthetic profile,
+  viewport-emulated at 1024/1280/1920 with Details open: zero overlap between the details column and
+  the composer/textarea/Send, the Send hit test resolves inside the composer, and the composer is
+  reachable at all three widths (1024: details column at x=814 w=210, composer x=220 w=594; no
+  overlap). This is the release-blocking 1024 correction verified on the shipped artifact.
+- **Two-bot broadcast (installed, private profile, real DeepSeek).** One `Everyone` broadcast produced
+  exactly one user message, one answer from each of two bots (`dev`, `review`), exactly **2** live
+  model requests / durable usage events, no follow-up round, and no plugin tools.
+- **Genuine image vision (installed, private profile, real DeepSeek).** Three real images through the
+  installed runtime and adapter: the photograph (cat; tabby coat, sitting on a stone ledge, green
+  eyes), a spatial/color diagram (blue circle bottom-right, red square top-left) and a real
+  application screenshot. All three HTTP 200 with correct answers against pre-recorded ground truth;
+  the recorded request bodies contain the source bytes (decoded image SHA-256 equals the source
+  SHA-256 for every image), no attachment marker text, and historical images are re-resolved on later
+  requests (1 → 2 → 3 images). Exactly **5** live model requests total across broadcast + images,
+  **5** durable `attempt.usage_recorded` events, **0** tool events.
+- **Plugins (installed, private profile).** Catalog list/install/enable/disable and a named
+  environment-reference connection work on the installed artifact (generation 1, identity honestly
+  `unverified`, `consented: false`), and `plugin operations list` is served. No metadata discovery
+  was performed against GitHub, and no real GitHub traffic was made.
+- **Credential boundary.** The DeepSeek credential was only ever sourced inside private subshells;
+  an exact-value scan of the private fixtures is clean, and nothing secret appears in SQLite,
+  recorded evidence, or this document.
+
+### Environment repair performed during the update (disclosed)
+
+After an ordinary reboot the owner's Desktop asset binding failed its filesystem-identity check
+(`device` 54→53 and mount id 60→59 changed; inode, uid, gid and mode were identical), which made
+Desktop asset reads and format-2 backups refuse. With a raw profile copy and a validated backup taken
+first, the binding identity was re-anchored atomically to the observed identity of the same inode
+(`metadata` update guarded by the exact old value; `quick_check` and `foreign_key_check` clean). This
+is a disclosed environment repair, not a product feature: the product has no self-repair for device
+identity drift, and a future reboot that changes the device mapping can require the same disclosed
+repair. A follow-up product improvement (safe re-anchor only when inode/uid/gid/mode match) remains a
+known limitation of this candidate.
+
 ## Release decision
 
-**Not yet.** This candidate is honest but not releasable: the scoped re-review of
-this fix wave, frozen artifacts at the fix revision (Node v26.13.0), disposable
-install/migration/rollback, and installed RC2 acceptance including the real GUI
-must complete first. RC2 is published only after acceptance, and stable 1.1 is not
-declared complete while its gates remain open.
+**Candidate accepted for RC2; stable 1.1 is not complete.** The whole-branch review and fix wave,
+the Task 6 delta review and its fix wave, frozen artifacts with reproducible SHA-256, disposable
+migration/rollback, and installed RC2 acceptance (migration, provider check, two-bot broadcast,
+genuine vision, installed GUI layout at 1024/1280/1920) are complete for this candidate. Remaining
+open items are recorded honestly: the live GitHub account/repository gate is **unqualified** (no
+explicitly approved test connection), the native/source-preset sharded qualification was **not
+re-run at this frozen revision** (RC1 native evidence is retained for unchanged modules; skips are
+not passes), the Windows/macOS/proxy and some vendor behaviours remain unverified, and publication of
+the candidate is a separate step recorded with the release report.
