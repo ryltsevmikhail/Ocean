@@ -18,6 +18,8 @@ export * from './side-effect.js';
 
 export * from './conversations.js';
 
+export * from './image-content.js';
+
 export * from './chat-turn.js';
 
 export * from './broadcast.js';

@@ -208,8 +208,13 @@ export function prepareDesktopFiles(
     context += part;
     budget -= part.length;
   }
-  context +=
-    '\n\n[Вложения сохранены в Desktop. Модели переданы только текстовые выдержки выше и описания файлов. Содержимое изображений и бинарных файлов модели недоступно.]';
+  // Images now reach vision models as real content through runtime authority; the
+  // disclaimer must stop claiming they are unavailable. Legacy text-only messages
+  // keep their existing wording.
+  const images = files.some(({ info }) => info.kind === 'image');
+  context += images
+    ? '\n\n[Вложения сохранены в Desktop. Текстовые выдержки переданы выше. Изображения передаются модели как изображения, если выбранная модель поддерживает изображения; содержимое остальных бинарных файлов модели недоступно.]'
+    : '\n\n[Вложения сохранены в Desktop. Модели переданы только текстовые выдержки выше и описания файлов. Содержимое изображений и бинарных файлов модели недоступно.]';
   const prepared = encodeDesktopAttachments(
     context,
     requestId,

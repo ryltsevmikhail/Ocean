@@ -8,7 +8,7 @@ import { createRuntime, type Runtime, type RuntimeOptions } from '../runtime.js'
 export function openOceanProfile(
   profile: string | undefined,
   initialize = false,
-  options: Pick<RuntimeOptions, 'codingTools' | 'requireUnpublished'> = {},
+  options: Pick<RuntimeOptions, 'codingTools' | 'requireUnpublished' | 'imageResolver'> = {},
 ): Runtime {
   if (process.env['RUNNE_DB'] !== undefined || process.env['RUNNE_MODE'] !== undefined)
     throw new Error('Select Ocean --profile without RUNNE_DB or RUNNE_MODE');

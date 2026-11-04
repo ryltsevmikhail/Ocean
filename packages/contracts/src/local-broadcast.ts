@@ -37,6 +37,8 @@ export interface LocalBroadcastChild {
   readonly position: number;
   readonly state: LocalBroadcastChildState;
   readonly resultMessageId: string | null;
+  /** Visible pre-dispatch refusal reason, when the runtime recorded one. */
+  readonly refusalCode?: string | null;
 }
 export interface LocalBroadcastBatch {
   readonly version: 1;
@@ -102,7 +104,8 @@ function exact(v: unknown, keys: readonly string[]): v is Record<string, unknown
 }
 export function isLocalBroadcastChild(v: unknown): v is LocalBroadcastChild {
   return (
-    exact(v, [
+    localRuntimeRecord(v) &&
+    only(v, [
       'botId',
       'handle',
       'name',
@@ -113,7 +116,11 @@ export function isLocalBroadcastChild(v: unknown): v is LocalBroadcastChild {
       'position',
       'state',
       'resultMessageId',
+      'refusalCode',
     ]) &&
+    (v['refusalCode'] === undefined ||
+      v['refusalCode'] === null ||
+      (typeof v['refusalCode'] === 'string' && /^[a-z_]{1,64}$/.test(v['refusalCode']))) &&
     localId(v['botId']) &&
     localId(v['handle']) &&
     localId(v['name']) &&

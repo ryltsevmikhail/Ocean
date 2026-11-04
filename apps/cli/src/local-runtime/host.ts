@@ -1,4 +1,8 @@
-import { runtimeDesktopAssets, desktopSubmitRefusal } from './desktop-assets.js';
+import {
+  runtimeDesktopAssets,
+  desktopSubmitRefusal,
+  desktopImageResolver,
+} from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
 import { LOCAL_RESTORE_METHODS } from '@runnets/contracts';
 import { profileCommand } from './profile-commands.js';
@@ -7,7 +11,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { closeSync } from 'node:fs';
 import { recoverEndpoint, publishEndpoint } from './endpoint.js';
 import { profileKey, type EndpointLayout } from './endpoint-files.js';
-import type { ProviderPort, RuntimeRecovery } from '@runnets/application';
+import type { ImageAssetResolverPort } from '@runnets/application';
 import { LOCAL_RUNTIME_MAX_WAIT_MS } from '@runnets/contracts';
 import type {
   LocalRuntimeIdentity,
@@ -19,7 +23,9 @@ import { CodingPanelQueries } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
 import { RuntimeTurns } from './turns.js';
-import type { RuntimeOptions } from '../runtime.js';
+import type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-types.js';
+
+export type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-types.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
 import { assertRuntimeDrained } from './drain-supervision.js';
@@ -32,36 +38,6 @@ import { RuntimeBroadcasts } from './broadcast.js';
 import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
 import { providerHostSettings } from './provider-settings.js';
-import type { ProviderSecretStorePort } from '@runnets/application';
-export interface LocalRuntimeHost {
-  readonly identity: LocalRuntimeIdentity;
-  readonly recovery: RuntimeRecovery;
-  readonly closed: Promise<void>;
-  status(): LocalRuntimeStatus;
-  stop(): Promise<LocalRuntimeStop>;
-}
-export interface LocalRuntimeHostOptions {
-  readonly profile: string;
-  readonly restore?: boolean;
-  /** Host-only composition. Providers and coding authority never arrive over the wire. */
-  readonly codingTools?: Pick<
-    NonNullable<RuntimeOptions['codingTools']>,
-    'sandbox' | 'inspectSandbox'
-  >;
-  /** `undefined` resolves saved/env; `null` forces every provider off; a value is read-only. */
-  readonly provider?: ProviderPort | null;
-  /** Test-only private credential store; production derives a profile sibling directory. */
-  readonly providerSecretStore?: ProviderSecretStorePort;
-  /** Explicit credential-directory override for fixtures; production is deterministic. */
-  readonly credentialDir?: string;
-  /** Test-only deterministic vendor transport origin; never wire input. */
-  readonly providerBaseUrl?: string;
-  /** Test-only deterministic clock; production omits it and uses Date.now (never wire input). */
-  readonly now?: () => number;
-  /** Additional host supervision joins runtime-owned execution before SQLite close. */
-  readonly drain?: () => Promise<'settled' | 'uncertain'>;
-  readonly drainDeadlineMs?: number;
-}
 /** The existing runtime remains the only SQLite owner and recovery/effect journal executor. */
 export async function startLocalRuntime(
   options: LocalRuntimeHostOptions,
@@ -78,9 +54,12 @@ export async function startLocalRuntime(
   checkRestoration();
   const originalProfile = profileKey(paths);
   let decisions: RuntimeDecisions;
+  let images: ImageAssetResolverPort | undefined;
   const runtime = openOceanProfile(paths.profile, false, {
     // This host alone validates and retires a surviving publication before serving.
     requireUnpublished: false,
+    imageResolver: (store) =>
+      (images = desktopImageResolver(store, paths.profile, paths.profileId)),
     ...(!options.restore && {
       codingTools: {
         ...(options.codingTools ?? registeredCodingTools(paths.profile)),
@@ -161,6 +140,7 @@ export async function startLocalRuntime(
       },
       clock: systemClock,
       provider: provider.activation,
+      ...(images === undefined ? {} : { images }),
     });
     turns.attachControllers((runId) => broadcasts.controllerFor(runId));
     let databaseClosed = false;

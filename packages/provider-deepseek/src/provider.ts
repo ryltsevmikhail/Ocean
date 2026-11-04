@@ -8,6 +8,7 @@
 
 import {
   ProviderError,
+  REQUEST_HARD_LIMIT_BYTES,
   fetchHttpClient,
   type HttpClient,
   type HttpResponse,
@@ -19,7 +20,13 @@ import {
 
 import { errorForStatus, errorFromException, messageFromBody } from './errors.js';
 import { mapStream } from './stream.js';
-import { DEEPSEEK_CHAT_PATH, DEEPSEEK_DEFAULT_ORIGIN, buildRequestBody } from './wire.js';
+import {
+  DEEPSEEK_CHAT_PATH,
+  DEEPSEEK_DEFAULT_ORIGIN,
+  WireContentError,
+  buildRequestBody,
+  serializedBodyBytes,
+} from './wire.js';
 
 /**
  * Models advertised when the host does not configure its own list.
@@ -64,6 +71,8 @@ export class DeepSeekProvider implements ProviderPort {
     usage: true,
     toolCalls: true,
   } as const;
+  /** Documented per-model input modalities; admission refuses unsupported images. */
+  readonly modelInfo: readonly ProviderModelInfo[] = DEEPSEEK_MODEL_INFO;
   readonly #apiKey: string;
   readonly #baseUrl: string;
   readonly #http: HttpClient;
@@ -84,6 +93,11 @@ export class DeepSeekProvider implements ProviderPort {
     return this.#stream(request);
   }
 
+  /** The adapter's one serializer, shared with the application pre-check. */
+  requestBytes(request: ModelRequest): number {
+    return serializedBodyBytes(request);
+  }
+
   async *#stream(request: ModelRequest): AsyncIterable<ProviderEvent> {
     const cancelled = request.signal ?? null;
     if (cancelled?.aborted === true) {
@@ -94,6 +108,23 @@ export class DeepSeekProvider implements ProviderPort {
     const timeout = this.#timeoutMs > 0 ? AbortSignal.timeout(this.#timeoutMs) : null;
     const signal = combineSignals(cancelled, timeout);
 
+    let body: string;
+    try {
+      body = buildRequestBody(request);
+    } catch (error) {
+      if (error instanceof WireContentError) {
+        yield { type: 'error', error: new ProviderError('invalid_request', error.message) };
+        return;
+      }
+      throw error;
+    }
+    // Hard gate: the complete serialized UTF-8 body must fit the vendor limit.
+    // A typed refusal here happens before any network call.
+    if (Buffer.byteLength(body, 'utf8') > REQUEST_HARD_LIMIT_BYTES) {
+      yield { type: 'error', error: new ProviderError('invalid_request', 'request_too_large') };
+      return;
+    }
+
     let response: HttpResponse;
     try {
       response = await this.#http.send({
@@ -103,7 +134,7 @@ export class DeepSeekProvider implements ProviderPort {
           'content-type': 'application/json',
           accept: 'text/event-stream',
         },
-        body: buildRequestBody(request),
+        body,
         ...(signal === null ? {} : { signal }),
       });
     } catch (error) {

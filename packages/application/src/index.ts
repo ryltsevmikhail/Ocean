@@ -28,6 +28,8 @@ export * from './room-broadcast-views.js';
 export * from './room-broadcast-runner.js';
 export * from './room-broadcast.js';
 
+export * from './image-content.js';
+
 export * from './chat-review.js';
 
 export * from './coding-ports.js';

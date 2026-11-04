@@ -43,6 +43,8 @@ export interface BroadcastChildView {
   readonly position: number;
   readonly state: BroadcastChildStatus;
   readonly resultMessageId: string | null;
+  /** Why the child was refused before dispatch, when the runtime knows it. */
+  readonly refusalCode?: string | null;
 }
 export interface BroadcastBatchView {
   readonly version: 1;
@@ -65,7 +67,12 @@ export interface BroadcastAdmission {
 }
 export type BroadcastAdmitResult =
   | { readonly kind: 'admitted'; readonly value: BroadcastAdmission }
-  | { readonly kind: 'refused'; readonly batch: BroadcastBatch; readonly turn: ChatTurn }
+  | {
+      readonly kind: 'refused';
+      readonly batch: BroadcastBatch;
+      readonly turn: ChatTurn;
+      readonly code: string;
+    }
   | { readonly kind: 'closed' };
 export const MAX_BROADCAST_ATTACHMENTS = 4;
 export const MAX_BROADCAST_BATCHES = 50;
@@ -106,6 +113,7 @@ export function broadcastView(
             ? 'not_started'
             : broadcastChildStatus(batch, turn.status, turn.broadcast?.abandoned === true),
         resultMessageId: turn?.status === 'completed' ? 'reply_' + turn.id : null,
+        refusalCode: turn?.failureCode ?? null,
       };
     }),
     state: batch.state,

@@ -16,6 +16,10 @@ const refused = new Set([
   'provider_unavailable',
   'context_limit',
   'runtime_draining',
+  'model_image_unsupported',
+  'image_unavailable',
+  'image_too_large',
+  'request_too_large',
 ]);
 export class RoomSubmission {
   readonly #connection: RoomConnection;

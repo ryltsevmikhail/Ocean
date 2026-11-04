@@ -27,7 +27,10 @@ defineProps<{ busy: boolean }>();
         :title="child.runId"
       >
         <span class="broadcast-handle">{{ '@' + child.handle }}</span>
-        <span>{{ broadcastChildText[child.state] }}</span>
+        <span
+          >{{ broadcastChildText[child.state]
+          }}<template v-if="child.refusalCode"> · {{ child.refusalCode }}</template></span
+        >
       </li>
     </ul>
     <p v-if="batch.state === 'paused'" class="broadcast-warning">

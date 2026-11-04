@@ -22,6 +22,7 @@ export function broadcastSummary(batch: BroadcastBatch): string {
 }
 export function broadcastChildLine(child: BroadcastChild): string {
   const base = `@${child.handle} — ${broadcastChildText[child.state]} · ${child.model}`;
+  if (child.refusalCode) return base + ' · ' + child.refusalCode;
   return child.state === 'answered' && child.resultMessageId !== null
     ? base + ' · ' + child.resultMessageId
     : base;

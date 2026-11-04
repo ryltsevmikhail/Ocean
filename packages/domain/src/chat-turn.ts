@@ -31,6 +31,8 @@ export interface ChatTurn {
   readonly broadcast?: ChatTurnBroadcastLink;
   readonly bot: Bot;
   readonly status: ChatTurnStatus;
+  /** Stable visible refusal code for a child/named model that was never dispatched. */
+  readonly failureCode?: string;
   readonly text: string;
   readonly preparedVersion: number | null;
   readonly stopReason: 'end_turn' | 'max_tokens';

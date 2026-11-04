@@ -108,6 +108,10 @@ export async function sendOwnedBroadcast(input: {
       'batch_open',
       'runtime_draining',
       'provider_unavailable',
+      'model_image_unsupported',
+      'image_unavailable',
+      'image_too_large',
+      'request_too_large',
     ].includes(code);
     if (refused) {
       pending.delete(input.room);

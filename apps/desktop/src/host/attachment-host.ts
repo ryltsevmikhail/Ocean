@@ -27,13 +27,10 @@ export class AttachmentHost {
         const { data } = await this.client.read(c.room, info.id);
         const image = nativeImage.createFromBuffer(data),
           size = image.getSize();
-        if (
-          image.isEmpty() ||
-          size.width * size.height > 24_000_000 ||
-          size.width > 16384 ||
-          size.height > 16384
-        )
-          throw Error('invalid_image');
+        // Align the native preview guard with the trusted runtime's documented
+        // 8192-px side limit; the runtime still re-validates the persisted header.
+        if (image.isEmpty() || size.width > 8192 || size.height > 8192)
+          throw Error('image_too_large');
       }
       return info;
     }

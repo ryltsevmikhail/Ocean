@@ -8,6 +8,8 @@
 import type { BroadcastBatch, ChatTurn } from '@runnets/domain';
 import type { Clock } from './ports.js';
 import type { ConversationStore } from './conversation-ports.js';
+import type { ImageAssetResolverPort } from './image-content.js';
+import type { ChatMessage } from './provider.js';
 import { broadcastRoomContext } from './room-context.js';
 import {
   broadcastView,
@@ -45,6 +47,7 @@ export function refuseBroadcastChild(
   store: ConversationStore,
   batchId: string,
   turnId: string,
+  failureCode = 'provider_unavailable',
 ): BroadcastBatchView {
   return store.atomic((tx) => {
     const batch = tx.broadcastBatch(batchId);
@@ -52,15 +55,22 @@ export function refuseBroadcastChild(
     const turns = tx.broadcastTurns(batchId);
     const turn = turns.find((candidate) => candidate.id === turnId);
     if (turn === undefined || turn.status !== 'queued') throw Error('batch_closed');
-    tx.putChatTurn({ ...turn, status: 'failed' });
+    tx.putChatTurn({ ...turn, status: 'failed', failureCode });
     return broadcastView(batch, tx.broadcastTurns(batchId));
   });
+}
+/** Runtime-owned image authority and capability/budget guard for one child. */
+export interface BroadcastContextPorts {
+  readonly images?: ImageAssetResolverPort | undefined;
+  /** Returns a stable refusal code, or null when the frozen context may dispatch. */
+  readonly guard?: ((messages: readonly ChatMessage[]) => string | null) | undefined;
 }
 /** Durable child admission: `queued → accepted` plus the frozen batch context. */
 export function admitBroadcastChild(
   store: ConversationStore,
   batchId: string,
   turnId: string,
+  ports: BroadcastContextPorts = {},
 ): BroadcastAdmitResult {
   return store.atomic((tx) => {
     const batch = tx.broadcastBatch(batchId);
@@ -70,11 +80,13 @@ export function admitBroadcastChild(
     if (turn === undefined || turn.status !== 'queued') return { kind: 'closed' };
     const room = tx.room(batch.roomId);
     if (room === null) throw Error('unknown_room');
-    const refuse = () => {
-      tx.putChatTurn({ ...turn, status: 'failed' });
-      return { kind: 'refused' as const, batch, turn: { ...turn, status: 'failed' as const } };
+    const refuse = (code: string) => {
+      const failed = { ...turn, status: 'failed' as const, failureCode: code };
+      tx.putChatTurn(failed);
+      return { kind: 'refused' as const, batch, turn: failed, code };
     };
-    if (room.kind !== 'group' || !room.botIds.includes(turn.bot.id)) return refuse();
+    if (room.kind !== 'group' || !room.botIds.includes(turn.bot.id))
+      return refuse('broadcast_member_removed');
     const boundary = tx.history(batch.roomId, batch.boundarySeq - 1, 1)[0];
     if (
       boundary === undefined ||
@@ -82,9 +94,18 @@ export function admitBroadcastChild(
       boundary.id !== batch.messageId ||
       boundary.author !== 'user'
     )
-      return refuse();
-    const context = broadcastRoomContext(tx, room, turn.bot, boundary.body, batch.boundarySeq);
-    if (!context.ok) return refuse();
+      return refuse('broadcast_boundary_missing');
+    const context = broadcastRoomContext(
+      tx,
+      room,
+      turn.bot,
+      { text: boundary.body, messageId: batch.messageId, phase: 'persisted' },
+      batch.boundarySeq,
+      ports.images,
+    );
+    if (!context.ok) return refuse(context.error.code);
+    const refusal = ports.guard?.(context.value) ?? null;
+    if (refusal !== null) return refuse(refusal);
     const accepted: ChatTurn = { ...turn, status: 'accepted' };
     tx.putChatTurn(accepted);
     return { kind: 'admitted', value: { batch, turn: accepted, messages: context.value } };
