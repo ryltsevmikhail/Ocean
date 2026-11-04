@@ -163,6 +163,7 @@ export function resolveAuthority(
     requestId: string;
     expected: readonly { id: string; sha256: string }[];
     roomId?: string;
+    admittedRequestId?: string;
     phase?: 'persisted' | 'committing';
   },
 ) {
@@ -173,6 +174,9 @@ export function resolveAuthority(
     body: input.body,
     requestId: input.requestId,
     expected: input.expected,
+    ...(input.admittedRequestId === undefined
+      ? {}
+      : { admittedRequestId: input.admittedRequestId }),
     phase: input.phase ?? 'persisted',
   });
 }

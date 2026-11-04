@@ -56,6 +56,12 @@ export interface ImageResolveRequest {
   /** The exact persisted/prepared body whose marker locates the request. */
   readonly body: string;
   readonly requestId: string;
+  /**
+   * The admitting submission's request id. Required for the fresh `committing`
+   * phase: the marker's preparation identity must equal the identity the
+   * admission will persist, otherwise the message can never be re-authenticated.
+   */
+  readonly admittedRequestId?: string | undefined;
   readonly expected: readonly ImageResolveExpectation[];
   /** `persisted` requires the durable message↔request binding. */
   readonly phase: ImageContextPhase;
@@ -78,6 +84,8 @@ export interface MessageContentScope {
   readonly roomId: string;
   readonly messageId: string;
   readonly body: string;
+  /** Submission request id; required when the message is not persisted yet. */
+  readonly admittedRequestId?: string | undefined;
   readonly phase: ImageContextPhase;
 }
 
@@ -96,6 +104,14 @@ export function resolveMessageContent(
       ? conversationFailure('image_unavailable')
       : ok(scope.body);
   }
+  // The fresh message is not yet bound by a receipt, so the marker's preparation
+  // request id must be exactly the submitting request id. A mismatch would be
+  // admitted once and then poison every later reconstruction of the room.
+  if (
+    scope.phase === 'committing' &&
+    (scope.admittedRequestId === undefined || scope.admittedRequestId !== decoded.requestId)
+  )
+    return conversationFailure('image_unavailable');
   if (resolver === undefined) return conversationFailure('image_unavailable');
   const resolved = resolver.resolve({
     workspaceId: scope.workspaceId,
@@ -103,6 +119,9 @@ export function resolveMessageContent(
     messageId: scope.messageId,
     body: scope.body,
     requestId: decoded.requestId,
+    ...(scope.admittedRequestId === undefined
+      ? {}
+      : { admittedRequestId: scope.admittedRequestId }),
     expected: decoded.files.map((file) => ({ id: file.id, sha256: file.sha256 })),
     phase: scope.phase,
   });
@@ -129,9 +148,6 @@ export function contentTextBytes(content: ChatContent): number {
         (bytes, part) => bytes + (part.type === 'text' ? utf8ByteLength(part.text) : 0),
         0,
       );
-}
-export function requestImageParts(messages: readonly ChatMessage[]): readonly ImagePart[] {
-  return messages.flatMap((message) => messageImageParts(message));
 }
 
 export interface ImageAdmissionInput {

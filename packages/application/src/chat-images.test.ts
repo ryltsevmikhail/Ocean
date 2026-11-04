@@ -12,6 +12,7 @@ import {
   history,
   imageChatFixture as fixture,
   prepared,
+  requestId as preparedRequestId,
 } from '../test-fixtures/image-chat.test.js';
 
 describe('direct chat image admission', () => {
@@ -20,7 +21,12 @@ describe('direct chat image admission', () => {
     const f = fixture(images);
     const admitted = admitChat(
       f.deps,
-      { workspaceId: 'ws_ocean', roomId: f.flashRoom.id, requestId: 'req-img', text: prepared },
+      {
+        workspaceId: 'ws_ocean',
+        roomId: f.flashRoom.id,
+        requestId: preparedRequestId,
+        text: prepared,
+      },
       f.provider,
       { mode: 'admit', codingAvailable: false },
     );
@@ -43,7 +49,12 @@ describe('direct chat image admission', () => {
     const f = fixture(images);
     const refused = admitChat(
       f.deps,
-      { workspaceId: 'ws_ocean', roomId: f.proRoom.id, requestId: 'req-img', text: prepared },
+      {
+        workspaceId: 'ws_ocean',
+        roomId: f.proRoom.id,
+        requestId: preparedRequestId,
+        text: prepared,
+      },
       f.provider,
       { mode: 'admit', codingAvailable: false },
     );
@@ -58,7 +69,12 @@ describe('direct chat image admission', () => {
       const f = fixture(resolverStub(resolveFail(code)));
       const refused = admitChat(
         f.deps,
-        { workspaceId: 'ws_ocean', roomId: f.flashRoom.id, requestId: 'req-img', text: prepared },
+        {
+          workspaceId: 'ws_ocean',
+          roomId: f.flashRoom.id,
+          requestId: preparedRequestId,
+          text: prepared,
+        },
         f.provider,
         { mode: 'admit', codingAvailable: false },
       );
@@ -72,7 +88,12 @@ describe('direct chat image admission', () => {
     const f = fixture();
     const refused = admitChat(
       f.deps,
-      { workspaceId: 'ws_ocean', roomId: f.flashRoom.id, requestId: 'req-img', text: prepared },
+      {
+        workspaceId: 'ws_ocean',
+        roomId: f.flashRoom.id,
+        requestId: preparedRequestId,
+        text: prepared,
+      },
       f.provider,
       { mode: 'admit', codingAvailable: false },
     );
@@ -87,7 +108,12 @@ describe('direct chat image admission', () => {
     const f = fixture(stub);
     const first = admitChat(
       f.deps,
-      { workspaceId: 'ws_ocean', roomId: f.flashRoom.id, requestId: 'req-1', text: prepared },
+      {
+        workspaceId: 'ws_ocean',
+        roomId: f.flashRoom.id,
+        requestId: preparedRequestId,
+        text: prepared,
+      },
       f.provider,
       { mode: 'admit', codingAvailable: false },
     );
@@ -124,7 +150,12 @@ describe('direct chat image admission', () => {
     const f = fixture(stub);
     const first = admitChat(
       f.deps,
-      { workspaceId: 'ws_ocean', roomId: f.flashRoom.id, requestId: 'req-1', text: prepared },
+      {
+        workspaceId: 'ws_ocean',
+        roomId: f.flashRoom.id,
+        requestId: preparedRequestId,
+        text: prepared,
+      },
       f.provider,
       { mode: 'admit', codingAvailable: false },
     );
@@ -170,7 +201,7 @@ describe('room context reconstruction', () => {
         tx,
         tx.room(f.flashRoom.id)!,
         f.flash,
-        { text: 'дальше', messageId: 'current', phase: 'committing' },
+        { text: 'дальше', messageId: 'current', requestId: 'current-request', phase: 'committing' },
         stub,
       ),
     );

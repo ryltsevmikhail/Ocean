@@ -20,6 +20,8 @@ import type { ChatContent, ChatMessage } from './provider.js';
 export interface CurrentUserTurn {
   readonly text: string;
   readonly messageId: string;
+  /** Submission request id; required for a fresh `committing` message. */
+  readonly requestId?: string | undefined;
   readonly phase: ImageContextPhase;
 }
 const MAX_CONTEXT_TEXT_BYTES = 65536;
@@ -27,7 +29,9 @@ const MAX_CONTEXT_TEXT_BYTES = 65536;
 /**
  * Peer bot replies remain attributed input data; only the selected bot owns assistant history.
  * `boundarySeq` freezes a broadcast child to history strictly before the batch user message.
- * Image bytes are re-authenticated on every reconstruction (restart, retry, tool round).
+ * Image bytes are re-authenticated on every context reconstruction (new admission,
+ * retry, broadcast child, owner restart). A single in-flight turn re-sends its
+ * already-verified bytes, and the adapter re-checks the exact body size each round.
  */
 export function roomContext(
   tx: ConversationTransaction,
@@ -108,6 +112,7 @@ function finishContext(
       roomId: room.id,
       messageId: current.messageId,
       body: current.text,
+      ...(current.requestId === undefined ? {} : { admittedRequestId: current.requestId }),
       phase: current.phase,
     },
     images,

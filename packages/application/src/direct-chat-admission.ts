@@ -112,7 +112,7 @@ export function admitChat(
       tx,
       room,
       selected,
-      { text: request.text, messageId, phase: 'committing' },
+      { text: request.text, messageId, requestId: request.requestId, phase: 'committing' },
       deps.images,
     );
     if (!context.ok) return context;

@@ -88,7 +88,12 @@ function readPrivate(path: string, mount: string, limit: number): Buffer {
     fs.closeSync(parent);
   }
 }
-export function desktopRead(binding: DesktopBinding, room: string, id: string) {
+/** Private attachment metadata only; no blob read. */
+export function desktopMetadata(
+  binding: DesktopBinding,
+  room: string,
+  id: string,
+): DesktopAttachment {
   const directory = desktopDirectory(binding, room, id),
     info: unknown = JSON.parse(
       readPrivate(
@@ -98,6 +103,11 @@ export function desktopRead(binding: DesktopBinding, room: string, id: string) {
       ).toString('utf8'),
     );
   if (!validDesktopAttachment(info) || info.id !== id) throw Error('desktop_asset_corrupted');
+  return info;
+}
+export function desktopRead(binding: DesktopBinding, room: string, id: string) {
+  const info = desktopMetadata(binding, room, id);
+  const directory = desktopDirectory(binding, room, id);
   const data = readPrivate(join(directory, 'blob'), binding.identity.split(':').at(-1)!, 10485760);
   if (data.length !== info.bytes || desktopHash(data) !== info.sha256)
     throw Error('desktop_asset_corrupted');

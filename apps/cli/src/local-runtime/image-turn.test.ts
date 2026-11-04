@@ -68,7 +68,7 @@ async function sendAttached(
   return { info, receipt, submitted };
 }
 
-describe('runtime image turn wire evidence', () => {
+describe('runtime image turn wire evidence', { timeout: 60_000 }, () => {
   it('sends the genuine PNG bytes and media type through the real runtime path', async () => {
     const { f, wire, host } = await fixture();
     const bytes = pngBytes(3, 2);

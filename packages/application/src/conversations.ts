@@ -22,8 +22,9 @@ export interface ConversationServiceDeps {
   readonly nextId: () => string;
   readonly clock: Clock;
   /**
-   * Runtime-owned image authority. Absent on hosts that cannot authenticate
-   * Desktop assets: an image-bearing marker is then refused, never dropped.
+   * Runtime-owned image authority. Every durable profile host composes it (runtime
+   * and CLI/TUI fallback); only ephemeral/no-asset hosts omit it. An attachment
+   * marker (image or text) is then refused explicitly, never silently dropped.
    */
   readonly images?: ImageAssetResolverPort | undefined;
 }

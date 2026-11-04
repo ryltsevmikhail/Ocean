@@ -89,6 +89,7 @@ export {
 export type { DesktopAssetCapture, DesktopAssetCatalog } from './desktop-assets.js';
 export { desktopAssetFiles, desktopLegacyRoot } from './desktop-enrollment.js';
 export { parseImageHeader, type ImageHeader } from './image-header.js';
+export { desktopMetadata } from './desktop-file-store.js';
 export { desktopImageResolver, type DesktopImageAuthorityStore } from './desktop-image-resolver.js';
 export * from './local-desktop-client.js';
 

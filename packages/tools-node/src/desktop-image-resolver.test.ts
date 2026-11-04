@@ -50,6 +50,7 @@ describe('runtime Desktop image resolver', () => {
         body: receipt.prepared,
         requestId: REQUEST,
         expected: expectedFor(info),
+        admittedRequestId: REQUEST,
         phase: 'committing',
       }),
     ).toMatchObject({ ok: true });

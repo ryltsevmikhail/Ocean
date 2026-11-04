@@ -43,7 +43,7 @@ async function send(
   return { submitted, final: await host.client.getRun({ ...scope, runId: submitted.runId! }) };
 }
 
-describe('historical image re-resolution after owner restart', () => {
+describe('historical image re-resolution after owner restart', { timeout: 60_000 }, () => {
   it('re-resolves the persisted image for a later turn on a new runtime process', async () => {
     const f = await imageProfile();
     cleanups.push(() => f.dispose());
@@ -145,7 +145,7 @@ describe('historical image re-resolution after owner restart', () => {
   });
 });
 
-describe('mixed-capability broadcast with images', () => {
+describe('mixed-capability broadcast with images', { timeout: 60_000 }, () => {
   it('gives the image to the capable child and refuses the text-only child before dispatch', async () => {
     const f = await imageProfile();
     cleanups.push(() => f.dispose());

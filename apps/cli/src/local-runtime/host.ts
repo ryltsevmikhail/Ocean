@@ -221,7 +221,11 @@ export async function startLocalRuntime(
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
             return provider.settings.dispatch(method, params, detached);
           if (method === 'broadcasts.submit') {
-            const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
+            const code = desktopSubmitRefusal(
+              runtime.desktopAssets!,
+              params,
+              method === 'broadcasts.submit',
+            );
             if (code) return { error: { code } };
           }
           if (LOCAL_BROADCAST_METHODS.some((m) => m === method))

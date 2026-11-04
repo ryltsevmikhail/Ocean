@@ -25,7 +25,7 @@ import {
   type ImageResolutionFailure,
   type ImageResolveResult,
 } from '@runnets/application';
-import { desktopRead } from './desktop-file-store.js';
+import { desktopMetadata, desktopRead } from './desktop-file-store.js';
 import { desktopRootIdentity } from './desktop-assets.js';
 import { parseImageHeader } from './image-header.js';
 
@@ -72,6 +72,12 @@ function resolveRequest(
     const message = store.message(request.roomId, request.messageId);
     if (message === null || message.body !== request.body) return refused();
   }
+  // A fresh admission has no receipt yet: the marker must name the admitting request.
+  if (
+    request.phase === 'committing' &&
+    (request.admittedRequestId === undefined || request.admittedRequestId !== request.requestId)
+  )
+    return refused();
   const preparation = store.prepared(request.roomId, request.requestId);
   if (preparation === null || !preparationValid(preparation, request.body)) return refused();
   if (request.phase === 'persisted' && !messageBound(store, request, preparation)) return refused();
@@ -83,6 +89,12 @@ function resolveRequest(
     return refused();
   const images: ImagePart[] = [];
   for (const [index, id] of preparation.ids.entries()) {
+    // Metadata binds every attachment; only actual images require the blob re-hash.
+    // Text snippets are baked into the persisted body at preparation time, so a
+    // later missing/replaced text or binary blob must not break the turn.
+    const metadata = desktopMetadata(binding, request.roomId, id);
+    if (metadata.sha256 !== request.expected[index]!.sha256) return refused();
+    if (metadata.kind !== 'image') continue;
     const attachment = desktopRead(binding, request.roomId, id);
     if (!validDesktopAttachment(attachment.info) || attachment.info.id !== id) return refused();
     if (attachment.info.sha256 !== request.expected[index]!.sha256) return refused();

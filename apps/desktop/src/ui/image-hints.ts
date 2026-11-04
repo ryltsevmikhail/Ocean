@@ -20,9 +20,6 @@ export interface AttachmentHintInput {
   readonly recipient: string;
   readonly broadcast: string;
 }
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-export const MAX_VISIBLE_SIDE = 8192;
-
 /** Confirmed per-model image input; unknown metadata never claims support. */
 export function modelImageInput(model: string | null): boolean {
   if (model === null) return false;
@@ -58,11 +55,4 @@ export function attachmentHint(input: AttachmentHintInput): string | null {
   return `Изображения получат: ${capable.map(describe).join(', ')}; не получат: ${unsupported
     .map(describe)
     .join(', ')} — их ход будет отклонён как не начатый.`;
-}
-/** Local pre-check text; the runtime still owns the trusted 8192-px validation. */
-export function imageLimitHint(file: {
-  readonly name: string;
-  readonly bytes: number;
-}): string | null {
-  return file.bytes > MAX_FILE_BYTES ? null : null;
 }
