@@ -1,4 +1,4 @@
-@media (max-width: 1079px) {
+@media (max-width: 1023px) {
   .shell.with-details {
     grid-template-columns: var(--rail-width) minmax(0, 1fr);
   }

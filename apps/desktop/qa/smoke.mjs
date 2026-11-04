@@ -32,6 +32,9 @@ async function send(text, to) {
   if (to) await page.getByLabel('Кому').selectOption(to);
   await page.getByLabel('Сообщение', { exact: true }).fill(text);
   await button('Отправить').click();
+  // Prove this send was admitted before reading the run status, so a previous
+  // completed run's human-readable text cannot satisfy the next status wait.
+  await page.waitForFunction(() => globalThis.document.querySelector('#draft')?.value === '');
 }
 async function status(word) {
   await page.locator('#feedback').filter({ hasText: word }).waitFor();
@@ -118,7 +121,7 @@ try {
   await button('Создать').click();
   await title('@dev');
   await send('private-only');
-  await status('completed');
+  await status('ответил');
   await button('Ocean Team').click();
   const image = Buffer.from(
     await app.evaluate(({ nativeImage }) =>
@@ -182,7 +185,7 @@ try {
     false,
   );
   await send('implement', 'dev');
-  await status('completed');
+  await status('ответил');
   assert.equal(await page.locator('#composer .attachment-card').count(), 0);
   await page
     .locator('#history')
@@ -194,13 +197,14 @@ try {
     /@dev[\s\S]*Test provider/,
   );
   await send('inspect', 'review');
-  await status('completed');
+  await status('ответил');
   assert.match(
     await page.locator('#history article').last().innerText(),
     /@review[\s\S]*Test provider/,
   );
   await page.setViewportSize({ width: 1024, height: 768 });
-  await page.waitForFunction(() => !globalThis.document.querySelector('aside.details'));
+  // At 1024 the details panel stays open in the push layout (RC2 1024 composer fix).
+  await button('Закрыть сведения').waitFor();
   assert.equal(await page.locator('.rail').isVisible(), true);
   await page.setViewportSize({ width: 760, height: 860 });
   await button('Список комнат').waitFor();
@@ -224,9 +228,9 @@ try {
   await send('slow-turn', 'dev');
   for (let i = 0; i < 100 && requests().length < 4; i++) await setTimeout(50);
   assert.equal(requests().length, 4);
-  await page.getByRole('button', { name: /Запросить отмену tr_.*\[v\d+\]/ }).click();
-  await status('uncertain');
-  assert.doesNotMatch(await page.locator('#feedback').innerText(), /cancelled/);
+  await page.getByRole('button', { name: 'Остановить ответ @dev', exact: true }).click();
+  await status('не подтверждён');
+  assert.doesNotMatch(await page.locator('#feedback').innerText(), /Остановлено/);
   await app.close();
   await launch();
   await button('Ocean Team').click();
@@ -264,7 +268,7 @@ try {
   await button('Задачи комнаты').click();
   await page
     .getByRole('dialog', { name: 'Задачи комнаты' })
-    .getByText('uncertain', { exact: true })
+    .getByText('Исход ответа не подтверждён', { exact: true })
     .waitFor();
   await button('К разговору').click();
   await button('@dev').click();

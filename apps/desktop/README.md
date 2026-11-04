@@ -37,6 +37,9 @@ pnpm build
 pnpm --filter @ocean/desktop bundle
 node apps/desktop/qa/smoke.mjs
 node apps/desktop/qa/entrypoint.mjs
+# Доступность composer и Send при открытых «Сведениях» на 1024/1280/1920:
+OCEAN_QA_CLI=/absolute/built/apps/cli/dist/main.js \
+  OCEAN_QA_ROOT=/absolute/private/evidence node apps/desktop/qa/layout.mjs
 # Текущая проверка против явно выбранного установленного CLI:
 OCEAN_QA_CLI=/absolute/installed/apps/cli/dist/main.js \
   OCEAN_QA_ROOT=/absolute/private/evidence node apps/desktop/qa/current.mjs
@@ -47,6 +50,9 @@ OCEAN_QA_CLI=/absolute/installed/apps/cli/dist/main.js \
 userData и передаёт только реальное GUI-подключение Wayland. Он не использует
 пользовательский D-Bus или физический буфер обмена.
 
+Драйвер `layout.mjs` проверяет при открытых «Сведениях», что поле ввода и кнопка
+отправки на 1024, 1280 и 1920 видимы, доступны, не перекрыты панелью и реально
+отправляют сообщение; он же фиксирует ограничения вложений и состояния истории.
 Драйверы создают временные каталоги и отдельный runtime с тестовым провайдером. Проверка включает обычную команду запуска, закрытие окна во время генерации, повторное открытие и одновременное наблюдение через TUI и SDK. Подробности и границы проверки приведены в [руководстве по интеграции](../../docs/integration/desktop-client.md).
 
 ## Отдельная Linux-сборка
