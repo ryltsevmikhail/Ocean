@@ -113,18 +113,19 @@ it.each(['drift', 'invalid-evidence', 'missing-root'])(
 it('publishes the current schema with the first anchored backup of an RC2 schema-18 profile', async () => {
   const f = await fixture();
   const db = new DatabaseSync(f.path);
-  db.exec(`DROP TABLE IF EXISTS ocean_bot_model_bindings;
+  db.exec(`DROP TABLE IF EXISTS ocean_room_model_policies;
+    DROP TABLE IF EXISTS ocean_bot_model_bindings;
     DROP TABLE IF EXISTS ocean_model_connection_receipts;
     DROP TABLE IF EXISTS ocean_model_connections`);
   db.exec("UPDATE meta SET value='18' WHERE key='schema_version'");
   db.close();
   const manifest = await backupProfile(f.profile, join(f.root, 'archive18'));
-  expect(manifest.summary.schema).toBe(21);
+  expect(manifest.summary.schema).toBe(22);
   const source = new DatabaseSync(f.path, { readOnly: true });
   try {
     expect(
       source.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('21');
+    ).toBe('22');
   } finally {
     source.close();
   }
@@ -136,7 +137,8 @@ it.each([15, 16, 17, 18])(
   async (version) => {
     const f = await fixture();
     const db = new DatabaseSync(f.path);
-    db.exec(`DROP TABLE IF EXISTS ocean_bot_model_bindings;
+    db.exec(`DROP TABLE IF EXISTS ocean_room_model_policies;
+    DROP TABLE IF EXISTS ocean_bot_model_bindings;
       DROP TABLE IF EXISTS ocean_model_connection_receipts;
       DROP TABLE IF EXISTS ocean_model_connections`);
     if (version < 18) db.exec('DROP TABLE ocean_plugin_operations');

@@ -55,9 +55,11 @@ it('migrates previous payloads to explicit null without changing frozen receipt 
     'binding',
     receipt,
   );
-  db.exec("UPDATE meta SET value='20' WHERE key='schema_version'");
+  db.exec(
+    "DROP TABLE ocean_room_model_policies; UPDATE meta SET value='20' WHERE key='schema_version'",
+  );
   initializeSchema(db);
-  expect(SCHEMA_VERSION).toBe(21);
+  expect(SCHEMA_VERSION).toBe(22);
   expect(store.read('local')?.localQualification).toBeNull();
   expect(
     JSON.parse(

@@ -101,6 +101,7 @@ describe('schema initialization', () => {
       'ocean_restore_origins',
       'ocean_retired_epochs',
       'ocean_reviews',
+      'ocean_room_model_policies',
       'ocean_room_policies',
       'ocean_rooms',
       'ocean_workspace',

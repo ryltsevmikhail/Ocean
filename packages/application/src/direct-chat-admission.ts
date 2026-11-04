@@ -1,3 +1,4 @@
+import { admitRoomModelTransfer } from './room-model-policy.js';
 import {
   conversationFailure,
   ok,
@@ -146,6 +147,8 @@ export function admitChat(
         snapshot: freezeModelActivation(resolved.value.snapshot),
       };
     }
+    const transfer = admitRoomModelTransfer(tx, room.id, activation?.snapshot.identity);
+    if (!transfer.ok) return transfer;
     const provider = activation?.provider ?? mode.provider ?? null;
     if (!providerAdmits(provider, selected, activation?.snapshot))
       return conversationFailure('provider_unavailable');

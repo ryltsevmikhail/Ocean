@@ -1,3 +1,4 @@
+import { admitBotModelBinding } from './room-model-policy.js';
 import {
   conversationFailure,
   ok,
@@ -116,6 +117,8 @@ export class BotModelBindingService {
         return conversationFailure('bot_profile_version_conflict');
       const provider = this.#provider(binding);
       if (!provider.ok) return provider;
+      const admission = admitBotModelBinding(tx, previous.id, binding, this.#deps.connections);
+      if (!admission.ok) return admission;
       const bot = {
         ...previous,
         provider: provider.value,

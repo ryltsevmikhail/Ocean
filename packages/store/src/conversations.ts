@@ -13,6 +13,7 @@ import type {
   BroadcastBatch,
   ChatReview,
   RoomExecutionPolicy,
+  RoomModelPolicy,
   ChatTurn,
   Bot,
   BotModelBinding,
@@ -25,6 +26,7 @@ interface State extends MemoryModelConnections {
   bindings: Map<string, BotModelBinding>;
   decisions: MemoryDecisionRows;
   reviews: Map<string, ChatReview>;
+  modelPolicies: Map<string, RoomModelPolicy>;
   policies: Map<string, RoomExecutionPolicy>;
   turns: Map<string, ChatTurn>;
   workspace: Workspace | null;
@@ -47,6 +49,7 @@ export class InMemoryConversationStore implements ConversationStore, ModelConnec
     decisions: new Map(),
     reviews: new Map(),
     policies: new Map(),
+    modelPolicies: new Map(),
     turns: new Map(),
     workspace: null,
     bots: new Map(),
@@ -86,6 +89,10 @@ export class InMemoryConversationStore implements ConversationStore, ModelConnec
     const state = copyState(this.#state);
     this.#draft = state;
     const tx: ConversationTransaction = {
+      roomModelPolicy: (id) => state.modelPolicies.get(id) ?? null,
+      putRoomModelPolicy: (p) => {
+        state.modelPolicies.set(p.roomId, p);
+      },
       review: (id) => state.reviews.get(id) ?? null,
       putReview: (r) => {
         if (state.reviews.has(r.id)) throw new Error('Duplicate review');
@@ -176,6 +183,11 @@ export class InMemoryConversationStore implements ConversationStore, ModelConnec
       putRoom: (value) => {
         if (state.rooms.has(value.id)) throw new Error('duplicate room identity');
         state.rooms.set(value.id, value);
+        state.modelPolicies.set(value.id, {
+          roomId: value.id,
+          cloudTransfer: 'allow',
+          revision: 1,
+        });
       },
       history: (roomId, after, limit) =>
         [...state.messages.values()]

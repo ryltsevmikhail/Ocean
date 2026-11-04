@@ -1,3 +1,4 @@
+import { migrateRoomModelPolicies } from './room-model-policy-schema.js';
 import { migrateModelQualifications } from './model-qualification-schema.js';
 import type { DatabaseSync } from 'node:sqlite';
 
@@ -113,4 +114,7 @@ export function applyMigrations(
     for (const table of MODEL_CONNECTION_TABLES)
       if (!existing.has(table)) throw Error('database schema is missing table ' + table);
   if (previousVersion < 21) migrateModelQualifications(db);
+  if (previousVersion < 22) migrateRoomModelPolicies(db);
+  else if (!existing.has('ocean_room_model_policies'))
+    throw Error('database schema is missing table ocean_room_model_policies');
 }

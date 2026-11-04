@@ -41,6 +41,11 @@ export interface ConversationMessage {
   readonly createdAt: string;
 }
 export type ConversationErrorCode =
+  | 'model_policy_revision_conflict'
+  | 'model_policy_unavailable'
+  | 'model_transfer_denied'
+  | 'model_policy_members_conflict'
+  | 'model_policy_work_conflict'
   | 'invalid_input'
   | 'admission_closed'
   | 'request_conflict'

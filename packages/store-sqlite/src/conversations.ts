@@ -1,3 +1,5 @@
+import { roomModelPolicyStorage } from './room-model-policy-storage.js';
+import { validRoomModelPolicy } from '@runnets/domain';
 import { legacyReviewKey } from './owner-decisions.js';
 import type {
   ConversationReceipt,
@@ -63,6 +65,14 @@ export class SqliteConversationStore implements ConversationStore {
       work({
         ...chatStorage(db),
         ...reviewStorage(db),
+        ...(current
+          ? roomModelPolicyStorage(db)
+          : {
+              roomModelPolicy: () => null,
+              putRoomModelPolicy: () => {
+                throw Error('unsupported_schema');
+              },
+            }),
         ...(current
           ? modelBindingStorage(db)
           : {
@@ -149,6 +159,12 @@ export class SqliteConversationStore implements ConversationStore {
           );
           for (const id of r.kind === 'direct' ? [r.botId] : r.botIds)
             db.prepare('INSERT INTO ocean_members VALUES(?,?,?)').run(r.workspaceId, r.id, id);
+          if (current)
+            roomModelPolicyStorage(db).putRoomModelPolicy({
+              roomId: r.id,
+              cloudTransfer: 'allow',
+              revision: 1,
+            });
         },
         history: (roomId, after, limit) =>
           db
@@ -191,13 +207,15 @@ export class SqliteConversationStore implements ConversationStore {
               'workspace',
               'bot',
               'bound_bot',
+              'room_model_policy',
               'room',
               'message',
               'turn',
               'review',
               'review_request',
             ].includes(reply.kind) ||
-            !('data' in reply)
+            !('data' in reply) ||
+            (reply.kind === 'room_model_policy' && !validRoomModelPolicy(reply.data))
           )
             throw new Error('Invalid conversation receipt');
           return { binding: readText(row, 'binding'), reply } as ConversationReceipt;

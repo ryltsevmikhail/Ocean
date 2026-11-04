@@ -1,3 +1,4 @@
+import { admitRoomModelTransfer } from './room-model-policy.js';
 /**
  * Broadcast child-transition operations used by the host runner.
  *
@@ -136,6 +137,8 @@ export function admitBroadcastChild(
       if (!providerAdmits(activation.provider, turn.bot, activation.snapshot))
         return refuse('provider_unavailable');
     }
+    const transfer = admitRoomModelTransfer(tx, room.id, activation?.snapshot.identity);
+    if (!transfer.ok) return refuse(transfer.error.code);
     const context = broadcastRoomContext(
       tx,
       room,

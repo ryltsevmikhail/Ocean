@@ -61,7 +61,8 @@ export class ConversationService {
       if (previous !== null)
         return previous.binding === binding &&
           previous.reply.kind !== 'review_request' &&
-          previous.reply.kind !== 'bound_bot'
+          previous.reply.kind !== 'bound_bot' &&
+          previous.reply.kind !== 'room_model_policy'
           ? ok(previous.reply)
           : conversationFailure('request_conflict');
       if (admission === 'existing_only') return conversationFailure('admission_closed');

@@ -97,3 +97,5 @@ export * from './model-activation-snapshot.js';
 export { validModelConnectionEndpoint } from './model-connection-input.js';
 
 export * from './model-local-qualification.js';
+
+export * from './room-model-policy.js';

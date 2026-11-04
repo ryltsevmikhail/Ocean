@@ -3,6 +3,7 @@ import type {
   ChatTurn,
   ChatReview,
   RoomExecutionPolicy,
+  RoomModelPolicy,
   Bot,
   BotModelBinding,
   BoundBot,
@@ -42,6 +43,7 @@ export interface ConversationReceipt {
   readonly binding: string;
   readonly reply:
     | ConversationReply
+    | { readonly kind: 'room_model_policy'; readonly data: RoomModelPolicy }
     | { readonly kind: 'bound_bot'; readonly data: BoundBot }
     | {
         readonly kind: 'review_request';
@@ -55,6 +57,8 @@ export interface ConversationReceipt {
 }
 /** Synchronous transaction surface; implementations must roll back writes on exceptions. */
 export interface ConversationTransaction {
+  roomModelPolicy(roomId: string): RoomModelPolicy | null;
+  putRoomModelPolicy(policy: RoomModelPolicy): void;
   review(id: string): ChatReview | null;
   putReview(review: ChatReview): void;
   roomPolicy(roomId: string): RoomExecutionPolicy | null;
