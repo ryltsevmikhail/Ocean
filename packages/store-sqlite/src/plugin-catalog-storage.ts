@@ -84,7 +84,7 @@ export class SqlitePluginCatalog implements PluginCatalogStorePort {
       .prepare(
         `UPDATE ocean_plugin_versions
          SET state = 'installed', file_digest = ?, verified_at = ?
-         WHERE plugin_id = ? AND version = ? AND state IN ('installing','interrupted')`,
+         WHERE plugin_id = ? AND version = ? AND state IN ('installing','interrupted','corrupt')`,
       )
       .run(file.sha256, verifiedAt, pluginId, version);
     return result.changes === 1;

@@ -219,15 +219,15 @@ export async function startLocalRuntime(
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
             return provider.settings.dispatch(method, params, detached);
           if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
+          if (method === 'broadcasts.submit') {
+            const code = desktopSubmitRefusal(runtime.desktopAssets!, params, true);
+            if (code) return { error: { code } };
+          }
           if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
             return broadcasts.dispatch(method, params, detached);
           if (method === 'desktop.assets') return desktop(params, state !== 'ready');
-          if (method === 'turns.submit' || method === 'broadcasts.submit') {
-            const code = desktopSubmitRefusal(
-              runtime.desktopAssets!,
-              params,
-              method === 'broadcasts.submit',
-            );
+          if (method === 'turns.submit') {
+            const code = desktopSubmitRefusal(runtime.desktopAssets!, params);
             if (code) return { error: { code } };
           }
           if (

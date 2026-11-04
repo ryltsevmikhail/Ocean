@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_BUSY_TIMEOUT_MS, openDatabase } from './schema.js';
@@ -7,7 +8,13 @@ import { SqlitePluginAccess } from './plugin-access-storage.js';
 import { SqlitePluginAdmission } from './plugin-admission-storage.js';
 import { SqliteToolJournal } from './tool-journal.js';
 import { readMaintenancePluginInventory } from './plugin-backup-inventory.js';
-import type { PluginConnectionRecord, PluginInstalledVersion } from '@runnets/application';
+import { PluginCatalogService } from '@runnets/application';
+import type {
+  PluginConnectionRecord,
+  PluginInstalledFile,
+  PluginInstallStorePort,
+  PluginInstalledVersion,
+} from '@runnets/application';
 import type { PluginGrantRecord } from '@runnets/domain';
 import { SHIPPED_PLUGIN_CATALOG } from '@runnets/domain';
 
@@ -296,5 +303,54 @@ describe('plugin backup inventory', () => {
     });
     expect(JSON.stringify(inventory)).not.toContain('OCEAN_TEST');
     expect(inventory.hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+});
+describe('plugin catalog startup recovery persistence', () => {
+  const pinnedAdapter = entry.adapter;
+  function recoveryService(catalog: SqlitePluginCatalog, files: PluginInstallStorePort) {
+    return new PluginCatalogService({
+      catalog: SHIPPED_PLUGIN_CATALOG,
+      store: catalog,
+      files,
+      adapter: pinnedAdapter,
+      clock: { now: () => new Date(at) },
+      nextId: () => 'id' + String(Math.random()).slice(2, 10),
+      sha256: (text: string) => createHash('sha256').update(text).digest('hex'),
+    });
+  }
+  function manifestFile(): PluginInstalledFile {
+    return { relativePath: 'manifest.json', sha256: entry.manifestDigest, bytes: 10 };
+  }
+  it('persists a repaired corrupt row as installed so enable works', () => {
+    const db = memory();
+    const catalog = new SqlitePluginCatalog(db);
+    installVersion(catalog);
+    catalog.setState('github', entry.version, 'corrupt');
+    const files: PluginInstallStorePort = {
+      publish: () => manifestFile(),
+      repair: () => manifestFile(),
+      read: () => ({ status: 'ok', bytes: 10, sha256: entry.manifestDigest }),
+    };
+    const report = recoveryService(catalog, files).initialize();
+    expect(report.repaired).toBe(1);
+    expect(report.corrupt).toBe(0);
+    expect(catalog.version('github', entry.version)?.state).toBe('installed');
+    expect(catalog.setEnabled('github', entry.version, true, at, false)).toBe(0);
+    expect(catalog.enabled('github')?.version).toBe(entry.version);
+  });
+  it('keeps a corrupt row terminal when the copy still does not verify', () => {
+    const db = memory();
+    const catalog = new SqlitePluginCatalog(db);
+    installVersion(catalog);
+    catalog.setState('github', entry.version, 'corrupt');
+    const files: PluginInstallStorePort = {
+      publish: () => manifestFile(),
+      repair: () => manifestFile(),
+      read: () => ({ status: 'missing', reason: 'absent' }),
+    };
+    const report = recoveryService(catalog, files).initialize();
+    expect(report.corrupt).toBe(1);
+    expect(report.repaired).toBe(0);
+    expect(catalog.version('github', entry.version)?.state).toBe('corrupt');
   });
 });

@@ -118,7 +118,7 @@ it('migrates a schema-14 RC1-shaped profile and restores an RC1-era format-2 bac
   try {
     expect(
       restoredDb.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('16');
+    ).toBe('17');
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_rooms').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_bots').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_messages').get()?.['n']).toBe(1);
@@ -216,7 +216,9 @@ it('the installed tree loads and qualifies the bundled adapter without plugin ex
     status: { qualified: boolean; mode: string; chunks: number; digest: string };
   };
   expect(proof.exports).toEqual([
+    'ExecutorPluginSetup',
     'ExecutorServicePluginTransport',
+    'ExecutorSetupError',
     'ExecutorTransportOpenError',
     'PINNED_IDENTITIES',
   ]);
