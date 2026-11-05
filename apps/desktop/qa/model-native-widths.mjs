@@ -32,38 +32,42 @@ function dispatch(row, action) {
   );
   assert.match(reply, /ok/);
 }
-export async function nativeWidths({ page, desktop, inspectMain, fixture: { root } }) {
-  const original = client(desktop.pid);
+export async function nativeWidths({ page, desktop, inspectMain, fixture: { root } }, step) {
+  const original = step(() => client(desktop.pid));
   if (!original.floating) {
-    dispatch(original, 'float({action="on",window=w})');
-    await wait(() => client(desktop.pid).floating, 3000);
+    step(() => dispatch(original, 'float({action="on",window=w})'));
+    await step(() => wait(() => step(() => client(desktop.pid).floating), 3000));
   }
   const facts = [];
   for (const width of [1024, 1280, 1920]) {
-    const owned = client(desktop.pid);
+    const owned = step(() => client(desktop.pid));
     assert.equal(owned.address, original.address);
-    await inspectMain('win.setBounds({width:' + width + ',height:800})');
-    await setTimeout(350);
-    if (client(desktop.pid).size[0] !== width || client(desktop.pid).size[1] !== 800) {
-      dispatch(owned, 'resize({x=' + width + ',y=800,relative=false,window=w})');
-      await setTimeout(350);
+    await step(() => inspectMain('win.setBounds({width:' + width + ',height:800})'));
+    await step(() => setTimeout(350));
+    const size = step(() => client(desktop.pid)).size;
+    if (size[0] !== width || size[1] !== 800) {
+      step(() => dispatch(owned, 'resize({x=' + width + ',y=800,relative=false,window=w})'));
+      await step(() => setTimeout(350));
     }
-    dispatch(owned, 'center({window=w})');
-    await setTimeout(300);
-    const compositor = client(desktop.pid);
-    const native = await inspectMain(
-      '({visible:win.isVisible(),bounds:win.getBounds(),content:win.getContentBounds(),display:e.screen.getDisplayMatching(win.getBounds()).bounds, scale:e.screen.getDisplayMatching(win.getBounds()).scaleFactor})',
+    step(() => dispatch(owned, 'center({window=w})'));
+    await step(() => setTimeout(300));
+    const compositor = step(() => client(desktop.pid));
+    const native = await step(() =>
+      inspectMain(
+        '({visible:win.isVisible(),bounds:win.getBounds(),content:win.getContentBounds(),display:e.screen.getDisplayMatching(win.getBounds()).bounds, scale:e.screen.getDisplayMatching(win.getBounds()).scaleFactor})',
+      ),
     );
     assert.ok(native.visible && compositor.mapped && !compositor.hidden && !compositor.xwayland);
     const details = page.getByRole('button', { name: 'Сведения', exact: true });
-    if ((await details.getAttribute('aria-expanded')) !== 'true') await details.click();
+    if ((await step(() => details.getAttribute('aria-expanded'))) !== 'true')
+      await step(() => details.click());
     const field = page.getByLabel('Сообщение', { exact: true });
     const draft = 'Native ' + width;
     const recipient = page.getByLabel('Кому');
-    if (await recipient.count()) await recipient.selectOption('dev');
-    await field.click();
-    await field.fill(draft);
-    const layout = await measureLayout(page);
+    if (await step(() => recipient.count())) await step(() => recipient.selectOption('dev'));
+    await step(() => field.click());
+    await step(() => field.fill(draft));
+    const layout = await step(() => measureLayout(page));
     assert.equal(layout.controls.textarea.focused, true);
     assert.deepEqual(
       checkReachable(layout, layout.viewport.width, { detailsOpen: true, draft }),
@@ -79,7 +83,7 @@ export async function nativeWidths({ page, desktop, inspectMain, fixture: { root
       compositor.size[0] === width &&
       compositor.size[1] === 800;
     const path = join(root, 'width-' + width + '.png');
-    await page.screenshot({ path });
+    await step(() => page.screenshot({ path }));
     facts.push({
       requested: { width, height: 800 },
       native,

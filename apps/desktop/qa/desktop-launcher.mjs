@@ -29,9 +29,20 @@ export function processIdentity(pid, read = readFileSync) {
 export function launchDesktopGroup(command, args, env, { track = false } = {}) {
   const proc = spawn(command, args, { env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   const pgid = proc.pid;
-  const leaderStat = pgid && readFileSync('/proc/' + pgid + '/stat', 'utf8');
-  const leaderStart =
-    leaderStat && leaderStat.slice(leaderStat.lastIndexOf(')') + 2).split(' ')[19];
+  const seen = new Map();
+  let observationError, leader;
+  if (pgid) {
+    try {
+      leader = processIdentity(pgid);
+      if (!leader || leader.session !== pgid || leader.group !== pgid)
+        throw Error('launch identity unavailable');
+      seen.set(pgid + ':' + leader.start, leader);
+    } catch (error) {
+      leader = undefined;
+      observationError = error;
+    }
+  }
+  const leaderStart = leader?.start;
   let groupGone = false,
     closeCode,
     launchError;
@@ -42,10 +53,9 @@ export function launchDesktopGroup(command, args, env, { track = false } = {}) {
     launchError = error;
   });
 
-  const seen = new Map();
-  let observationError;
   function sample() {
     if (!pgid) return [];
+    if (!leaderStart) throw observationError;
     const rows = readdirSync('/proc')
       .filter((p) => /^\d+$/.test(p))
       .map((p) => processIdentity(Number(p)))
@@ -80,6 +90,7 @@ export function launchDesktopGroup(command, args, env, { track = false } = {}) {
   }
   function signalGroup(signal) {
     if (groupGone || pgid === undefined) return;
+    if (!leaderStart) throw observationError;
     if (!Number.isSafeInteger(pgid) || pgid <= 1) throw Error('Invalid Desktop process group');
     try {
       const current = readFileSync('/proc/' + pgid + '/stat', 'utf8');
@@ -169,5 +180,22 @@ export function launchDesktopGroup(command, args, env, { track = false } = {}) {
       proc.unref();
     }
   }
-  return { proc, waitForClose, dispose, records: () => [...seen.values()], sample };
+  return {
+    launch: leader
+      ? { observation: 'observed', ...leader }
+      : {
+          observation: pgid ? 'unavailable' : 'no-pid',
+          pid: pgid ?? null,
+          start: null,
+          session: null,
+        },
+    proc,
+    waitForClose,
+    dispose,
+    records: () =>
+      pgid && !leaderStart
+        ? [{ pid: pgid, start: null, session: null, observation: 'unavailable' }]
+        : [...seen.values()],
+    sample,
+  };
 }

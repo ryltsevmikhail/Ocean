@@ -1,79 +1,37 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import {
-  appendFileSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { appendFileSync, lstatSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import {
+  artifact,
+  defaultQualificationParent,
+  digest,
+  directory,
+  fresh,
+  json,
+  saveProof,
+  verified,
+} from './model-native-paths.mjs';
+import { createNativeCase } from './model-native-case.mjs';
+export { saveProof } from './model-native-paths.mjs';
 import process from 'node:process';
 import { setTimeout, clearTimeout } from 'node:timers';
 import { pathToFileURL } from 'node:url';
 import { bounded, currentWindow, wait } from './current-window.mjs';
 import { launchDesktopGroup } from './desktop-launcher.mjs';
 
-const json = (path) => JSON.parse(readFileSync(path, 'utf8'));
-const digest = (data) => createHash('sha256').update(data).digest('hex');
-function directory(root) {
-  mkdirSync(root, { mode: 0o700 });
-  return root;
-}
-function verified(path) {
-  assert.equal(realpathSync(path), path, 'explicit absolute canonical input required');
-  return path;
-}
-function fresh(root) {
-  assert.equal(resolve(root), root);
-  verified(dirname(root));
-  for (let dir = dirname(root); ; dir = dirname(dir)) {
-    assert.ok(
-      !['.git', 'artifact-proof.json', 'desktop-artifact.json', 'identity.json', 'seal.json'].some(
-        (name) => existsSync(join(dir, name)),
-      ),
-      'cannot write inside checkout or previous evidence',
-    );
-    const s = lstatSync(dir);
-    assert.ok(
-      [0, process.getuid()].includes(s.uid) && (!(s.mode & 0o022) || s.mode & 0o1000),
-      'untrusted output ancestor',
-    );
-    if (dir === '/') break;
-  }
-  directory(root);
-}
-function artifact(root) {
-  verified(root);
-  const manifest = json(join(root, 'manifest.json'));
-  assert.equal(manifest.node, process.version);
-  for (const [name, record] of Object.entries(manifest.files)) {
-    const file = verified(join(root, name));
-    assert.ok(file.startsWith(root + '/'));
-    assert.equal(digest(readFileSync(file)), record.sha256, name);
-  }
-  return manifest.revision;
-}
-export function saveProof(root, name, data) {
-  assert.match(name, /^[a-z0-9-]+\.json$/);
-  writeFileSync(join(root, name), JSON.stringify(data, null, 2) + '\n', {
-    flag: 'wx',
-    mode: 0o600,
-  });
-}
-export async function openModelNativeSession({
-  installedRoot,
-  runtimeRoot = installedRoot,
-  desktopExecutable,
-  root,
-  label = 'desktop',
-  ownerHook,
-}) {
+export async function openModelNativeSession(
+  {
+    installedRoot,
+    runtimeRoot = installedRoot,
+    desktopExecutable,
+    root,
+    label = 'desktop',
+    ownerHook,
+    qualificationParent = defaultQualificationParent,
+  },
+  { setupDirectory = directory, appendEvidence = appendFileSync } = {},
+) {
   assert.match(label, /^[a-z][a-z0-9-]{0,40}$/);
   verified(desktopExecutable);
   const sdkRevision = artifact(installedRoot);
@@ -90,42 +48,31 @@ export async function openModelNativeSession({
       root !== input && !root.startsWith(input + '/'),
       'proof root overlaps an artifact input',
     );
-  fresh(root);
-  const short = mkdtempSync('/tmp/oa-native-');
-  let desktop,
+  const control = createNativeCase(),
+    failures = [];
+  let short,
+    desktop,
     owner,
     peer,
     authenticated = false,
-    disposed = false;
-  const failures = [];
-  const profile = join(root, 'profile'),
-    workspace = directory(join(root, 'workspace'));
-  const env = {
-    PATH: dirname(process.execPath) + ':/usr/bin',
-    LANG: 'C.UTF-8',
-    DBUS_SESSION_BUS_ADDRESS: 'disabled:',
-    DBUS_SYSTEM_BUS_ADDRESS: 'disabled:',
-  };
-  for (const [key, path] of Object.entries({
-    HOME: 'home',
-    XDG_CONFIG_HOME: 'config',
-    XDG_CACHE_HOME: 'cache',
-    XDG_DATA_HOME: 'data',
-    XDG_STATE_HOME: 'state',
-    XDG_RUNTIME_DIR: 'run',
-    TMPDIR: 'tmp',
-  }))
-    env[key] = directory(join(['run', 'tmp'].includes(path) ? short : root, path));
-  directory(join(root, 'exports'));
-  const fixture = {
-    root,
-    env,
-    profile,
-    windowEnv: { ...env, WAYLAND_DISPLAY: socket, OCEAN_DESKTOP_PROFILE: profile },
-  };
-  async function dispose(original) {
-    if (disposed) return;
-    disposed = true;
+    retirement,
+    published = false;
+  function dispose(original) {
+    retirement ??= Promise.resolve().then(() => cleanup(original));
+    return retirement;
+  }
+  control.signal.addEventListener(
+    'abort',
+    () => {
+      if (published)
+        void dispose(control.signal.reason).catch((e) => {
+          if (e !== control.signal.reason) control.signal.reason.cleanupError = e;
+        });
+    },
+    { once: true },
+  );
+  fresh(root, qualificationParent);
+  async function cleanup(original) {
     async function attempt(fn) {
       try {
         await fn();
@@ -133,24 +80,28 @@ export async function openModelNativeSession({
         failures.push(String(e));
       }
     }
+    if (control.signal.aborted && peer) await attempt(() => peer.close());
     if (desktop) {
-      await attempt(() => desktop.close());
+      if (!control.signal.aborted) await attempt(() => desktop.close());
       await attempt(() => desktop.dispose());
     }
     if (peer) {
-      if (authenticated)
+      if (authenticated && !control.signal.aborted)
         await attempt(async () => assert.equal((await peer.stop()).outcome, 'complete'));
       await attempt(() => peer.close());
     }
     if (owner) {
-      if (authenticated) await attempt(async () => assert.equal(await owner.waitForClose(5000), 0));
+      if (authenticated && !control.signal.aborted)
+        await attempt(async () => assert.equal(await owner.waitForClose(5000), 0));
       await attempt(() => owner.dispose(5000));
     }
-    if (!failures.length && !original?.cleanupError)
+    if (short && !failures.length && !original?.cleanupError)
       await attempt(() => rmSync(short, { recursive: true }));
+    const primary = original ?? control.signal.reason;
     await attempt(() =>
       saveProof(root, 'cleanup.json', {
-        original: original && String(original),
+        original: primary && String(primary),
+        interrupted: control.signal.aborted,
         attached: original?.cleanupError && String(original.cleanupError),
         failures,
         short,
@@ -160,11 +111,44 @@ export async function openModelNativeSession({
     );
     if (failures.length) {
       const error = Error('native cleanup: ' + failures.join('; '));
-      if (original) original.cleanupError = error;
+      if (primary) primary.cleanupError = error;
       else throw error;
     }
+    if (!original && primary) throw primary;
   }
   try {
+    short = mkdtempSync('/tmp/oa-native-');
+    const profile = join(root, 'profile'),
+      workspace = join(root, 'workspace');
+    setupDirectory(workspace);
+    const env = {
+      PATH: dirname(process.execPath) + ':/usr/bin',
+      LANG: 'C.UTF-8',
+      DBUS_SESSION_BUS_ADDRESS: 'disabled:',
+      DBUS_SYSTEM_BUS_ADDRESS: 'disabled:',
+    };
+    for (const [key, path] of Object.entries({
+      HOME: 'home',
+      XDG_CONFIG_HOME: 'config',
+      XDG_CACHE_HOME: 'cache',
+      XDG_DATA_HOME: 'data',
+      XDG_STATE_HOME: 'state',
+      XDG_RUNTIME_DIR: 'run',
+      TMPDIR: 'tmp',
+    })) {
+      env[key] = join(['run', 'tmp'].includes(path) ? short : root, path);
+      setupDirectory(env[key]);
+    }
+    setupDirectory(join(root, 'exports'));
+    const fixture = {
+      root,
+      env,
+      profile,
+      signal: control.signal,
+      fail: control.fail,
+      appendEvidence,
+      windowEnv: { ...env, WAYLAND_DISPLAY: socket, OCEAN_DESKTOP_PROFILE: profile },
+    };
     const cli = join(runtimeRoot, 'launch.js');
     const args = ['--profile', profile, '--json'];
     const init = JSON.parse(
@@ -183,13 +167,24 @@ export async function openModelNativeSession({
       { ...env, OCEAN_NATIVE_REQUESTS: join(root, 'requests.jsonl') },
       { track: true },
     );
+    saveProof(root, 'owner-launch.json', owner.launch);
+    if (owner.launch.observation !== 'observed')
+      throw Error('owner launch identity ' + owner.launch.observation);
+    function log(bytes) {
+      try {
+        appendEvidence(join(root, 'owner.log'), bytes);
+      } catch (error) {
+        control.fail(error);
+      }
+    }
     let output = '';
     owner.proc.stdout.on('data', (b) => {
       output = (output + b).slice(-65536);
-      appendFileSync(join(root, 'owner.log'), b);
+      log(b);
     });
-    owner.proc.stderr.on('data', (b) => appendFileSync(join(root, 'owner.log'), b));
+    owner.proc.stderr.on('data', log);
     await wait(() => {
+      control.signal.throwIfAborted();
       if (owner.proc.exitCode !== null || owner.proc.signalCode !== null)
         throw Error('installed owner exited before readiness');
       return output.includes('\n');
@@ -219,6 +214,7 @@ export async function openModelNativeSession({
     assert.equal(status.profileId, ready.profileId);
     assert.equal(status.instanceId, ready.instanceId);
     authenticated = true;
+    control.signal.throwIfAborted();
     desktop = await currentWindow(fixture, label, desktopExecutable);
     const { page, inspectMain } = desktop;
     assert.equal(await inspectMain('process.versions.electron'), '45.2.1');
@@ -256,11 +252,26 @@ export async function openModelNativeSession({
       status,
       gui: gui.data,
       url: page.url(),
-      title: await page.title(),
+      title: await bounded(page.title(), 15000, 'page title'),
       body,
     });
-    return { page, peer, fixture, desktop, inspectMain, dispose };
-  } catch (error) {
+    control.signal.throwIfAborted();
+    published = true;
+    return {
+      page,
+      peer,
+      fixture,
+      desktop,
+      inspectMain,
+      dispose,
+      signal: control.signal,
+      runCase: (work, ms = 120000) => control.run(work, ms, dispose),
+    };
+  } catch (observed) {
+    const error = control.signal.aborted ? control.signal.reason : observed;
+    if (observed !== error && observed.desktopRecords)
+      error.desktopRecords = observed.desktopRecords;
+    if (observed !== error && observed.cleanupError) error.cleanupError = observed.cleanupError;
     try {
       await dispose(error);
     } catch (cleanup) {

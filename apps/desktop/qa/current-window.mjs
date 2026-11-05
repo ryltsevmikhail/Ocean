@@ -14,6 +14,7 @@ import { chromium } from 'playwright-core';
 import { windowEnv } from './owner.mjs';
 import { launchDesktopGroup } from './desktop-launcher.mjs';
 import { packageNative, inspectPackage } from './package-native.mjs';
+import { saveProof } from './model-native-paths.mjs';
 import { closePage } from './window-close.mjs';
 export async function bounded(work, ms, description) {
   let timeout;
@@ -59,10 +60,31 @@ export async function currentWindow(f, label, executable) {
     env,
     { track: !!f.windowEnv },
   );
-  let log = '';
+  let log = '',
+    sinkError,
+    published = false,
+    retirement;
+  const dispose = () => (retirement ??= launcher.dispose());
+  function append(name, bytes) {
+    if (sinkError) return;
+    try {
+      (f.appendEvidence ?? appendFileSync)(join(f.root, name), bytes);
+    } catch (error) {
+      sinkError = error;
+      if (f.fail) f.fail(error);
+      else if (published)
+        void dispose().catch((cleanup) => {
+          error.cleanupError = cleanup;
+        });
+    }
+  }
+  function check() {
+    f.signal?.throwIfAborted();
+    if (sinkError) throw sinkError;
+  }
   const add = (b) => {
     log = (log + b).slice(-65536);
-    appendFileSync(join(f.root, label + '.log'), b);
+    append(label + '.log', b);
   };
   launcher.proc.stdout.on('data', add);
   launcher.proc.stderr.on('data', add);
@@ -90,8 +112,8 @@ export async function currentWindow(f, label, executable) {
         // be a live Desktop child and would fail an otherwise unrelated audit race.
         if (!pairs.length && cmd[0] === '') continue;
         if (!pairs.some(([key]) => key === 'HOME') && cmd[0]?.includes(' --type=')) {
-          appendFileSync(
-            join(f.root, 'children.jsonl'),
+          append(
+            'children.jsonl',
             JSON.stringify({ pid, cmd, env: {}, sandboxRewrittenProcEnvironment: pairs }) + '\n',
           );
           seen.add(pid);
@@ -99,8 +121,8 @@ export async function currentWindow(f, label, executable) {
         }
         const child = Object.fromEntries(pairs),
           selected = {};
-        appendFileSync(
-          join(f.root, 'children-observed.jsonl'),
+        append(
+          'children-observed.jsonl',
           JSON.stringify({
             pid,
             cmd: readFileSync('/proc/' + pid + '/cmdline', 'utf8').split('\0'),
@@ -122,8 +144,8 @@ export async function currentWindow(f, label, executable) {
         assert.ok([undefined, 'disabled:'].includes(child.DBUS_SESSION_BUS_ADDRESS));
         selected.DBUS_SESSION_BUS_ADDRESS = child.DBUS_SESSION_BUS_ADDRESS;
         assert.equal(child.DEEPSEEK_API_KEY, undefined);
-        appendFileSync(
-          join(f.root, 'children.jsonl'),
+        append(
+          'children.jsonl',
           JSON.stringify({
             pid,
             cmd: readFileSync('/proc/' + pid + '/cmdline', 'utf8').split('\0'),
@@ -137,7 +159,13 @@ export async function currentWindow(f, label, executable) {
     }
   }
   try {
+    if (f.windowEnv) {
+      saveProof(f.root, 'desktop-launch.json', launcher.launch);
+      if (launcher.launch.observation !== 'observed')
+        throw Error('Desktop launch identity ' + launcher.launch.observation);
+    }
     await wait(() => {
+      check();
       audit();
       if (launcher.proc.exitCode !== null || launcher.proc.signalCode !== null)
         throw Error('Desktop exited ' + log.slice(-4000));
@@ -151,11 +179,9 @@ export async function currentWindow(f, label, executable) {
       browser.contexts()[0].pages()[0] ??
       (await browser.contexts()[0].waitForEvent('page', { timeout: 15000 }));
     page.setDefaultTimeout(15000);
-    page.on('pageerror', (error) =>
-      appendFileSync(join(f.root, 'page-errors.log'), String(error) + '\n'),
-    );
+    page.on('pageerror', (error) => append('page-errors.log', String(error) + '\n'));
     page.on('console', (msg) =>
-      appendFileSync(join(f.root, 'renderer-console.log'), msg.type() + ':' + msg.text() + '\n'),
+      append('renderer-console.log', msg.type() + ':' + msg.text() + '\n'),
     );
     audit();
     if (executable) await packageNative(f, () => log);
@@ -180,6 +206,8 @@ export async function currentWindow(f, label, executable) {
       ),
       'undefined',
     );
+    check();
+    published = true;
     return {
       page,
       pid: launcher.proc.pid,
@@ -187,15 +215,20 @@ export async function currentWindow(f, label, executable) {
       inspectMain: (expression) => inspectPackage(() => log, expression),
       userData,
       async close() {
+        check();
         audit();
         await closePage(page);
         assert.equal(await launcher.waitForClose(), 0);
       },
-      dispose: () => launcher.dispose(),
+      async dispose() {
+        await dispose();
+        if (!f.fail && sinkError) throw sinkError;
+      },
     };
-  } catch (error) {
+  } catch (observed) {
+    const error = sinkError ?? f.signal?.reason ?? observed;
     try {
-      await launcher.dispose();
+      await dispose();
     } catch (cleanup) {
       error.cleanupError = cleanup;
     }
