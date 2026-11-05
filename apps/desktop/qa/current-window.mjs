@@ -212,7 +212,11 @@ export async function currentWindow(f, label, executable) {
       page,
       pid: launcher.proc.pid,
       records: launcher.records,
-      inspectMain: (expression) => inspectPackage(() => log, expression),
+      inspectMain: (expression) =>
+        inspectPackage(() => log, expression, undefined, {
+          signal: f.signal,
+          step: f.inspectorStep,
+        }),
       userData,
       async close() {
         check();

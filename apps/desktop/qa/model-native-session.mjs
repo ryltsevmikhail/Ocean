@@ -49,7 +49,12 @@ export async function openModelNativeSession(
       'proof root overlaps an artifact input',
     );
   const control = createNativeCase(),
-    failures = [];
+    failures = [],
+    sinkErrors = new Set();
+  function sinkFailed(error) {
+    sinkErrors.add(error);
+    control.fail(error);
+  }
   let short,
     desktop,
     owner,
@@ -77,7 +82,7 @@ export async function openModelNativeSession(
       try {
         await fn();
       } catch (e) {
-        failures.push(String(e));
+        failures.push(e);
       }
     }
     if (control.signal.aborted && peer) await attempt(() => peer.close());
@@ -98,19 +103,22 @@ export async function openModelNativeSession(
     if (short && !failures.length && !original?.cleanupError)
       await attempt(() => rmSync(short, { recursive: true }));
     const primary = original ?? control.signal.reason;
+    for (const error of sinkErrors)
+      if (error !== primary && !failures.includes(error)) failures.push(error);
     await attempt(() =>
       saveProof(root, 'cleanup.json', {
         original: primary && String(primary),
         interrupted: control.signal.aborted,
         attached: original?.cleanupError && String(original.cleanupError),
-        failures,
+        failures: failures.map(String),
         short,
         owner: owner?.records(),
         desktop: desktop?.records() ?? original?.desktopRecords,
       }),
     );
     if (failures.length) {
-      const error = Error('native cleanup: ' + failures.join('; '));
+      if (primary?.cleanupError) failures.unshift(primary.cleanupError);
+      const error = new AggregateError(failures, 'native cleanup: ' + failures.join('; '));
       if (primary) primary.cleanupError = error;
       else throw error;
     }
@@ -145,7 +153,8 @@ export async function openModelNativeSession(
       env,
       profile,
       signal: control.signal,
-      fail: control.fail,
+      fail: sinkFailed,
+      inspectorStep: control.step,
       appendEvidence,
       windowEnv: { ...env, WAYLAND_DISPLAY: socket, OCEAN_DESKTOP_PROFILE: profile },
     };
@@ -174,7 +183,7 @@ export async function openModelNativeSession(
       try {
         appendEvidence(join(root, 'owner.log'), bytes);
       } catch (error) {
-        control.fail(error);
+        sinkFailed(error);
       }
     }
     let output = '';

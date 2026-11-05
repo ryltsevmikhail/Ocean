@@ -58,5 +58,5 @@ export function createNativeCase() {
       finished = true;
     }
   }
-  return { signal, fail, run };
+  return { signal, fail, run, step };
 }

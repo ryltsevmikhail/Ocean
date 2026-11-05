@@ -38,6 +38,7 @@ for (const stage of [
   'readiness',
   'fast-owner',
   'proof-sink',
+  'retirement-sink',
   'launch',
   'mismatch',
   'existing',
@@ -71,7 +72,10 @@ for (const stage of [
           child.stdout.once('data',b=>{fs.writeFileSync(profile+'/child',b);setTimeout(()=>process.exit(2),350);});
         } else {
           console.log(JSON.stringify({data:{profileId:createHash('sha256').update(profile).digest('hex'),instanceId:'qa',state:'ready'}}));
-          setInterval(()=>{if(fs.existsSync(profile+'/stop'))process.exit(0);},20);
+          setInterval(()=>{if(fs.existsSync(profile+'/stop')){
+            if(${JSON.stringify(stage)}==='retirement-sink') process.stderr.write('retiring',()=>process.exit(4));
+            else process.exit(0);
+          }},20);
           setTimeout(()=>process.exit(3),3000).unref();
         }`,
         'package.json': '{"type":"module"}',
@@ -115,6 +119,8 @@ for (const stage of [
           mkdirSync(path, { mode: 0o700 });
         },
         appendEvidence(path, bytes) {
+          if (stage === 'retirement-sink' && bytes.toString().includes('retiring'))
+            throw Object.assign(Error('retirement log EIO'), { code: 'EIO' });
           if (stage === 'proof-sink' && path.endsWith('/owner.log')) {
             if (!injected) mkdirSync(join(root, 'cleanup.json'));
             injected = true;
@@ -174,6 +180,20 @@ for (const stage of [
             cleanup: String(fsFault.cleanupError),
           }),
         );
+        return;
+      }
+      if (stage === 'retirement-sink') {
+        let primary;
+        await assert.rejects(run, (error) => {
+          primary = error;
+          return /Desktop exited/.test(error.message);
+        });
+        const ledger = JSON.parse(readFileSync(join(root, 'cleanup.json'), 'utf8'));
+        assert.equal(ledger.original, String(primary));
+        assert.ok(ledger.failures.some((message) => message.includes('retirement log EIO')));
+        assert.ok(ledger.failures.some((message) => message.includes('AssertionError')));
+        assert.match(primary.cleanupError.message, /retirement log EIO/);
+        assert.ok(primary.cleanupError.errors.some((error) => error.code === 'EIO'));
         return;
       }
       const ioFailure = ['setup', 'owner-sink', 'desktop-sink'].includes(stage);
