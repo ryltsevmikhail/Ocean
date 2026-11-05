@@ -26,6 +26,8 @@ export function settingsError(error: unknown): string {
   if (unknownOutcome(error)) return unknownText;
   const code = error instanceof Error ? error.message : '';
   const messages: Record<string, string> = {
+    model_support_changed:
+      'Возможности хоста изменились во время выбора. Обновите метаданные и явно выберите подключение и модель заново.',
     model_runtime_upgrade_required: 'Этому хосту требуется обновление для настроек подключений.',
     connection_not_found: 'Подключение не найдено. Обновите метаданные.',
     connection_unverified: 'Подключение не подтверждено. Проверьте состояние и исходную операцию.',

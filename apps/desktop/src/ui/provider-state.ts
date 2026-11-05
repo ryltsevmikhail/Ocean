@@ -1,75 +1,105 @@
-import { computed, ref } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import type { ProviderStatus } from '../protocol.js';
 import { call } from './bridge.js';
 import { explain } from './dom.js';
 import { providerCheckText } from './provider-text.js';
-
-/** Shared provider settings state; one runtime, one visible connection. */
+import { settingsError, unknownOutcome, unknownText } from './model-settings-text.js';
+import {
+  legacyOriginal,
+  legacyResupply,
+  sameLegacyOriginal,
+  type LegacyMutation,
+  type LegacyOriginal,
+} from './provider-recovery.js';
 export const providerStatus = ref<ProviderStatus | null>(null);
-export const providerBusy = ref(false);
-export const providerKey = ref('');
-export const providerModel = ref('');
-export const providerMessage = ref('');
-export const providerError = ref(false);
-export const providerCode = ref('');
+export const providerBusy = ref(false),
+  providerKey = ref(''),
+  providerModel = ref(''),
+  providerMessage = ref(''),
+  providerError = ref(false),
+  providerCode = ref(''),
+  providerStale = ref(true);
+export const providerPending = shallowRef<LegacyOriginal | null>(null);
 export const providerModels = computed<readonly string[]>(() => providerStatus.value?.models ?? []);
-export const providerDefaultModel = computed<string>(
+export const providerDefaultModel = computed(
   () => providerStatus.value?.model ?? providerStatus.value?.models[0] ?? '',
 );
-export const providerCanSave = computed<boolean>(() => {
+export const providerCanSave = computed(() => {
   const status = providerStatus.value;
-  if (status === null || !status.writable) return false;
-  if (providerKey.value.trim() !== '') return true;
-  // An unreadable saved reference must be replaced or removed explicitly; an empty key
-  // never falls through to a model-only activation that could adopt the environment value.
-  return status.savedKey && status.state !== 'unverified';
+  if (!status?.writable || providerPending.value || providerStale.value) return false;
+  return providerKey.value.trim() !== '' || (status.savedKey && status.state !== 'unverified');
 });
-function apply(status: ProviderStatus): void {
+watch(
+  providerModel,
+  () => {
+    providerKey.value = '';
+  },
+  { flush: 'sync' },
+);
+function apply(status: ProviderStatus) {
   providerStatus.value = status;
   if (status.model !== null) providerModel.value = status.model;
 }
-function failure(error: unknown): void {
+function failure(error: unknown) {
   providerCode.value = error instanceof Error ? error.message : String(error);
-  providerMessage.value = explain(error);
+  providerMessage.value = settingsError(error);
   providerError.value = true;
 }
-async function run(action: () => Promise<ProviderStatus>, success: string): Promise<void> {
-  if (providerBusy.value) return;
+let readGeneration = 0;
+export async function loadProviderStatus(): Promise<void> {
+  providerKey.value = '';
+  const token = ++readGeneration;
+  providerStale.value = true;
+  try {
+    const status = await call({ op: 'provider' });
+    if (token === readGeneration) {
+      apply(status);
+      providerStale.value = false;
+    }
+  } catch (error) {
+    if (token === readGeneration) failure(error);
+  }
+}
+async function run(command: LegacyMutation, success: string) {
+  if (providerBusy.value || providerStale.value) return;
+  const original = legacyOriginal(command),
+    pending = providerPending.value;
+  if (pending && !sameLegacyOriginal(pending, original)) return;
   providerBusy.value = true;
   providerMessage.value = '';
   providerError.value = false;
   providerCode.value = '';
   try {
-    apply(await action());
-    providerMessage.value = success;
+    await call(command);
+    if (providerPending.value && sameLegacyOriginal(providerPending.value, original))
+      providerPending.value = null;
+    await loadProviderStatus();
+    providerMessage.value = providerStale.value
+      ? 'Исходная операция подтверждена; текущее состояние не прочитано. Обновите метаданные.'
+      : success;
   } catch (error) {
+    if (
+      unknownOutcome(error) ||
+      (error instanceof Error && error.message === 'provider_write_failed')
+    )
+      providerPending.value = original;
+    await loadProviderStatus();
     failure(error);
+    if (providerPending.value) providerMessage.value = unknownText;
   } finally {
     providerBusy.value = false;
   }
 }
-/** Drop a typed but never submitted key; the settings dialog never retains it after close. */
-export function clearProviderInput(): void {
+export function clearProviderInput() {
   providerKey.value = '';
 }
-/** The loaded provider model, or a fail-closed refusal instead of an empty wire value. */
 export function requireProviderDefaultModel(): string {
-  const model = providerDefaultModel.value;
-  if (model === '') throw Error('provider_unavailable');
-  return model;
+  if (!providerDefaultModel.value) throw Error('provider_unavailable');
+  return providerDefaultModel.value;
 }
-/** Read-only refresh; a missing runtime leaves the settings panel unavailable, not broken. */
-export async function loadProviderStatus(): Promise<void> {
-  try {
-    apply(await call({ op: 'provider' }));
-  } catch (error) {
-    providerCode.value = error instanceof Error ? error.message : String(error);
-    providerError.value = true;
-    providerMessage.value = explain(error);
-  }
-}
-export async function checkProvider(): Promise<void> {
-  if (providerBusy.value) return;
+export async function checkProvider() {
+  clearProviderInput();
+  if (providerBusy.value || providerPending.value) return;
   providerBusy.value = true;
   providerMessage.value = '';
   providerError.value = false;
@@ -77,6 +107,7 @@ export async function checkProvider(): Promise<void> {
   try {
     const reply = await call({ op: 'provider-check' });
     apply(reply.status);
+    providerStale.value = false;
     providerMessage.value =
       providerCheckText[reply.check.outcome] +
       (reply.check.persisted ? ' · результат сохранён.' : ' · результат не сохранён.');
@@ -86,62 +117,78 @@ export async function checkProvider(): Promise<void> {
     providerBusy.value = false;
   }
 }
-/** Save (or replace) the transient key and the selected model. Input is cleared afterwards. */
-export async function saveProvider(): Promise<void> {
-  if (providerBusy.value) return;
+export async function saveProvider() {
+  const key = providerKey.value;
+  clearProviderInput();
+  if (providerBusy.value || providerPending.value) return;
   const status = providerStatus.value;
-  const canSave = providerCanSave.value;
-  const key = providerKey.value.trim();
-  providerKey.value = '';
-  if (status === null || !canSave) {
+  if (
+    !status?.writable ||
+    providerStale.value ||
+    (!key.trim() && (!status.savedKey || status.state === 'unverified'))
+  ) {
     providerMessage.value =
       status?.state === 'unverified' ? explain('provider_unverified') : 'Введите ключ API.';
     providerError.value = true;
     return;
   }
-  try {
-    await run(
-      () =>
-        call({
-          op: 'provider-set',
-          requestId: crypto.randomUUID(),
-          model: providerModel.value || providerDefaultModel.value,
-          ...(key === '' ? {} : { key }),
-        }),
-      key === '' ? 'Выбрана модель.' : 'Ключ сохранён.',
-    );
-  } finally {
-    providerKey.value = '';
-  }
-}
-export async function disconnectProvider(): Promise<void> {
-  const status = providerStatus.value;
-  if (status === null || !status.writable) return;
   await run(
-    () =>
-      call({
-        op: 'provider-disconnect',
-        requestId: crypto.randomUUID(),
-        expectedRevision: status.revision,
-      }),
+    {
+      op: 'provider-set',
+      requestId: crypto.randomUUID(),
+      model: providerModel.value || providerDefaultModel.value,
+      ...(key.trim() ? { key } : {}),
+    },
+    key.trim() ? 'Ключ сохранён. Текущее состояние прочитано отдельно.' : 'Выбрана модель.',
+  );
+}
+export async function disconnectProvider() {
+  clearProviderInput();
+  const status = providerStatus.value;
+  if (!status?.writable || providerPending.value) return;
+  await run(
+    {
+      op: 'provider-disconnect',
+      requestId: crypto.randomUUID(),
+      expectedRevision: status.revision,
+    },
     'Провайдер отключён. Ключ DeepSeek не отозван.',
   );
 }
-export async function removeSavedProviderKey(): Promise<void> {
+export async function removeSavedProviderKey() {
+  clearProviderInput();
   const status = providerStatus.value;
-  if (status === null || !status.writable) return;
+  if (!status?.writable || providerPending.value) return;
   await run(
-    () =>
-      call({
-        op: 'provider-remove-key',
-        requestId: crypto.randomUUID(),
-        expectedRevision: status.revision,
-      }),
+    {
+      op: 'provider-remove-key',
+      requestId: crypto.randomUUID(),
+      expectedRevision: status.revision,
+    },
     'Сохранённый ключ Ocean удалён. Ключ DeepSeek не отозван.',
   );
 }
-/** Test-only reset: component state never survives a window. */
-export function resetProviderState(): void {
+export async function recoverProvider() {
+  const key = providerKey.value;
+  clearProviderInput();
+  const original = providerPending.value;
+  if (!original || providerBusy.value || providerStale.value || !providerStatus.value?.writable)
+    return;
+  try {
+    await run(
+      legacyResupply(original, key),
+      'Исходная операция подтверждена. Текущее состояние прочитано отдельно.',
+    );
+  } catch (error) {
+    providerMessage.value =
+      error instanceof Error && error.message === 'key_resupply_required'
+        ? 'Введите тот же исходный ключ.'
+        : settingsError(error);
+    providerError.value = true;
+  }
+}
+export function resetProviderState() {
+  ++readGeneration;
   providerStatus.value = null;
   providerBusy.value = false;
   providerKey.value = '';
@@ -149,4 +196,12 @@ export function resetProviderState(): void {
   providerMessage.value = '';
   providerError.value = false;
   providerCode.value = '';
+  providerPending.value = null;
+  providerStale.value = true;
+}
+
+export function legacyProviderBlocks(connectionId: string): boolean {
+  return (
+    connectionId === 'legacy:deepseek' && (providerPending.value !== null || providerBusy.value)
+  );
 }

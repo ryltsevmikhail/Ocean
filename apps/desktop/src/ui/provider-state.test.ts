@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { isLocalProviderStatus } from '@runnets/contracts';
 import { commands, outputs, type ProviderStatus } from '../protocol.js';
 import {
   checkProvider,
@@ -41,7 +42,25 @@ const ok = (data: unknown): Reply => ({ version: 1, ok: true, data });
 const fail = (code: string): Reply => ({ version: 1, ok: false, error: { code } });
 function channel(replies: Reply[]) {
   const request = vi.fn<(message: unknown) => Promise<unknown>>();
-  for (const reply of replies) request.mockResolvedValueOnce(reply);
+  let first = true;
+  let latest: unknown = status;
+  request.mockImplementation(async (message) => {
+    const op = (message as { op: string }).op;
+    if (op === 'provider' && !first) return ok(latest);
+    first = false;
+    const reply = replies.shift() ?? ok(latest);
+    if (reply.ok) {
+      if (isLocalProviderStatus(reply.data)) latest = reply.data;
+      else if (
+        reply.data &&
+        typeof reply.data === 'object' &&
+        'status' in reply.data &&
+        isLocalProviderStatus(reply.data.status)
+      )
+        latest = reply.data.status;
+    }
+    return reply;
+  });
   vi.stubGlobal('window', { ocean: { request } });
   return request;
 }
@@ -69,7 +88,9 @@ it('saves the transient key, clears it after submission and applies the returned
   providerKey.value = 'sk-fixture-ui-key';
   expect(providerCanSave.value).toBe(true);
   await saveProvider();
-  const sent = request.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+  const sent = request.mock.calls.findLast(
+    ([c]) => (c as { op: string }).op === 'provider-set',
+  )?.[0] as Record<string, unknown>;
   expect(sent).toMatchObject({
     op: 'provider-set',
     key: 'sk-fixture-ui-key',
@@ -90,7 +111,7 @@ it('clears the transient key after a refused submission and shows a masked error
   expect(providerKey.value).toBe('');
   expect(providerError.value).toBe(true);
   expect(JSON.stringify(providerStatus.value)).not.toContain('sk-fixture-ui-key');
-  expect(request).toHaveBeenCalledTimes(2);
+  expect(request).toHaveBeenCalledTimes(3);
 
   channel([fail('request_conflict')]);
   providerKey.value = 'sk-fixture-ui-key';
@@ -106,7 +127,9 @@ it('applies a model-only change when a saved key already exists', async () => {
   expect(providerCanSave.value).toBe(true);
   providerModel.value = 'deepseek-v4-pro';
   await saveProvider();
-  const sent = request.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+  const sent = request.mock.calls.findLast(
+    ([c]) => (c as { op: string }).op === 'provider-set',
+  )?.[0] as Record<string, unknown>;
   expect(sent).toMatchObject({ op: 'provider-set', model: 'deepseek-v4-pro' });
   expect(Object.hasOwn(sent, 'key')).toBe(false);
 });
@@ -200,11 +223,17 @@ it('sends guarded disconnect and saved-key deletion with the displayed revision'
   expect(typeof blocked['requestId']).toBe('string');
   expect(providerMessage.value).toContain('не отозван');
   await removeSavedProviderKey();
-  expect(request.mock.calls[2]?.[0]).toMatchObject({
+  expect(
+    request.mock.calls.find(([c]) => (c as { op: string }).op === 'provider-remove-key')?.[0],
+  ).toMatchObject({
     op: 'provider-remove-key',
     expectedRevision: 3,
   });
-  expect(commands.safeParse(request.mock.calls[2]?.[0]).success).toBe(true);
+  expect(
+    commands.safeParse(
+      request.mock.calls.find(([c]) => (c as { op: string }).op === 'provider-remove-key')?.[0],
+    ).success,
+  ).toBe(true);
 });
 
 it('clears a typed but unsubmitted key when the settings dialog closes', async () => {
@@ -251,10 +280,12 @@ it('clears the key synchronously before a pending legacy submission settles', as
   let settle!: (reply: Reply) => void;
   vi.stubGlobal('window', {
     ocean: {
-      request: () =>
-        new Promise<Reply>((resolve) => {
-          settle = resolve;
-        }),
+      request: (c: { op: string }) =>
+        c.op === 'provider'
+          ? Promise.resolve(ok(status))
+          : new Promise<Reply>((resolve) => {
+              settle = resolve;
+            }),
     },
   });
   providerKey.value = 'synthetic-pending';

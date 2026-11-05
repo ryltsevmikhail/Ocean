@@ -115,3 +115,66 @@ it('keeps an uncertain team creation UUID and explicitly replays the same comman
   await expect(createOceanTeam(deps, choices)).rejects.toThrow();
   expect(request.mock.calls[0]?.[0]).toEqual(request.mock.calls[1]?.[0]);
 });
+
+it('never consumes explicit bindings as a legacy create when support changes during bot read', async () => {
+  modelSupport.value = true;
+  let resolve!: (v: Bot[]) => void;
+  const request = vi.fn();
+  vi.stubGlobal('window', { ocean: { request } });
+  const { providerStatus } = await import('./provider-state.js');
+  providerStatus.value = { provider: 'deepseek', model: 'deepseek-flash' } as never;
+  const choices = {
+    dev: { connectionId: 'a', modelId: 'm' },
+    review: { connectionId: 'b', modelId: 'm' },
+  };
+  const operation = createOceanTeam(
+    {
+      readBots: () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+      setBots: () => {},
+      currentBots: () => [],
+      refresh: async () => {},
+      requestId: () => crypto.randomUUID(),
+    },
+    choices,
+  ).catch((e) => e);
+  modelSupport.value = null;
+  resolve([]);
+  await operation;
+  expect(request).not.toHaveBeenCalled();
+});
+
+it('pins explicit choice bytes before the bot-read await', async () => {
+  modelSupport.value = true;
+  let resolve!: (v: Bot[]) => void;
+  const request = vi
+    .fn()
+    .mockResolvedValue({ version: 1, ok: false, error: { code: 'provider_unavailable' } });
+  vi.stubGlobal('window', { ocean: { request } });
+  const choices = {
+    dev: { connectionId: 'original', modelId: 'm' },
+    review: { connectionId: 'b', modelId: 'm' },
+  };
+  const operation = createOceanTeam(
+    {
+      readBots: () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+      setBots: () => {},
+      currentBots: () => [],
+      refresh: async () => {},
+      requestId: () => crypto.randomUUID(),
+    },
+    choices,
+  ).catch((e) => e);
+  choices.dev.connectionId = 'changed';
+  resolve([]);
+  await operation;
+  expect(request.mock.calls[0]?.[0]).toMatchObject({
+    op: 'bot-bound-create',
+    input: { binding: { connectionId: 'original', modelId: 'm' } },
+  });
+});

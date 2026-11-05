@@ -10,7 +10,18 @@ defineEmits<{ recover: []; repair: [] }>();
 </script>
 <template>
   <section v-if="current?.recovery || pending" class="info-card warning" role="status">
-    <template v-if="current?.recovery?.kind === 'retry_available'">
+    <template v-if="pending">
+      <p>
+        Локальный исходный запрос {{ pending.connectionId }}. Метаданные не являются квитанцией
+        успеха; другая операция на этой строке не заменяет исходную.
+      </p>
+      <pre>{{ JSON.stringify(pending.command, null, 2) }}</pre>
+      <p v-if="pending.requiresKey">Введите тот же исходный ключ.</p>
+      <button :disabled="disabled || (current && !current.writable)" @click="$emit('recover')">
+        Завершить точный исходный запрос
+      </button>
+    </template>
+    <template v-else-if="current?.recovery?.kind === 'retry_available'">
       <strong>Завершить исходную операцию</strong>
       <p>
         {{ current.recovery.request.operation.method }} ·
@@ -32,14 +43,6 @@ defineEmits<{ recover: []; repair: [] }>();
       </p>
       <button :disabled="disabled || !current.writable || !!pending" @click="$emit('repair')">
         Явно исправить новым ключом
-      </button>
-    </template>
-    <template v-else-if="pending">
-      <p>Исход неизвестен: {{ pending.connectionId }}. Метаданные не являются квитанцией успеха.</p>
-      <pre>{{ JSON.stringify(pending.command, null, 2) }}</pre>
-      <p v-if="pending.requiresKey">Для этого же запроса нужен тот же исходный ключ.</p>
-      <button :disabled="disabled || (current && !current.writable)" @click="$emit('recover')">
-        Явно повторить точный исходный запрос
       </button>
     </template>
     <p v-else>

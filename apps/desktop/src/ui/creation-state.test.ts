@@ -42,3 +42,17 @@ it('blocks recovery until failed metadata refresh succeeds', async () => {
   await s.recover();
   expect(submit).toHaveBeenCalledTimes(2);
 });
+
+it('keeps the explicitly bound creation family and choice through uncertain recovery', async () => {
+  const { modelSupport } = await import('./model-support.js');
+  modelSupport.value = true;
+  const send = vi.fn().mockRejectedValueOnce(Error('outcome_unknown')).mockResolvedValueOnce(null),
+    read = vi.fn().mockResolvedValue(undefined);
+  const s = createCreationState(send, read);
+  await s.submit(draft);
+  modelSupport.value = false;
+  await s.recover();
+  expect(send.mock.calls[1]?.[0]).toEqual(send.mock.calls[0]?.[0]);
+  expect(send.mock.calls[1]?.[0].binding).toEqual(draft.binding);
+  modelSupport.value = null;
+});

@@ -15,6 +15,8 @@ const {
   stale,
   message,
   pending,
+  pendingEntries,
+  legacyBlocked,
   checkResult,
   draft,
   current,
@@ -41,8 +43,20 @@ defineExpose({ clear: state.close });
       @change="state.select(($event.target as HTMLSelectElement).value)"
     >
       <option value="">Новое подключение</option>
+      <option v-if="selected && !current && !pending" :value="selected">
+        {{ selected }} · отсутствует в прочитанных метаданных
+      </option>
       <option v-for="item in connections" :key="item.connectionId" :value="item.connectionId">
         {{ item.connectionId }} · {{ item.kind }} · {{ item.endpoint }}
+      </option>
+      <option
+        v-for="item in pendingEntries.filter(
+          (x) => !connections.some((c) => c.connectionId === x.connectionId),
+        )"
+        :key="'local:' + item.connectionId"
+        :value="item.connectionId"
+      >
+        {{ item.connectionId }} · локальный исходный запрос; строка не подтверждена
       </option>
     </select></label
   >
@@ -72,6 +86,7 @@ defineExpose({ clear: state.close });
       disabled ||
       (!canEdit &&
         !(
+          !legacyBlocked &&
           current?.writable &&
           current.recovery?.kind === 'explicit_key_repair_required' &&
           !busy &&
@@ -142,15 +157,26 @@ defineExpose({ clear: state.close });
       type="password"
       autocomplete="off"
       spellcheck="false"
-      :disabled="disabled || busy || stale || !!writeRestriction || (current && !current.writable)"
+      :disabled="
+        disabled ||
+        busy ||
+        stale ||
+        legacyBlocked ||
+        !!writeRestriction ||
+        (current && !current.writable)
+      "
   /></label>
   <small
     >Ключ не возвращается из runtime. Поле очищается при отправке, смене выбора и закрытии.</small
   >
+  <p v-if="legacyBlocked" role="status">
+    Для этого подключения сохранена старая provider-операция. Завершите её в отдельном блоке выше;
+    новый запрос недоступен.
+  </p>
   <ConnectionRecovery
     :current="current"
     :pending="pending"
-    :disabled="disabled || busy || stale"
+    :disabled="disabled || busy || stale || legacyBlocked"
     @recover="state.recover"
     @repair="state.save(true)"
   />
@@ -159,7 +185,9 @@ defineExpose({ clear: state.close });
   <div class="form-actions">
     <button :disabled="disabled || !canEdit" @click="state.save()">Сохранить</button>
     <button
-      :disabled="disabled || busy || stale || !current || !!current.recovery || !!pending"
+      :disabled="
+        disabled || busy || stale || legacyBlocked || !current || !!current.recovery || !!pending
+      "
       @click="state.check"
     >
       Проверить явно

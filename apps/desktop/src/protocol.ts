@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import { isLocalProviderSetRequest, isLocalProviderRevisionRequest } from '@runnets/contracts';
+const providerRequestId = z
+  .string()
+  .max(128)
+  .refine((value) => value.trim() !== '');
 import { modelCommands, modelOutputs } from './model-protocol.js';
 import { pluginCommands, pluginOutputs } from './plugin-protocol.js';
 import { bot, message, pageSize, roomDto, run } from './protocol-room.js';
@@ -53,22 +58,28 @@ const baseCommands = [
   }),
   z.strictObject({ op: z.literal('provider') }),
   z.strictObject({ op: z.literal('provider-check') }),
-  z.strictObject({
-    op: z.literal('provider-set'),
-    requestId,
-    key: z.string().min(1).max(512).optional(),
-    model: value(256),
-  }),
-  z.strictObject({
-    op: z.literal('provider-disconnect'),
-    requestId,
-    expectedRevision: z.int().nonnegative(),
-  }),
-  z.strictObject({
-    op: z.literal('provider-remove-key'),
-    requestId,
-    expectedRevision: z.int().nonnegative(),
-  }),
+  z
+    .strictObject({
+      op: z.literal('provider-set'),
+      requestId: providerRequestId,
+      key: z.string().min(1).max(512).optional(),
+      model: z.string().min(1).max(256),
+    })
+    .refine(({ op: _op, ...input }) => isLocalProviderSetRequest(input)),
+  z
+    .strictObject({
+      op: z.literal('provider-disconnect'),
+      requestId: providerRequestId,
+      expectedRevision: z.int().nonnegative(),
+    })
+    .refine(({ op: _op, ...input }) => isLocalProviderRevisionRequest(input)),
+  z
+    .strictObject({
+      op: z.literal('provider-remove-key'),
+      requestId: providerRequestId,
+      expectedRevision: z.int().nonnegative(),
+    })
+    .refine(({ op: _op, ...input }) => isLocalProviderRevisionRequest(input)),
   z.strictObject({
     op: z.literal('broadcast'),
     requestId,

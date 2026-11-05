@@ -1,25 +1,16 @@
-import { computed, reactive, ref, watch, toRaw } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import type {
   LocalModelConnectionMetadata,
   LocalModelConnectionSetRequest,
   ModelPreset,
 } from '../model-protocol.js';
 import { call } from './bridge.js';
+import { legacyProviderBlocks } from './provider-state.js';
 import { modelPages } from './model-pages.js';
-import {
-  conflictText,
-  settingsError,
-  unknownOutcome,
-  unknownText,
-  connectionCheckLine,
-} from './model-settings-text.js';
-import {
-  recoveryCommand,
-  keyless,
-  resupply,
-  type ConnectionMutation,
-  type PendingConnectionMutation,
-} from './model-settings-recovery.js';
+import { createConnectionIntents, keylessRecoveryForSelection } from './connection-intents.js';
+import { connectionOperations } from './connection-operations.js';
+import { settingsError, connectionCheckLine } from './model-settings-text.js';
+import { recoveryCommand, resupply } from './model-settings-recovery.js';
 type Draft = {
   -readonly [
     K in keyof Omit<LocalModelConnectionSetRequest, 'requestId' | 'expectedRevision' | 'key'>
@@ -41,18 +32,22 @@ export function createConnectionSettings(request: typeof call = call) {
     busy = ref(false),
     stale = ref(true),
     message = ref('');
-  const pending = ref<PendingConnectionMutation | null>(null);
+  const intents = createConnectionIntents();
+  const pending = computed(() => intents.entries.get(selected.value) ?? null);
+  const pendingEntries = computed(() => [...intents.entries.values()]);
   const checkResult = ref('');
   const draft = reactive<Draft>(empty());
   const current = computed(() => connections.value.find((x) => x.connectionId === selected.value));
   const writeRestriction = computed(
     () => connections.value.find((x) => x.restriction !== null)?.restriction ?? null,
   );
+  const legacyBlocked = computed(() => legacyProviderBlocks(selected.value || draft.connectionId));
   const canEdit = computed(
     () =>
       !busy.value &&
       !stale.value &&
       !pending.value &&
+      !legacyBlocked.value &&
       !writeRestriction.value &&
       (current.value?.writable ?? true) &&
       !current.value?.recovery,
@@ -91,7 +86,7 @@ export function createConnectionSettings(request: typeof call = call) {
             auth: entry.auth,
             defaultModelId: entry.defaultModelId ?? '',
           }
-        : empty(),
+        : { ...empty(), connectionId: id },
     );
   }
   function propose(preset: ModelPreset) {
@@ -136,44 +131,29 @@ export function createConnectionSettings(request: typeof call = call) {
       if (token === generation) message.value = settingsError(error);
     }
   }
-  async function mutate(command: ConnectionMutation, id: string) {
-    if (busy.value || stale.value) return;
-    const original = keyless(command, id);
-    busy.value = true;
-    message.value = '';
-    try {
-      const result = await request(command);
-      if ('connectionId' in result && result.connectionId !== id) throw Error('outcome_unknown');
-      pending.value = null;
-      await load();
-      if (!stale.value && connections.value.some((x) => x.connectionId === id)) select(id);
-      message.value = stale.value
-        ? 'Операция подтверждена; метаданные прочитать не удалось. Редактирование заблокировано.'
-        : 'Операция подтверждена. Метаданные обновлены. Отключение не отменяет запуски и не отзывает ключ.';
-    } catch (error) {
-      if (error instanceof Error && error.message === 'revision_conflict') {
-        pending.value = null;
-        await load();
-        message.value = conflictText;
-      } else {
-        if (
-          unknownOutcome(error) ||
-          (error instanceof Error && error.message === 'provider_write_failed')
-        )
-          pending.value = original;
-        await load();
-        if (pending.value && connections.value.some((x) => x.connectionId === id)) select(id);
-        message.value = pending.value ? unknownText : settingsError(error);
-      }
-    } finally {
-      busy.value = false;
-    }
-  }
+  const mutate = connectionOperations(request, {
+    busy,
+    stale,
+    message,
+    connections,
+    load,
+    select,
+    intents,
+  });
   async function save(repair = false) {
-    const secret = key.value.trim();
+    const secret = key.value;
     key.value = '';
     const entry = current.value;
-    if (repair && (!secret || draft.auth !== 'api_key')) {
+    if (legacyBlocked.value) {
+      message.value = 'Сначала завершите сохранённую старую provider-операцию этого подключения.';
+      return;
+    }
+    if (!entry && intents.entries.has(draft.connectionId)) {
+      select(draft.connectionId);
+      message.value = 'Сначала завершите сохранённый исходный запрос этого подключения.';
+      return;
+    }
+    if (repair && (!secret.trim() || draft.auth !== 'api_key')) {
       message.value = 'Для отдельного исправления выберите API key и введите новый ключ.';
       return;
     }
@@ -181,7 +161,7 @@ export function createConnectionSettings(request: typeof call = call) {
       repair
         ? !entry?.writable ||
           entry.recovery?.kind !== 'explicit_key_repair_required' ||
-          !secret ||
+          !secret.trim() ||
           pending.value
         : !canEdit.value
     )
@@ -191,7 +171,7 @@ export function createConnectionSettings(request: typeof call = call) {
       ...draft,
       requestId: crypto.randomUUID(),
       expectedRevision: entry?.revision ?? null,
-      ...(draft.auth === 'api_key' && secret ? { key: secret } : {}),
+      ...(draft.auth === 'api_key' && secret.trim() ? { key: secret } : {}),
     };
     if (repair && (input.auth !== 'api_key' || !input.key)) return;
     await mutate({ op: 'model-set', input }, input.connectionId);
@@ -213,12 +193,13 @@ export function createConnectionSettings(request: typeof call = call) {
     );
   }
   async function recover() {
-    const secret = key.value.trim();
+    const secret = key.value;
     key.value = '';
-    if (busy.value || stale.value) return;
+    if (busy.value || stale.value || legacyBlocked.value) return;
     try {
       const entry = current.value;
       if (entry && !entry.writable) return;
+      const local = pending.value;
       if (entry?.recovery?.kind === 'retry_available') {
         const command = recoveryCommand(entry.recovery.request, secret);
         if (
@@ -228,14 +209,12 @@ export function createConnectionSettings(request: typeof call = call) {
           command.op !== 'provider-remove-key'
         )
           throw Error('invalid_request');
-        await mutate(command, entry.connectionId);
-      } else if (
-        pending.value &&
-        (!entry?.recovery || entry.recovery.kind === 'original_input_required')
-      ) {
-        const original = toRaw(pending.value);
-        await mutate(resupply(original, secret), original.connectionId);
-      }
+        await mutate(command, entry.connectionId, true);
+      } else if (local && keylessRecoveryForSelection(local, entry, selected.value)) {
+        await mutate(resupply(local, secret), local.connectionId, true);
+      } else if (local)
+        message.value =
+          'Текущее описание относится к другой операции. Исходный запрос сохранён без изменений.';
     } catch (error) {
       message.value =
         error instanceof Error && error.message === 'key_resupply_required'
@@ -246,7 +225,15 @@ export function createConnectionSettings(request: typeof call = call) {
   async function check() {
     key.value = '';
     const entry = current.value;
-    if (busy.value || stale.value || !entry || entry.recovery || pending.value) return;
+    if (
+      busy.value ||
+      stale.value ||
+      !entry ||
+      entry.recovery ||
+      pending.value ||
+      legacyBlocked.value
+    )
+      return;
     const selection = selectionVersion;
     busy.value = true;
     try {
@@ -280,6 +267,8 @@ export function createConnectionSettings(request: typeof call = call) {
     stale,
     message,
     pending,
+    pendingEntries,
+    legacyBlocked,
     checkResult,
     draft,
     current,

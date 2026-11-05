@@ -2,18 +2,13 @@
 import { computed, ref, watch } from 'vue';
 import ModelBindingPicker from './ModelBindingPicker.vue';
 import { connectionSettings } from './model-connection-state.js';
-import { readModelSupport } from './model-support.js';
+import { createCreationOptions } from './creation-options.js';
 import type { LocalBotModelBinding } from '../model-protocol.js';
 import type { Bot } from '../protocol.js';
-import { explain } from './dom.js';
+import { settingsError } from './model-settings-text.js';
 import { teamPending } from './ocean-team.js';
 import { createCreationState } from './creation-state.js';
-import {
-  loadProviderStatus,
-  providerDefaultModel,
-  providerModels,
-  providerStatus,
-} from './provider-state.js';
+import { providerDefaultModel, providerModels, providerStatus } from './provider-state.js';
 import { providerCapabilitySuffix } from './provider-text.js';
 
 const props = defineProps<{ bots: Bot[]; busy: boolean }>();
@@ -23,7 +18,8 @@ const emit = defineEmits<{
 }>();
 const manager = ref<HTMLDialogElement>();
 const dialog = ref<'' | 'room' | 'bot' | 'team'>('');
-const negotiated = ref<boolean | null>(null);
+const options = createCreationOptions();
+const { negotiated, model, message: optionsMessage } = options;
 const binding = ref<LocalBotModelBinding>({ connectionId: '', modelId: '' });
 const choices = ref<Record<string, LocalBotModelBinding>>({});
 const missing = computed(() =>
@@ -36,7 +32,6 @@ const kind = ref<'group' | 'direct'>('group');
 const handle = ref('');
 const name = ref('');
 const role = ref('');
-const model = ref('');
 const creation = createCreationState();
 const {
   busy: pending,
@@ -66,28 +61,16 @@ function open(value: 'room' | 'bot' | 'team') {
   selected.value = [];
   feedback.value = '';
   feedbackError.value = false;
-  negotiated.value = null;
   binding.value = { connectionId: '', modelId: '' };
   choices.value = Object.fromEntries(
     missing.value.map((handle) => [handle, { connectionId: '', modelId: '' }]),
   );
-  if (value !== 'room')
-    void (async () => {
-      try {
-        negotiated.value = await readModelSupport();
-        if (negotiated.value) await connectionSettings.load();
-        else {
-          await loadProviderStatus();
-          model.value = providerDefaultModel.value;
-        }
-      } catch (error) {
-        feedback.value = explain(error);
-        feedbackError.value = true;
-      }
-    })();
+  options.close();
+  if (value !== 'room') void options.open();
 }
 function close() {
   if (props.busy || pending.value) return;
+  options.close();
   dialog.value = '';
 }
 async function create() {
@@ -131,7 +114,7 @@ async function create() {
       emit('created', created.roomId ?? undefined);
     }
   } catch (error) {
-    feedback.value = explain(error);
+    feedback.value = settingsError(error);
     feedbackError.value = true;
   }
 }
@@ -143,7 +126,7 @@ async function recover() {
       emit('created', result.roomId ?? undefined);
     }
   } catch (error) {
-    feedback.value = explain(error);
+    feedback.value = settingsError(error);
     feedbackError.value = true;
   }
 }
@@ -172,6 +155,7 @@ defineExpose({ open });
               : 'В группе вы выбираете, кому передать ход.'
           }}
         </p>
+        <p v-if="optionsMessage" role="status">{{ optionsMessage }}</p>
         <p v-if="negotiated && stale" role="status">
           Метаданные подключений не прочитаны. Обновите их в настройках провайдера перед созданием
           ботов.

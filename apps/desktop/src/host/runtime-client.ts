@@ -1,3 +1,4 @@
+import { LOCAL_MODEL_CONNECTIONS } from '@runnets/contracts';
 import type { LocalRuntimeClient } from '@runnets/tools-node/local-runtime-client';
 import { pageSize, type Command } from '../protocol.js';
 import { dispatchModelSettings } from './model-settings-client.js';
@@ -28,6 +29,8 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
     case 'status':
       return client.status();
     case 'bot':
+      if (client.identity.capabilities.includes(LOCAL_MODEL_CONNECTIONS))
+        throw Error('model_support_changed');
       return client.createBot({
         workspaceId,
         requestId: c.requestId,

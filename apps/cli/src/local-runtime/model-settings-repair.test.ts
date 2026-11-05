@@ -47,13 +47,17 @@ it('canonical CAS repairs exactly the legacy null-intent row and refuses pending
     ...desired,
     requestId: 'explicit-repair',
     expectedRevision: 1,
-    key: 'synthetic-repair',
+    key: '  synthetic-repair  ',
   };
   const fail = vi.spyOn(f.secrets, 'replace').mockImplementationOnce(() => {
     throw Error('fixture publication');
   });
   await expect(f.client.setModelConnection(repair)).rejects.toThrow('provider_write_failed');
   const pending = service.options.store.read(desired.connectionId)!;
+  await expect(f.client.setModelConnection({ ...repair, key: repair.key.trim() })).rejects.toThrow(
+    'request_conflict',
+  );
+  expect(service.options.store.read(desired.connectionId)).toEqual(pending);
   expect(pending.pendingSecretChange).not.toBeNull();
   for (const attempt of [
     () => f.client.setModelConnection({ ...repair, requestId: 'supersede', expectedRevision: 2 }),
@@ -105,7 +109,7 @@ it('actual legacy replay preserves provider.set and original revision omission',
   const original = {
     requestId: 'legacy-original',
     model: 'deepseek-flash',
-    key: 'synthetic-second',
+    key: '  synthetic-second  ',
   };
   await expect(f.client.providerSet(original)).rejects.toThrow('provider_write_failed');
   const recovery = (await f.client.listModelConnections()).items.find(
@@ -120,6 +124,9 @@ it('actual legacy replay preserves provider.set and original revision omission',
   });
   expect(recovery.request.operation.input).not.toHaveProperty('expectedRevision');
   fail.mockRestore();
+  await expect(f.client.providerSet({ ...original, key: original.key.trim() })).rejects.toThrow(
+    'request_conflict',
+  );
   const result = await f.client.providerSet({
     ...recovery.request.operation.input,
     key: original.key,

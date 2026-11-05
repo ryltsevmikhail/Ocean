@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { LocalRuntimeClient } from '@runnets/tools-node/local-runtime-client';
 import { commands, outputs } from '../protocol.js';
 
 describe('renderer and host contract', () => {
@@ -214,4 +215,68 @@ describe('broadcast IPC contract', () => {
       ]).success,
     ).toBe(true);
   });
+});
+
+it('refuses stale old-host unbound bot creation on an actual model-capable client', async () => {
+  const { dispatch } = await import('./runtime-client.js');
+  const createBot = vi.fn();
+  await expect(
+    dispatch(
+      {
+        identity: { capabilities: ['model.connections-v1'] },
+        createBot,
+      } as unknown as LocalRuntimeClient,
+      {
+        op: 'bot',
+        requestId: crypto.randomUUID(),
+        handle: 'new',
+        name: 'New',
+        role: 'role',
+        model: 'legacy',
+      },
+    ),
+  ).rejects.toThrow('model_support_changed');
+  expect(createBot).not.toHaveBeenCalled();
+});
+
+it('preserves exact legacy provider recovery on modern hosts and legacy bot creation on safe old hosts', async () => {
+  const { dispatch } = await import('./runtime-client.js');
+  const providerSet = vi.fn().mockResolvedValue('saved'),
+    providerRemoveSavedKey = vi.fn().mockResolvedValue('removed'),
+    createBot = vi.fn().mockResolvedValue('created');
+  const modern = {
+    identity: { capabilities: ['model.connections-v1'] },
+    providerSet,
+    providerRemoveSavedKey,
+  } as unknown as LocalRuntimeClient;
+  await dispatch(modern, {
+    op: 'provider-set',
+    requestId: 'legacy-original',
+    model: 'deepseek-flash',
+    key: ' raw ',
+  });
+  expect(providerSet).toHaveBeenCalledExactlyOnceWith({
+    requestId: 'legacy-original',
+    model: 'deepseek-flash',
+    key: ' raw ',
+  });
+  await dispatch(modern, {
+    op: 'provider-remove-key',
+    requestId: 'legacy-remove',
+    expectedRevision: 3,
+  });
+  expect(providerRemoveSavedKey).toHaveBeenCalledExactlyOnceWith({
+    requestId: 'legacy-remove',
+    expectedRevision: 3,
+  });
+  await expect(
+    dispatch({ identity: { capabilities: [] }, createBot } as unknown as LocalRuntimeClient, {
+      op: 'bot',
+      requestId: crypto.randomUUID(),
+      handle: 'old',
+      name: 'Old',
+      role: 'role',
+      model: 'legacy',
+    }),
+  ).resolves.toBe('created');
 });

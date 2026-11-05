@@ -50,3 +50,43 @@ it('posts exact legacy recovery from reactive metadata without inventing a revis
   expect(sent).toEqual([command]);
   expect(sent[0]).not.toHaveProperty('expectedRevision');
 });
+
+it.each(['provider.set', 'provider.removeSavedKey'] as const)(
+  'accepts bounded non-UUID %s recovery through the real parser and bridge',
+  async (method) => {
+    const sent: unknown[] = [];
+    vi.stubGlobal('window', {
+      ocean: {
+        request: async (command: unknown) => {
+          sent.push(structuredClone(command));
+          return { version: 1, ok: false, error: { code: 'request_conflict' } };
+        },
+      },
+    });
+    const original: LocalModelPendingRequest =
+      method === 'provider.set'
+        ? {
+            version: 1,
+            operation: {
+              method,
+              input: { requestId: 'legacy-original', model: 'deepseek-flash' },
+              keyWasSupplied: true,
+            },
+          }
+        : {
+            version: 1,
+            operation: {
+              method,
+              input: { requestId: 'legacy-remove-original', expectedRevision: 7 },
+            },
+          };
+    const key = method === 'provider.set' ? '  synthetic-sensitive-key  ' : '';
+    const command = recoveryCommand(original, key);
+    await expect(call(command)).rejects.toThrow('request_conflict');
+    expect(sent).toEqual([command]);
+    if (method === 'provider.set') {
+      expect(sent[0]).not.toHaveProperty('expectedRevision');
+      expect(sent[0]).toHaveProperty('key', key);
+    }
+  },
+);

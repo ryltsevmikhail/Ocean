@@ -52,3 +52,30 @@ it('never falls back after the unsafe pre-A3 host refusal', async () => {
   expect(modelSupport.value).toBeNull();
   expect(request).toHaveBeenCalledOnce();
 });
+
+it('does not publish an older false support reply after a newer true decision', async () => {
+  const { readModelSupport } = await import('./model-support.js');
+  let older!: (v: unknown) => void, newer!: (v: unknown) => void;
+  const request = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          older = r;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          newer = r;
+        }),
+    );
+  vi.stubGlobal('window', { ocean: { request } });
+  const first = readModelSupport().catch((e) => e);
+  const second = readModelSupport();
+  newer(ok({ connections: true }));
+  await second;
+  older(ok({ connections: false }));
+  await first;
+  expect(modelSupport.value).toBe(true);
+});

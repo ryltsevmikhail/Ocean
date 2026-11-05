@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import Glyph from './Glyph.vue';
+import LegacyProviderRecovery from './LegacyProviderRecovery.vue';
 import LegacyProviderSettings from './LegacyProviderSettings.vue';
 import ConnectionSettings from './ConnectionSettings.vue';
 import { clearProviderInput, loadProviderStatus } from './provider-state.js';
@@ -59,7 +60,11 @@ function close() {
         </button>
       </header>
       <p v-if="mode === 'loading'" role="status">Читаем возможности хоста…</p>
-      <ConnectionSettings v-else-if="mode === 'model'" ref="connections" :disabled="busy" />
+      <template v-else-if="mode === 'model'"
+        ><LegacyProviderRecovery :busy="busy" /><ConnectionSettings
+          ref="connections"
+          :disabled="busy"
+      /></template>
       <LegacyProviderSettings v-else-if="mode === 'legacy'" :busy="busy" />
       <p v-else role="alert">{{ message }}</p>
     </dialog></Teleport
