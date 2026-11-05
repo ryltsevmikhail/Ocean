@@ -1,10 +1,14 @@
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule1 from '../src/local-runtime/host.js';
 import { ports } from './model-process-ports.ts';
 import { dropper } from './model-process-drop.ts';
 import { serve } from './model-process-rpc.ts';
 const profile = process.argv[2]!;
 const p = ports(profile, process.argv[3]!);
 const drop = process.argv[4] === 'drop' ? dropper(profile, p.record) : null;
-const { startLocalRuntime } = await import('../dist/local-runtime/host.js');
+const { startLocalRuntime }: typeof SourceModule1 = await import(
+  String('../dist/local-runtime/host.js')
+);
 const host = await startLocalRuntime({
   profile,
   providerSecretStore: p.secrets,

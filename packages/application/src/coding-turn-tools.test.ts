@@ -18,7 +18,16 @@ it('exposes preset IDs and refuses arbitrary command arguments before preparatio
       restored: false,
     }),
     owner: { decide: async () => 'deny' },
-    journal: { claim: async () => false, settle: async () => {} },
+    journal: {
+      claim: async () => false,
+      settle: async () => {},
+      pending: async () => {
+        throw Error('unexpected pending');
+      },
+      recover: async () => {
+        throw Error('unexpected recover');
+      },
+    },
     taskRunId: 'run',
     nextId: () => 'approval',
     admit: () => true,

@@ -196,7 +196,13 @@ describe('broadcast frozen context and runner transitions', () => {
     expect(contents[2]).toContain('старый ответ коллеги');
     expect(contents[2]).toContain('dev');
     expect(contents[3]).toBe('Вопрос всем');
-    expect(contents.some((content) => content.includes('ответ первого'))).toBe(false);
+    expect(
+      contents.some((content) =>
+        typeof content === 'string'
+          ? content.includes('ответ первого')
+          : content.some((part) => part.type === 'text' && part.text.includes('ответ первого')),
+      ),
+    ).toBe(false);
     expect(admitted.value.turn.status).toBe('accepted');
   });
   it('serializes children, supports visible refusal and settles only when all are terminal', () => {

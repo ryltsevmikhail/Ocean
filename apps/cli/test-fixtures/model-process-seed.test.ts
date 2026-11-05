@@ -1,4 +1,6 @@
-import { openOceanProfile } from '../dist/ocean/profile.js';
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule1 from '../src/ocean/profile.js';
+const { openOceanProfile }: typeof SourceModule1 = await import(String('../dist/ocean/profile.js'));
 import { categorySeed } from './model-process-category-seed.ts';
 const profile = process.argv[2]!;
 const runtime = openOceanProfile(profile, true);

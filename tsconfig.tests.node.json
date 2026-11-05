@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.tests.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/test-fixtures/**/*.ts",
+    "apps/cli/src/**/*.ts",
+    "apps/cli/test-fixtures/**/*.ts",
+    "test-fixtures/**/*.ts",
+    "vitest*.config.ts",
+    "rc.config.ts"
+  ]
+}

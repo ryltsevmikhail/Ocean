@@ -1,3 +1,4 @@
+import type { CodingTestPreset } from '@runnets/domain';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -24,7 +25,7 @@ it
     const root = await mkdtemp(join(tmpdir(), 'ocean-hold-'));
     try {
       await writeFile(join(root, '.git'), 'synthetic');
-      const preset = {
+      const preset: CodingTestPreset = {
         id: 'test',
         program: '/toolchain/node',
         args: ['-e', 'process.exit(0)'],

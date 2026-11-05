@@ -1,6 +1,11 @@
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule1 from '../src/local-runtime/host.js';
+import type { ProviderPort, ServicePluginTransportPort } from '@runnets/application';
 // Synthetic plugin owner for the SIGKILL/restart qualification; launched with an isolated environment.
 import { appendFileSync } from 'node:fs';
-import { startLocalRuntime } from '../dist/local-runtime/host.js';
+const { startLocalRuntime }: typeof SourceModule1 = await import(
+  String('../dist/local-runtime/host.js')
+);
 import { connectLocalRuntime } from '@runnets/tools-node';
 
 const profile = process.argv[2]!;
@@ -12,7 +17,7 @@ function record(line: string): void {
 }
 
 let dispatched = 0;
-const provider = {
+const provider: ProviderPort = {
   id: 'deepseek',
   models: ['deepseek-flash'],
   capabilities: { streaming: true, usage: true, reasoning: false, toolCalls: true },
@@ -35,7 +40,7 @@ const provider = {
   },
 };
 
-const transport = {
+const transport: ServicePluginTransportPort = {
   qualification: () => ({
     qualified: true,
     reason: null,

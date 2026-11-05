@@ -97,10 +97,8 @@ it('creates and lists a group, hands off CLI→TUI and preserves private-room is
   const output = new PassThrough();
   output.resume();
   const app = new TuiApp({
-    service: runtime.service,
     input,
     output,
-    provider,
     book: new ChatRunBook(runtime, roomId, provider),
   });
   try {

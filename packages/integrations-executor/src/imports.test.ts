@@ -12,6 +12,7 @@
  */
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import * as ts from 'typescript';
 
 import { describe, expect, it } from 'vitest';
 
@@ -125,9 +126,25 @@ describe('package surface qualification', () => {
     expect(setup).toContain('streamable-http');
   });
 
-  it('the dead test-config path mapping stays out of tsconfig.tests.json', async () => {
-    const source = await readFile(new URL('../../../tsconfig.tests.json', import.meta.url), 'utf8');
-    expect(source.includes('integrations-executor')).toBe(false);
+  it('the strict test compilers resolve the public Executor entry to source', () => {
+    for (const context of ['node', 'desktop']) {
+      const configPath = fileURLToPath(
+        new URL(`../../../tsconfig.tests.${context}.json`, import.meta.url),
+      );
+      const config = ts.readConfigFile(configPath, ts.sys.readFile);
+      expect(config.error).toBeUndefined();
+      const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, packagesRoot);
+      expect(parsed.errors).toEqual([]);
+      const resolved = ts.resolveModuleName(
+        '@runnets/integrations-executor',
+        fileURLToPath(import.meta.url),
+        parsed.options,
+        ts.sys,
+      ).resolvedModule;
+      expect(resolved?.resolvedFileName).toBe(
+        fileURLToPath(new URL('../src/index.ts', import.meta.url)),
+      );
+    }
   });
 
   it('patch re-derivation guidance uses the verified line-anchored git-diff method', async () => {

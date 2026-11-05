@@ -7,7 +7,7 @@ import type { Loopback } from './loopback.js';
 import { closeServer, listen, readBody, writeJson } from './loopback.js';
 
 export type OpenApiScenario =
-  'ok' | 'static401' | 'oauth401' | 'drop' | 'redirect' | 'bigDiscovery';
+  'ok' | 'static401' | 'oauth401' | 'drop' | 'redirect' | 'bigDiscovery' | 'server500';
 
 export interface OpenApiCounts {
   business: number;

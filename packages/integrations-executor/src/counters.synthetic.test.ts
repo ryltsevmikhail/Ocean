@@ -169,7 +169,7 @@ describe('pinned Executor SDK dispatch counters (synthetic plugin, real loopback
     expect(harness.counts.business).toBe(1);
     expect(harness.counts.grants.filter((grant) => grant === 'refresh_token')).toHaveLength(0);
     expect(outcome.kind).toBe('observed');
-    expect(outcome.vendorErrorCode).toBe('connection_rejected');
+    expect(outcome).toMatchObject({ kind: 'observed', vendorErrorCode: 'connection_rejected' });
     await harness.close();
   });
 

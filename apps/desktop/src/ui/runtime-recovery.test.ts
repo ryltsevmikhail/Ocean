@@ -106,7 +106,7 @@ it('pages authoritative turn IDs and preserves the original draft across conflic
     state.room.value = { kind: 'direct', id: room.data.id, botId: bot.data.id };
     state.draft.value = 'original user content';
     phase = 'lost';
-    await expect(state.send()).rejects.toThrow('connection_closed');
+    await expect(state.send([])).rejects.toThrow('connection_closed');
     expect(original).toBeDefined();
     await other.submit({
       ...scope,
@@ -114,9 +114,9 @@ it('pages authoritative turn IDs and preserves the original draft across conflic
       text: 'independent conflicting content',
     });
     phase = 'normal';
-    await expect(state.send()).rejects.toThrow('request_conflict');
+    await expect(state.send([])).rejects.toThrow('request_conflict');
     phase = 'preparation';
-    await expect(state.send()).rejects.toThrow('attachment_unavailable');
+    await expect(state.send([])).rejects.toThrow('attachment_unavailable');
     expect(state.draft.value).toBe('original user content');
     expect(state.uncertain.value).toBe(true);
     expect(state.sent.value).toBe(0);

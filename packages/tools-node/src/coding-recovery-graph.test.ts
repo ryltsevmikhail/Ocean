@@ -182,7 +182,9 @@ it('ignores unrelated legacy storage without eligible applications and verifies 
   await expect(
     assets.captureCodingRecoveryAssets({ ...f.inventory(), hash: 'x' }, f.managed, async () => {}),
   ).rejects.toThrow();
-  Object.assign(f.worktrees[0], { gitCommonDir: f.outer });
+  const worktree = f.worktrees[0];
+  if (!worktree) throw Error('fixture worktree missing');
+  Object.assign(worktree, { gitCommonDir: f.outer });
   await expect(collect()).rejects.toThrow();
 });
 it('distinguishes a declared protocol from an observed canonical header after a partial write', async () => {

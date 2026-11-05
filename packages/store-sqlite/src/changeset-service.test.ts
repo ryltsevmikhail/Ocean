@@ -232,6 +232,7 @@ for (const kind of ['memory', 'sqlite'] as const)
     const failing = new CodingChangesetService({
       ...s.deps,
       store: {
+        projectHeld: (root) => s.store.projectHeld(root),
         atomic: (work) =>
           s.store.atomic((tx) => {
             const value = work(tx);

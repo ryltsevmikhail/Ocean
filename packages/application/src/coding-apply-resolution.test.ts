@@ -35,14 +35,22 @@ it.each([
       projectRoot: '/project',
       lease: { ownerId: 'owner' },
     } as CodingTask;
-    const changeset = {
+    const changeset: Changeset = {
+      id: 'changeset',
+      diff: '-before\n+after',
       taskId: 'task',
       hash: 'hash',
       baseCommit: 'base',
       beforeTreeHash: 'before',
       afterTreeHash: 'after',
-      files: [{ path: 'file' }],
-    } as Changeset;
+      files: [
+        {
+          path: 'file',
+          before: { sha256: 'before', mode: '100644', text: 'before' },
+          after: { sha256: 'after', mode: '100644', text: 'after' },
+        },
+      ],
+    };
     let resolution: CodingApplyResolution | null = null,
       admitted = true,
       treeCalls = 0,

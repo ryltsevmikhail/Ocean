@@ -1,3 +1,5 @@
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule1 from '../src/ocean/profile.js';
 // Drive a registered slow preset, then let the parent kill the runtime or the supervised cgroup.
 import { writeSync } from 'node:fs';
 import cp from 'node:child_process';
@@ -16,7 +18,7 @@ const spawn = cp.spawn as (...args: unknown[]) => unknown;
   return spawn(...args);
 };
 syncBuiltinESMExports();
-const { openOceanProfile } = await import('../dist/ocean/profile.js');
+const { openOceanProfile }: typeof SourceModule1 = await import(String('../dist/ocean/profile.js'));
 type Task = { worktreeRoot: string | null };
 const sandbox = async (task: Task) => ({ root: task.worktreeRoot! });
 const owner = () => ({ decide: async () => 'allow-once' as const });

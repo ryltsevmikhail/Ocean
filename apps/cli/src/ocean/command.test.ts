@@ -109,8 +109,6 @@ it('TUI restores the same room and sends its next prompt through the common chat
   const output = new PassThrough();
   output.resume();
   const app = new TuiApp({
-    service: runtime.service,
-    provider,
     input,
     output,
     book: new ChatRunBook(runtime, roomId, provider),

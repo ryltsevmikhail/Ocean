@@ -10,7 +10,8 @@ import {
   type Bot,
 } from '@runnets/domain';
 import { executeStep } from '@runnets/application';
-import type { Runtime } from '../dist/runtime.js';
+// eslint-disable-next-line no-restricted-imports -- Same-app fixture types; owner loads built runtime.
+import type { Runtime } from '../src/runtime.js';
 /** Synthetic journals created solely through public application commands/store ports before launch. */
 export async function categorySeed(runtime: Runtime, bot: Bot, roomId: string) {
   const instant = new Date().toISOString();

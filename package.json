@@ -19,10 +19,13 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:process",
+    "check": "pnpm typecheck && pnpm typecheck:tests && pnpm lint && pnpm test && pnpm test:process",
     "runne": "node apps/cli/dist/main.js",
     "ocean": "node apps/cli/dist/main.js",
-    "package:release": "pnpm build && node apps/cli/dist/release/package.js"
+    "package:release": "pnpm build && node apps/cli/dist/release/package.js",
+    "typecheck:tests:node": "tsc -p tsconfig.tests.node.json --pretty false",
+    "typecheck:tests:desktop": "tsc -p tsconfig.tests.desktop.json --pretty false",
+    "typecheck:tests": "pnpm typecheck:tests:node && pnpm typecheck:tests:desktop"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

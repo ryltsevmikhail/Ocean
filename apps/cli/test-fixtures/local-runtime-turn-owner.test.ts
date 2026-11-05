@@ -1,5 +1,9 @@
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule1 from '../src/local-runtime/host.js';
 // Synthetic owner for native shutdown and detach qualification; launched with an isolated environment.
-import { startLocalRuntime } from '../dist/local-runtime/host.js';
+const { startLocalRuntime }: typeof SourceModule1 = await import(
+  String('../dist/local-runtime/host.js')
+);
 import { appendFileSync, writeSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { openSqliteStore } from '@runnets/store-sqlite';

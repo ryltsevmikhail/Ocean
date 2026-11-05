@@ -18,8 +18,14 @@
       "@runnets/tools-node": ["packages/tools-node/src/index.ts"],
       "@runnets/provider-openai": ["packages/provider-openai/src/index.ts"],
       "@runnets/provider-anthropic": ["packages/provider-anthropic/src/index.ts"],
-      "@runnets/provider-local": ["packages/provider-local/src/index.ts"]
-    }
+      "@runnets/provider-local": ["packages/provider-local/src/index.ts"],
+      "@runnets/integrations-executor": ["packages/integrations-executor/src/index.ts"],
+      "@runnets/tools-node/local-runtime-client": [
+        "packages/tools-node/src/local-runtime-client.ts"
+      ]
+    },
+    "allowImportingTsExtensions": true
   },
-  "include": ["packages/*/src/**/*.ts", "apps/*/src/**/*.ts", "vitest.config.ts"]
+  "include": [],
+  "files": []
 }
