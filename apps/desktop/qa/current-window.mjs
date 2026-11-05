@@ -9,11 +9,25 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
+import { setTimeout as timer, clearTimeout } from 'node:timers';
 import { chromium } from 'playwright-core';
 import { windowEnv } from './owner.mjs';
 import { launchDesktopGroup } from './desktop-launcher.mjs';
-import { packageNative } from './package-native.mjs';
+import { packageNative, inspectPackage } from './package-native.mjs';
 import { closePage } from './window-close.mjs';
+export async function bounded(work, ms, description) {
+  let timeout;
+  try {
+    return await Promise.race([
+      work,
+      new Promise((_, reject) => {
+        timeout = timer(() => reject(Error(description + ' timed out')), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 export async function wait(condition, ms = 15000) {
   const until = Date.now() + ms;
   do {
@@ -27,7 +41,7 @@ export async function currentWindow(f, label, executable) {
     portFile = join(userData, 'DevToolsActivePort');
   rmSync(portFile, { force: true });
   const env = {
-    ...windowEnv(f),
+    ...(f.windowEnv ?? windowEnv(f)),
     ...(executable
       ? {}
       : { NODE_OPTIONS: '--import=' + resolve('apps/desktop/qa/native-proof.mjs') }),
@@ -43,10 +57,11 @@ export async function currentWindow(f, label, executable) {
       '--ozone-platform=wayland',
     ],
     env,
+    { track: !!f.windowEnv },
   );
   let log = '';
   const add = (b) => {
-    log += b;
+    log = (log + b).slice(-65536);
     appendFileSync(join(f.root, label + '.log'), b);
   };
   launcher.proc.stdout.on('data', add);
@@ -129,9 +144,12 @@ export async function currentWindow(f, label, executable) {
       return existsSync(portFile);
     }, 60000);
     const [port] = readFileSync(portFile, 'utf8').split('\n');
-    const browser = await chromium.connectOverCDP('http://127.0.0.1:' + Number(port));
+    const browser = await chromium.connectOverCDP('http://127.0.0.1:' + Number(port), {
+      timeout: 15000,
+    });
     const page =
-      browser.contexts()[0].pages()[0] ?? (await browser.contexts()[0].waitForEvent('page'));
+      browser.contexts()[0].pages()[0] ??
+      (await browser.contexts()[0].waitForEvent('page', { timeout: 15000 }));
     page.setDefaultTimeout(15000);
     page.on('pageerror', (error) =>
       appendFileSync(join(f.root, 'page-errors.log'), String(error) + '\n'),
@@ -154,9 +172,19 @@ export async function currentWindow(f, label, executable) {
     assert.equal(preferences.sandbox, true);
     assert.equal(preferences.contextIsolation, true);
     assert.equal(preferences.nodeIntegration, false);
-    assert.equal(await page.evaluate(() => typeof globalThis.require), 'undefined');
+    assert.equal(
+      await bounded(
+        page.evaluate(() => typeof globalThis.require),
+        15000,
+        'renderer identity',
+      ),
+      'undefined',
+    );
     return {
       page,
+      pid: launcher.proc.pid,
+      records: launcher.records,
+      inspectMain: (expression) => inspectPackage(() => log, expression),
       userData,
       async close() {
         audit();
@@ -166,8 +194,20 @@ export async function currentWindow(f, label, executable) {
       dispose: () => launcher.dispose(),
     };
   } catch (error) {
-    writeFileSync(join(f.root, label + '-failure.log'), String(error));
-    await launcher.dispose();
+    try {
+      await launcher.dispose();
+    } catch (cleanup) {
+      error.cleanupError = cleanup;
+    }
+    try {
+      writeFileSync(
+        join(f.root, label + '-failure.log'),
+        String(error) + (error.cleanupError ? '\ncleanup: ' + error.cleanupError : ''),
+      );
+    } catch (diagnostic) {
+      error.diagnosticError = diagnostic;
+    }
+    if (f.windowEnv) error.desktopRecords = launcher.records();
     throw error;
   }
 }

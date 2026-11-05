@@ -1,0 +1,96 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
+import { wait } from './current-window.mjs';
+import { checkReachable, fileSHA256, measureLayout } from './layout-measure.mjs';
+import { saveProof } from './model-native-session.mjs';
+
+// Query the compositor, retaining only the window for this verified Electron process.
+function hypr(...args) {
+  return execFileSync('hyprctl', args, {
+    encoding: 'utf8',
+    timeout: 2500,
+    killSignal: 'SIGKILL',
+    maxBuffer: 4e6,
+  });
+}
+function client(pid) {
+  const rows = JSON.parse(hypr('-j', 'clients')).filter(
+    (x) => x.pid === pid && x.title === 'Ocean Desktop',
+  );
+  assert.equal(rows.length, 1);
+  const { address, mapped, hidden, floating, size, at, monitor, xwayland } = rows[0];
+  assert.match(address, /^0x[0-9a-f]+$/);
+  return { pid, address, mapped, hidden, floating, size, at, monitor, xwayland };
+}
+// Resolve the same synthetic window again inside the compositor before acting.
+function dispatch(row, action) {
+  const reply = hypr(
+    'eval',
+    `local w=hl.get_window("address:${row.address}"); assert(w and w.pid==${row.pid}); hl.dispatch(hl.dsp.window.${action}); return "ok"`,
+  );
+  assert.match(reply, /ok/);
+}
+export async function nativeWidths({ page, desktop, inspectMain, fixture: { root } }) {
+  const original = client(desktop.pid);
+  if (!original.floating) {
+    dispatch(original, 'float({action="on",window=w})');
+    await wait(() => client(desktop.pid).floating, 3000);
+  }
+  const facts = [];
+  for (const width of [1024, 1280, 1920]) {
+    const owned = client(desktop.pid);
+    assert.equal(owned.address, original.address);
+    await inspectMain('win.setBounds({width:' + width + ',height:800})');
+    await setTimeout(350);
+    if (client(desktop.pid).size[0] !== width || client(desktop.pid).size[1] !== 800) {
+      dispatch(owned, 'resize({x=' + width + ',y=800,relative=false,window=w})');
+      await setTimeout(350);
+    }
+    dispatch(owned, 'center({window=w})');
+    await setTimeout(300);
+    const compositor = client(desktop.pid);
+    const native = await inspectMain(
+      '({visible:win.isVisible(),bounds:win.getBounds(),content:win.getContentBounds(),display:e.screen.getDisplayMatching(win.getBounds()).bounds, scale:e.screen.getDisplayMatching(win.getBounds()).scaleFactor})',
+    );
+    assert.ok(native.visible && compositor.mapped && !compositor.hidden && !compositor.xwayland);
+    const details = page.getByRole('button', { name: 'Сведения', exact: true });
+    if ((await details.getAttribute('aria-expanded')) !== 'true') await details.click();
+    const field = page.getByLabel('Сообщение', { exact: true });
+    const draft = 'Native ' + width;
+    const recipient = page.getByLabel('Кому');
+    if (await recipient.count()) await recipient.selectOption('dev');
+    await field.click();
+    await field.fill(draft);
+    const layout = await measureLayout(page);
+    assert.equal(layout.controls.textarea.focused, true);
+    assert.deepEqual(
+      checkReachable(layout, layout.viewport.width, { detailsOpen: true, draft }),
+      [],
+    );
+    const exact =
+      layout.viewport.width === width &&
+      layout.viewport.height === 800 &&
+      native.bounds.width === width &&
+      native.bounds.height === 800 &&
+      native.content.width === width &&
+      native.content.height === 800 &&
+      compositor.size[0] === width &&
+      compositor.size[1] === 800;
+    const path = join(root, 'width-' + width + '.png');
+    await page.screenshot({ path });
+    facts.push({
+      requested: { width, height: 800 },
+      native,
+      compositor,
+      exact,
+      layout,
+      path,
+      sha256: fileSHA256(path),
+    });
+    saveProof(root, 'bounds-' + width + '.json', facts.at(-1));
+    assert.ok(exact, 'physical bounds constrained; inspect measured evidence before accepting');
+  }
+  return facts;
+}
