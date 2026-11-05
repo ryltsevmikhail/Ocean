@@ -1,3 +1,4 @@
+import type { PendingConnectionMutation } from './model-settings-recovery.js';
 import type { Command } from '../protocol.js';
 export type LegacyMutation = Extract<
   Command,
@@ -25,4 +26,18 @@ export function legacyResupply(original: LegacyOriginal, key: string): LegacyMut
   if (original.requiresKey && original.command.op === 'provider-set')
     return { ...original.command, key };
   return { ...original.command };
+}
+
+export function compatibleLegacyOriginal(
+  original: PendingConnectionMutation | null,
+): LegacyOriginal | null {
+  if (!original) return null;
+  const command = original.command;
+  if (
+    command.op !== 'provider-set' &&
+    command.op !== 'provider-remove-key' &&
+    command.op !== 'provider-disconnect'
+  )
+    return null;
+  return { command, requiresKey: original.requiresKey };
 }

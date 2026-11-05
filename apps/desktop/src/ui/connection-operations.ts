@@ -23,7 +23,8 @@ export function connectionOperations(request: typeof call, context: Context) {
       message.value = 'На этом подключении сохранён другой исходный запрос. Его нельзя заменить.';
       return;
     }
-    if (recovering) intents.retain(original);
+    const retainedBefore = intents.entries.has(id);
+    intents.retain(original);
     busy.value = true;
     message.value = '';
     try {
@@ -36,11 +37,10 @@ export function connectionOperations(request: typeof call, context: Context) {
         ? 'Операция подтверждена; метаданные прочитать не удалось. Редактирование заблокировано.'
         : 'Исходная операция подтверждена; текущее состояние прочитано отдельно. Отключение не отменяет запуски и не отзывает ключ.';
     } catch (error) {
-      if (
+      const unknown =
         unknownOutcome(error) ||
-        (error instanceof Error && error.message === 'provider_write_failed')
-      )
-        intents.retain(original);
+        (error instanceof Error && error.message === 'provider_write_failed');
+      if (!retainedBefore && !recovering && !unknown) intents.acknowledge(original);
       await load();
       select(id);
       const retained = intents.entries.has(id);

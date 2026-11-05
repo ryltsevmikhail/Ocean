@@ -46,3 +46,6 @@ export function keylessRecoveryForSelection(
   const requestId = 'input' in command ? command.input.requestId : command.requestId;
   return entry.recovery.requestId === requestId;
 }
+
+/** One connection ownership registry shared by both settings views in this window. */
+export const sharedConnectionIntents = createConnectionIntents();

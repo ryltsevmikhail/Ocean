@@ -1,6 +1,9 @@
-import { computed, ref, shallowRef, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { ProviderStatus } from '../protocol.js';
 import { call } from './bridge.js';
+import { sharedConnectionIntents } from './connection-intents.js';
+import type { PendingConnectionMutation } from './model-settings-recovery.js';
+const legacyConnectionId = 'legacy:deepseek';
 import { explain } from './dom.js';
 import { providerCheckText } from './provider-text.js';
 import { settingsError, unknownOutcome, unknownText } from './model-settings-text.js';
@@ -9,7 +12,7 @@ import {
   legacyResupply,
   sameLegacyOriginal,
   type LegacyMutation,
-  type LegacyOriginal,
+  compatibleLegacyOriginal,
 } from './provider-recovery.js';
 export const providerStatus = ref<ProviderStatus | null>(null);
 export const providerBusy = ref(false),
@@ -19,7 +22,12 @@ export const providerBusy = ref(false),
   providerError = ref(false),
   providerCode = ref(''),
   providerStale = ref(true);
-export const providerPending = shallowRef<LegacyOriginal | null>(null);
+export const providerPending = computed(
+  () => sharedConnectionIntents.entries.get(legacyConnectionId) ?? null,
+);
+export const providerRecoverySupported = computed(
+  () => compatibleLegacyOriginal(providerPending.value) !== null,
+);
 export const providerModels = computed<readonly string[]>(() => providerStatus.value?.models ?? []);
 export const providerDefaultModel = computed(
   () => providerStatus.value?.model ?? providerStatus.value?.models[0] ?? '',
@@ -63,26 +71,28 @@ export async function loadProviderStatus(): Promise<void> {
 async function run(command: LegacyMutation, success: string) {
   if (providerBusy.value || providerStale.value) return;
   const original = legacyOriginal(command),
-    pending = providerPending.value;
-  if (pending && !sameLegacyOriginal(pending, original)) return;
+    pending = providerPending.value,
+    compatible = compatibleLegacyOriginal(pending);
+  if (pending && (!compatible || !sameLegacyOriginal(compatible, original))) return;
+  const owned: PendingConnectionMutation = { ...original, connectionId: legacyConnectionId };
+  if (!sharedConnectionIntents.accepts(owned)) return;
+  sharedConnectionIntents.retain(owned);
   providerBusy.value = true;
   providerMessage.value = '';
   providerError.value = false;
   providerCode.value = '';
   try {
     await call(command);
-    if (providerPending.value && sameLegacyOriginal(providerPending.value, original))
-      providerPending.value = null;
+    sharedConnectionIntents.acknowledge(owned);
     await loadProviderStatus();
     providerMessage.value = providerStale.value
       ? 'Исходная операция подтверждена; текущее состояние не прочитано. Обновите метаданные.'
       : success;
   } catch (error) {
-    if (
+    const unknown =
       unknownOutcome(error) ||
-      (error instanceof Error && error.message === 'provider_write_failed')
-    )
-      providerPending.value = original;
+      (error instanceof Error && error.message === 'provider_write_failed');
+    if (!pending && !unknown) sharedConnectionIntents.acknowledge(owned);
     await loadProviderStatus();
     failure(error);
     if (providerPending.value) providerMessage.value = unknownText;
@@ -171,9 +181,16 @@ export async function removeSavedProviderKey() {
 export async function recoverProvider() {
   const key = providerKey.value;
   clearProviderInput();
-  const original = providerPending.value;
-  if (!original || providerBusy.value || providerStale.value || !providerStatus.value?.writable)
+  const retained = providerPending.value;
+  if (!retained || providerBusy.value || providerStale.value || !providerStatus.value?.writable)
     return;
+  const original = compatibleLegacyOriginal(retained);
+  if (!original) {
+    providerMessage.value =
+      'Старый хост не поддерживает точное семейство исходной modelConnections-операции. Новый provider-запрос заблокирован; нужен совместимый хост.';
+    providerError.value = true;
+    return;
+  }
   try {
     await run(
       legacyResupply(original, key),
@@ -196,12 +213,17 @@ export function resetProviderState() {
   providerMessage.value = '';
   providerError.value = false;
   providerCode.value = '';
-  providerPending.value = null;
+  sharedConnectionIntents.entries.delete(legacyConnectionId);
   providerStale.value = true;
 }
 
-export function legacyProviderBlocks(connectionId: string): boolean {
+export function legacyProviderBlocks(
+  connectionId: string,
+  owned?: PendingConnectionMutation | null,
+): boolean {
+  const original = sharedConnectionIntents.entries.get(connectionId);
   return (
-    connectionId === 'legacy:deepseek' && (providerPending.value !== null || providerBusy.value)
+    connectionId === legacyConnectionId &&
+    (providerBusy.value || (original !== undefined && original !== owned))
   );
 }

@@ -26,6 +26,7 @@ export type ConnectionMutation = Extract<
       | 'model-remove-key'
       | 'model-disconnect'
       | 'provider-set'
+      | 'provider-disconnect'
       | 'provider-remove-key';
   }
 >;

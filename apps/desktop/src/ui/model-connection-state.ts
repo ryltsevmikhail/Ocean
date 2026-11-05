@@ -7,7 +7,11 @@ import type {
 import { call } from './bridge.js';
 import { legacyProviderBlocks } from './provider-state.js';
 import { modelPages } from './model-pages.js';
-import { createConnectionIntents, keylessRecoveryForSelection } from './connection-intents.js';
+import {
+  createConnectionIntents,
+  keylessRecoveryForSelection,
+  sharedConnectionIntents,
+} from './connection-intents.js';
 import { connectionOperations } from './connection-operations.js';
 import { settingsError, connectionCheckLine } from './model-settings-text.js';
 import { recoveryCommand, resupply } from './model-settings-recovery.js';
@@ -24,7 +28,10 @@ const empty = (): Draft => ({
   auth: 'api_key',
   defaultModelId: '',
 });
-export function createConnectionSettings(request: typeof call = call) {
+export function createConnectionSettings(
+  request: typeof call = call,
+  intents = createConnectionIntents(),
+) {
   const connections = ref<LocalModelConnectionMetadata[]>([]),
     presets = ref<ModelPreset[]>([]);
   const selected = ref(''),
@@ -32,7 +39,6 @@ export function createConnectionSettings(request: typeof call = call) {
     busy = ref(false),
     stale = ref(true),
     message = ref('');
-  const intents = createConnectionIntents();
   const pending = computed(() => intents.entries.get(selected.value) ?? null);
   const pendingEntries = computed(() => [...intents.entries.values()]);
   const checkResult = ref('');
@@ -41,7 +47,9 @@ export function createConnectionSettings(request: typeof call = call) {
   const writeRestriction = computed(
     () => connections.value.find((x) => x.restriction !== null)?.restriction ?? null,
   );
-  const legacyBlocked = computed(() => legacyProviderBlocks(selected.value || draft.connectionId));
+  const legacyBlocked = computed(() =>
+    legacyProviderBlocks(selected.value || draft.connectionId, pending.value),
+  );
   const canEdit = computed(
     () =>
       !busy.value &&
@@ -285,4 +293,4 @@ export function createConnectionSettings(request: typeof call = call) {
   };
 }
 
-export const connectionSettings = createConnectionSettings();
+export const connectionSettings = createConnectionSettings(call, sharedConnectionIntents);

@@ -5,6 +5,18 @@ import { call } from './bridge.js';
 import { modelPages } from './model-pages.js';
 import { conflictText, settingsError, unknownOutcome, unknownText } from './model-settings-text.js';
 type BindingCommand = Extract<Command, { op: 'bot-binding-set' }>;
+function sameBindingOriginal(a: BindingCommand, b: BindingCommand): boolean {
+  const x = a.input,
+    y = b.input;
+  return (
+    x.workspaceId === y.workspaceId &&
+    x.botId === y.botId &&
+    x.requestId === y.requestId &&
+    x.expectedProfileVersion === y.expectedProfileVersion &&
+    x.binding.connectionId === y.binding.connectionId &&
+    x.binding.modelId === y.binding.modelId
+  );
+}
 export function createBotModels(request: typeof call = call) {
   const bots = ref<LocalBoundBot[]>([]),
     message = ref(''),
@@ -80,12 +92,14 @@ export function createBotModels(request: typeof call = call) {
       bots.value = bots.value.map((x) =>
         x.bot.id === id && x.bot.profileVersion < result.bot.profileVersion ? result : x,
       );
-      delete pending[id];
+      if (pending[id] && sameBindingOriginal(pending[id], command)) delete pending[id];
       errors[id] = 'Исходная привязка подтверждена; более новая прочитанная версия сохранена.';
       if (stale.value && reads === 0) await load();
     } catch (error) {
       if (context !== authority) return;
       if (error instanceof Error && error.message === 'bot_profile_version_conflict') {
+        // Matching successful receipts precede CAS in the atomic owner; this refusal is definitive.
+        if (pending[id] && sameBindingOriginal(pending[id], command)) delete pending[id];
         await load();
         message.value = conflictText;
         errors[id] = conflictText;
