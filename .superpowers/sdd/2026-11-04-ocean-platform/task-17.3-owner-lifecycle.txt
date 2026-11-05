@@ -1,0 +1,94 @@
+// Qualification-only lifecycle. It never claims product effect cancellation.
+import fs from 'node:fs';
+import {spawn} from 'node:child_process';
+import {setTimeout as delay} from 'node:timers/promises';
+function identity(pid) {
+  try {
+    const fields=fs.readFileSync('/proc/'+pid+'/stat','utf8').split(') ').at(-1).split(' ');
+    return {pid,state:fields[0],group:Number(fields[2]),session:Number(fields[3]),start:fields[19]};
+  } catch(e) {if(e.code==='ENOENT'||e.code==='ESRCH')return null;throw e;}
+}
+function members(group) {
+  return fs.readdirSync('/proc').filter(n=>/^\d+$/.test(n)).flatMap(n=>{
+    const row=identity(Number(n));return row&&row.group===group&&row.session===group?[row]:[];
+  });
+}
+async function bounded(promise,ms,message) {
+  let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(message)),ms);})]);}
+  finally{clearTimeout(timer);}
+}
+export class QualificationOwner {
+  constructor({startupMs=10000,graceMs=2000,termMs=1000,killMs=2000}={}) {
+    Object.assign(this,{startupMs,graceMs,termMs,killMs});this.records=[];this.child=null;this.client=null;
+  }
+  async start(args,{env=process.env,connect,context={}}) {
+    if(this.child)throw Error('owned_owner_already_running');
+    const child=this.child=spawn(process.execPath,args,{env,detached:true,stdio:['ignore','pipe','pipe']});
+    this.closed=false;this.exit=null;this.output='';this.spawnError=null;
+    this.closePromise=new Promise(resolve=>{child.once('error',e=>{this.spawnError=e;});child.once('close',(code,signal)=>{this.closed=true;this.exit={code,signal};resolve(this.exit);});});
+    const original=identity(child.pid);this.record={...context,pid:child.pid,start:original?.start,group:child.pid,signals:[]};this.records.push(this.record);
+    for(const stream of [child.stdout,child.stderr])stream.on('data',b=>{this.output=(this.output+b).slice(-65536);});
+    const deadline=Date.now()+this.startupMs;
+    while(Date.now()<deadline) {
+      if(this.output.includes('"ready"')){this.client=await bounded(Promise.resolve().then(connect),this.startupMs,'owner_connect_timeout');return this.client;}
+      if(this.closed)throw this.spawnError??Error('owner_startup_failed: '+this.output);
+      await delay(10);
+    }
+    throw Error('owner_startup_timeout');
+  }
+  signal(signal) {
+    const current=identity(this.record.pid);
+    if(current&&current.start!==this.record.start)throw Error('owned_owner_identity_changed');
+    const group=members(this.record.group);
+    if(group.length){process.kill(-this.record.group,signal);this.record.signals.push(signal);}
+  }
+  async waitGone(ms) {
+    const deadline=Date.now()+ms;
+    while(Date.now()<deadline){if(this.closed&&members(this.record.group).length===0)return true;await delay(10);}
+    return this.closed&&members(this.record.group).length===0;
+  }
+  async cleanup() {
+    if(!this.child)return this.lastCleanup??{leaderReaped:true,groupGone:true,signals:[]};
+    let stopError;
+    if(this.client) {
+      try {
+        const result=await bounded(Promise.resolve().then(()=>this.client.stop()),this.graceMs,'owner_stop_timeout');
+        if(result.outcome!=='complete')throw Error('owner_stop_incomplete');
+      }catch(e){stopError=e;}
+      finally{try{this.client.close();}catch(e){stopError??=e;}this.client=null;}
+      if(!stopError&&!await this.waitGone(this.graceMs))stopError=Error('owner_close_timeout');
+    }
+    if(!await this.waitGone(1)){this.signal('SIGTERM');if(!await this.waitGone(this.termMs)){this.signal('SIGKILL');if(!await this.waitGone(this.killMs))throw Error('owned_owner_not_reaped');}}
+    await this.closePromise;
+    const remaining=members(this.record.group),leader=identity(this.record.pid);
+    const result={pid:this.record.pid,start:this.record.start,group:this.record.group,signals:[...this.record.signals],exit:this.exit,leaderReaped:leader===null,groupGone:remaining.length===0,stopError:stopError?.message};
+    this.record.cleanup=result;this.lastCleanup=result;this.child=null;
+    if(!result.leaderReaped||!result.groupGone)throw Error('owned_owner_not_reaped');
+    return result;
+  }
+  async stop() {
+    const result=await this.cleanup();
+    if(result.stopError)throw Error(result.stopError);
+    if(result.exit&&result.exit.code!==0)throw Error('owner_unclean_exit');
+    return result;
+  }
+  async finish(originalError) {
+    try {
+      const result=await this.cleanup();
+      if(!originalError&&result.stopError)throw Error(result.stopError);
+      return result;
+    }catch(cleanupError){if(originalError){originalError.cleanupError=cleanupError;return {cleanupError:cleanupError.message,leaderReaped:false,groupGone:false};}throw cleanupError;}
+  }
+}
+export async function withQualificationOwner(owner,work,writeLedger) {
+  let originalError,cleanup;
+  try{return await work();}
+  catch(e){originalError=e;throw e;}
+  finally {
+    try{cleanup=await owner.finish(originalError);}
+    finally {
+      try{writeLedger({failure:originalError?.message,cleanup,owners:owner.records});}
+      catch(ledgerError){if(originalError)originalError.ledgerError=ledgerError;else throw ledgerError;}
+    }
+  }
+}

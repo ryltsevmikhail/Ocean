@@ -1,11 +1,11 @@
 """Read-only exact candidate inventory and evidence freeze after final native/installed probes."""
-import hashlib,json,pathlib,platform,subprocess,sys,tarfile,zipfile
-root=pathlib.Path(sys.argv[1]);source=root/'source';plan=pathlib.Path('/home/ryltsevmg/Projects/Ocean-stable/.superpowers/sdd/2026-11-04-ocean-platform');sha=lambda b:hashlib.sha256(b).hexdigest();file_sha=lambda p:sha(p.read_bytes())
+import hashlib,json,pathlib,platform,runpy,subprocess,sys,tarfile,zipfile
+root=pathlib.Path(sys.argv[1]).resolve();output=pathlib.Path(sys.argv[2]).resolve();source=root/'source';plan=pathlib.Path(__file__).resolve().parent;validation=runpy.run_path(str(plan/'task-17.3-evidence-validate.py'));sha=lambda b:hashlib.sha256(b).hexdigest();file_sha=lambda p:sha(p.read_bytes())
 revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip();assert revision=='ec1e5d59fc8f7bc08122f331d636c9ae0f1d031a';assert subprocess.check_output(['git','status','--porcelain'],cwd=source,text=True)==''
 archive=root/'cli/ocean-1.1.0-rc.3-linux-x64.tar.gz';assert file_sha(archive)=='933d0b3a535685a4606e92c91ecd970507e0d403002d2e348cfb2b304302556d'
 with tarfile.open(archive) as t:
     raw=t.extractfile('manifest.json').read();manifest=json.loads(raw)
-(root/'cli/manifest.json').write_bytes(raw)
+assert (root/'cli/manifest.json').read_bytes()==raw
 installed=root/'prefix/lib/ocean/releases/1.1.0-rc.3'
 for name,record in manifest['files'].items():
     p=installed/name;assert file_sha(p)==record['sha256'];assert p.stat().st_mode&511==record['mode']
@@ -28,17 +28,18 @@ with zipfile.ZipFile(zip_path) as z:
         p=root/'desktop/artifact/OceanDesktop-linux-x64'/dst;assert sha(z.read(src))==file_sha(p);checks[dst]=file_sha(p)
         if dst!='OceanDesktop':licenses['electron/'+dst]={'bytes':p.stat().st_size,'sha256':file_sha(p)}
     electron={'archive':str(zip_path),'bytes':zip_path.stat().st_size,'sha256':zip_sha,'safeEntries':len(z.infolist()),'version':'45.2.1','packagedBytesMatchOfficialArchive':checks,'officialChecksums':'task-17-native-upstream-checksum-verification.json: official API and SHASUMS256 agree','staging':str(root/'desktop/packager-tmp'),'systemElectronNotUsed':True,'desktopGUIExecution':False}
-(root/'electron-proof.json').write_text(json.dumps(electron,indent=2)+'\n')
-(root/'licenses-proof.json').write_text(json.dumps({'verifiedRawASARAgainstStage':True,'asarDataOffset':offset,'licenses':licenses,'vueGroupVersion':'3.5.44','zodVersion':'4.6.7','electron':'45.2.1','desktopManifestSha256':file_sha(meta)},indent=2)+'\n')
+(output/'electron-proof.json').write_text(json.dumps(electron,indent=2)+'\n')
+(output/'licenses-proof.json').write_text(json.dumps({'verifiedRawASARAgainstStage':True,'asarDataOffset':offset,'licenses':licenses,'vueGroupVersion':'3.5.44','zodVersion':'4.6.7','electron':'45.2.1','desktopManifestSha256':file_sha(meta)},indent=2)+'\n')
 files={}
 for p in source.rglob('*'):
     if p.is_file() and 'node_modules' not in p.parts and '.git' not in p.parts and (p.suffix in ['.ts','.vue','.mjs','.json','.yaml','.js','.cjs','.html','.css'] or p.name in ['LICENSE','NOTICE']):files[str(p.relative_to(source))]=file_sha(p)
-protected=pathlib.Path('/home/ryltsevmg/Projects/Ocean-stable');frozen={'sourceRevision':revision,'sourceStatus':'','node':subprocess.check_output(['node','--version'],text=True).strip(),'pnpm':subprocess.check_output(['pnpm','--version'],text=True).strip(),'architecture':platform.machine(),'kernel':platform.release(),'lockfileSha256':file_sha(source/'pnpm-lock.yaml'),'rawManifestSha256':sha(raw),'archiveSha256':file_sha(archive),'desktopASARSha256':file_sha(asar),'protectedCurrentHashes':{n:file_sha(protected/n) for n in ['apps/cli/test-fixtures/github-session-rig.ts','apps/cli/src/plugin-catalog-lifetime.test.ts']},'files':files,'qualificationScripts':{p.name:file_sha(p) for p in plan.glob('task-17.3-*') if p.suffix in ['.py','.txt']}}
+protected=pathlib.Path('/home/ryltsevmg/Projects/Ocean-stable');frozen={'sourceRevision':revision,'sourceStatus':'','node':subprocess.check_output(['node','--version'],text=True).strip(),'pnpm':subprocess.check_output(['pnpm','--version'],text=True).strip(),'architecture':platform.machine(),'kernel':platform.release(),'lockfileSha256':file_sha(source/'pnpm-lock.yaml'),'rawManifestSha256':sha(raw),'archiveSha256':file_sha(archive),'desktopASARSha256':file_sha(asar),'protectedCurrentHashes':{n:file_sha(protected/n) for n in ['apps/cli/test-fixtures/github-session-rig.ts','apps/cli/src/plugin-catalog-lifetime.test.ts']},'files':files,'qualificationScripts':{name:file_sha(plan/name) for name in validation['CURRENT_DRIVERS']},'sharedPrivateRunner':{'sha256':file_sha(output/'inputs/run-private.py'),'provenance':str(output/'inputs/provenance.json')}}
 assert frozen['protectedCurrentHashes']=={'apps/cli/test-fixtures/github-session-rig.ts':'d6ea013e8333688abb36e51c7a09922a077f5a1726f203258bc06f49e642c031','apps/cli/src/plugin-catalog-lifetime.test.ts':'68f28f549e0713f5c21d47950b6db96babdb27a7b9264684268c571b7cde62a3'}
-(root/'freeze.json').write_text(json.dumps(frozen,indent=2)+'\n')
-(root/'environment.txt').write_text(subprocess.check_output(['uname','-a'],text=True)+subprocess.check_output(['df','-h',str(root),'/tmp'],text=True)+subprocess.check_output(['free','-h'],text=True)+subprocess.check_output(['lscpu'],text=True))
-proofs=['archive-proof.json','v1-proof.json','rebind-proof.json','hosts-proof.json','sandbox-proof.json','early-cancel-proof.json','runtime-equivalence.json','electron-proof.json','licenses-proof.json','owned-cleanup-proof.json','gate-ledger.json','freeze.json']
-for p in proofs:assert (root/p).is_file(),p
-inventory={str(p.relative_to(root)):{'sha256':file_sha(p),'bytes':p.stat().st_size} for p in sorted(root.rglob('*')) if p.is_file() and str(p.relative_to(root))!='logs/freeze.log' and ('logs' in p.relative_to(root).parts or str(p.relative_to(root)) in proofs)}
-(root/'evidence-inventory.json').write_text(json.dumps(inventory,indent=2)+'\n')
-print(json.dumps({'revision':revision,'archiveSha256':file_sha(archive),'rawManifestSha256':sha(raw),'CLIInventoriedFiles':len(manifest['files']),'desktopASARSha256':file_sha(asar),'desktopFiles':desktop['files'],'desktopBytes':desktop['bytes'],'frozenFiles':len(files),'proofs':proofs},indent=2))
+(output/'freeze.json').write_text(json.dumps(frozen,indent=2)+'\n')
+(output/'environment.txt').write_text(subprocess.check_output(['uname','-a'],text=True)+subprocess.check_output(['df','-h',str(root),'/tmp'],text=True)+subprocess.check_output(['free','-h'],text=True)+subprocess.check_output(['lscpu'],text=True))
+required=validation['required_files'](root,output)
+files={name:{'sha256':file_sha(validation['safe'](root,name)),'bytes':validation['safe'](root,name).stat().st_size} for name in sorted(required)}
+inventory={'format':2,'artifactSourceRevision':revision,'requiredFiles':sorted(required),'files':files}
+validation['validate_inventory'](root,output,inventory)
+(output/'evidence-inventory.json').write_text(json.dumps(inventory,indent=2)+'\n')
+print(json.dumps({'revision':revision,'archiveSha256':file_sha(archive),'rawManifestSha256':sha(raw),'CLIInventoriedFiles':len(manifest['files']),'desktopASARSha256':file_sha(asar),'desktopFiles':desktop['files'],'frozenEvidenceFiles':len(required),'rawInventorySha256':file_sha(output/'evidence-inventory.json')},indent=2))
