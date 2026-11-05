@@ -43,7 +43,11 @@ const server = createServer((socket) => {
     const request = value as { id: string; method: string; params: Record<string, unknown> };
     methods.push(request.method);
     if (request.method === 'hello') {
-      assert.equal(request.params['capability'], descriptor.capability);
+      assert.equal(
+        request.params['capability'] === descriptor.capability,
+        true,
+        'capability mismatch',
+      );
       assert.equal(request.params['instanceId'], descriptor.instanceId);
       features = request.params['clientFeatures'];
       authenticated = true;

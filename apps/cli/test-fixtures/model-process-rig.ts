@@ -19,7 +19,7 @@ export const setInput = {
   defaultModelId: 'deepseek-flash',
   key: 'synthetic-fixture-key',
 };
-export async function rig() {
+export async function rig(mode: 'standard' | 'mixed' = 'standard') {
   const root = mkdtempSync(join(process.argv[3] ?? tmpdir(), 'oa-m-'));
   const env: NodeJS.ProcessEnv = { LANG: 'C.UTF-8', NO_COLOR: '1', NODE_NO_WARNINGS: '1' };
   for (const [key, name] of Object.entries({
@@ -57,10 +57,14 @@ export async function rig() {
     runs: Record<string, string>;
   };
   await seed.kill();
-  const launch = async (intercept = false) => {
+  const launch = async (intercept = false, atProfile = profile) => {
     const owner = child(
-      'model-process-owner.test.ts',
-      [profile, join(root, 'credentials'), intercept ? 'drop' : 'plain'],
+      mode === 'mixed' ? 'model-mixed-owner.test.ts' : 'model-process-owner.test.ts',
+      [
+        atProfile,
+        join(root, 'credentials'),
+        intercept ? (mode === 'mixed' ? 'restore' : 'drop') : 'plain',
+      ],
       env,
     );
     children.push(owner);
@@ -77,8 +81,8 @@ export async function rig() {
     }
     return { ...owner, info: ready, snapshot: () => owner.call<PortSnapshot>('snapshot') };
   };
-  const peer = async (mode = 'sdk') => {
-    const process = child('model-process-client.test.ts', [profile, mode], env);
+  const peer = async (mode = 'sdk', atProfile = profile) => {
+    const process = child('model-process-client.test.ts', [atProfile, mode], env);
     children.push(process);
     const info = (await process.ready) as {
       pid: number;

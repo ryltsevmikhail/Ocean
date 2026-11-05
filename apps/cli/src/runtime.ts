@@ -114,7 +114,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       ...(options.pluginTransport === undefined ? {} : { transport: options.pluginTransport }),
       ...(options.pluginEnv === undefined ? {} : { env: options.pluginEnv }),
     });
+    const reviews = new ChatReviewService({ ...deps, tasks: service, journal: store.tools });
     const chat = new DirectChatService({
+      reviews,
       ...deps,
       tasks: service,
       ...(pluginRuntime.tools === null ? {} : { grantedTools: pluginRuntime.tools }),
@@ -225,7 +227,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       conversationStore: deps.store,
       chat,
       broadcasts,
-      reviews: new ChatReviewService({ ...deps, tasks: service, journal: store.tools }),
+      reviews,
       durable: true,
       toolJournal: store.tools,
       ready,

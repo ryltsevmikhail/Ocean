@@ -24,10 +24,11 @@ import { publishChat } from './direct-chat-publication.js';
 import { runTurn } from './turn.js';
 import type { TurnUpdate } from './turn-update.js';
 import type { TurnInput } from './types.js';
+import { knownChatFailure, type ChatFailureEvidence } from './chat-known-failure.js';
 import type { GrantedPluginTools, GrantedToolSource } from './plugin-turn-tools.js';
 
 export type ChatCodingTools = NonNullable<TurnInput['tools']> & { readonly cleanupConfirmed: true };
-export interface ChatTurnExecutionDeps {
+export interface ChatTurnExecutionDeps extends ChatFailureEvidence {
   readonly tasks: TaskRunService;
   readonly store: ConversationStore;
   readonly clock: Clock;
@@ -127,7 +128,12 @@ export async function executeChatTurn(
     // A dispatched stream failure can leave remote work or billing unknown.
     const next = {
       ...turn,
-      status: outcome.kind === 'cancelled' ? ('cancelled' as const) : ('uncertain' as const),
+      status:
+        outcome.kind === 'cancelled'
+          ? ('cancelled' as const)
+          : (await knownChatFailure(deps, turn))
+            ? ('failed' as const)
+            : ('uncertain' as const),
       text: '',
     };
     updateChat(store, turn, next);

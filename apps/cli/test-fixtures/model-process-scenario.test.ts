@@ -1,3 +1,7 @@
+import { mixedRestart } from './model-mixed-restart.test.ts';
+import { mixedProjection } from './model-mixed-projection.test.ts';
+import { mixedRestore } from './model-mixed-restore.test.ts';
+import { mixedRouting } from './model-mixed-routing.test.ts';
 import { recovery } from './model-process-recovery.test.ts';
 import { lostReply } from './model-process-lost.test.ts';
 import { compatibility } from './model-process-compatibility.test.ts';
@@ -9,6 +13,10 @@ import { cli } from './model-process-cli.test.ts';
 import { policy } from './model-process-policy.test.ts';
 import { timeout } from './model-process-timeout.test.ts';
 const scenarios: Record<string, () => Promise<unknown>> = {
+  mixed: mixedRouting,
+  'mixed-restart': mixedRestart,
+  'mixed-projection': mixedProjection,
+  'mixed-restore': mixedRestore,
   recovery,
   lost: lostReply,
   compatibility,

@@ -52,20 +52,39 @@ it('preserves receipt JSON across both APIs and closing and reopening SQLite', a
       'version',
       'events',
     ]);
-    const before = fixture.db.prepare('SELECT * FROM command_receipts ORDER BY command_id').all();
-    expect(before[0]?.['events']).toBe(JSON.stringify(original.value.events));
-    expect(before[1]?.['events']).toBe(JSON.stringify(fresh.value.receipt.events));
+    const originals = [
+      [command, JSON.stringify(original.value)],
+      [second, JSON.stringify(fresh.value.receipt)],
+    ] as const;
     fixture.db.close();
     fixture = open();
-    expect(await fixture.service.executeWithDisposition(command)).toEqual({
-      ok: true,
-      value: { receipt: original.value, disposition: 'replayed' },
+    const advanced = await fixture.service.execute({
+      type: 'Admit',
+      commandId: 'cm_advance',
+      taskRunId: command.taskRunId,
+      expectedVersion: original.value.version,
+      actor: command.actor,
+      payload: {},
     });
-    expect(await fixture.service.execute(command)).toEqual(original);
-    expect(fixture.db.prepare('SELECT * FROM command_receipts').all()).toEqual(before);
-    expect(JSON.stringify(await fixture.service.executeWithDisposition(command))).not.toContain(
-      'request_binding',
-    );
+    expect(advanced.ok).toBe(true);
+    const rows = () =>
+      JSON.stringify({
+        receipts: fixture.db.prepare('SELECT * FROM command_receipts ORDER BY command_id').all(),
+        events: fixture.db.prepare('SELECT * FROM events ORDER BY aggregate_id,sequence').all(),
+        meta: fixture.db.prepare('SELECT * FROM meta ORDER BY key').all(),
+      });
+    for (const [request, bytes] of originals) {
+      for (const api of ['execute', 'executeWithDisposition'] as const) {
+        const before = rows();
+        const replay = await fixture.service[api](request);
+        if (!replay.ok) throw replay.error;
+        const receipt = 'receipt' in replay.value ? replay.value.receipt : replay.value;
+        expect(JSON.stringify(receipt)).toBe(bytes);
+        if ('disposition' in replay.value) expect(replay.value.disposition).toBe('replayed');
+        expect(rows()).toBe(before);
+        expect(JSON.stringify(receipt)).not.toContain('request_binding');
+      }
+    }
   } finally {
     fixture.db.close();
     rmSync(directory, { recursive: true, force: true });

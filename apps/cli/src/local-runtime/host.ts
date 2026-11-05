@@ -138,6 +138,7 @@ export async function startLocalRuntime(
     const broadcasts = new RuntimeBroadcasts({
       service: runtime.broadcasts,
       execution: {
+        reviews: runtime.reviews,
         tasks: runtime.service,
         store: runtime.conversationStore,
         clock: systemClock,

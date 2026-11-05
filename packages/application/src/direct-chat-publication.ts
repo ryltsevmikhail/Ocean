@@ -1,6 +1,8 @@
 import { taskRunId, type ChatTurn } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
 import type { TaskRunService } from './service.js';
+import { knownChatFailure } from './chat-known-failure.js';
+import type { ChatReviewService } from './chat-review.js';
 import type { Clock } from './ports.js';
 
 /** Publish only a proven succeeded task with its complete prepared response. */
@@ -42,11 +44,17 @@ export async function recoverChats(
   store: ConversationStore,
   tasks: TaskRunService,
   clock: Clock,
+  reviews?: Pick<ChatReviewService, 'review'>,
 ): Promise<void> {
   const turns = store.atomic((tx) => tx.chatTurns());
   for (const turn of turns) {
     // A queued broadcast child was never dispatched; batch recovery owns its state.
-    if (['queued', 'completed', 'failed', 'cancelled', 'uncertain'].includes(turn.status)) continue;
+    if (['queued', 'completed', 'failed', 'cancelled'].includes(turn.status)) continue;
+    if (await knownChatFailure({ store, tasks, ...(reviews ? { reviews } : {}) }, turn)) {
+      store.atomic((tx) => tx.putChatTurn({ ...turn, status: 'failed' }));
+      continue;
+    }
+    if (turn.status === 'uncertain') continue;
     let state = await tasks.state(taskRunId(turn.taskRunId));
     if (
       turn.status === 'prepared' &&

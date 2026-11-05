@@ -67,6 +67,8 @@ export async function negotiationWaves(
     legacyPluginMutation: () =>
       denied(async () => {
         for (const peer of [rc2, modelOnly, unknown]) {
+          await assert.rejects(peer.raw('plugin.catalog'), /plugin_runtime_upgrade_required/);
+          await statuses();
           await assert.rejects(
             peer.raw('plugin.disable', pluginInput),
             /plugin_runtime_upgrade_required/,

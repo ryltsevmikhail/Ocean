@@ -8,6 +8,7 @@
  * rollback with profile bytes untouched, and that the installed tree loads and
  * qualifies the bundled adapter without enabling real plugin execution.
  */
+import { SCHEMA_VERSION } from '@runnets/store-sqlite';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -122,7 +123,7 @@ it('migrates a schema-14 RC1-shaped profile and restores an RC1-era format-2 bac
   try {
     expect(
       restoredDb.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('22');
+    ).toBe(String(SCHEMA_VERSION));
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_rooms').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_bots').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_messages').get()?.['n']).toBe(1);

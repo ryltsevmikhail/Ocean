@@ -5,6 +5,7 @@ import {
   type ChatAdmissionMode,
   type ChatProviderSource,
 } from './direct-chat-admission.js';
+import type { ChatReviewService } from './chat-review.js';
 import { recoverChats } from './direct-chat-publication.js';
 import {
   executeChatTurn,
@@ -39,6 +40,7 @@ export interface RecordedRoomMessage {
 }
 export interface DirectChatDeps extends ConversationServiceDeps {
   readonly tasks: TaskRunService;
+  readonly reviews?: Pick<ChatReviewService, 'review'>;
   readonly codingTools?: {
     /** Successful preparation must join its workers and prove their cleanup before returning. */
     forTurn(turn: ChatTurn, signal: AbortSignal): Promise<ChatCodingTools>;
@@ -136,6 +138,7 @@ export class DirectChatService {
         tasks: this.#deps.tasks,
         store: this.#deps.store,
         clock: this.#deps.clock,
+        ...(this.#deps.reviews === undefined ? {} : { reviews: this.#deps.reviews }),
         ...(this.#deps.codingTools === undefined ? {} : { codingTools: this.#deps.codingTools }),
         ...(this.#deps.grantedTools === undefined ? {} : { grantedTools: this.#deps.grantedTools }),
       },
@@ -150,6 +153,6 @@ export class DirectChatService {
   }
   /** Requires exclusive host ownership. Never replays a provider or tool request. */
   recover(): Promise<void> {
-    return recoverChats(this.#deps.store, this.#deps.tasks, this.#deps.clock);
+    return recoverChats(this.#deps.store, this.#deps.tasks, this.#deps.clock, this.#deps.reviews);
   }
 }

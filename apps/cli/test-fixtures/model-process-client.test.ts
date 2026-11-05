@@ -5,6 +5,7 @@ import {
   LocalRuntimeFrames,
   writeLocalRuntimeFrame,
 } from '@runnets/tools-node';
+import { localProfileClient } from './rc2-profile-client.ts';
 import { localRoomClient } from './rc2-room-client.ts';
 import { isLocalRuntimeIdentity as rc2 } from './rc2-runtime-contract.ts';
 import { serve } from './model-process-rpc.ts';
@@ -62,6 +63,7 @@ if (mode === 'sdk') {
     throw Error('frozen_identity_refused');
   client = {
     ...localRoomClient(raw, identity),
+    ...localProfileClient(raw),
     close: () => socket.destroy(),
     status: async () => {
       const value = await raw('status', {});

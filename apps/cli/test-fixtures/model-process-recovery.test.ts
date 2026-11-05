@@ -129,7 +129,11 @@ export async function recovery() {
       assert.ok(recovery?.kind === 'retry_available');
       assert.equal(recovery.pendingRevision, pendingRevision);
       assert.equal(recovery.requiresKeyResupply, !remove && !removesViaSet);
-      assert.deepEqual(recovery.request, envelope);
+      assert.equal(
+        JSON.stringify(recovery.request) === JSON.stringify(envelope),
+        true,
+        'recovery envelope mismatch',
+      );
       assert.doesNotMatch(
         JSON.stringify(recovery),
         /synthetic-fixture-key|secretRef|previousRef|nextRef|digest/,
