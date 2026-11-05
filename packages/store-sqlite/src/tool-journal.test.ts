@@ -1,3 +1,4 @@
+import { initializeSchema } from './schema.js';
 import { DatabaseSync } from 'node:sqlite';
 import { expect, it } from 'vitest';
 import { SqliteToolJournal } from './tool-journal.js';
@@ -74,3 +75,36 @@ it('surfaces legacy unscoped unresolved claims instead of silently losing them',
     db.close();
   }
 });
+
+it.each([false, true])(
+  'preserves noncoding tool authority for a colliding name with coding schema=%s',
+  (withCoding) => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      if (withCoding) initializeSchema(db);
+      const journal = new SqliteToolJournal(db);
+      const admission = {
+        effectKind: 'mutation' as const,
+        scope: {
+          kind: 'resources' as const,
+          resources: [{ kind: 'connection' as const, connectionId: 'remote' }],
+        },
+        grantReference: { grantId: 'remote-grant', revision: 1 },
+        binding: { tool: 'coding_write', connectionId: 'remote' },
+      };
+      expect(
+        journal.claimNow(
+          'i',
+          'coding_write',
+          { taskRunId: 'run', attemptId: 'at' },
+          'request',
+          admission,
+        ),
+      ).toBe(true);
+      expect(journal.inspectPending()[0]?.admission).toEqual(admission);
+      expect(journal.grantCalls('run', 'remote-grant')).toBe(1);
+    } finally {
+      db.close();
+    }
+  },
+);

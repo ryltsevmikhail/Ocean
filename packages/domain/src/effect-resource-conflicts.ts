@@ -52,7 +52,10 @@ function disjoint(
       ];
       return typeof value === 'string' && canonicalRoot(value) ? value.toLowerCase() : null;
     };
-    if (a.projectId === b.projectId && (a.worktreeId === null || b.worktreeId === null))
+    if (
+      (a.worktreeId !== null && a.worktreeId === b.worktreeId) ||
+      (a.projectId === b.projectId && (a.worktreeId === null || b.worktreeId === null))
+    )
       return false;
     const ar = root(a, existing),
       br = root(b, incoming);

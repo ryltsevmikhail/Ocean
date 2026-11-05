@@ -1,3 +1,4 @@
+import { journalCodingApproval } from './coding-journal-receipt.js';
 import {
   effectResourcesConflict,
   validToolEffectAdmission,
@@ -83,13 +84,16 @@ export class SqliteToolJournal implements ToolJournalPort {
     return this.#db.isTransaction ? insert() : withImmediateTransaction(this.#db, insert);
   }
   grantCalls(run: string, id: string): number {
-    return Number(
-      this.#db
-        .prepare(
-          "SELECT COUNT(*) AS n FROM tool_invocations_v2 WHERE task_run_id=? AND json_extract(admission,'$.grantReference.grantId')=?",
-        )
-        .get(run, id)?.['n'],
-    );
+    const rows = this.#db
+      .prepare(
+        `SELECT id,tool,task_run_id,attempt_id,fingerprint,json_extract(admission,'$.grantReference.grantId') AS grant_id
+        FROM tool_invocations_v2 WHERE task_run_id=? AND (json_extract(admission,'$.grantReference.grantId')=? OR tool IN ('coding_write','coding_test'))`,
+      )
+      .all(run, id);
+    return rows.filter((row) => {
+      const approval = journalCodingApproval(this.#db, row);
+      return approval ? approval.grantReference?.grantId === id : row['grant_id'] === id;
+    }).length;
   }
   inspectConflicts(admission?: ToolEffectAdmission): readonly ToolEffectRecord[] {
     return this.inspectPending().filter((r) => effectResourcesConflict(r.admission, admission));

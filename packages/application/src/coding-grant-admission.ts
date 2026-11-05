@@ -29,10 +29,18 @@ export function codingEffectAdmission(
     b.operation === 'apply'
   )
     return undefined;
+  return boundCodingEffect(b, ref, projectId);
+}
+/** Historical evidence depends on the exact approved binding, independently of current readiness. */
+export function boundCodingEffect(
+  b: CodingApprovalBinding,
+  ref: OwnerGrantReference | null,
+  projectId: string,
+): ToolEffectAdmission {
   return {
     scope: {
       kind: 'resources',
-      resources: [{ kind: 'project-worktree', projectId, worktreeId: task.id }],
+      resources: [{ kind: 'project-worktree', projectId, worktreeId: b.taskId }],
     },
     effectKind: 'mutation',
     grantReference: ref,

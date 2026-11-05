@@ -16,6 +16,8 @@ it('partitions exact leased worktrees but preserves parent, alias and unproven h
   const a = tree('project', 'a', '/work/a');
   expect(effectResourcesConflict(a, tree('project', 'b', '/work/b'))).toBe(false);
   for (const b of [
+    tree('project', 'a', '/moved'),
+    tree('rebound-project', 'a', '/other-project'),
     tree('alias', 'b', '/WORK/A'),
     tree('project', 'b', '/work/a/sub'),
     tree('project', null, '/src'),

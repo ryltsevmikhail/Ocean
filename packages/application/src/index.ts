@@ -112,4 +112,4 @@ export * from './owner-scope.js';
 export * from './service-admission-types.js';
 export * from './service-admission.js';
 export * from './service-catalog-policy.js';
-export { codingEffectAdmission } from './coding-grant-admission.js';
+export { codingEffectAdmission, boundCodingEffect } from './coding-grant-admission.js';

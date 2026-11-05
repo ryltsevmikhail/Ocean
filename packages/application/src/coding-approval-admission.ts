@@ -1,5 +1,6 @@
 import { codingEffectAdmission } from './coding-grant-admission.js';
 import {
+  canonicalJson,
   codingCapabilities,
   type CodingApproval,
   type CodingApprovalBinding,
@@ -12,10 +13,14 @@ export function codingApprovalAdmission(
   binding: CodingApprovalBinding,
   tx: CodingApprovalTransaction,
   deps: Readonly<{ ownerId: string; leases: ProjectLeasePort; journal: ToolJournalPort }>,
-  consumed?: CodingApproval,
+  approval?: CodingApproval,
 ): boolean {
   const task = tx.task?.(binding.taskId);
   const worktree = tx.worktree?.(binding.taskId);
+  const evidence =
+    approval?.guardedDispatch === true
+      ? codingEffectAdmission(tx, binding, approval.grantReference ?? null)
+      : undefined;
   if (
     !task ||
     !worktree ||
@@ -37,13 +42,12 @@ export function codingApprovalAdmission(
     !deps.leases.owns(worktree.lease) ||
     binding.operation === 'apply' ||
     !deps.journal.inspectPending ||
-    (
-      deps.journal.inspectConflicts?.(
-        codingEffectAdmission(tx, binding, consumed?.grantReference ?? null),
-      ) ?? deps.journal.inspectPending()
-    ).some(
+    (deps.journal.inspectConflicts?.(evidence) ?? deps.journal.inspectPending()).some(
       (r) =>
-        !consumed ||
+        approval?.status !== 'consumed' ||
+        !evidence ||
+        !r.admission ||
+        canonicalJson(r.admission) !== canonicalJson(evidence) ||
         r.id !== binding.invocationId ||
         r.taskRunId !== binding.runId ||
         r.attemptId !== binding.attemptId ||

@@ -1,4 +1,5 @@
-import { codingEffectAdmission } from '@runnets/application';
+import { readToolAdmission, exactCodingReceipt } from './coding-journal-receipt.js';
+import { boundCodingEffect } from '@runnets/application';
 import { digest } from './coding-claim-evidence.js';
 import { codingProjectId } from './service-run-scope.js';
 import { readAuthorityGrant } from './service-authority-rows.js';
@@ -41,9 +42,9 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
         grantCalls: (run, id) => this.#journal.grantCalls(run, id),
         claimed: (a) => {
           const b = a.binding;
-          return !!db
+          const row = db
             .prepare(
-              `SELECT 1 FROM tool_invocations_v2 j JOIN ocean_coding_approval_claims c ON c.invocation_key=? AND c.approval_id=?
+              `SELECT j.admission FROM tool_invocations_v2 j JOIN ocean_coding_approval_claims c ON c.invocation_key=? AND c.approval_id=?
             WHERE j.id=? AND j.task_run_id=? AND j.attempt_id=? AND j.tool=? AND j.outcome='started' AND j.fingerprint=?`,
             )
             .get(
@@ -55,6 +56,7 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
               'coding_' + b.operation,
               digest(JSON.stringify({ ...a, status: 'allowed' })),
             );
+          return exactCodingReceipt(a, readToolAdmission(row?.['admission']));
         },
         worktree: (id) => changesetStorage(db).worktree(id),
         task: (id) => decodeTask(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
@@ -102,7 +104,9 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
               'coding_' + b.operation,
               { taskRunId: b.runId, attemptId: b.attemptId },
               JSON.stringify(value),
-              codingEffectAdmission(tx, b, value.grantReference ?? null),
+              value.guardedDispatch === true
+                ? boundCodingEffect(b, value.grantReference ?? null, codingProjectId(b.projectRoot))
+                : undefined,
             )
           )
             return false;

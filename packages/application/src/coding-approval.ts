@@ -43,7 +43,7 @@ export interface CodingApprovalDependencies {
   readonly admit: (
     binding: CodingApprovalBinding,
     tx: CodingApprovalTransaction,
-    consumed?: CodingApproval,
+    approval?: CodingApproval,
   ) => boolean;
   readonly restored: boolean;
 }
@@ -72,8 +72,6 @@ export class CodingApprovalService {
       return codingFailure('invalid_input');
     if (this.deps.restored) return codingFailure('recovery_required');
     return this.deps.store.atomic((tx) => {
-      if (!this.deps.admit(input, tx)) return codingFailure('coding_denied');
-      if (tx.approval(id)) return codingFailure('request_conflict');
       const ref = guarded ? codingGrant(tx, input, preview, this.deps.grantOwnerId, now) : null;
       const approval: CodingApproval = {
         ...(guarded ? { guardedDispatch: true as const } : {}),
@@ -86,6 +84,8 @@ export class CodingApprovalService {
         expiresAt: now + 300000,
         status: 'pending',
       };
+      if (!this.deps.admit(input, tx, approval)) return codingFailure('coding_denied');
+      if (tx.approval(id)) return codingFailure('request_conflict');
       tx.putApproval(approval);
       return ok(approval);
     });
@@ -98,9 +98,10 @@ export class CodingApprovalService {
   ): Promise<CodingResult<CodingApproval>> {
     const binding = structuredClone(current);
     if (this.deps.restored) return codingFailure('recovery_required');
-    const approval = this.deps.store.atomic((tx) =>
-      this.deps.admit(binding, tx) ? tx.approval(id) : null,
-    );
+    const approval = this.deps.store.atomic((tx) => {
+      const a = tx.approval(id);
+      return a && this.deps.admit(binding, tx, a) ? a : null;
+    });
     if (
       !approval ||
       approval.authorityId !== this.deps.authorityId ||
@@ -119,7 +120,7 @@ export class CodingApprovalService {
       return this.deps.store.atomic(
         (tx) =>
           tx.approval(id)?.status === 'pending' &&
-          this.deps.admit(observed, tx) &&
+          this.deps.admit(observed, tx, approval) &&
           codingApprovalMatches(
             approval.binding,
             observed,
@@ -138,7 +139,7 @@ export class CodingApprovalService {
       if (
         !pending ||
         pending.status !== 'pending' ||
-        !this.deps.admit(observed, tx) ||
+        !this.deps.admit(observed, tx, pending) ||
         (pending.grantReference &&
           !codingGrant(
             tx,
@@ -183,7 +184,7 @@ export class CodingApprovalService {
             this.deps.now(),
             approval.grantReference,
           )) ||
-        !this.deps.admit(binding, tx) ||
+        !this.deps.admit(binding, tx, approval) ||
         !codingApprovalMatches(
           approval.binding,
           binding,
@@ -206,6 +207,7 @@ export class CodingApprovalService {
       return (
         !!a &&
         a.status === 'consumed' &&
+        a.guardedDispatch === true &&
         a.authorityId === this.deps.authorityId &&
         tx.claimed?.(a) === true &&
         this.deps.admit(binding, tx, a) &&

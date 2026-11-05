@@ -101,7 +101,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       store: store.codingApprovals,
       grantOwnerId: codingDeps.ownerId,
       now: () => deps.clock.now().getTime(),
-      admit: (binding, tx, consumed) => codingApprovalAdmission(binding, tx, codingDeps, consumed),
+      admit: (binding, tx, approval) => codingApprovalAdmission(binding, tx, codingDeps, approval),
       restored: codingDeps.restored,
     });
     const pluginRuntime = composeRuntimePlugins({
