@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 const env = { PATH: '/usr/bin:/bin', XDG_RUNTIME_DIR: '/run/user/' + process.getuid!() };
@@ -32,3 +33,33 @@ export const inspect = (cg: string) => {
     ),
   };
 };
+
+export function serverObservation(path: string) {
+  const obs = JSON.parse(read(path)) as {
+    cwd: string;
+    env: Record<string, string>;
+    canary: boolean;
+    socket: boolean;
+  };
+  assert.equal(obs.cwd, '/workspace');
+  assert.equal(obs.env['PWD'], '/workspace');
+  assert.equal(obs.env['HOME'], '/home/worker');
+  assert.equal(obs.canary, false);
+  assert.equal(obs.socket, false);
+  assert.deepEqual(
+    Object.keys(obs.env).sort(),
+    [
+      'HOME',
+      'LANG',
+      'PATH',
+      'PWD',
+      'TMPDIR',
+      'XDG_CACHE_HOME',
+      'XDG_CONFIG_HOME',
+      'XDG_DATA_HOME',
+      'XDG_RUNTIME_DIR',
+      'XDG_STATE_HOME',
+    ].sort(),
+  );
+  return obs;
+}

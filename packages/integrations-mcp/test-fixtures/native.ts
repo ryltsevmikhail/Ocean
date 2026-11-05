@@ -1,6 +1,6 @@
 // Run with the private environment runner and a fresh owned proof directory.
 import assert from 'node:assert/strict';
-import { ctl, read, inspect } from './native-observation.ts';
+import { ctl, read, inspect, serverObservation } from './native-observation.ts';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -177,33 +177,7 @@ try {
       'escape-write-denied',
     ];
   } else {
-    const obs = JSON.parse(read(join(workspace, 'observed.json'))) as {
-      cwd: string;
-      env: Record<string, string>;
-      canary: boolean;
-      socket: boolean;
-    };
-    assert.equal(obs.cwd, '/workspace');
-    assert.equal(obs.env['PWD'], '/workspace');
-    assert.equal(obs.env['HOME'], '/home/worker');
-    assert.equal(obs.canary, false);
-    assert.equal(obs.socket, false);
-    assert.deepEqual(
-      Object.keys(obs.env).sort(),
-      [
-        'HOME',
-        'LANG',
-        'PATH',
-        'PWD',
-        'TMPDIR',
-        'XDG_CACHE_HOME',
-        'XDG_CONFIG_HOME',
-        'XDG_DATA_HOME',
-        'XDG_RUNTIME_DIR',
-        'XDG_STATE_HOME',
-      ].sort(),
-    );
-    evidence['server'] = obs;
+    evidence['server'] = serverObservation(join(workspace, 'observed.json'));
     const ac = new AbortController();
     const start = performance.now();
     const promise = call('write', {}, 'invoke', ac.signal);
