@@ -6,6 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { LocalRuntimeClient } from '@runnets/tools-node';
 import type { LocalRuntimeIdentity } from '@runnets/contracts';
 import { child } from './model-process-rpc.ts';
+import { ownFixture } from './model-process-lifecycle.ts';
 import type { PortSnapshot } from './model-process-ports.ts';
 export const setInput = {
   connectionId: 'named',
@@ -19,7 +20,7 @@ export const setInput = {
   key: 'synthetic-fixture-key',
 };
 export async function rig() {
-  const root = mkdtempSync(join(tmpdir(), 'oa-m-'));
+  const root = mkdtempSync(join(process.argv[3] ?? tmpdir(), 'oa-m-'));
   const env: NodeJS.ProcessEnv = { LANG: 'C.UTF-8', NO_COLOR: '1', NODE_NO_WARNINGS: '1' };
   for (const [key, name] of Object.entries({
     HOME: 'h',
@@ -34,8 +35,17 @@ export async function rig() {
     env[key] = join(root, name);
     mkdirSync(env[key]!, { mode: 0o700 });
   }
+  const children: ReturnType<typeof child>[] = [];
+  let closing: Promise<void> | undefined;
+  const close = () =>
+    (closing ??= (async () => {
+      for (const c of [...children].reverse()) await c.kill();
+      rmSync(root, { recursive: true, force: true });
+    })());
+  ownFixture(close);
   const profile = join(root, 'p');
   const seed = child('model-process-seed.test.ts', [profile], env);
+  children.push(seed);
   const seeded = (await seed.ready.catch(async (error: unknown) => {
     await seed.kill();
     rmSync(root, { recursive: true, force: true });
@@ -47,9 +57,12 @@ export async function rig() {
     runs: Record<string, string>;
   };
   await seed.kill();
-  const children: ReturnType<typeof child>[] = [];
-  const launch = async () => {
-    const owner = child('model-process-owner.test.ts', [profile, join(root, 'credentials')], env);
+  const launch = async (intercept = false) => {
+    const owner = child(
+      'model-process-owner.test.ts',
+      [profile, join(root, 'credentials'), intercept ? 'drop' : 'plain'],
+      env,
+    );
     children.push(owner);
     const ready = (await owner.ready) as {
       pid: number;
@@ -70,6 +83,7 @@ export async function rig() {
     const info = (await process.ready) as {
       pid: number;
       identity: LocalRuntimeIdentity;
+      endpoint: string;
       sdk: string;
     };
     assert.match(info.sdk, /\/dist\//);
@@ -92,10 +106,7 @@ export async function rig() {
     scope: { workspaceId: 'ws_ocean', roomId: seeded.roomId },
     launch,
     peer,
-    async close() {
-      for (const c of children.reverse()) await c.kill();
-      rmSync(root, { recursive: true, force: true });
-    },
+    close,
   };
 }
 export async function until<T>(fn: () => Promise<T>, valid: (value: T) => boolean): Promise<T> {

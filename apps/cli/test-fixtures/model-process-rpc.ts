@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { ownFixture } from './model-process-lifecycle.ts';
 export interface Reply {
   id: number;
   result?: unknown;
@@ -10,6 +11,7 @@ export function child(file: string, args: string[], env: NodeJS.ProcessEnv) {
     env,
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
+  ownFixture(() => kill(p));
   let stderr = '';
   p.stderr!.on('data', (b: Buffer) => {
     stderr += b.toString();

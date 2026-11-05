@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { rig, setInput, until } from './model-process-rig.ts';
+import { ownFixture } from './model-process-lifecycle.ts';
 import { kill } from './model-process-rpc.ts';
 export async function cli() {
   const f = await rig();
@@ -18,6 +19,8 @@ export async function cli() {
       env: f.env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    const owned = p;
+    ownFixture(() => kill(owned));
     let output = '';
     for (const stream of [p.stdout!, p.stderr!])
       stream.on('data', (b: Buffer) => {

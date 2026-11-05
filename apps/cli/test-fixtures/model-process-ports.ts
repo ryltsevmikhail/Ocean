@@ -3,7 +3,8 @@ import { appendFileSync } from 'node:fs';
 import { createProviderSecretStore } from '@runnets/tools-node';
 import type { ProviderSecretStorePort } from '@runnets/application';
 import type { HttpClient } from '@runnets/provider-core';
-import { pendingWitness } from './model-process-witness.ts';
+import { localMetadata } from './model-process-local-metadata.ts';
+import { pendingWitness, type ReceiptOwner } from './model-process-witness.ts';
 export function ports(profile: string, credentialDir: string) {
   const counters = {
     read: 0,
@@ -23,6 +24,7 @@ export function ports(profile: string, credentialDir: string) {
   };
   let fault: {
     requestId: string;
+    owner: ReceiptOwner;
     timing: 'before' | 'after';
     expected?: { envelope: unknown; revision: number; action: string };
   } | null = null;
@@ -34,7 +36,7 @@ export function ports(profile: string, credentialDir: string) {
     counters[kind]++;
     const planned = fault;
     if (planned) {
-      const w = pendingWitness(profile, planned.requestId);
+      const w = pendingWitness(profile, planned.requestId, planned.owner);
       if (planned.expected) {
         assert.equal(
           JSON.stringify(w.row!['pendingRequest']) === JSON.stringify(planned.expected.envelope),
@@ -76,6 +78,10 @@ export function ports(profile: string, credentialDir: string) {
   };
   const http: HttpClient = {
     async send(request) {
+      if (new URL(request.url).origin === 'http://127.0.0.1:11434') {
+        counters.probe++;
+        return localMetadata(new URL(request.url));
+      }
       assert.equal(new URL(request.url).origin, 'https://api.deepseek.com');
       if (request.method === 'GET') {
         counters.probe++;

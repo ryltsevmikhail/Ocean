@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { rig, setInput, effects } from './model-process-rig.ts';
-import { activeWitness, pendingWitness } from './model-process-witness.ts';
+import {
+  activeWitness,
+  pendingWitness,
+  publicReceipt,
+  receiptOwner,
+} from './model-process-witness.ts';
 import type { LocalRuntimeClient } from '@runnets/tools-node';
 import { isLocalProviderStatus as frozenProvider } from './rc2-provider-contract.ts';
 type Mutation =
@@ -67,6 +72,7 @@ export async function recovery() {
         : remove
           ? 'modelConnections.removeSavedKey'
           : 'modelConnections.set';
+      const receiptFamily = receiptOwner(wire, connectionId);
       const invoke = (client: LocalRuntimeClient, input: unknown = original) =>
         (client[method] as (v: unknown) => Promise<unknown>)(input).then((result) => {
           if (legacy) assert.equal(frozenProvider(result), true, 'frozen provider receipt refused');
@@ -85,6 +91,7 @@ export async function recovery() {
       await first.call('fault', {
         requestId: 'pending',
         timing,
+        owner: receiptFamily,
         expected: {
           envelope,
           revision: family === 'new' || family === 'legacy-set' ? 1 : 2,
@@ -92,7 +99,7 @@ export async function recovery() {
         },
       });
       await assert.rejects(invoke(requester.client), /^Error: provider_write_failed$/);
-      const pending = pendingWitness(f.profile, 'pending');
+      const pending = pendingWitness(f.profile, 'pending', receiptFamily);
       const pendingRevision = pending.row!['revision'];
       const failed = await first.snapshot();
       assert.equal(failed.counters.attempt - baseline.counters.attempt, 1);
@@ -109,7 +116,8 @@ export async function recovery() {
       assert.notEqual(successor.info.pid, first.info.pid);
       assert.equal((await successor.snapshot()).counters.attempt, 0);
       assert.equal(
-        JSON.stringify(pendingWitness(f.profile, 'pending')) === JSON.stringify(pending),
+        JSON.stringify(pendingWitness(f.profile, 'pending', receiptFamily)) ===
+          JSON.stringify(pending),
         true,
         'pending witness changed',
       );
@@ -195,13 +203,19 @@ export async function recovery() {
         );
       assert.deepEqual(effects(await successor.snapshot()), effects(beforeRefusals));
       assert.equal(
-        JSON.stringify(pendingWitness(f.profile, 'pending')) === JSON.stringify(pending),
+        JSON.stringify(pendingWitness(f.profile, 'pending', receiptFamily)) ===
+          JSON.stringify(pending),
         true,
         'pending witness changed',
       );
       const [receipt, second] = await Promise.all([invoke(a.client), invoke(b.client)]);
       assert.deepEqual(second, receipt);
-      const active = activeWitness(f.profile, 'pending');
+      const active = activeWitness(f.profile, 'pending', receiptFamily);
+      assert.equal(
+        JSON.stringify(receipt) === JSON.stringify(publicReceipt(active, receiptFamily)),
+        true,
+        'recovery reply differs from owning persisted public result',
+      );
       assert.equal(active.row!['revision'], pendingRevision);
       const wave = await successor.snapshot();
       assert.equal(wave.counters.attempt, 1);
@@ -211,7 +225,8 @@ export async function recovery() {
       assert.deepEqual(await invoke(a.client), receipt);
       assert.deepEqual(await invoke(b.client), receipt);
       assert.equal(
-        JSON.stringify(activeWitness(f.profile, 'pending')) === JSON.stringify(active),
+        JSON.stringify(activeWitness(f.profile, 'pending', receiptFamily)) ===
+          JSON.stringify(active),
         true,
         'active witness changed',
       );

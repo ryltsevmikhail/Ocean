@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { Socket } from 'node:net';
-import { activeWitness } from './model-process-witness.ts';
+import { activeWitness, publicReceipt, receiptOwner } from './model-process-witness.ts';
 /** Fixture-only interposition. IDs are correlated independently on each incoming socket. */
 export function dropper(profile: string, record: (phase: string) => void) {
-  let target: { method: string; requestId: string } | null = null;
+  let target: { method: string; requestId: string; connectionId: string } | null = null;
   const correlations = new WeakMap<Socket, Map<string, { method: string; requestId?: string }>>();
   const buffers = new WeakMap<Socket, string>();
   const emit = Socket.prototype.emit;
@@ -38,7 +38,13 @@ export function dropper(profile: string, record: (phase: string) => void) {
         'result' in frame
       ) {
         assert.ok(frame.result);
-        activeWitness(profile, target.requestId);
+        const owner = receiptOwner(target.method, target.connectionId);
+        const committed = activeWitness(profile, target.requestId, owner);
+        assert.equal(
+          JSON.stringify(frame.result) === JSON.stringify(publicReceipt(committed, owner)),
+          true,
+          'suppressed public result differs from original persisted result',
+        );
         target = null;
         record('reply-suppressed-after-active-receipt');
         this.destroy();
@@ -47,7 +53,7 @@ export function dropper(profile: string, record: (phase: string) => void) {
     }
     return write.apply(this, args);
   } as Socket['write'];
-  return (input: { method: string; requestId: string }) => {
+  return (input: { method: string; requestId: string; connectionId: string }) => {
     target = input;
   };
 }

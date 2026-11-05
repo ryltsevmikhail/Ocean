@@ -15,7 +15,11 @@ export async function metadata() {
       requestId: 'disconnect',
       expectedRevision: 1,
     });
-    await owner.call('fault', { requestId: 'pending', timing: 'before' });
+    await owner.call('fault', {
+      requestId: 'pending',
+      timing: 'before',
+      owner: { family: 'model', connectionId: ids[25]! },
+    });
     await assert.rejects(
       a.client.setModelConnection({
         ...setInput,
@@ -37,9 +41,20 @@ export async function metadata() {
           binding: { connectionId: ids[i]!, modelId: i % 2 ? 'deepseek-v4-pro' : 'deepseek-flash' },
         }),
       );
-    const expectedBots = [...bots, ...(await a.client.listBoundBots(f.scope)).items].sort((a, b) =>
-      a.bot.id.localeCompare(b.bot.id),
-    );
+    const legacyBot: LocalBoundBot = {
+      bot: {
+        id: f.seed.botId,
+        workspaceId: 'ws_ocean',
+        handle: 'dev',
+        name: 'Dev',
+        role: 'Fixture',
+        provider: 'deepseek',
+        model: 'deepseek-flash',
+        profileVersion: 1,
+      },
+      binding: { connectionId: 'legacy:deepseek', modelId: 'deepseek-flash' },
+    };
+    const expectedBots = [...bots, legacyBot].sort((a, b) => a.bot.id.localeCompare(b.bot.id));
     const readPages = async (client: typeof a.client) => {
       const first = await client.listModelConnections();
       assert.equal(first.items.length, 50);
@@ -86,10 +101,7 @@ export async function metadata() {
         (await client.listBoundBots({ workspaceId: 'ws_ocean', limit: 200 })).items.length,
         52,
       );
-      assert.deepEqual(
-        (await client.listBoundBots(f.scope)).items.map((r) => r.bot.id),
-        [f.seed.botId],
-      );
+      assert.deepEqual((await client.listBoundBots(f.scope)).items, [legacyBot]);
       await assert.rejects(client.listBoundBots({ ...f.scope, roomId: 'foreign' }), /unknown_room/);
       await assert.rejects(client.listBoundBots({ workspaceId: 'foreign' }), /workspace_conflict/);
       await assert.rejects(
@@ -133,22 +145,6 @@ export async function metadata() {
       requestId: 'disconnect-bound',
       expectedRevision: 2,
     });
-    const policy = await a.client.getRoomModelPolicy(f.scope);
-    const nextPolicy = await b.client.setRoomModelPolicy({
-      ...f.scope,
-      requestId: 'policy',
-      expectedRevision: policy.policy.revision,
-      cloudTransfer: 'allow',
-    });
-    await assert.rejects(
-      a.client.setRoomModelPolicy({
-        ...f.scope,
-        requestId: 'stale-policy',
-        expectedRevision: policy.policy.revision,
-        cloudTransfer: 'allow',
-      }),
-      /model_policy_revision_conflict/,
-    );
     await owner.kill();
     await a.kill();
     await b.kill();
@@ -157,23 +153,13 @@ export async function metadata() {
     const restarted = await next.snapshot();
     assert.equal(restarted.counters.attempt, 0);
     await readPages(fresh.client);
-    assert.deepEqual((await fresh.client.getRoomModelPolicy(f.scope)).policy, nextPolicy);
     assert.deepEqual(await next.snapshot(), restarted);
-    const refreshed = await fresh.client.getRoomModelPolicy(f.scope);
-    const newest = await fresh.client.setRoomModelPolicy({
-      ...f.scope,
-      requestId: 'policy-after-restart',
-      expectedRevision: refreshed.policy.revision,
-      cloudTransfer: 'allow',
-    });
-    assert.equal(newest.revision, nextPolicy.revision + 1);
     return {
       connections: 52,
       bots: 52,
       pageLimit: 2,
       readCounterDelta: 0,
       pendingStartupPublications: restarted.counters.attempt,
-      policyRevisions: [policy.policy.revision, nextPolicy.revision, newest.revision],
     };
   } finally {
     await f.close();

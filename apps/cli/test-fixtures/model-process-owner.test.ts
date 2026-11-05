@@ -1,10 +1,10 @@
-import { startLocalRuntime } from '../dist/local-runtime/host.js';
 import { ports } from './model-process-ports.ts';
 import { dropper } from './model-process-drop.ts';
 import { serve } from './model-process-rpc.ts';
 const profile = process.argv[2]!;
 const p = ports(profile, process.argv[3]!);
-const drop = dropper(profile, p.record);
+const drop = process.argv[4] === 'drop' ? dropper(profile, p.record) : null;
+const { startLocalRuntime } = await import('../dist/local-runtime/host.js');
 const host = await startLocalRuntime({
   profile,
   providerSecretStore: p.secrets,
@@ -13,7 +13,7 @@ const host = await startLocalRuntime({
 serve((method, input) => {
   if (method === 'snapshot') return p.snapshot();
   if (method === 'fault') return p.fault(input);
-  if (method === 'drop') return drop(input);
+  if (method === 'drop') return drop!(input);
   if (method === 'hold') return p.hold();
   if (method === 'release') return p.release();
   throw Error('fixture_unknown_control');

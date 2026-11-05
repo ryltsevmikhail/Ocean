@@ -1,63 +1,23 @@
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { rig, setInput, until } from './model-process-rig.ts';
-import { settingsWitness } from './model-process-witness.ts';
-import { LOCAL_MODEL_METHODS } from '@runnets/contracts';
-import type { LocalRuntimeStatus } from '@runnets/contracts';
+import { rig, until } from './model-process-rig.ts';
+import { negotiationWaves } from './model-process-negotiation.ts';
 export async function compatibility() {
   const f = await rig();
   try {
     const owner = await f.launch();
     const sdk = await f.peer(),
-      rc2 = await f.peer('rc2'),
-      a3 = await f.peer('a3');
+      rc2 = await f.peer('rc2');
+    let a3 = await f.peer('a3');
     const modelOnly = await f.peer('model'),
       unknown = await f.peer('unknown');
-    const expected = [
-      [rc2, 45],
-      [a3, 65],
-      [sdk, 66],
-      [modelOnly, 46],
-      [unknown, 45],
-    ] as const;
-    for (let wave = 0; wave < 2; wave++) {
-      const baseline = await owner.snapshot();
-      const canonical = settingsWitness(f.profile);
-      for (const old of [rc2, a3, unknown]) {
-        await assert.rejects(
-          old.raw('modelConnections.set', setInput),
-          /model_runtime_upgrade_required/,
-        );
-        for (const method of LOCAL_MODEL_METHODS)
-          await assert.rejects(old.raw(method), /model_runtime_upgrade_required/);
-      }
-      for (const old of [rc2, modelOnly, unknown])
-        await assert.rejects(old.raw('plugin.catalog'), /plugin_runtime_upgrade_required/);
-      assert.ok(Array.isArray(await a3.raw('plugin.catalog')));
-      assert.ok(Array.isArray(await sdk.client.pluginCatalog()));
-      assert.equal((await sdk.client.listModelConnections()).version, 1);
-      assert.equal((await modelOnly.raw<{ version: number }>('modelConnections.list')).version, 1);
-      assert.deepEqual(await owner.snapshot(), baseline);
-      assert.equal(
-        settingsWitness(f.profile) === canonical,
-        true,
-        'refused legacy command mutated canonical settings',
-      );
-      for (const [peer, size] of wave ? [...expected].reverse() : expected) {
-        const status: LocalRuntimeStatus = await peer.client.status();
-        assert.equal(status.capabilities.length, size);
-        assert.equal(
-          status.capabilities.includes('model.connections-v1'),
-          peer === sdk || peer === modelOnly,
-        );
-        assert.equal(
-          status.capabilities.includes('plugin.session-authority-v1'),
-          peer === sdk || peer === a3,
-        );
-      }
-      await assert.rejects(rc2.raw('future.fixture'), /method_not_found/);
-    }
-    await sdk.client.setModelConnection(setInput);
+    const before = await negotiationWaves(
+      f,
+      owner,
+      { sdk, rc2, a3, modelOnly, unknown },
+      0,
+      'before',
+    );
     await sdk.client.setBotModelBinding({
       workspaceId: 'ws_ocean',
       requestId: 'bind',
@@ -108,22 +68,20 @@ export async function compatibility() {
           });
     }
     await a3.kill();
-    const reconnected = await f.peer('a3');
-    assert.equal((await reconnected.client.status()).capabilities.length, 65);
-    assert.equal((await sdk.client.status()).capabilities.length, 66);
-    assert.equal((await rc2.client.status()).capabilities.length, 45);
-    await assert.rejects(
-      reconnected.raw('modelConnections.set', { ...setInput, requestId: 'refused' }),
-      /model_runtime_upgrade_required/,
+    a3 = await f.peer('a3');
+    const after = await negotiationWaves(
+      f,
+      owner,
+      { sdk, rc2, a3, modelOnly, unknown },
+      before.revision,
+      'after',
     );
-    assert.equal(
-      (await sdk.client.listModelConnections()).items.filter((r) => r.connectionId === 'named')
-        .length,
-      1,
-    );
+    assert.deepEqual(after.orders, before.orders);
     return {
-      clientPids: [rc2.info.pid, reconnected.info.pid, sdk.info.pid],
+      clientPids: [rc2.info.pid, a3.info.pid, sdk.info.pid],
       physicalEvents: physical.length,
+      mutationOrders: [before.orders, after.orders],
+      permittedMutations: after.revision,
       pages: Math.ceil(physical.length / 2),
       owner: owner.info.host,
     };

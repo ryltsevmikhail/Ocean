@@ -78,5 +78,10 @@ serve(async (method, input: { method: string; params: unknown }) => {
   return (fn as (v: unknown) => unknown)(input);
 });
 process.send!({
-  ready: { identity, pid: process.pid, sdk: import.meta.resolve('@runnets/tools-node') },
+  ready: {
+    identity,
+    pid: process.pid,
+    endpoint: readLocalRuntimeDescriptor(profile).endpoint,
+    sdk: import.meta.resolve('@runnets/tools-node'),
+  },
 });
