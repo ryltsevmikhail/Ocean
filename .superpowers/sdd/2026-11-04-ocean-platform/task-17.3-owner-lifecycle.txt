@@ -76,6 +76,7 @@ export class QualificationOwner {
     try {
       const result=await this.cleanup();
       if(!originalError&&result.stopError)throw Error(result.stopError);
+      if(!originalError&&result.exit&&result.exit.code!==0)throw Error('owner_unclean_exit');
       return result;
     }catch(cleanupError){if(originalError){originalError.cleanupError=cleanupError;return {cleanupError:cleanupError.message,leaderReaped:false,groupGone:false};}throw cleanupError;}
   }
@@ -86,8 +87,9 @@ export async function withQualificationOwner(owner,work,writeLedger) {
   catch(e){originalError=e;throw e;}
   finally {
     try{cleanup=await owner.finish(originalError);}
+    catch(e){if(!originalError){originalError=e;throw e;}}
     finally {
-      try{writeLedger({failure:originalError?.message,cleanup,owners:owner.records});}
+      try{writeLedger({failure:originalError?.message,cleanup:cleanup??owner.lastCleanup,owners:owner.records});}
       catch(ledgerError){if(originalError)originalError.ledgerError=ledgerError;else throw ledgerError;}
     }
   }

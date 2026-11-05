@@ -6,7 +6,10 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {createRuntime} from './apps/cli/dist/runtime.js';
 import {connectLocalRuntime} from '@runnets/tools-node';
 import {readCodingBackupInventory} from '@runnets/store-sqlite';
-const artifact=process.env.OCEAN_QA_ARTIFACT,rehearsal=process.env.OCEAN_QA_REHEARSAL_NAME??'rebind-rehearsal';assert.match(rehearsal,/^[a-z0-9-]+$/);const root=path.join(artifact,rehearsal);fs.mkdirSync(root,{mode:0o700});
+const artifact=process.env.OCEAN_QA_ARTIFACT,rehearsal=process.env.OCEAN_QA_REHEARSAL_NAME??'rebind-rehearsal';
+const proofHelper=process.env.OCEAN_QA_PROOF_HELPER??'/home/ryltsevmg/Projects/Ocean-stable/.superpowers/sdd/2026-11-04-ocean-platform/task-17.3-proof-output.txt';
+const {prepareProofOutput}=await import('data:text/javascript,'+encodeURIComponent(fs.readFileSync(proofHelper,'utf8')));
+const proofOutput=prepareProofOutput(artifact,{rehearsal,proof:process.env.OCEAN_QA_REBIND_PROOF}),root=proofOutput.root;
 const helper=process.env.OCEAN_QA_OWNER_HELPER??'/home/ryltsevmg/Projects/Ocean-stable/.superpowers/sdd/2026-11-04-ocean-platform/task-17.3-owner-lifecycle.txt';
 const {QualificationOwner,withQualificationOwner}=await import('data:text/javascript,'+encodeURIComponent(fs.readFileSync(helper,'utf8')));
 process.env.HOME=path.join(root,'home');fs.mkdirSync(process.env.HOME,{mode:0o700});
@@ -59,5 +62,5 @@ await withQualificationOwner(lifecycle,async()=>{
  const final=(await client.listModelConnections()).items.filter(r=>descriptors.some(d=>d.connectionId===r.connectionId));assert.equal(final.find(r=>r.connectionId==='openai').configuration.configuredAfterRestore,true);for(const id of ['anthropic','local'])assert.equal(final.find(r=>r.connectionId===id).configuration.configuredAfterRestore,false);
  const after=fs.readFileSync(effects,'utf8').trim().split('\n').map(JSON.parse);assert.ok(after.every(e=>e.origin==='https://api.openai.com'));assert.equal(after.filter(e=>e.path.endsWith('/chat/completions')).length,1);
  const proof={installedRoot:process.cwd(),hosts,ordinaryStartupBeforeRebind:'restore_restricted',maintenanceAllInert:true,maintenanceNoEffects:true,inspect:inspection.reply.data,preview:preview.reply.data,result:result.reply.data,nonTTYConfirm:'approval_required',actualTTY:true,normalOwnerReconnectOne:true,configured:final.map(r=>({connectionId:r.connectionId,configuredAfterRestore:r.configuration.configuredAfterRestore})),run,effects:after};
- fs.writeFileSync(path.join(artifact,process.env.OCEAN_QA_REBIND_PROOF??'rebind-proof.json'),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify(proof,null,2));
+ proofOutput.write(proof);console.log(JSON.stringify(proof,null,2));
 },outcome=>{fs.writeFileSync(path.join(root,'commands.json'),JSON.stringify(ledger,null,2)+'\n');fs.writeFileSync(path.join(root,'owner-cleanup.json'),JSON.stringify(outcome,null,2)+'\n');});
