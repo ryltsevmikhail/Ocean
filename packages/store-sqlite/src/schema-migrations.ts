@@ -1,3 +1,4 @@
+import { SERVICE_AUTHORITY_TABLES, migrateServiceAuthority } from './service-authority-schema.js';
 import { migrateModelPendingRequests } from './model-pending-schema.js';
 import { migrateRoomModelPolicies } from './room-model-policy-schema.js';
 import { migrateModelQualifications } from './model-qualification-schema.js';
@@ -119,4 +120,8 @@ export function applyMigrations(
   else if (!existing.has('ocean_room_model_policies'))
     throw Error('database schema is missing table ocean_room_model_policies');
   if (previousVersion < 23) migrateModelPendingRequests(db);
+  if (previousVersion < 24) migrateServiceAuthority(db);
+  else
+    for (const table of SERVICE_AUTHORITY_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
 }

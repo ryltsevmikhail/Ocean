@@ -86,6 +86,7 @@ describe('schema initialization', () => {
       'ocean_model_connection_receipts',
       'ocean_model_connections',
       'ocean_owner_decisions',
+      'ocean_owner_scope_grants',
       'ocean_plugin_confirmations',
       'ocean_plugin_connections',
       'ocean_plugin_consents',
@@ -104,6 +105,8 @@ describe('schema initialization', () => {
       'ocean_room_model_policies',
       'ocean_room_policies',
       'ocean_rooms',
+      'ocean_service_catalogs',
+      'ocean_service_connections',
       'ocean_workspace',
       'ocean_worktrees',
     ]);

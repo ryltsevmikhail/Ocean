@@ -1,0 +1,32 @@
+import type {
+  OwnerScopeGrant,
+  ServiceCatalogSnapshot,
+  ServiceConnection,
+  ServiceConnectionVersions,
+} from '@runnets/domain';
+/** Runtime-only storage; these operations grant no model-facing mutation capability. */
+export interface ServiceAuthorityTransaction {
+  connection(id: string): ServiceConnection | null;
+  listConnections(): readonly ServiceConnection[];
+  /** null creates revision-1 axes; false is a stale/missing expected version. */
+  putConnection(
+    record: ServiceConnection,
+    expectedVersions: ServiceConnectionVersions | null,
+  ): boolean;
+  catalog(id: string): ServiceCatalogSnapshot | null;
+  /** Identical insertion is idempotent; conflicting immutable content throws. */
+  putCatalog(record: ServiceCatalogSnapshot): boolean;
+  publishCatalog(
+    connectionId: string,
+    expectedVersions: ServiceConnectionVersions,
+    snapshotId: string,
+  ): boolean;
+  grant(id: string): OwnerScopeGrant | null;
+  listGrants(): readonly OwnerScopeGrant[];
+  /** null creates revision 1; replacement must advance exactly one revision. */
+  putGrant(record: OwnerScopeGrant, expectedRevision: number | null): boolean;
+}
+export interface ServiceAuthorityStorePort {
+  /** Synchronous callback only; all operations share one immediate transaction. */
+  atomic<T>(work: (tx: ServiceAuthorityTransaction) => T): T;
+}

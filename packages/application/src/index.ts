@@ -105,3 +105,5 @@ export * from './model-read-pages.js';
 export * from './model-connection-metadata.js';
 export * from './bot-model-binding-reads.js';
 export * from './model-execution-reads.js';
+
+export * from './service-authority-ports.js';

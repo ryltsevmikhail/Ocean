@@ -125,8 +125,7 @@ export interface ServicePluginInvokeOptions {
 }
 
 /** Hard limits. The application owns them; the adapter enforces them. */
-export const SERVICE_PLUGIN_MAX_TOOLS = 256;
-export const SERVICE_PLUGIN_MAX_DISCOVERY_BYTES = 4 * 1024 * 1024;
+export { SERVICE_PLUGIN_MAX_TOOLS, SERVICE_PLUGIN_MAX_DISCOVERY_BYTES } from '@runnets/domain';
 export const SERVICE_PLUGIN_MAX_REQUEST_BYTES = 1024 * 1024;
 export const SERVICE_PLUGIN_CALL_DEADLINE_MS = 30_000;
 export const SERVICE_PLUGIN_DISCOVERY_DEADLINE_MS = 15_000;

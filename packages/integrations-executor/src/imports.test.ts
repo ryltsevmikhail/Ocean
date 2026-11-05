@@ -62,7 +62,7 @@ describe('package surface qualification', () => {
       'utf8',
     );
     const specifiers = importSpecifiers(source);
-    expect(specifiers).toHaveLength(0);
+    expect(specifiers).toEqual(['@runnets/domain']);
     expect(source).not.toMatch(/^\s*import\s/m);
   });
 

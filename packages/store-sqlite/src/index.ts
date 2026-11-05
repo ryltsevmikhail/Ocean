@@ -51,3 +51,6 @@ export {
 } from './plugin-backup-inventory.js';
 
 export type { DesktopBindingUpgrade } from './desktop-binding-upgrade.js';
+
+export { SqliteServiceAuthority } from './service-authority-storage.js';
+export { SERVICE_AUTHORITY_TABLES, migrateServiceAuthority } from './service-authority-schema.js';

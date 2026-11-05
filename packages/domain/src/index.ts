@@ -75,3 +75,8 @@ export { evolveModelDispatch } from './model-dispatch-evolve.js';
 export { copyActivation as copyModelActivationSnapshot } from './model-dispatch-validation.js';
 
 export * from './room-model-policy.js';
+
+export * from './service-connection.js';
+export * from './service-catalog.js';
+export * from './owner-scope-grant.js';
+export * from './effect-resource-scope.js';

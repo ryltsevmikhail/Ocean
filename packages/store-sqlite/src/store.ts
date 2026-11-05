@@ -1,3 +1,5 @@
+import { SqliteServiceAuthority } from './service-authority-storage.js';
+import type { ServiceAuthorityStorePort } from '@runnets/application';
 import { upgradeDesktopBinding, type DesktopBindingUpgrade } from './desktop-binding-upgrade.js';
 import { desktopAssetStore } from './desktop-assets.js';
 import { restoreOriginStore } from './restore-origin.js';
@@ -78,6 +80,7 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  readonly serviceAuthority: ServiceAuthorityStorePort;
   readonly modelConnections: ModelConnectionStorePort;
   readonly providerConnections: ProviderConnectionStorePort;
   readonly pluginCatalog: PluginCatalogStorePort;
@@ -142,6 +145,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   let closed = false;
   const tools = new SqliteToolJournal(db);
   return {
+    serviceAuthority: new SqliteServiceAuthority(db),
     modelConnections: new SqliteModelConnections(db),
     providerConnections: new SqliteProviderConnections(db),
     pluginCatalog: new SqlitePluginCatalog(db),
