@@ -10,9 +10,20 @@ export class InvocationSend {
   httpStatus = 0;
   private closed = false;
 
-  constructor(timeoutMs: number, signal?: AbortSignal) {
+  readonly id: string;
+  private readonly authorize: (() => boolean) | undefined;
+  constructor(timeoutMs: number, signal?: AbortSignal, id = '', authorize?: () => boolean) {
+    this.id = id;
+    this.authorize = authorize;
     this.deadline = performance.now() + timeoutMs;
     this.signal = signal;
+  }
+
+  static outside<T>(fn: () => T) {
+    return active.exit(fn);
+  }
+  static get active() {
+    return active.getStore();
   }
 
   static current(): InvocationSend {
@@ -33,6 +44,7 @@ export class InvocationSend {
   admit(record?: () => void): void {
     if (this.closed || this.sent || this.signal?.aborted || performance.now() >= this.deadline)
       throw Error('invocation closed to dispatch');
+    if (this.authorize && !this.authorize()) throw Error('dispatch denied');
     record?.();
     this.sent = true;
   }

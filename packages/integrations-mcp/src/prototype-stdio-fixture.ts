@@ -1,4 +1,4 @@
-import { InvocationSend } from './prototype-send.js';
+import { InvocationSend } from './send.js';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { Server } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';

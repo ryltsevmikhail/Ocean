@@ -1,4 +1,4 @@
-import { InvocationSend } from './prototype-send.js';
+import { InvocationSend } from './send.js';
 import { client, empty, immutable } from './prototype-types.js';
 import { httpTransport } from './prototype-http.js';
 import { httpFixture } from './prototype-http-fixture.js';

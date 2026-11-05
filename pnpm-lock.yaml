@@ -322,15 +322,22 @@ importers:
       '@modelcontextprotocol/client':
         specifier: 2.4.0
         version: 2.4.0
-      '@modelcontextprotocol/server':
-        specifier: 2.4.0
-        version: 2.4.0
       '@runnets/application':
         specifier: workspace:*
         version: link:../application
+      '@runnets/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@runnets/tools-node':
         specifier: workspace:*
         version: link:../tools-node
+    devDependencies:
+      '@modelcontextprotocol/server':
+        specifier: 2.4.0
+        version: 2.4.0
+      '@runnets/store-sqlite':
+        specifier: workspace:*
+        version: link:../store-sqlite
       rolldown:
         specifier: 1.2.16
         version: 1.2.16

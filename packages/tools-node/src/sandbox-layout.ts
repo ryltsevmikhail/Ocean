@@ -41,6 +41,7 @@ export async function sandboxRoot(
   root: string,
   mounts: readonly SandboxMount[] = [],
   projectRoot?: string,
+  serviceWorkspace = false,
 ): Promise<void> {
   if ((await realpath(root)) !== root || !(await lstat(root)).isDirectory())
     throw new ToolError('containment_unavailable', 'canonical task root required');
@@ -48,7 +49,7 @@ export async function sandboxRoot(
   const pending = new Set(
     mounts.map((m) => m.target).filter((target) => target.startsWith('/workspace/')),
   );
-  pending.add('/workspace/.git');
+  if (!serviceWorkspace) pending.add('/workspace/.git');
   let count = 0;
   async function walk(directory: string): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -56,7 +57,7 @@ export async function sandboxRoot(
       if (/^\.ocean-(?:recovery-|.*\.tmp$)/.test(entry.name))
         throw new ToolError('effect_uncertain', 'unreconciled filesystem worker artifacts');
       if (entry.name === '.git' && directory === root) {
-        if (!(await lstat(join(directory, entry.name))).isFile())
+        if (serviceWorkspace || !(await lstat(join(directory, entry.name))).isFile())
           throw new ToolError('containment_unavailable', 'linked worktree required');
         pending.delete('/workspace/.git');
         continue;

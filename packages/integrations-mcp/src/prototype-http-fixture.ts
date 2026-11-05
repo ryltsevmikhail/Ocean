@@ -1,3 +1,5 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
@@ -28,11 +30,13 @@ export function definition(version: string): Tool {
     },
   };
 }
-export async function httpFixture(name: string) {
+export async function httpFixture(name: string, evidenceDir?: string) {
   const rows: string[] = [];
   const headers: string[] = [];
+  const pairs: string[][] = [];
   const types: string[] = [];
   const stats = { effects: 0, calls: 0, version: 'alpha', notified: 0 };
+  const extra: Tool[] = [];
   const held = name.startsWith('held-') || name === 'status-race';
   const legacy = ['sse', 'notification'].includes(name) || held;
   let releaseResponse = () => {};
@@ -48,7 +52,7 @@ export async function httpFixture(name: string) {
       },
     );
     protocol.setRequestHandler('tools/list', () => ({
-      tools: [definition(stats.version)],
+      tools: [definition(stats.version), ...extra],
       ttlMs: 0,
       cacheScope: 'private',
     }));
@@ -64,6 +68,7 @@ export async function httpFixture(name: string) {
         await protocol.sendToolListChanged();
         stats.notified++;
       }
+      if (evidenceDir) appendFileSync(join(evidenceDir, 'effects'), 'effect\n', { flush: true });
       stats.effects++;
       const version = name === 'invalid' ? 'invalid' : req.params.arguments?.['value'];
       return { content: [{ type: 'text', text: 'fixture' }], structuredContent: { version } };
@@ -89,7 +94,16 @@ export async function httpFixture(name: string) {
         const method = message ? (message.method ?? 'response') : (req.method ?? 'GET');
         rows.push(method);
         if (method === 'tools/call') {
+          if (evidenceDir)
+            appendFileSync(join(evidenceDir, 'dispatches'), 'send\n', { flush: true });
           stats.calls++;
+          pairs.push(
+            req.rawHeaders.filter((_, i) =>
+              ['authorization', 'mcp-param-alpha', 'mcp-param-bravo'].includes(
+                req.rawHeaders[i - (i % 2)]!.toLowerCase(),
+              ),
+            ),
+          );
           headers.push(
             String(req.headers['mcp-param-alpha'] ?? req.headers['mcp-param-bravo'] ?? ''),
           );
@@ -158,6 +172,8 @@ export async function httpFixture(name: string) {
     url: new URL('http://127.0.0.1:' + addr.port + '/mcp'),
     rows,
     headers,
+    pairs,
+    extra,
     types,
     stats,
     async close() {

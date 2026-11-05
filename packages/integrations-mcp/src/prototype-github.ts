@@ -1,4 +1,4 @@
-import { InvocationSend } from './prototype-send.js';
+import { InvocationSend } from './send.js';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';

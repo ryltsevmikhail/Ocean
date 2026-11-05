@@ -174,3 +174,5 @@ export {
   localModelConnectionsClient,
   type LocalModelConnectionsClient,
 } from './local-model-connections-client.js';
+
+export { prepareManagedStdio, type ManagedStdioRequest } from './managed-stdio.js';

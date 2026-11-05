@@ -1,8 +1,7 @@
 import { sandboxLauncher } from './sandbox-launcher.js';
-import { spawn, execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { readdir, readFile, realpath } from 'node:fs/promises';
-import { dirname, basename } from 'node:path';
+import { spawn } from 'node:child_process';
+import { control, controlEnv as env, observedGroup, retiredGroup } from './sandbox-cgroup.js';
+import { realpath } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import {
   sandboxArgv,
@@ -13,21 +12,6 @@ import {
 } from './sandbox-layout.js';
 export { sandboxLimits } from './sandbox-layout.js';
 export type { SandboxRequest, SandboxEvidence } from './sandbox-layout.js';
-const execute = promisify(execFile);
-const env = { PATH: '/usr/bin:/bin', XDG_RUNTIME_DIR: '/run/user/' + process.getuid?.() };
-async function control(args: string[]): Promise<string> {
-  return (
-    await execute('/usr/bin/systemctl', ['--user', ...args], {
-      env,
-      timeout: 5000,
-      maxBuffer: 65536,
-    })
-  ).stdout;
-}
-function populated(events: string, expected: 0 | 1): boolean {
-  const fields = events.split('\n').filter((line) => /^populated\b/.test(line));
-  return fields.length === 1 && fields[0] === 'populated ' + expected;
-}
 /** Write the worker payload only while its unit and exact operation are still authorized. */
 export async function sendSandboxPayload(
   request: Pick<SandboxRequest, 'guard' | 'signal'>,
@@ -159,19 +143,7 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
       admitted = true;
       void (async () => {
         try {
-          const path = (await control(['show', unit, '--property=ControlGroup', '--value'])).trim();
-          if (
-            !path.startsWith('/user.slice/') ||
-            basename(path) !== unit ||
-            !path
-              .slice(1)
-              .split('/')
-              .every((part) => /^[A-Za-z0-9_@-][A-Za-z0-9_.@-]*$/.test(part))
-          )
-            throw new Error('invalid cgroup');
-          const events = await readFile('/sys/fs/cgroup' + path + '/cgroup.events', 'utf8');
-          if (!populated(events, 1)) throw new Error('cgroup not populated');
-          observed.cgroup = path;
+          observed.cgroup = await observedGroup(unit);
           if (
             !(await sendSandboxPayload(
               request,
@@ -206,20 +178,7 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
   // handler. An admitted run with a plain exit-0 status therefore had its child
   // exit on its own; no stdout token can be forged in this namespace.
   if (exitCode === 0 && reason === 'exit' && !admitted) reason = 'unavailable';
-  let cleanupConfirmed = false;
-  if (observed.cgroup !== null) {
-    try {
-      const events = await readFile('/sys/fs/cgroup' + observed.cgroup + '/cgroup.events', 'utf8');
-      cleanupConfirmed = populated(events, 0);
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        const siblings = await readdir('/sys/fs/cgroup' + dirname(observed.cgroup)).catch(
-          () => null,
-        );
-        cleanupConfirmed = siblings !== null && !siblings.includes(unit);
-      }
-    }
-  }
+  const cleanupConfirmed = observed.cgroup !== null && (await retiredGroup(observed.cgroup));
   await control(['reset-failed', unit]).catch(() => {});
   return {
     output: output.toString('utf8'),

@@ -1,32 +1,12 @@
-import { InvocationSend } from './prototype-send.js';
-import {
-  StreamableHTTPClientTransport,
-  ProtocolError,
-  SdkError,
-  SdkErrorCode,
-  type Tool,
-} from '@modelcontextprotocol/client';
+import { httpTransport } from './profile.js';
+export { httpTransport } from './profile.js';
+import { InvocationSend } from './send.js';
+import { ProtocolError, SdkError, SdkErrorCode, type Tool } from '@modelcontextprotocol/client';
 import { appendFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { client, empty, immutable, methodOf, type Case } from './prototype-types.js';
 import { httpFixture } from './prototype-http-fixture.js';
 
-type WireFetch = NonNullable<
-  NonNullable<ConstructorParameters<typeof StreamableHTTPClientTransport>[1]>['fetch']
->;
-export function httpTransport(url: URL, wire: WireFetch, headers: Record<string, string> = {}) {
-  return new StreamableHTTPClientTransport(url, {
-    requestInit: { headers, redirect: 'error' },
-    fetch: wire,
-    onInsufficientScope: 'throw',
-    reconnectionOptions: {
-      maxRetries: 0,
-      maxReconnectionDelay: 0,
-      initialReconnectionDelay: 0,
-      reconnectionDelayGrowFactor: 1,
-    },
-  });
-}
 function deferred() {
   let resolve = () => {};
   const promise = new Promise<void>((r) => {

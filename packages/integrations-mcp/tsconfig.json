@@ -8,7 +8,12 @@
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"],
   "references": [
-    { "path": "../application" },
+    {
+      "path": "../domain"
+    },
+    {
+      "path": "../application"
+    },
     {
       "path": "../tools-node"
     }

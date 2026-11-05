@@ -21,7 +21,7 @@ export type ServiceConfiguration =
       readonly kind: 'stdio';
       readonly executable: string;
       readonly sha256: string;
-      /** Inert stage18.2 accepts only an empty list; qualified launch forms follow18.4. */
+      /** Only the isolated /workspace directory may be passed to the pinned Node artifact. */
       readonly args: readonly string[];
     };
 export interface ServiceTrustBinding {
@@ -73,7 +73,7 @@ export function validServiceConfiguration(v: unknown): v is ServiceConfiguration
       String(v['executable']).startsWith('/') &&
       validPluginSchemaDigest(v['sha256']) &&
       Array.isArray(v['args']) &&
-      v['args'].length === 0 &&
+      (v['args'].length === 0 || (v['args'].length === 1 && v['args'][0] === '/workspace')) &&
       authorityDenseArray(v['args'])
     );
   if (v['kind'] !== 'http' || !keys(v, ['kind', 'url']) || !text(v['url'], 4096)) return false;
