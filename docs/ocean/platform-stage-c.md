@@ -1,8 +1,9 @@
 # Ocean Platform: прогресс этапа C
 
-Дата: 2026-11-06. **Приняты C18.1** на `79bbce9` и **C18.2** на `7bbb502`
-после независимых ревью и одного раунда исправлений каждый. Production использует
-Executor; новый допуск, прямой MCP в runtime и UI ещё запланированы.
+Дата: 2026-11-06. **Приняты C18.1** на `79bbce9`, **C18.2** на `7bbb502`
+и **C18.3** с normal coding consumers на `b868d32` после независимых ревью
+и исправлений. Сервисный production transport пока использует Executor;
+прямой MCP-host, owner RPC/UI и установленная миграция ещё запланированы.
 
 ## Что квалифицировано
 
@@ -74,9 +75,42 @@ lint/format0. Полного зелёного root gate эта проверка 
 финальному whole-branch review. Native/live/установленная миграция относятся
 к следующим шагам.
 
+## Актуальный допуск и coding consumers C18.3
+
+OwnerScopeService хранит долговечное намерение владельца; служебные права, каталог
+и сессия разделены. Exact/current-set используют утверждённые определения;
+future tools требуют явного выбора. Отзыв проверяется перед отправкой.
+Смена credential требует доказанной непрерывности, endpoint/account не считаются
+обычной ротацией ключа. Клиентские owner-операции будут подключены в18.5.
+
+Схема25 добавляет одну nullable admission-колонку существующему журналу.
+Известные независимые footprints могут работать отдельно; legacy, неподтверждённые
+и противоречивые записи сохраняют глобальный hold. Guarded coding требует
+точной связи approval/claim/инструмент/fingerprint/metadata. Утрата metadata
+не восстанавливает право отправки и не сбрасывает уже занятый allowance.
+
+Обычная фабрика coding-tools проверена с реальными application/SQLite:
+B читает, редактирует и запускает зарегистрированный preset без prompt,
+пока A остаётся uncertain. Подтверждённая владельцем финализация освобождает
+только B; записи и holds A не меняются. Platform session и registry в этих
+тестах scripted: это не новое доказательство физических файлов, native sandbox
+или установленного клиента. Source apply сохраняет отдельный точный
+owner/review/changeset-путь и legacy global fallback.
+
+Core303a623:92 focused passes; root3502 passed/3 failures/44 skipped.
+Normal-consumerdcb1982:206 covering passes; root3584 passed/те же3 failures/
+44 skipped; process-фаза не достигнута; build0, format1 только protected2.
+Исправленияaf343c6 иb868d32 отдельно покрыты126 и226 тестами соответственно,
+строгой main/Node/Desktop-компиляцией и scoped lint/format0. Нового полного
+зелёного root gate эти результаты не заявляют.
+
+В ревью закрыты ошибки сопоставления квитанций, legacy scope и resource identity,
+допуска до project inspection и wiring верхних consumers. Minor о повторном
+чтении SQLite оставлен финальному whole-branch review.
+
 ## Дальше по плану
 
-18.3 — актуальный допуск, scoped journal и coding bypass;
 18.4 — production adapter/host;18.5 — консервативная миграция и настройки;
-18.6 — установленная/live/package-приёмка и удаление Executor.
+18.6 — установленная/live/package-приёмка и удаление Executor. Затем D —
+сохраняемые поручения и свободное взаимодействие команды, E/F — клиент и выпуск.
 [Канонический план](../superpowers/plans/2026-11-04-ocean-platform.md).
