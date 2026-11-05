@@ -1,3 +1,4 @@
+import { validToolEffectAdmission } from '@runnets/domain';
 import type { ToolEffectRecord } from '@runnets/application';
 import type { DatabaseSync } from 'node:sqlite';
 import { unresolvedEffectSql } from './tool-effect-resolution.js';
@@ -16,6 +17,7 @@ export function inspectPendingEffects(
           )
           .all(taskRunId);
   const records: ToolEffectRecord[] = rows.map((row) => ({
+    ...decodeAdmission(row['admission']),
     id: String(row['id']),
     tool: String(row['tool']),
     taskRunId: String(row['task_run_id']),
@@ -41,4 +43,14 @@ export function inspectPendingEffects(
       });
   }
   return records;
+}
+
+function decodeAdmission(raw: unknown) {
+  if (typeof raw !== 'string') return {};
+  try {
+    const value: unknown = JSON.parse(raw);
+    return validToolEffectAdmission(value) ? { admission: value } : {};
+  } catch {
+    return {};
+  }
 }

@@ -1,4 +1,4 @@
-import { ToolError } from '@runnets/application';
+import { ToolError, type ToolDispatchGuard } from '@runnets/application';
 import { checkedPath, type WorkspaceBackend } from './backend.js';
 import { runSandbox, type SandboxRequest } from './sandbox-supervision.js';
 
@@ -117,11 +117,13 @@ export async function sandboxFile(
     expected?: string | null;
   },
   signal?: AbortSignal,
+  guard?: ToolDispatchGuard,
 ): Promise<unknown> {
   const path = checkedPath(input.path);
   const evidence = await runSandbox({
     ...options,
     ...(signal ? { signal } : {}),
+    ...(guard ? { guard } : {}),
     program: '/toolchain/node',
     args: ['-e', worker],
     stdin: JSON.stringify({ ...input, path }),

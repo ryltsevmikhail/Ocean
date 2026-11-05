@@ -4,6 +4,7 @@ import type { PreparedTool, ToolJournalPort, ToolResult } from './tools.js';
 
 /** Trusted host preparation owns the immutable binding and executable closure. */
 export interface PreparedCodingOperation {
+  readonly guarded?: true;
   readonly approvalId: string;
   readonly binding: CodingApprovalBinding;
   readonly tool: PreparedTool;
@@ -20,11 +21,12 @@ export async function dispatchCodingOperation(
   signal.throwIfAborted();
   const binding = structuredClone(operation.binding);
   const approvalId = operation.approvalId;
+  const guarded = operation.guarded === true;
   const preview = operation.tool.preview;
   const execute = operation.tool.execute.bind(operation.tool);
   const currentBinding = operation.currentBinding.bind(operation);
   const recordResult = operation.recordResult?.bind(operation);
-  const requested = approvals.request(approvalId, binding, preview);
+  const requested = approvals.request(approvalId, binding, preview, guarded);
   if (!requested.ok) return { isError: true, output: requested.error.code };
   const decision = await approvals.decide(approvalId, binding, owner, currentBinding);
   signal.throwIfAborted();
@@ -35,8 +37,18 @@ export async function dispatchCodingOperation(
   const consumed = approvals.consume(approvalId, current);
   if (!consumed.ok) return { isError: true, output: consumed.error.code };
   const context = { taskRunId: binding.runId, attemptId: binding.attemptId };
+  let sent = !guarded,
+    closed = false;
+  const authorize = () => {
+    if (closed || signal.aborted || sent || !approvals.authorizeDispatch(approvalId, binding))
+      return false;
+    sent = true;
+    return true;
+  };
   try {
-    const result = await execute(signal);
+    const result = await execute(signal, guarded ? { authorize } : undefined);
+    closed = true;
+    if (!sent) throw Error('coding dispatch refused');
     await recordResult?.(result);
     await journal.settle(
       binding.invocationId,
@@ -45,6 +57,11 @@ export async function dispatchCodingOperation(
     );
     return result;
   } catch {
+    closed = true;
+    if (!sent) {
+      await journal.settle(binding.invocationId, 'not_started', context);
+      return { isError: true, output: 'coding dispatch refused' };
+    }
     await journal.settle(binding.invocationId, 'uncertain', context).catch(() => {});
     return {
       isError: true,

@@ -28,6 +28,18 @@ function populated(events: string, expected: 0 | 1): boolean {
   const fields = events.split('\n').filter((line) => /^populated\b/.test(line));
   return fields.length === 1 && fields[0] === 'populated ' + expected;
 }
+/** Write the worker payload only while its unit and exact operation are still authorized. */
+export async function sendSandboxPayload(
+  request: Pick<SandboxRequest, 'guard' | 'signal'>,
+  active: () => boolean,
+  write: () => void,
+): Promise<boolean> {
+  await request.guard?.prepare?.();
+  if (!active() || request.signal?.aborted || (request.guard && !request.guard.authorize()))
+    return false;
+  write();
+  return true;
+}
 /** No project code executes until the host has observed the service cgroup. */
 export async function runSandbox(request: SandboxRequest): Promise<SandboxEvidence> {
   request.signal?.throwIfAborted();
@@ -160,8 +172,14 @@ export async function runSandbox(request: SandboxRequest): Promise<SandboxEviden
           const events = await readFile('/sys/fs/cgroup' + path + '/cgroup.events', 'utf8');
           if (!populated(events, 1)) throw new Error('cgroup not populated');
           observed.cgroup = path;
-          if (reason === 'exit' && !closed) child.stdin.end(payload);
-          else await stop();
+          if (
+            !(await sendSandboxPayload(
+              request,
+              () => reason === 'exit' && !closed,
+              () => child.stdin.end(payload),
+            ))
+          )
+            await stop();
         } catch {
           reason = 'unavailable';
           await stop();

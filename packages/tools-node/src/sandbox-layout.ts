@@ -1,6 +1,6 @@
 import { lstat, realpath, readdir } from 'node:fs/promises';
 import { join, relative as pathRelative } from 'node:path';
-import { ToolError } from '@runnets/application';
+import { ToolError, type ToolDispatchGuard } from '@runnets/application';
 import { validateMounts, type SandboxMount } from './sandbox-mounts.js';
 import { blockedName } from './backend.js';
 import { WORKER_SYSTEM_TREES } from './worker-system-paths.js';
@@ -21,6 +21,7 @@ export interface SandboxRequest {
   readonly args: readonly string[];
   readonly cwd?: string;
   readonly signal?: AbortSignal;
+  readonly guard?: ToolDispatchGuard;
   /** Private input for the fixed filesystem worker. */
   readonly stdin?: string;
   readonly timeoutMs?: number;

@@ -167,6 +167,7 @@ export function claimFixture() {
     task,
     approvals,
     dispatch,
+    operation,
     holds,
     rows,
     approval,

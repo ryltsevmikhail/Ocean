@@ -55,9 +55,9 @@ describe('service authority migration 24', () => {
       oldTables = tables(f.db),
       pending = f.journal.inspectPending();
     initializeSchema(f.db);
-    expect(SCHEMA_VERSION).toBe(24);
+    expect(SCHEMA_VERSION).toBe(25);
     expect(f.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '24',
+      '25',
     );
     expect(
       tables(f.db)
@@ -81,7 +81,7 @@ describe('service authority migration 24', () => {
     initializeSchema(db);
     schema23(db);
     db.exec(
-      "CREATE TRIGGER stop_authority BEFORE UPDATE ON meta WHEN NEW.value='24' BEGIN SELECT RAISE(ABORT,'publication failed'); END",
+      "CREATE TRIGGER stop_authority BEFORE UPDATE ON meta WHEN NEW.value='25' BEGIN SELECT RAISE(ABORT,'publication failed'); END",
     );
     expect(() => initializeSchema(db)).toThrow('publication failed');
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
@@ -93,10 +93,10 @@ describe('service authority migration 24', () => {
     const db = new DatabaseSync(':memory:');
     opened.push(db);
     initializeSchema(db);
-    db.exec("UPDATE meta SET value='25' WHERE key='schema_version'");
+    db.exec("UPDATE meta SET value='26' WHERE key='schema_version'");
     expect(() => initializeSchema(db)).toThrow(/newer/);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '25',
+      '26',
     );
     db.exec(
       "UPDATE meta SET value='24' WHERE key='schema_version'; DROP TABLE ocean_owner_scope_grants",

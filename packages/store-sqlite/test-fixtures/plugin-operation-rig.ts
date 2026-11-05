@@ -39,8 +39,8 @@ export const databases: DatabaseSync[] = [];
 afterEach(() => {
   for (const db of databases.splice(0)) if (db.isOpen) db.close();
 });
-export function store(): DatabaseSync {
-  const db = openDatabase(':memory:', DEFAULT_BUSY_TIMEOUT_MS);
+export function store(path = ':memory:'): DatabaseSync {
+  const db = openDatabase(path, DEFAULT_BUSY_TIMEOUT_MS);
   databases.push(db);
   new SqliteToolJournal(db);
   db.exec(`

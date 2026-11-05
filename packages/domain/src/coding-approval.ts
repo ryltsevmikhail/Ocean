@@ -1,3 +1,4 @@
+import type { OwnerGrantReference } from './owner-scope-grant.js';
 /** Runtime-created binding. Hashes refer to complete immutable operation previews. */
 export interface CodingApprovalBinding {
   readonly workspaceId: string;
@@ -18,6 +19,9 @@ export interface CodingApprovalBinding {
 }
 export interface CodingApproval {
   readonly authorityId?: string;
+  /** Only the guarded host can prove zero worker dispatch at settlement. */
+  readonly guardedDispatch?: true;
+  readonly grantReference?: OwnerGrantReference;
   readonly id: string;
   readonly binding: CodingApprovalBinding;
   readonly preview: string;

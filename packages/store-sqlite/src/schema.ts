@@ -16,8 +16,8 @@ import { applyMigrations } from './schema-migrations.js';
 
 import { ownerBusy } from './maintenance-owner.js';
 import { userTables } from './schema-inspection.js';
-/** Schema 24 adds inert neutral service authority records. */
-export const SCHEMA_VERSION = 24;
+/** Schema 25 adds optional admission evidence to the existing effect journal. */
+export const SCHEMA_VERSION = 25;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 

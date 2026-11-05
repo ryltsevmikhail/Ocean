@@ -120,12 +120,12 @@ it('publishes the current schema with the first anchored backup of an RC2 schema
   db.exec("UPDATE meta SET value='18' WHERE key='schema_version'");
   db.close();
   const manifest = await backupProfile(f.profile, join(f.root, 'archive18'));
-  expect(manifest.summary.schema).toBe(24);
+  expect(manifest.summary.schema).toBe(25);
   const source = new DatabaseSync(f.path, { readOnly: true });
   try {
     expect(
       source.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('24');
+    ).toBe('25');
   } finally {
     source.close();
   }

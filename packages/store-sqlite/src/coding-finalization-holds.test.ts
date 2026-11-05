@@ -82,7 +82,7 @@ it.each(['v1', 'v2'] as const)('preserves a global unrelated %s effect hold', as
     f.db.exec("INSERT INTO tool_invocations_v1 VALUES('unknown','command','uncertain')");
   else
     f.db.exec(
-      "INSERT INTO tool_invocations_v2 VALUES('unknown','coding_apply','other','attempt','fingerprint','started')",
+      "INSERT INTO tool_invocations_v2(id,tool,task_run_id,attempt_id,fingerprint,outcome) VALUES('unknown','coding_apply','other','attempt','fingerprint','started')",
     );
   expect(f.holds()).toContainEqual(expect.objectContaining({ id: 'unknown', scope: 'global' }));
 });

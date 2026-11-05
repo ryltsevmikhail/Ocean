@@ -1,3 +1,7 @@
+import { codingEffectAdmission } from '@runnets/application';
+import { digest } from './coding-claim-evidence.js';
+import { codingProjectId } from './service-run-scope.js';
+import { readAuthorityGrant } from './service-authority-rows.js';
 import { changesetStorage } from './changeset-storage.js';
 import { SqliteToolJournal } from './tool-journal.js';
 import { task as decodeTask } from './coding-store.js';
@@ -27,7 +31,31 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
         if (value.id !== id) throw Error('invalid approval identity');
         return value;
       };
-      return work({
+      const tx: CodingApprovalTransaction = {
+        projectId: codingProjectId,
+        grants: () =>
+          db
+            .prepare('SELECT id FROM ocean_owner_scope_grants ORDER BY id')
+            .all()
+            .map((r) => readAuthorityGrant(db, String(r['id']))!),
+        grantCalls: (run, id) => this.#journal.grantCalls(run, id),
+        claimed: (a) => {
+          const b = a.binding;
+          return !!db
+            .prepare(
+              `SELECT 1 FROM tool_invocations_v2 j JOIN ocean_coding_approval_claims c ON c.invocation_key=? AND c.approval_id=?
+            WHERE j.id=? AND j.task_run_id=? AND j.attempt_id=? AND j.tool=? AND j.outcome='started' AND j.fingerprint=?`,
+            )
+            .get(
+              codingApprovalClaimKey(a),
+              a.id,
+              b.invocationId,
+              b.runId,
+              b.attemptId,
+              'coding_' + b.operation,
+              digest(JSON.stringify({ ...a, status: 'allowed' })),
+            );
+        },
         worktree: (id) => changesetStorage(db).worktree(id),
         task: (id) => decodeTask(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
         participates: (ws, room, bot) =>
@@ -74,6 +102,7 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
               'coding_' + b.operation,
               { taskRunId: b.runId, attemptId: b.attemptId },
               JSON.stringify(value),
+              codingEffectAdmission(tx, b, value.grantReference ?? null),
             )
           )
             return false;
@@ -83,7 +112,8 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
               .run(codingApprovalClaimKey(value), value.id).changes === 1
           );
         },
-      });
+      };
+      return work(tx);
     });
   }
 }

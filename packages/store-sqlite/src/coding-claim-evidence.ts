@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  validOwnerGrantReference,
   codingApprovalMatches,
   validCodingApprovalBinding,
   type CodingApproval,
@@ -49,7 +50,13 @@ export function approvalOf(payload: unknown): CodingApproval | null {
   const a: unknown = JSON.parse(payload);
   if (
     !record(a) ||
-    !keys(a, ['id', 'binding', 'preview', 'createdAt', 'expiresAt', 'status'], ['authorityId']) ||
+    !keys(
+      a,
+      ['id', 'binding', 'preview', 'createdAt', 'expiresAt', 'status'],
+      ['authorityId', 'grantReference', 'guardedDispatch'],
+    ) ||
+    (Object.hasOwn(a, 'guardedDispatch') && a['guardedDispatch'] !== true) ||
+    (Object.hasOwn(a, 'grantReference') && !validOwnerGrantReference(a['grantReference'])) ||
     typeof a['id'] !== 'string' ||
     !a['id'] ||
     !validBinding(a['binding']) ||

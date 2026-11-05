@@ -1,3 +1,4 @@
+import { migrateToolAdmission } from './tool-admission-schema.js';
 import { SERVICE_AUTHORITY_TABLES, migrateServiceAuthority } from './service-authority-schema.js';
 import { migrateModelPendingRequests } from './model-pending-schema.js';
 import { migrateRoomModelPolicies } from './room-model-policy-schema.js';
@@ -124,4 +125,5 @@ export function applyMigrations(
   else
     for (const table of SERVICE_AUTHORITY_TABLES)
       if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (existing.has('tool_invocations_v2')) migrateToolAdmission(db, previousVersion);
 }

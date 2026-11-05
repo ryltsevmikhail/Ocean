@@ -1,4 +1,4 @@
-import { ToolError, type ToolResult } from '@runnets/application';
+import { ToolError, type ToolDispatchGuard, type ToolResult } from '@runnets/application';
 
 export interface FileEntry {
   readonly name: string;
@@ -19,12 +19,14 @@ export interface WorkspaceBackend {
     content: string,
     expected: string | null,
     signal?: AbortSignal,
+    guard?: ToolDispatchGuard,
   ): Promise<void>;
   command(
     program: string,
     args: readonly string[],
     cwd: string,
     signal: AbortSignal,
+    guard?: ToolDispatchGuard,
   ): Promise<ToolResult>;
 }
 

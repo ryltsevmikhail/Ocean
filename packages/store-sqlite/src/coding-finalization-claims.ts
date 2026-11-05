@@ -1,5 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  validToolEffectAdmission,
+  canonicalJson,
   codingApprovalClaimKey,
   type CodingApproval,
   type CodingFinalizationHold,
@@ -55,6 +57,20 @@ function quiescent(db: DatabaseSync, a: CodingApproval, task: CodingTask): boole
     journal['fingerprint'] !== digest(JSON.stringify({ ...a, status: 'allowed' }))
   )
     return false;
+  if (a.grantReference || journal['outcome'] === 'not_started') {
+    const evidence: unknown = JSON.parse(String(journal['admission']));
+    if (
+      !validToolEffectAdmission(evidence) ||
+      canonicalJson(evidence.binding) !== canonicalJson(b) ||
+      canonicalJson(evidence.grantReference) !== canonicalJson(a.grantReference ?? null)
+    )
+      return false;
+    if (journal['outcome'] === 'not_started')
+      return (
+        a.guardedDispatch === true &&
+        !db.prepare('SELECT 1 FROM ocean_coding_test_evidence WHERE id=?').get(a.id)
+      );
+  }
   if (b.operation === 'test') return testClaimQuiescent(db, a, task, journal['outcome']);
   // The production filesystem adapter returns only after confirmed cgroup cleanup
   // and complete worker success. Exceptions/failed writes have no terminal proof.

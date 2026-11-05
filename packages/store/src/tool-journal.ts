@@ -1,3 +1,8 @@
+import {
+  effectResourcesConflict,
+  validToolEffectAdmission,
+  type ToolEffectAdmission,
+} from '@runnets/domain';
 import type {
   ToolEffectContext,
   ToolEffectOutcome,
@@ -19,11 +24,14 @@ export class InMemoryToolJournal implements ToolJournalPort {
     tool: string,
     context: ToolEffectContext,
     fingerprint: string,
+    admission?: ToolEffectAdmission,
   ): Promise<boolean> {
     if (context.taskRunId === '' || context.attemptId === '' || fingerprint === '')
       return Promise.reject(new Error('tool claim requires run, attempt and request identity'));
+    if (admission !== undefined && !validToolEffectAdmission(admission))
+      return Promise.reject(Error('invalid tool effect admission'));
     const key = identity(id, context);
-    if (this.#records.has(key) || [...this.#records.values()].some(unresolved))
+    if (this.#records.has(key) || this.inspectConflicts(admission).length > 0)
       return Promise.resolve(false);
     this.#records.set(
       key,
@@ -34,6 +42,7 @@ export class InMemoryToolJournal implements ToolJournalPort {
         attemptId: context.attemptId,
         fingerprint,
         outcome: 'started',
+        ...(admission ? { admission: structuredClone(admission) } : {}),
       }),
     );
     return Promise.resolve(true);
@@ -57,16 +66,24 @@ export class InMemoryToolJournal implements ToolJournalPort {
   /** Return immutable unresolved snapshots across all sessions, optionally restricted to one run. */
   pending(taskRunId?: string): Promise<readonly ToolEffectRecord[]> {
     return Promise.resolve(
-      [...this.#records.values()].filter(
-        (record) =>
-          unresolved(record) && (taskRunId === undefined || record.taskRunId === taskRunId),
+      structuredClone(
+        [...this.#records.values()].filter(
+          (record) =>
+            unresolved(record) && (taskRunId === undefined || record.taskRunId === taskRunId),
+        ),
       ),
     );
   }
 
   /** Evidence read without yielding while an acknowledgement is committed. */
   inspectPending(): readonly ToolEffectRecord[] {
-    return [...this.#records.values()].filter(unresolved);
+    return structuredClone([...this.#records.values()].filter(unresolved));
+  }
+  inspectConflicts(admission?: ToolEffectAdmission): readonly ToolEffectRecord[] {
+    return this.inspectPending().filter((r) => effectResourcesConflict(r.admission, admission));
+  }
+  conflicts(admission?: ToolEffectAdmission): Promise<readonly ToolEffectRecord[]> {
+    return Promise.resolve(this.inspectConflicts(admission));
   }
   /** Recovery lowers certainty and never removes a claim or authorizes replay. */
   recover(id: string, context: ToolEffectContext): Promise<void> {

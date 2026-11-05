@@ -102,6 +102,7 @@ async function prepareOperation(
   const binding = await currentBinding();
   return {
     approvalId,
+    guarded: true,
     binding,
     currentBinding,
     ...(operation === 'test' && input.recordEvidence
@@ -156,11 +157,19 @@ async function prepareOperation(
     tool: {
       ...tool,
       preview,
-      execute: async (signal) => {
+      execute: async (signal, guard) => {
         signal.throwIfAborted();
         if ((await snapshot()) !== binding.sourceTreeHash)
           throw new ToolError('stale_read', 'approved source tree changed before execution');
-        return tool.execute(signal);
+        if (!guard) throw new ToolError('coding_denied', 'dispatch authority required');
+        return tool.execute(signal, {
+          authorize: () => guard.authorize(),
+          prepare: async () => {
+            const current = await currentBinding();
+            if (JSON.stringify(current) !== JSON.stringify(binding))
+              throw new ToolError('stale_read', 'coding binding changed before worker dispatch');
+          },
+        });
       },
     },
   };

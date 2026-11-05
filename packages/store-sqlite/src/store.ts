@@ -145,7 +145,7 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   let closed = false;
   const tools = new SqliteToolJournal(db);
   return {
-    serviceAuthority: new SqliteServiceAuthority(db),
+    serviceAuthority: new SqliteServiceAuthority(db, tools),
     modelConnections: new SqliteModelConnections(db),
     providerConnections: new SqliteProviderConnections(db),
     pluginCatalog: new SqlitePluginCatalog(db),

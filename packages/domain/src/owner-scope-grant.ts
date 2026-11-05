@@ -27,6 +27,7 @@ export type OwnerPermission =
       readonly kind: 'service';
       readonly connectionId: string;
       readonly trustRevision: number;
+      readonly baselineCatalogId?: string;
       readonly tools: OwnerToolPolicy;
       readonly resources: readonly OwnerResourceScope[];
     }
@@ -91,7 +92,15 @@ export function validOwnerPermission(v: unknown): v is OwnerPermission {
     );
   return (
     v['kind'] === 'service' &&
-    keys(v, ['kind', 'connectionId', 'trustRevision', 'tools', 'resources']) &&
+    keys(v, [
+      'kind',
+      'connectionId',
+      'trustRevision',
+      'tools',
+      'resources',
+      ...(Object.hasOwn(v, 'baselineCatalogId') ? ['baselineCatalogId'] : []),
+    ]) &&
+    (!Object.hasOwn(v, 'baselineCatalogId') || text(v['baselineCatalogId'])) &&
     text(v['connectionId']) &&
     revision(v['trustRevision']) &&
     validOwnerToolPolicy(v['tools']) &&

@@ -80,3 +80,5 @@ export * from './service-connection.js';
 export * from './service-catalog.js';
 export * from './owner-scope-grant.js';
 export * from './effect-resource-scope.js';
+export * from './service-permissions.js';
+export * from './effect-resource-conflicts.js';

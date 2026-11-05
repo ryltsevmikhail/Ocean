@@ -1,3 +1,5 @@
+import type { ToolEffectAdmission, ToolEffectRecord, ToolEffectOutcome } from './tools.js';
+import type { ServiceCallRequest } from './service-admission-types.js';
 import type {
   OwnerScopeGrant,
   ServiceCatalogSnapshot,
@@ -6,6 +8,12 @@ import type {
 } from '@runnets/domain';
 /** Runtime-only storage; these operations grant no model-facing mutation capability. */
 export interface ServiceAuthorityTransaction {
+  participates(subject: OwnerScopeGrant['subject']): boolean;
+  runMatches(request: ServiceCallRequest): boolean;
+  grantCalls(run: string, grantId: string): number;
+  claim(request: ServiceCallRequest, fingerprint: string, admission: ToolEffectAdmission): boolean;
+  pending(): readonly ToolEffectRecord[];
+  settle(request: ServiceCallRequest, outcome: Exclude<ToolEffectOutcome, 'started'>): void;
   connection(id: string): ServiceConnection | null;
   listConnections(): readonly ServiceConnection[];
   /** null creates revision-1 axes; false is a stale/missing expected version. */

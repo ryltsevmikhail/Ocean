@@ -1,3 +1,6 @@
+import { SqliteToolJournal } from './tool-journal.js';
+import { participates } from './coding-store.js';
+import { runMatches } from './service-run-scope.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { ServiceAuthorityStorePort, ServiceAuthorityTransaction } from '@runnets/application';
 import {
@@ -20,7 +23,9 @@ const versionsMatch = (a: ServiceConnectionVersions, b: ServiceConnectionVersion
   a.credentialRevision === b.credentialRevision;
 export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
   readonly #db: DatabaseSync;
-  constructor(db: DatabaseSync) {
+  readonly #journal: SqliteToolJournal;
+  constructor(db: DatabaseSync, journal = new SqliteToolJournal(db)) {
+    this.#journal = journal;
     this.#db = db;
   }
   atomic<T>(work: (tx: ServiceAuthorityTransaction) => T): T {
@@ -30,6 +35,30 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
     };
     const db = this.#db;
     const tx: ServiceAuthorityTransaction = {
+      participates: (s) => {
+        guard();
+        return participates(db, s.workspaceId, s.roomId, s.botId);
+      },
+      runMatches: (r) => {
+        guard();
+        return runMatches(db, r);
+      },
+      grantCalls: (run, id) => {
+        guard();
+        return this.#journal.grantCalls(run, id);
+      },
+      claim: (r, fingerprint, admission) => {
+        guard();
+        return this.#journal.claimNow(r.invocationId, r.tool, r, fingerprint, admission);
+      },
+      pending: () => {
+        guard();
+        return this.#journal.inspectPending();
+      },
+      settle: (r, outcome) => {
+        guard();
+        this.#journal.settleNow(r.invocationId, outcome, r);
+      },
       connection: (id) => {
         guard();
         return connection(db, id);
@@ -73,6 +102,8 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
           if (
             record.currentCatalogId !== old.currentCatalogId ||
             record.createdAt !== old.createdAt ||
+            (canonical(record.configuration) !== canonical(old.configuration) &&
+              record.trustRevision === old.trustRevision) ||
             versionsMatch(record, old)
           )
             return false;
@@ -132,6 +163,8 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
         if (
           !current ||
           !snapshot ||
+          current.state !== 'active' ||
+          current.trust.metadataPermission !== 'allow' ||
           snapshot.connectionId !== id ||
           !versionsMatch(current, expected) ||
           !versionsMatch(snapshot, expected)

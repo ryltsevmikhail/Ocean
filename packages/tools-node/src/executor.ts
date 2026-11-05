@@ -129,9 +129,9 @@ export class WorkspaceTools implements ToolExecutorPort {
       title: `Edit ${path}`,
       kind: 'edit',
       preview: `--- ${path}\n${before ?? '(new file)'}\n+++ ${path}\n${after}`,
-      execute: async (signal) => {
+      execute: async (signal, guard) => {
         signal.throwIfAborted();
-        await this.#backend.write(path, after, before, signal);
+        await this.#backend.write(path, after, before, signal, guard);
         this.#read.set(path, after);
         return { isError: false, output: `Updated ${path}` };
       },
@@ -155,7 +155,7 @@ export class WorkspaceTools implements ToolExecutorPort {
       title: `Run ${program}`,
       kind: 'execute',
       preview: JSON.stringify({ program, args: argv, cwd }),
-      execute: (signal) => this.#backend.command(program, argv, cwd, signal),
+      execute: (signal, guard) => this.#backend.command(program, argv, cwd, signal, guard),
     };
   }
 }

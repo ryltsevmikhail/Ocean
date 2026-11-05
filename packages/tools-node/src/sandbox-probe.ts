@@ -1,6 +1,6 @@
 import { fingerprintTree } from './sandbox-tree.js';
 import { createHash } from 'node:crypto';
-import { ToolError } from '@runnets/application';
+import { ToolError, type ToolDispatchGuard } from '@runnets/application';
 import type { CodingTestPreset } from '@runnets/domain';
 import { blockedName, checkedPath, type WorkspaceBackend, type FileEntry } from './backend.js';
 import { realpath } from 'node:fs/promises';
@@ -79,6 +79,7 @@ export async function sandboxCommand(
   preset: CodingTestPreset,
   signal: AbortSignal,
   snapshot: () => Promise<string>,
+  guard?: ToolDispatchGuard,
 ): Promise<SandboxCommandEvidence> {
   const beforeTreeHash = await snapshot();
   const dependencyHash = await validateMounts(options.mounts ?? [], options.dependencyProjectRoot);
@@ -91,6 +92,7 @@ export async function sandboxCommand(
     args: preset.args,
     cwd: checkedPath(preset.cwd),
     signal,
+    ...(guard ? { guard } : {}),
   });
   const afterTreeHash = await snapshot();
   return {
@@ -139,9 +141,13 @@ export async function createSandboxBackend(
     if ((await identity()) !== qualifiedIdentity)
       throw new ToolError('containment_unavailable', 'sandbox qualification is stale');
   };
-  const fileOperation = async (input: Parameters<typeof sandboxFile>[1], signal?: AbortSignal) => {
+  const fileOperation = async (
+    input: Parameters<typeof sandboxFile>[1],
+    signal?: AbortSignal,
+    guard?: ToolDispatchGuard,
+  ) => {
     try {
-      return await sandboxFile(options, input, signal);
+      return await sandboxFile(options, input, signal, guard);
     } catch (error) {
       if (error instanceof ToolError && error.code === 'effect_uncertain') held = true;
       throw error;
@@ -164,13 +170,13 @@ export async function createSandboxBackend(
         .filter((e) => !blockedName(e.name))
         .sort((a, b) => a.name.localeCompare(b.name));
     },
-    async write(path, content, expected, signal) {
+    async write(path, content, expected, signal, guard) {
       await verify();
       if (Buffer.byteLength(content) > 131072 || content.includes('\0'))
         throw new ToolError('unsupported_file', 'write exceeds text limits');
-      await fileOperation({ op: 'write', path, content, expected }, signal);
+      await fileOperation({ op: 'write', path, content, expected }, signal, guard);
     },
-    async command(program, args, cwd, signal) {
+    async command(program, args, cwd, signal, guard) {
       await verify();
       const preset = presets.find(
         (p) =>
@@ -180,7 +186,7 @@ export async function createSandboxBackend(
         throw new ToolError('preset_denied', 'only exact owner-registered presets are allowed');
       let result: SandboxCommandEvidence;
       try {
-        result = await sandboxCommand(options, preset, signal, snapshot);
+        result = await sandboxCommand(options, preset, signal, snapshot, guard);
       } catch (error) {
         held = true;
         throw error;

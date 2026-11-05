@@ -107,3 +107,9 @@ export * from './bot-model-binding-reads.js';
 export * from './model-execution-reads.js';
 
 export * from './service-authority-ports.js';
+
+export * from './owner-scope.js';
+export * from './service-admission-types.js';
+export * from './service-admission.js';
+export * from './service-catalog-policy.js';
+export { codingEffectAdmission } from './coding-grant-admission.js';

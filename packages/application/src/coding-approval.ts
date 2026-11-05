@@ -1,8 +1,10 @@
+import { codingGrant } from './coding-grant-admission.js';
 import {
   codingApprovalMatches,
   validCodingApprovalBinding,
   codingFailure,
   ok,
+  type OwnerScopeGrant,
   type CodingTask,
   type CodingWorktree,
   type CodingApproval,
@@ -11,6 +13,10 @@ import {
 } from '@runnets/domain';
 
 export interface CodingApprovalTransaction {
+  projectId?(root: string): string;
+  grants?(): readonly OwnerScopeGrant[];
+  grantCalls?(run: string, id: string): number;
+  claimed?(value: CodingApproval): boolean;
   worktree?(id: string): CodingWorktree | null;
   task?(id: string): CodingTask | null;
   participates?(workspaceId: string, roomId: string, botId: string): boolean;
@@ -30,10 +36,15 @@ export interface CodingApprovalOwnerPort {
 }
 export interface CodingApprovalDependencies {
   readonly authorityId?: string;
+  readonly grantOwnerId?: string;
   readonly store: CodingApprovalStore;
   readonly now: () => number;
   /** Checks current task/room/bot authority, project lease and unresolved claims. */
-  readonly admit: (binding: CodingApprovalBinding, tx: CodingApprovalTransaction) => boolean;
+  readonly admit: (
+    binding: CodingApprovalBinding,
+    tx: CodingApprovalTransaction,
+    consumed?: CodingApproval,
+  ) => boolean;
   readonly restored: boolean;
 }
 /** Persists preview and owner decision. Dispatch must atomically consume before effects. */
@@ -46,6 +57,7 @@ export class CodingApprovalService {
     id: string,
     binding: CodingApprovalBinding,
     preview: string,
+    guarded = false,
   ): CodingResult<CodingApproval> {
     const input = structuredClone(binding);
     const now = this.deps.now();
@@ -62,7 +74,10 @@ export class CodingApprovalService {
     return this.deps.store.atomic((tx) => {
       if (!this.deps.admit(input, tx)) return codingFailure('coding_denied');
       if (tx.approval(id)) return codingFailure('request_conflict');
+      const ref = guarded ? codingGrant(tx, input, preview, this.deps.grantOwnerId, now) : null;
       const approval: CodingApproval = {
+        ...(guarded ? { guardedDispatch: true as const } : {}),
+        ...(ref ? { grantReference: ref } : {}),
         id,
         ...(this.deps.authorityId ? { authorityId: this.deps.authorityId } : {}),
         binding: input,
@@ -114,14 +129,25 @@ export class CodingApprovalService {
           ),
       );
     };
-    const decision = await owner.decide(structuredClone(approval), currentAtConsent);
-    const observed = decision === 'allow-once' && readBinding ? await readBinding() : binding;
+    const allowed =
+      approval.grantReference !== undefined ||
+      (await owner.decide(structuredClone(approval), currentAtConsent)) === 'allow-once';
+    const observed = allowed && readBinding ? await readBinding() : binding;
     return this.deps.store.atomic((tx) => {
       const pending = tx.approval(id);
       if (
         !pending ||
         pending.status !== 'pending' ||
         !this.deps.admit(observed, tx) ||
+        (pending.grantReference &&
+          !codingGrant(
+            tx,
+            observed,
+            pending.preview,
+            this.deps.grantOwnerId,
+            this.deps.now(),
+            pending.grantReference,
+          )) ||
         !codingApprovalMatches(
           pending.binding,
           observed,
@@ -133,7 +159,7 @@ export class CodingApprovalService {
         return codingFailure('approval_required');
       const value: CodingApproval = {
         ...pending,
-        status: decision === 'allow-once' ? 'allowed' : 'denied',
+        status: allowed ? 'allowed' : 'denied',
       };
       tx.putApproval(value);
       return ok(value);
@@ -148,6 +174,15 @@ export class CodingApprovalService {
         !approval ||
         approval.authorityId !== this.deps.authorityId ||
         approval.status !== 'allowed' ||
+        (approval.grantReference &&
+          !codingGrant(
+            tx,
+            binding,
+            approval.preview,
+            this.deps.grantOwnerId,
+            this.deps.now(),
+            approval.grantReference,
+          )) ||
         !this.deps.admit(binding, tx) ||
         !codingApprovalMatches(
           approval.binding,
@@ -162,6 +197,30 @@ export class CodingApprovalService {
       const consumed: CodingApproval = { ...approval, status: 'consumed' };
       tx.putApproval(consumed);
       return ok(consumed);
+    });
+  }
+  authorizeDispatch(id: string, binding: CodingApprovalBinding): boolean {
+    if (this.deps.restored) return false;
+    return this.deps.store.atomic((tx) => {
+      const a = tx.approval(id);
+      return (
+        !!a &&
+        a.status === 'consumed' &&
+        a.authorityId === this.deps.authorityId &&
+        tx.claimed?.(a) === true &&
+        this.deps.admit(binding, tx, a) &&
+        codingApprovalMatches(a.binding, binding, a.createdAt, a.expiresAt, this.deps.now()) &&
+        (!a.grantReference ||
+          !!codingGrant(
+            tx,
+            binding,
+            a.preview,
+            this.deps.grantOwnerId,
+            this.deps.now(),
+            a.grantReference,
+            true,
+          ))
+      );
     });
   }
 }
