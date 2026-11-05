@@ -109,7 +109,7 @@ name=sys.argv[1]; installed=pathlib.Path(sys.argv[2]); driver=pathlib.Path(sys.a
 phase=Q/name; phase.mkdir(mode=0o700)
 import shutil,hashlib
 inputs=phase/'inputs'; inputs.mkdir(mode=0o700)
-for source in [pathlib.Path(__file__).resolve(),P/'task-17.4-capture.py',P/'task-17.4-sparse.py',P/'task-17.4-identities.py',P/'task-17.4-scope.py',P/'task-17.4-location.json',driver]: shutil.copyfile(source,inputs/source.name)
+for source in [pathlib.Path(__file__).resolve(),P/'task-17.4-capture.py',P/'task-17.4-sparse.py',P/'task-17.4-identities.py',P/'task-17.4-scope.py',P/'task-17.4-process.py',P/'task-17.4-finalize.py',P/'task-17.4-location.json',driver]: shutil.copyfile(source,inputs/source.name)
 driver=inputs/driver.name
 write(inputs/'hashes.json',{f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in inputs.iterdir() if f.is_file()})
 short=pathlib.Path(tempfile.mkdtemp(prefix='oa174-')); short.chmod(0o700)
@@ -127,7 +127,7 @@ if offline:
     setup="import os,subprocess,sys; subprocess.run(['ip','link','set','lo','up'],check=True,close_fds=True); os.execv('/usr/bin/bwrap',sys.argv[1:])"
     inner=['unshare','--user','--map-root-user','--net','--pid','--fork','--kill-child','python3','-c',setup,*sparse.sparse_command(Q,phase,installed,short,inner)]
 command=['systemd-run','--user','--scope','--unit='+unit,'-p','CPUAccounting=yes','-p','MemoryAccounting=yes','-p','CPUQuota=200%','-p','MemoryHigh=3G','-p','MemoryMax=3584M','-p','MemorySwapMax=0','-p','TasksMax=256','timeout','--signal=TERM','--kill-after=10s','900s','env','-i',*[k+'='+v for k,v in env.items()],*inner]
-scopeHelper=helper('scope');identityHelper=helper('identities');scopeHandle=None
+scopeHelper=helper('scope');identityHelper=helper('identities');processHelper=helper('process');finalizeHelper=helper('finalize');scopeHandle=None;workError=None
 outerSecurity={'uid':os.getuid(),**{line.split(':')[0]:line.split(':',1)[1].strip()for line in pathlib.Path('/proc/self/status').read_text().splitlines()if line.startswith(('CapEff','CapBnd','NoNewPrivs'))}}
 policy=identityHelper.DRIVERS.get(driver.name)
 if policy is None:raise ValueError('explicit phase identity policy required')
@@ -154,14 +154,11 @@ with (phase/'supervisor.log').open('x') as log,(phase/'samples.jsonl').open('x')
             time.sleep(.1)
         record['exit']=child.wait(timeout=2)
     except Exception as error:
-        record['error']=str(error)
+        record['error']=str(error);workError=error
         record['exit']=child.poll()
 # Retirement follows actual population even when the launcher has already exited.
-record['scopeRetirement']=scopeHelper.retire(scopeHandle) if scopeHandle is not None else {'confirmed':False,'signals':[],'errors':['no verified scope identity']}
-try:record['exit']=child.wait(timeout=3)
-except subprocess.TimeoutExpired:record.setdefault('error','launcher did not reap after scope retirement')
+workError=finalizeHelper.finish(record,scopeHandle,child,list(seen),scopeHelper.retire,processHelper.check,workError)
 record['scopeGone']=cg is not None and not cg.exists();record['scopeEmpty']=record['scopeRetirement']['confirmed'];record['remaining']=snapshot(cg) if cg is not None and cg.exists() else None
-record['pidIdentitiesGone']=all(not (v:=proc(pid)) or v['starttime']!=start for pid,start in seen)
 record['seenProcesses']=list(seen.values())
 if (phase/'cgroup-final.json').exists():
     final=json.loads((phase/'cgroup-final.json').read_text()); events=final['cgroup']['memory.events'] or ''
@@ -177,4 +174,4 @@ else:record['identityValidation']={'ok':False,'errors':['missing network evidenc
 import shutil
 shutil.rmtree(short); record['shortFixtureRemoved']=not short.exists(); record['ended']=time.time()
 write(phase/'supervisor-result.json',record); print(json.dumps(record,indent=2))
-sys.exit(0 if 'error' not in record and record.get('exit')==0 and (record['scopeGone'] or record['scopeEmpty']) and record['pidIdentitiesGone'] and record['oomFree'] and record['scopeRetirement']['confirmed'] and record['identityValidation']['ok'] else 1)
+sys.exit(0 if 'error' not in record and record.get('exit')==0 and (record['scopeGone'] or record['scopeEmpty']) and record['pidIdentityCheck']['confirmedGone'] and record['launcherReaped'] and record['oomFree'] and record['scopeRetirement']['confirmed'] and record['identityValidation']['ok'] else 1)

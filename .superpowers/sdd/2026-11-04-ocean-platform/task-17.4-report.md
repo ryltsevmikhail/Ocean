@@ -209,3 +209,61 @@ Pinned raw SHA256:
 Exact freeze command: `python3 P/task-17.4-fix1-freeze.py freeze`, exit0. Copied `freeze-final/inputs/run-private.py` executed copied `task-17.4-fix1-freeze.py verify FIX1_FREEZE PINNED_SEAL_SHA`, exit0, all117 bytes/sizes/modes verified. The post-freeze attestation binds that exact validation command/result/output and verifies the freeze invocation stdout/stderr hashes. Freeze read-only verification confirmed all original51+385=436 listed records and old inventory/seal/attestation anchors; six original17.3 fix1/fix2 anchors also still match. No old seal/input was overwritten.
 
 Protected file hashes remain `d6ea013e8333688abb36e51c7a09922a077f5a1726f203258bc06f49e642c031` and `68f28f549e0713f5c21d47950b6db96babdb27a7b9264684268c571b7cde62a3`. Controller plan changes are excluded. This owned QA correction commit requires independent scoped FIX_BASE..HEAD review; no helper/reviewer, push/merge, Task17.5 work or release claim occurred.
+
+## Correction2/5 — I1/I2/I3 follow-up and N1/N2/N3
+
+FIX_BASE `c27b33e64176f3cbbed55f068edd253df1688f19`. The first scoped review left I1/I2/I3 open and identified three new Important helper findings. This round addresses those six and their direct integration only. The product28909ea/CLI6b41ce…2daa/ASAR968370…b06a and previously supported actual native/live facts remain unchanged. No model/backend inference, DeepSeek key read, product source edit, build, broad suite, GUI, push or merge occurred. New outputs are exclusively **Q/fix2**; original51/385/117 chains are preserved.
+
+### Actual RED and identity/PID corrections
+
+`task-17.4-fix2-regression-test.py --legacy` executes pinned BASE helper bytes against copied samples/mocks/dummy trees. **Nine tests failed, exit1**, with no errors/skips: collapsed Node identities, same-identity conflicting roles, cross-observation argv mutation, PermissionError incorrectly treated as PID disappearance, middle-ancestor symlink escape, partial admission incorrectly reporting scopeGone, fresh-label shared-syntax overwrite, manager show timeout escape and manager kill timeout escape. No legacy orphan code ran with a real child, and no old gate ran against real sealed data. The regression GREEN is9/9.
+
+I1 now associates immutable fingerprints with each PID/starttime: canonical compatible Node comm alias, argv, namespace, capabilities, NNP and fixed phase policy. Contradictory same-identity entries anywhere refuse. Required separate-process roles have disjoint identity witnesses; a single PID/starttime cannot supply the four Node roles. A single observation cannot contain two starttimes for one PID. Starttimes must be canonical positive decimal strings. Legitimate `node`/`node-MainThread` aliases and PID reuse in different observations remain supported. Existing complete offline/mixed positives, all matching observations, metadata-no-runner distinction and explicit trusted-outer online policy remain; no expectation is learned from candidate records.
+
+I2 adds `task-17.4-process.py`, which reads only `/proc/PID/stat` for the independent identity proof. It returns **present**, **gone** or **unavailable**. Only ENOENT/ESRCH or a successfully parsed different starttime proves original identity gone. PermissionError, other I/O, malformed PID/stat/starttime and unrelated optional proc-field failure never certify disappearance. PID/stat-prefix identity is checked. The sampler can still omit unavailable optional fields, but its None is never used as disappearance proof. The supervisor's final gate now requires the dedicated `pidIdentityCheck.confirmedGone`; empty cgroup/old boolean alone cannot replace it. Controls cover live, absent, reused, denied, I/O, parse error and unrelated-field denial, including an actual live test-process stat read. The actual supervisor final-exit AST also rejects unavailable PID evidence despite otherwise-successful cleanup facts.
+
+### Descriptor-relative output and isolated gate runs
+
+I3 uses `task-17.4-private-output.py`: start from an opened trusted system-root descriptor, walk every component of the private owned root with O_DIRECTORY|O_NOFOLLOW and fstat validation, then walk every output-parent component relative to that held root. No absolute parent is reopened after path checks. Exclusive complete-byte publication is relative to the verified parent descriptor, mode0600/O_CREAT|O_EXCL|O_NOFOLLOW. Existing targets refuse, including the old default summary; outside/traversal and symlink paths refuse. The middle-ancestor swap control replaces a directory with a link immediately before its open, while the final component remains real; the corrected writer refuses and creates nothing outside the held root. Full summary JSON bytes are computed before exclusive file creation as part of this flow. N4 remains a parked Minor, not a separate expansion of this round.
+
+N2 rewrites the gate driver around a constrained lowercase label and an **exclusive fresh per-run directory**, Q/fix2/runs/LABEL. Label validation precedes directory creation or test effects; absolute, traversal, separator, empty, uppercase and oversized labels refuse. Existing-label collisions refuse before launching tests. Each run holds its private directory descriptor, writes distinct logs and exclusively publishes commands.json and syntax.json once. A fresh label creates another run directory and cannot rewrite old shared syntax or another run's bytes. Failure/timeout still publishes its own command ledger; failed runs do not claim a syntax pass. Tests use dummy roots and mocked command effects. The old real fix1 syntax/ledger/logs are unchanged.
+
+### Admission-safe orphan fixture and structured timeouts
+
+N1 replaces the old unlimited orphan with a cooperative pilot in a uniquely named small user scope. The pilot publishes ready.json atomically, then waits for admission; it **cannot fork the TERM-resistant child before the fixture captures and verifies the unit/InvocationID/cgroup inode/owner**. Only then does the fixture exclusively publish admit. The orphan PID record is complete and atomically linked into place. The pilot has its own8-second hard alarm (and5-second admission deadline); the TERM-resistant orphan has an independent6-second hard alarm. The fixture has a12-second budget; launcher waits have timeouts and orphan waitpid uses WNOHANG within the deadline. All signals still target only a verified owned unit, never a bare PID.
+
+Missing ownership stays cleanup-unavailable/scopeGoneNone, never success. Mocked empty/partial ready data and manager lookup timeout prove admission is withheld, no orphan body runs, waits stay bounded, the original error remains and a failure proof is written. The real essential control verifies ownership timestamp precedes fork timestamp, actual launcher exit0 with populated scope, TERM→KILL, bounded reaping and direct PID/starttime disappearance. It uses64MiB/SwapMax0/TasksMax16/CPUQuota100% and clean child env, with no backend/model.
+
+There were two actual tiny trials, not a hidden rerun of any model: green1 retired/reaped correctly but its test required immediate directory removal although the actual kernel already reported population0/procs0; that overstrict assertion failed. The corrected criterion accepts confirmed emptiness or removal. Green2 passes all3 scope controls. Independent final read-only checks find both pilot/orphan identity pairs gone and both scopes removed (`owned-cleanup.json`). No later scope was started.
+
+N3 catches subprocess.TimeoutExpired from manager show/kill as structured unconfirmed retirement with the original typed/message cause. No timeout is converted to success or an unverified signal target. `task-17.4-finalize.py` lets the caller reap/check identities and retain its failure ledger even when retirement or launcher wait raises. An already existing work exception is returned as the same object and its diagnostic remains the original cause; cleanup failure is recorded separately. Mock timeout controls exercise both manager paths and verify independent wait/identity checks still execute, the failure ledger contains TimeoutExpired, and the final gate fails.
+
+### Final focused results and exact execution
+
+The fresh gate command `python3 P/task-17.4-fix1-gates.py green2` exits0 with6 groups: regression9, safety controls7, existing identity14, resource6, supervisor/freezer integration4 and scope3, all passed. Its exact argv/cwd/numeric exits are in `fix2/runs/green2/commands.json`; source parsing covered26 Python helpers. No shared syntax.json was rewritten.
+
+After the final canonical-starttime input guard and independent-PID final-gate assertion, a fresh **non-scope** invocation calls `gate.run('final', Q/fix2, commands=...)` for the five exact private-runner/env commands recorded in `fix2/runs/final/commands.json`:9+7+14+6+4=**40 passed**, exit0. It does not rerun the scope. Together with the unchanged real fixture's3 passing controls, the final distinct covering set is **43 tests passed,0 failed,0 skipped**. `selection.json` records this component attribution rather than counting repeat passes twice. The gate leaves both earlier runs and all historical seals intact.
+
+| Actual command/control | Exit / result |
+| --- | --- |
+| private fix2 regression `--legacy` on BASE copies | 1;9 expected failures |
+| private fix2 regression corrected | 0;9 passed |
+| `task-17.4-fix1-gates.py green1` | 1; all non-scope groups passed; immediate-scope-removal assertion failed after actual cleanup |
+| `task-17.4-fix1-gates.py green2` | 0;43 passed across6 groups |
+| final fresh non-scope gate invocation | 0;40 passed across5 groups, no new scope |
+| read-only owned-cleanup verification | 0; four known pilot/orphan PID identities gone, two scopes removed |
+| final focused helper/dependency AST/line checks | 17 parsed incl collector,0 errors, maximum177 physical lines |
+
+### Correction2 immutable evidence and handoff
+
+`Q/fix2/freeze-final` contains164 focused files: pinned legacy input helpers and copied sample provenance; every new counterexample/dummy/mocked ledger; fresh per-run command/syntax/test records; the two actual bounded pilot/orphan proofs; all current correction helpers/tests/dependencies and exact collector/private runner snapshots. Historical product assets and full old history are referenced, not regenerated or resnapshotted.
+
+Pinned raw SHA256:
+
+- Fix2 inventory: `b72a7b089bf32704b9015eaf004c02521285c0b99e1efd32d783ce518f01c04c`.
+- Fix2 seal: `cf5a086324004e1f43216f357d84863768134ad10e1fc21fb1f1ecd8739b28c4`.
+- Post-freeze validation attestation: `b20ab0fac97c89b1ef6c9e146a95986f6fb65e8be0ec959dd27f1dccfa2621c3`.
+
+Exact freeze: `python3 P/task-17.4-fix2-freeze.py freeze`, exit0. Copied private runner executes copied collector's `verify FIX2_FREEZE PINNED_SEAL_SHA`, exit0, all164 file bytes/sizes/modes verified. Freeze argv/cwd/exit and stdout/stderr hashes are separately recorded; post-freeze attestation binds and checks them without a self-hash cycle. Read-only verification matches **51/385/117** old entries, their seals/inventories/attestations and all six17.3 anchors. No old sealed input was replaced.
+
+Product source/artifacts, protected C files and controller plan are unchanged by this correction; root build/check/format/native/live suites are deliberately not run under the focused contract. The remaining original generic-tool UNKNOWN, C debt, deferred vendors, CPU-only scope and out-of-scope release/GUI/D/E limitations remain disclosed. N4 and prior documentation Minors stay with the controller. Independent scoped c27b33e..FIX_HEAD review is required; no reviewer/helper, push/merge or17.5 work occurred.

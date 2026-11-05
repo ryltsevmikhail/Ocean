@@ -50,5 +50,7 @@ def retire(handle,term_seconds=10,kill_seconds=5,observe=observe):
                 if time.monotonic()>=deadline:break
                 time.sleep(.03)
         result['errors'].append('owned cgroup remained populated after KILL deadline')
-    except OSError as error:result['errors'].append(str(error))
+    except (OSError,subprocess.TimeoutExpired) as error:
+        result['errors'].append({'type':type(error).__name__,'message':str(error)})
+        result['confirmed']=False
     return result

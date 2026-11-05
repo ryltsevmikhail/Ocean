@@ -21,18 +21,25 @@ def role(p):
         return 'additional-node'
     return 'unrecognized'
 def validate(samples,policy,namespace,outer_namespace,outer_security):
-    errors=[];identities={};roles=set();observations=0
+    errors=[];identities={};roles=set();observations=0;fingerprints={};witnesses={}
     if policy not in REQUIRED:return {'ok':False,'errors':['unknown phase policy']}
     online=policy=='mixed-online'
     if not isinstance(namespace,str) or not re.fullmatch(r'net:\[\d+\]',namespace):errors.append('invalid namespace identity')
     if (namespace==outer_namespace)!=online:errors.append('namespace policy mismatch')
     if online and (type(outer_security.get('uid')) is not int or outer_security['uid']<=0 or outer_security.get('CapEff')!='0000000000000000' or outer_security.get('NoNewPrivs')!='0' or not re.fullmatch('[0-9a-f]{16}',outer_security.get('CapBnd',''))):errors.append('invalid trusted nonroot launch policy')
     for row in samples:
+        row_pids={}
         for p in row.get('processes',[]):
             if p.get('name') not in RELEVANT:continue
             observations+=1;pid,start=p.get('pid'),p.get('starttime')
-            if type(pid) is not int or pid<=0 or not isinstance(start,str) or not start.isdecimal() or not int(start):errors.append('invalid PID/starttime');continue
+            if type(pid) is not int or pid<=0 or not isinstance(start,str) or not start.isdecimal() or not int(start)or str(int(start))!=start:errors.append('invalid PID/starttime');continue
             key=(pid,start);r=role(p);roles.add(r)
+            if pid in row_pids and row_pids[pid]!=start:errors.append('contradictory same-observation PID starttime')
+            row_pids[pid]=start
+            canonical='node'if p['name']in {'node','node-MainThread'}else p['name']
+            fingerprint=(canonical,p.get('argv'),p.get('netns'),p.get('CapEff'),p.get('CapBnd'),p.get('NoNewPrivs'),policy)
+            if key in fingerprints and fingerprints[key]!=fingerprint:errors.append(f'contradictory identity {pid}:{start}')
+            fingerprints.setdefault(key,fingerprint);witnesses.setdefault(r,set()).add(key)
             identities.setdefault(key,{'pid':pid,'starttime':start,'name':p['name'],'roles':[]})
             if r not in identities[key]['roles']:identities[key]['roles'].append(r)
             if p.get('netns')!=namespace:errors.append(f'wrong namespace {pid}:{start}')
@@ -41,6 +48,10 @@ def validate(samples,policy,namespace,outer_namespace,outer_security):
             nnp='0' if online else '1'
             if p.get('CapEff')!=eff or p.get('CapBnd')!=bnd or p.get('NoNewPrivs')!=nnp:errors.append(f'wrong security policy {pid}:{start}')
             if r=='unrecognized':errors.append(f'unrecognized role {pid}:{start}')
+    required=sorted(REQUIRED[policy])
+    for index,left in enumerate(required):
+        for right in required[index+1:]:
+            if witnesses.get(left,set())&witnesses.get(right,set()):errors.append('separate process roles share an identity')
     missing=REQUIRED[policy]-roles
     if missing:errors.append('missing roles: '+','.join(sorted(missing)))
     return {'ok':not errors,'policy':policy,'namespace':namespace,'outerNamespace':outer_namespace,'trustedOuterSecurity':outer_security if online else None,'requiredRoles':sorted(REQUIRED[policy]),'observedRoles':sorted(roles),'relevantObservations':observations,'identities':list(identities.values()),'errors':sorted(set(errors))}

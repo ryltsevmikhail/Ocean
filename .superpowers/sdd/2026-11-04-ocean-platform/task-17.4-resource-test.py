@@ -7,7 +7,7 @@ else:
  spec=importlib.util.spec_from_file_location('resources',P/'task-17.4-resources.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 class Resources(unittest.TestCase):
  def setUp(self):
-  self.root=F/('resource-'+self._testMethodName+('-red-' if legacy else '-green-')+str(os.getpid()));self.root.mkdir(mode=0o700)
+  self.root=pathlib.Path(os.environ['OCEAN_QA_FIX_RUN'])/('resource-'+self._testMethodName+('-red-' if legacy else '-green-')+str(os.getpid()));self.root.mkdir(mode=0o700)
  def test_existing_dummy_never_truncated(self):
   target=self.root/'resources-summary.json';target.write_bytes(b'sealed-dummy-input');target.chmod(0o600);before=(target.read_bytes(),target.stat().st_mode)
   if legacy:
