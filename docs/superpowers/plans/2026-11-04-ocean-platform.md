@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Интеграционная приёмка (17) и этапы C–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`; интеграционная/нативная приёмка 17.2–17.5 и этапы C–H пока запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -461,11 +461,11 @@ The following sequential checkpoints close Task17; the parent stays open until a
 
 **Interfaces:** Consumes current public ProviderPort/ProviderEvent/Changeset/ToolJournalPort/TuiApp/ChatRunBook and desktop send signatures; inspect settled16 changes before exact fixture edits. Produces scripts typecheck:tests:node, typecheck:tests:desktop, aggregate typecheck:tests, and root check order production types -> test types -> lint -> source -> built process.
 
-- [ ] Capture fresh unmodified aggregate diagnostic command/exit and original TS root manifest; no fixed63 subtraction or grandfathered added diagnostics.
-- [ ] Partition Node ES2023+node and desktop ES2023+DOM+DOM.Iterable+node roots with the inherited strict flags/noEmit. Preserve source aliases and explicitly resolve public subpaths to source, never stale dist. No global DOM in base, any/ignore/no-check/skipLibCheck increase or test exclusions without ownership in other context.
-- [ ] Repair complete typed fixtures/callers with existing behavior assertions retained. Run both strict contexts to0. Baseline compiler failure is meaningful RED; no fabricated runtime bug.
-- [ ] Audit root union covers every original root and runnable source/process test, all fixture/setup/config roots including formerly missing test-fixtures and vitest*.config.ts; report overlap and resolved workspace paths using showConfig/listFilesOnly or compiler API. Vue SFC compilation remains separate.
-- [ ] Run affected runtime suites, root check/build/format and fresh separate process controls when catalog baseline skips them; source<=300; self-review/owned commit/independent review. Expected strict test types0; remaining catalog/format baseline explicitly disclosed, not green.
+- [x] Capture fresh unmodified aggregate diagnostic command/exit and original TS root manifest; no fixed63 subtraction or grandfathered added diagnostics.
+- [x] Partition Node ES2023+node and desktop ES2023+DOM+DOM.Iterable+DOM.AsyncIterable+node roots with the inherited strict flags/noEmit. Preserve source aliases and explicitly resolve public subpaths to source, never stale dist. No global DOM in base, any/ignore/no-check/skipLibCheck increase or test exclusions without ownership in other context.
+- [x] Repair complete typed fixtures/callers with existing behavior assertions retained. Run both strict contexts to0. Baseline compiler failure is meaningful RED; no fabricated runtime bug.
+- [x] Audit root union covers every original root and runnable source/process test, all fixture/setup/config roots including formerly missing test-fixtures and vitest*.config.ts; report overlap and resolved workspace paths using showConfig/listFilesOnly or compiler API. Vue SFC compilation remains separate.
+- [x] Run affected runtime suites, root check/build/format and fresh separate process controls when catalog baseline skips them; source<=300; self-review/owned commit/independent review. Expected strict test types0; remaining catalog/format baseline explicitly disclosed, not green.
 
 #### Task 17.2: Migration, durable run projections and recovery regressions
 
