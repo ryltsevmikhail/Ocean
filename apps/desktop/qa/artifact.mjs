@@ -17,6 +17,7 @@ import {
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import console from 'node:console';
+import { stageWorkspace } from './artifact-workspace.mjs';
 import { packager } from '@electron/packager';
 import { stageDesktopThirdPartyLicenses } from '../dist/types/artifact-licenses.js';
 
@@ -88,12 +89,7 @@ writeFileSync(
     license: desktop.license,
   }),
 );
-for (const name of ['tools-node', 'application', 'domain', 'contracts']) {
-  const target = join(stage, 'node_modules', '@runnets', name);
-  mkdirSync(target, { recursive: true, mode: 0o700 });
-  cpSync(join('packages', name, 'package.json'), join(target, 'package.json'));
-  cpSync(join('packages', name, 'dist'), join(target, 'dist'), { recursive: true });
-}
+stageWorkspace(stage);
 cpSync('apps/desktop/node_modules/zod', join(stage, 'node_modules', 'zod'), {
   recursive: true,
   dereference: true,
