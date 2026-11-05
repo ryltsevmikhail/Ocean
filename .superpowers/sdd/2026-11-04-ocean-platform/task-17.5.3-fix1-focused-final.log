@@ -1,0 +1,48 @@
+✔ accepts the three-column push layout with details open (1.713697ms)
+✔ rejects the pre-fix 280px overlay covering composer and Send (0.373374ms)
+✔ rejects layout defects other than the details overlay (0.38185ms)
+✔ rejecting reopened GUI disposal still retires runtime and preserves primary plus secondary errors (2.822939ms)
+✔ expired delayed observation cannot issue release-held-gui (20.580342ms)
+✔ expired delayed observation cannot issue drop-chat (21.514521ms)
+✔ expired delayed observation cannot issue tui-detach (20.163119ms)
+✔ expired delayed observation cannot issue release-held-tui (21.529409ms)
+✔ active handoff marker uses the owning step gate (1.157531ms)
+✔ SIGTERM wrapper runs finally, joins its owned PTY child and driver witnesses cleanup (129.922802ms)
+ℹ {"wrapper":3470002,"wrapperExit":{"code":143,"signal":null},"child":{"pid":3470009,"start":"15666704"},"childExit":-9,"childGone":true,"cancellationConfirmed":false}
+✔ synthetic HTTP vision/hold/abort and committed receipt drop have no network fallback (106.692586ms)
+✔ expiry closes and drains a delayed check before returning; no subsequent mutations (106.491586ms)
+✔ an interrupted case waits for its pending operation even when transport cleanup finishes first (2.724378ms)
+✔ a successful flow returns its value and closes its operation gate (0.502276ms)
+✔ direct process identity distinguishes disappearance from unavailable evidence (2.428629ms)
+✔ owned native session: resume (9.75134ms)
+✔ owned native session: readiness (1533.827985ms)
+ℹ {"stage":"readiness","original":"Error: installed owner exited before readiness","failures":[],"shortAbsent":true,"owner":[{"pid":3469995,"start":"15666699","parent":3469939,"session":3469995,"group":3469995,"state":"S"},{"pid":3470003,"start":"15666703","parent":1027,"session":3469995,"group":3469995,"state":"S"}]}
+✔ owned native session: fast-owner (97.648601ms)
+ℹ {"stage":"fast-owner","original":"Error: installed owner exited before readiness","failures":[],"shortAbsent":true,"owner":[{"pid":3470160,"start":"15666852","parent":3469939,"session":3470160,"group":3470160,"state":"R"}]}
+✔ owned native session: proof-sink (132.239677ms)
+ℹ {"stage":"proof-sink","launch":{"observation":"observed","pid":3470174,"start":"15666863","parent":3469939,"session":3470174,"group":3470174,"state":"R"},"shortRetired":true,"primary":"ENOSPC","cleanup":"AggregateError: native cleanup: Error: EEXIST: file already exists, open '/tmp/oa-g2h2a5hq/t/native-failure-p1yX8y/proof/cleanup.json'"}
+✔ owned native session: retirement-sink (192.98048ms)
+✔ owned native session: launch (215.408282ms)
+ℹ {"stage":"launch","original":"Error: Desktop exited ","failures":[],"shortAbsent":true,"owner":[{"pid":3470203,"start":"15666895","parent":3469939,"session":3470203,"group":3470203,"state":"Z"}],"desktop":[{"pid":3470210,"start":"15666900","parent":3469939,"session":3470210,"group":3470210,"state":"R"}]}
+✔ owned native session: mismatch (126.472154ms)
+ℹ {"stage":"mismatch","original":"AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n'wrong' !== 'qa'\n","failures":[],"shortAbsent":true,"owner":[{"pid":3470219,"start":"15666916","parent":3469939,"session":3470219,"group":3470219,"state":"S"}]}
+✔ owned native session: existing (2.711847ms)
+✔ owned native session: symlink (2.76036ms)
+✔ owned native session: prior-proof (1.382181ms)
+✔ owned native session: profile (1.10827ms)
+✔ owned native session: setup (1.966907ms)
+ℹ {"stage":"setup","original":"Error: fixture evidence sink full","failures":[],"shortAbsent":true}
+✔ owned native session: owner-sink (190.657584ms)
+ℹ {"stage":"owner-sink","original":"Error: fixture evidence sink full","failures":[],"shortAbsent":true,"owner":[{"pid":3470259,"start":"15666936","parent":3469939,"session":3470259,"group":3470259,"state":"S"}]}
+✔ owned native session: desktop-sink (218.666032ms)
+ℹ {"stage":"desktop-sink","original":"Error: fixture evidence sink full","failures":[],"shortAbsent":true,"owner":[{"pid":3470307,"start":"15666949","parent":3469939,"session":3470307,"group":3470307,"state":"Z"}],"desktop":[{"pid":3470320,"start":"15666955","parent":3469939,"session":3470320,"group":3470320,"state":"S"},{"pid":3470321,"start":"15666955","parent":3470320,"session":3470320,"group":3470320,"state":"S"}]}
+✔ a missing page close reaches teardown after a rejected evaluation (22.638358ms)
+✔ a missing page close reaches teardown after a stalled evaluation (20.527535ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3162.801961

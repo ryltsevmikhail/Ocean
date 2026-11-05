@@ -9,6 +9,7 @@ import { seedModelSettings, workspaceId } from './model-native-seed.mjs';
 import { currentWindow, wait } from './current-window.mjs';
 import { handoffAssets, image } from './model-handoff-assets.mjs';
 import { restartHandoff } from './model-handoff-restart.mjs';
+import { retireHandoff, writeHandoffMarker } from './model-handoff-lifecycle.mjs';
 const { values } = parseArgs({
   options: {
     'installed-root': { type: 'string' },
@@ -31,6 +32,7 @@ const s = await openModelNativeSession({ ...inputs, root });
 let gui = s.desktop,
   original,
   terminal,
+  terminalClosed,
   assets,
   direct,
   evidence;
@@ -93,7 +95,7 @@ try {
     const detached = await independent('inspect', { ...scope, runId: first.runId }, step);
     assert.equal(detached.data.run.taskStatus, 'running');
     assert.equal(detached.data.result, null);
-    writeFileSync(join(root, 'release-held-gui'), '');
+    writeHandoffMarker(root, 'release-held-gui', step);
     const completed = await settled(first);
     assert.equal(completed.data.result.body, 'Synthetic handoff: held-gui');
     const reopenRoot = join(root, 'reopen');
@@ -119,7 +121,7 @@ try {
       disconnectIsCancellation: false,
       providerDispatches: 1,
     });
-    writeFileSync(join(root, 'drop-chat'), '');
+    writeHandoffMarker(root, 'drop-chat', step);
     await send('lost-chat-reply');
     await wait(() => step(() => rows('dropped.jsonl').length === 1), 5000);
     const lost = rows('dropped.jsonl')[0];
@@ -165,7 +167,9 @@ try {
       err += b;
       writeFileSync(join(root, 'tui.stderr'), err);
     });
-    const tuiExit = new Promise((resolve) => terminal.once('close', resolve));
+    terminalClosed = new Promise((resolve) =>
+      terminal.once('close', (code, signal) => resolve({ code, signal })),
+    );
     await wait(
       () =>
         step(() => {
@@ -180,12 +184,12 @@ try {
     const tuiReceipt = rows('receipts.jsonl').at(-1);
     const tuiQuery = { ...scope, runId: tuiReceipt.runId };
     assert.equal((await step(() => peer.getRun(tuiQuery))).taskStatus, 'running');
-    writeFileSync(join(root, 'tui-detach'), '');
-    assert.equal(await step(() => tuiExit), 0, err);
+    writeHandoffMarker(root, 'tui-detach', step);
+    assert.equal((await step(() => terminalClosed)).code, 0, err);
     const afterTuiExit = await independent('inspect', tuiQuery, step);
     assert.equal(afterTuiExit.data.run.taskStatus, 'running');
     assert.equal(afterTuiExit.data.result, null);
-    writeFileSync(join(root, 'release-held-tui'), '');
+    writeHandoffMarker(root, 'release-held-tui', step);
     const tuiCompleted = await settled(tuiReceipt);
     assert.equal(tuiCompleted.data.result.body, 'Synthetic handoff: held-tui');
     assert.equal(rows('provider.jsonl').filter((x) => x.text === 'held-tui').length, 1);
@@ -262,9 +266,7 @@ try {
   if (gui !== s.desktop) saveProof(root, 'reopened-failure.json', { records: gui.records() });
   throw error;
 } finally {
-  if (terminal && terminal.exitCode === null) terminal.kill();
-  if (gui !== s.desktop) await gui.dispose();
-  await s.dispose(original);
+  await retireHandoff({ terminal, terminalClosed, gui, session: s, original, root });
 }
 await restartHandoff(
   inputs,
