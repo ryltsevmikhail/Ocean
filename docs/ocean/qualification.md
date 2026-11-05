@@ -133,7 +133,20 @@ OpenAI/Anthropic live **DEFERRED**, автономный A→B→A (D) и нас
 Два отдельных raw/native diagnostics совместимы с decoder; stream code не менялся.
 Успешная финальная fixture имеет явно scoped harmless tool instructions и новые
 profile/run IDs/token, прежний UNKNOWN не повторялся. Предыдущие setup/driver
-failures сохранены в отчёте; независимое controller review остаётся обязательным.
+failures сохранены в отчёте; независимое ревью и три раунда исправлений обвязки
+закрыты на `de70683`. Продуктовая ревизия артефакта остаётся `28909ea`.
 Root3412 pass/3 protected catalog failures/44 skip, strict/lint/build/bundle0,
 affected built process21 pass; format остаётся с двумя protected C-файлами.
 Эти факты не закрывают C, D/E, родительский Task17 или финальный выпуск F.
+
+Итоговые существенные замечания Task17.4 закрыты независимым scoped review.
+Третий раунд: 51 проверка текущего кода обвязки, exit 0; старые три scope controls
+относятся только к `9966242`, без нового запуска. Новая цепочка 167 файлов:
+seal SHA256 `6ca7b21bb03eded061a21775c6b2c58ef4be8ec9f072adccdfac35c49d0b989c`,
+inventory `2cb13f79b960401ac26c06b096c9d243cb70a4842ea4a68bf76f6c7a740f7c67`,
+validation attestation `c7900fd600f4f1d5d399e3aa7284a508c31a1822c65f28438dc08d83b5d1ff30`.
+Предыдущие цепочки и артефакты сохранены. Ограничения fixture deadline и
+failed-launch command ledger остаются Minor для выпускного разбора.
+Шесть native submissions подтверждены wire witness; backend access log содержит
+пять завершённых строк, отдельный прерванный запрос не имеет completed access line.
+Следом — GUI-приёмка 17.5.1–17.5.3; текущая приёмка не является выпуском stable.
