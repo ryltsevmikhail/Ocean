@@ -32,6 +32,6 @@ defineEmits<{ close: [] }>();
       <strong>Вы управляете диалогом</strong>
       <p>Выберите адресата перед отправкой. В группе ход передаёте вы.</p>
     </div>
-    <RoomWork :key="room.id" :runs="runs" />
+    <RoomWork :key="room.id" :room-id="room.id" :runs="runs" />
   </aside>
 </template>

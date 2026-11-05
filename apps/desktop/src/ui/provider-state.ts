@@ -88,14 +88,17 @@ export async function checkProvider(): Promise<void> {
 }
 /** Save (or replace) the transient key and the selected model. Input is cleared afterwards. */
 export async function saveProvider(): Promise<void> {
+  if (providerBusy.value) return;
   const status = providerStatus.value;
-  if (status === null || !providerCanSave.value) {
+  const canSave = providerCanSave.value;
+  const key = providerKey.value.trim();
+  providerKey.value = '';
+  if (status === null || !canSave) {
     providerMessage.value =
       status?.state === 'unverified' ? explain('provider_unverified') : 'Введите ключ API.';
     providerError.value = true;
     return;
   }
-  const key = providerKey.value.trim();
   try {
     await run(
       () =>

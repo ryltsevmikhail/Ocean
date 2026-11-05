@@ -1,4 +1,7 @@
 const errors: Record<string, string> = {
+  team_outcome_unknown:
+    'Исход создания команды неизвестен. Откройте создание Ocean Team и явно завершите сохранённый исходный запрос.',
+  explicit_bot_binding_required: 'Явно выберите подключение и модель каждого нового бота.',
   attachment_too_large: 'Один файл — не более 10 МБ.',
   attachment_unavailable: 'Не удалось открыть вложение. Попробуйте прикрепить файл ещё раз.',
   invalid_image: 'Не удалось прочитать изображение. Поддерживаются PNG, JPEG, GIF и WebP.',

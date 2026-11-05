@@ -3,7 +3,8 @@ import { turnText } from './runtime-text.js';
 import { ref } from 'vue';
 import type { Run } from '../protocol.js';
 import Glyph from './Glyph.vue';
-defineProps<{ runs: Run[] }>();
+import ModelExecutionFacts from './ModelExecutionFacts.vue';
+defineProps<{ runs: Run[]; roomId: string }>();
 const page = ref<'Задачи комнаты' | 'События' | 'Изменения'>('Задачи комнаты'),
   panel = ref<HTMLDialogElement>();
 const entries = [
@@ -50,6 +51,7 @@ const entries = [
           <dt>Ожидают решения в TUI</dt>
           <dd>{{ run.pendingDecisionIds.join(', ') || '—' }}</dd>
         </dl>
+        <ModelExecutionFacts :room-id="roomId" :run-id="run.runId" />
         <p v-if="run.turnStatus === 'uncertain'">
           Исход не подтверждён. Проверьте эффекты этого запуска в Ocean CLI перед продолжением.
         </p>

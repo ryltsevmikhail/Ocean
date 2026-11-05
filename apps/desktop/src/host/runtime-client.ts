@@ -1,5 +1,6 @@
 import type { LocalRuntimeClient } from '@runnets/tools-node/local-runtime-client';
 import { pageSize, type Command } from '../protocol.js';
+import { dispatchModelSettings } from './model-settings-client.js';
 
 // Only the native host selects the authenticated client and workspace.
 export async function dispatch(client: LocalRuntimeClient, c: Command) {
@@ -10,6 +11,18 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
     ...('after' in c && typeof c.after === 'string' ? { after: c.after } : {}),
   };
   switch (c.op) {
+    case 'model-support':
+    case 'model-presets':
+    case 'model-connections':
+    case 'model-set':
+    case 'model-check':
+    case 'model-disconnect':
+    case 'model-remove-key':
+    case 'bot-bound-create':
+    case 'bot-binding-set':
+    case 'bound-bots':
+    case 'model-execution':
+      return dispatchModelSettings(client, c);
     case 'receipt':
       return client.getReceipt({ workspaceId, roomId: c.room, requestId: c.requestId });
     case 'status':

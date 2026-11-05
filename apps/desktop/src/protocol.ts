@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { modelCommands, modelOutputs } from './model-protocol.js';
 import { pluginCommands, pluginOutputs } from './plugin-protocol.js';
 import { bot, message, pageSize, roomDto, run } from './protocol-room.js';
 export * from './protocol-room.js';
@@ -103,7 +104,11 @@ const baseCommands = [
     attachments: z.array(z.uuid()).max(4).optional(),
   }),
 ] as const;
-export const commands = z.discriminatedUnion('op', [...baseCommands, ...pluginCommands]);
+export const commands = z.discriminatedUnion('op', [
+  ...baseCommands,
+  ...pluginCommands,
+  ...modelCommands,
+]);
 export type Command = z.infer<typeof commands>;
 const receipt = z.object({
   workspaceId: z.literal('ws_ocean'),
@@ -244,6 +249,7 @@ export const outputs = {
     check: providerCheckMetadata.extend({ persisted: z.boolean() }),
   }),
   ...pluginOutputs,
+  ...modelOutputs,
 };
 export type ProfileReport = z.infer<typeof outputs.status>;
 export type ProviderStatus = z.infer<typeof providerStatus>;

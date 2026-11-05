@@ -4,7 +4,8 @@ import { pages, useRoomFeed } from './room-feed.js';
 import { call, SendFailure, submitDraft } from './bridge.js';
 import { explain } from './dom.js';
 import { feedbackText } from './runtime-text.js';
-import { loadProviderStatus } from './provider-state.js';
+import { refreshModelSettings } from './model-support.js';
+import type { LocalBotModelBinding } from '../model-protocol.js';
 import { unavailableFeedback } from './provider-feedback.js';
 import {
   abandonBroadcast,
@@ -109,7 +110,7 @@ export function useDesktop() {
     try {
       bots.value = await loadBots();
       runtimeReady.value = true;
-      await loadProviderStatus();
+      await refreshModelSettings();
     } catch (error) {
       runtimeReady.value = false;
       throw error;
@@ -124,16 +125,19 @@ export function useDesktop() {
   }
   onMounted(() => void guard(() => refresh()));
   const uuid = () => crypto.randomUUID();
-  const team = () =>
-    createOceanTeam({
-      readBots: loadBots,
-      setBots: (next) => {
-        bots.value = next;
+  const team = (choices?: Readonly<Record<string, LocalBotModelBinding>>) =>
+    createOceanTeam(
+      {
+        readBots: loadBots,
+        setBots: (next) => {
+          bots.value = next;
+        },
+        currentBots: () => bots.value,
+        refresh,
+        requestId: uuid,
       },
-      currentBots: () => bots.value,
-      refresh,
-      requestId: uuid,
-    });
+      choices,
+    );
   async function send(attachments: string[] = []) {
     const r = room.value;
     if (!r) return;

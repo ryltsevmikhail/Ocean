@@ -242,6 +242,18 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@runnets/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@runnets/provider-anthropic':
+        specifier: workspace:*
+        version: link:../../packages/provider-anthropic
+      '@runnets/provider-deepseek':
+        specifier: workspace:*
+        version: link:../../packages/provider-deepseek
+      '@runnets/provider-openai':
+        specifier: workspace:*
+        version: link:../../packages/provider-openai
       '@runnets/tools-node':
         specifier: workspace:*
         version: link:../../packages/tools-node

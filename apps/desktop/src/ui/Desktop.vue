@@ -14,6 +14,7 @@ import BroadcastPanel from './BroadcastPanel.vue';
 import ProviderSettings from './ProviderSettings.vue';
 import PluginSettings from './PluginSettings.vue';
 import { useDesktop } from './state.js';
+import { modelSupport } from './model-support.js';
 const {
   runtimeReady,
   loading,
@@ -75,6 +76,10 @@ function created(roomId?: string) {
 }
 const profile = ref<InstanceType<typeof ProfilePanel>>();
 const roomManager = ref<InstanceType<typeof RoomManager>>();
+function startTeam() {
+  if (modelSupport.value === true) roomManager.value?.open('team');
+  else void guard(() => team());
+}
 </script>
 <template>
   <div class="shell" :class="{ 'with-details': details && room, 'show-rooms': roomList }">
@@ -171,13 +176,13 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
         :loading="loading"
         @refresh="guard(() => refresh())"
         @profile="profile?.open()"
-        @team="guard(team)"
+        @team="startTeam"
       />
       <button
         v-else-if="!rooms.some((r) => r.kind === 'group' && r.title === 'Ocean Team')"
         class="team-link"
         :disabled="busy || !runtimeReady"
-        @click="guard(team)"
+        @click="startTeam"
       >
         Создать Ocean Team
       </button>
@@ -236,5 +241,11 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
       @close="details = false"
     />
   </div>
-  <RoomManager ref="roomManager" :bots="bots" :busy="busy" @created="created" />
+  <RoomManager
+    ref="roomManager"
+    :bots="bots"
+    :busy="busy"
+    @created="created"
+    @team="(choices) => guard(() => team(choices))"
+  />
 </template>

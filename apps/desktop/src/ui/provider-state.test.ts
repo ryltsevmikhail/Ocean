@@ -244,3 +244,22 @@ function checkMetadata() {
     checkedAt: '2026-11-04T00:00:00.000Z',
   };
 }
+
+it('clears the key synchronously before a pending legacy submission settles', async () => {
+  channel([ok(status)]);
+  await loadProviderStatus();
+  let settle!: (reply: Reply) => void;
+  vi.stubGlobal('window', {
+    ocean: {
+      request: () =>
+        new Promise<Reply>((resolve) => {
+          settle = resolve;
+        }),
+    },
+  });
+  providerKey.value = 'synthetic-pending';
+  const pending = saveProvider();
+  expect(providerKey.value).toBe('');
+  settle(ok(status));
+  await pending;
+});

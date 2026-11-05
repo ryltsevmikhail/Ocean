@@ -19,11 +19,12 @@ async function post(message: unknown) {
 export async function call<K extends Command['op']>(
   command: Command & { op: K },
 ): Promise<z.infer<(typeof outputs)[K]>> {
-  if (!commands.safeParse(command).success) {
+  const parsed = commands.safeParse(command);
+  if (!parsed.success) {
     if (command.op === 'send') throw new SendFailure('invalid_request', 'validation');
     throw new Error('invalid_request');
   }
-  const raw = await post(command);
+  const raw = await post(parsed.data);
   const reply = envelope.safeParse(raw);
   if (!reply.success) throw new Error('outcome_unknown');
   if (!reply.data.ok) {
