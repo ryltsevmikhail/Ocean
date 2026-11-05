@@ -81,3 +81,8 @@ OCEAN_RC_INSTALL=/absolute/prefix/lib/ocean/releases/VERSION pnpm exec vitest ru
 Коррекция2 Task17.3 ограничена qualification drivers: финализация отклоняет exit23/сигнал после stop-ack, а proof создаётся исключительно в новом каталоге rehearsal с защитой от overwrite/traversal/symlink. Семь lifecycle- и семь filesystem-контролей проходят; corrected installed rehearsal завершился exit0. Из-за ошибочно выполненного старого драйвера owned исходный proof временно перезаписан; исходные 13542 raw bytes восстановлены только после совпадения immutable SHA256, mode0644 сохранён, весь прежний165-file seal повторно проверен. Инцидент и случайный вывод сохранены в отчёте/fix2, продуктовый архив не менялся.
 
 Новая узкая фиксация `task-17.3-ec1e5d5/fix2/freeze-final` содержит69 файлов и ссылается на неизменённый fix1 seal: inventory raw SHA256 `d951ffd623ffa0a35740f697a35725dd7c74183564c58075c55ed52a44903f18`, seal raw SHA256 `36f9a9ddf6b8205fb3d3e8d66f81476c3cfe1a2076c8ca86a437dbc8340f7963`, validation attestation raw SHA256 `d0a9945ec48d88a7aab85c9ec85365ee4de94ace58b02bec41b467353806609f`. Ревизия исходного артефакта остаётся ec1e5d5; пересборки и broad gates для evidence-only коррекции не выполнялись, scoped review остаётся обязательным.
+
+Task17.3 принят на `652dd56` после повторного независимого ревью: N1/N2 закрыты,
+новых Critical/Important нет. Исходная ревизия продукта и хеши артефактов выше
+сохранены. Приёмка относится к установленному Linux-кандидату; 17.4 (native model
+и mixed DeepSeek), 17.5 (настоящий GUI) и финальный выпуск F остаются открытыми.
