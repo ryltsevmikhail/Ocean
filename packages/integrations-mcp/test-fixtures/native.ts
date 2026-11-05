@@ -1,6 +1,6 @@
 // Run with the private environment runner and a fresh owned proof directory.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { ctl, read, inspect } from './native-observation.ts';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -18,7 +18,7 @@ import fsPromises from 'node:fs/promises';
 import { mock } from 'node:test';
 import type { ServiceJson } from '@runnets/domain';
 import { syncBuiltinESMExports } from 'node:module';
-import { createMcpServiceTransport } from '@runnets/integrations-mcp';
+import { createMcpServiceTransport, type McpCatalogCandidate } from '@runnets/integrations-mcp';
 import { admission, connection } from './admission.ts';
 const [dir, mode] = process.argv.slice(2);
 assert.ok(dir && mode);
@@ -86,42 +86,10 @@ const a = admission(
   },
   mode === 'deadline' ? 200 : 6000,
 );
-const env = { PATH: '/usr/bin:/bin', XDG_RUNTIME_DIR: '/run/user/' + process.getuid!() };
-const ctl = (...args: string[]) =>
-  execFileSync('/usr/bin/systemctl', ['--user', ...args], { env, encoding: 'utf8' }).trim();
-const read = (p: string) => readFileSync(p, 'utf8').trim();
-const inspect = (cg: string) => {
-  const root = '/sys/fs/cgroup' + cg;
-  const pids = read(root + '/cgroup.procs')
-    .split('\n')
-    .map(Number);
-  return {
-    cg,
-    pids: pids.map((pid) => ({
-      pid,
-      start: read('/proc/' + pid + '/stat')
-        .split(') ')
-        .at(-1)!
-        .split(' ')[19],
-    })),
-    fields: Object.fromEntries(
-      [
-        'cgroup.events',
-        'pids.current',
-        'pids.peak',
-        'memory.current',
-        'memory.peak',
-        'memory.max',
-        'pids.max',
-        'pids.events',
-      ].map((k) => [k, read(root + '/' + k)]),
-    ),
-  };
-};
 const evidence: Record<string, unknown> = { mode };
-let cleanup, cg: string | undefined;
+let cleanup, cg: string | undefined, candidate: McpCatalogCandidate | undefined;
 try {
-  const candidate = await t.discover(cfg, {
+  candidate = await t.discover(cfg, {
     signal: new AbortController().signal,
     deadlineMs: 12000,
     authorizeMetadata: () => a.metadata(cfg),
@@ -151,7 +119,37 @@ try {
   );
   const call = (tool: string, args: ServiceJson, id: string, signal?: AbortSignal) =>
     a.call(s.id, tool, args, id, signal);
-  if (mode === 'ready') {
+  if (mode === 'runtime') {
+    const start = performance.now();
+    while (existsSync('/sys/fs/cgroup' + cg) && performance.now() - start < 68000) await delay(200);
+    const elapsed = performance.now() - start;
+    evidence['expiryMs'] = elapsed;
+    assert.ok(elapsed > 50000 && elapsed < 68000 && !existsSync('/sys/fs/cgroup' + cg));
+    assert.equal((await call('write', {}, 'after-expiry')).outcome?.kind, 'not_started');
+    assert.equal(attempts, 0);
+  } else if (mode === 'manifest') {
+    assert.ok(cfg.configuration.kind === 'stdio');
+    const forged = {
+      ...cfg,
+      currentCatalogId: s.id,
+      configuration: { ...cfg.configuration, packageJsonSha256: '0'.repeat(64) },
+    };
+    const reply = await t.invoke({
+      connection: forged,
+      catalogId: s.id,
+      definition: s.tools[0]!,
+      arguments: {},
+      invocationId: 'changed-manifest',
+      signal: new AbortController().signal,
+      deadlineMs: 1000,
+      authorizeDispatch: () => {
+        throw Error('should not reach authority');
+      },
+    });
+    assert.equal(reply.kind, 'not_started');
+    assert.equal(attempts, 0);
+    evidence['changedPin'] = reply.kind;
+  } else if (mode === 'ready') {
     assert.equal((await call('list_allowed_directories', {}, 'allowed')).outcome?.code, 'ok');
     assert.equal(
       (await call('write_file', { path: '/workspace/note', content: 'ready-proof' }, 'write'))
@@ -207,6 +205,7 @@ try {
     );
     evidence['server'] = obs;
     const ac = new AbortController();
+    const start = performance.now();
     const promise = call('write', {}, 'invoke', ac.signal);
     await enter.promise;
     if (mode === 'revoke') a.owner.revoke({ grantId: 'grant', revision: 1 });
@@ -226,6 +225,8 @@ try {
       ac.abort();
     }
     const r = await promise;
+    evidence['responseMs'] = Math.round(performance.now() - start);
+    if (mode === 'stderr') assert.ok(performance.now() - start < 5000);
     resume.resolve();
     await delay(25);
     assert.equal(
@@ -274,6 +275,18 @@ try {
     syncBuiltinESMExports();
   }
   try {
+    if (mode === 'observer' && candidate) {
+      assert.deepEqual(await t.disposeCandidate(candidate), { status: 'unknown' });
+      await assert.rejects(
+        t.discover(cfg, {
+          authorizeMetadata: () => true,
+          signal: new AbortController().signal,
+          deadlineMs: 1000,
+        }),
+        { code: 'execution_disabled' },
+      );
+      evidence['executionDisabled'] = true;
+    }
     cleanup = await t.close();
   } finally {
     mock.restoreAll();

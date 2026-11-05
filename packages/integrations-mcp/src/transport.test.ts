@@ -114,3 +114,46 @@ it('never opens a credential or starts metadata after owner denial', async () =>
   ).rejects.toMatchObject({ code: 'catalog_incomplete' });
   expect(await t.close()).toEqual({ status: 'never_started' });
 });
+
+it('coalesces list-changed and TTL into a single separately owned refresh hint', async () => {
+  const f = await httpFixture('notification');
+  let hints = 0;
+  const t = createMcpServiceTransport({
+    refreshNeeded: () => {
+      hints++;
+    },
+  });
+  const c = {
+    ...serviceConnection,
+    credentialReference: null,
+    configuration: { kind: 'http' as const, url: f.url.href },
+  };
+  try {
+    const first = await t.discover(c, {
+      authorizeMetadata: () => true,
+      deadlineMs: 2000,
+      signal: new AbortController().signal,
+    });
+    const s = { ...first, id: 'change' };
+    expect(t.activate(first, s, () => true)).toBe(true);
+    const before = f.rows.length;
+    const reply = await t.invoke({
+      connection: { ...c, currentCatalogId: s.id },
+      catalogId: s.id,
+      definition: s.tools[0]!,
+      arguments: { value: 'alpha' },
+      invocationId: 'one',
+      signal: new AbortController().signal,
+      deadlineMs: 2000,
+      authorizeDispatch: () => true,
+    });
+    expect(reply.kind).toBe('observed');
+    await vi.waitFor(() => expect(hints).toBe(1), { timeout: 700 });
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(hints).toBe(1);
+    expect(f.rows.slice(before)).toEqual(['tools/call']);
+  } finally {
+    await t.close();
+    await f.close();
+  }
+});

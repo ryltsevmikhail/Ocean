@@ -49,6 +49,10 @@ server.setRequestHandler('tools/call', async () => {
     }),
   );
   if (config.mode === 'drop') process.exit(23);
+  if (config.mode === 'stderr') {
+    process.stderr.write('e'.repeat(65537));
+    await new Promise(() => {});
+  }
   if (config.mode === 'overflow') {
     process.stdout.write('x'.repeat(4 * 1024 * 1024 + 1));
     await new Promise(() => {});
