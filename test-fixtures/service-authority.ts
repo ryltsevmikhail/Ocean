@@ -6,7 +6,7 @@ export const serviceConnection: ServiceConnection = {
   name: 'Third server',
   ...authorityVersions,
   configuration: { kind: 'http', url: 'https://third.example/mcp' },
-  credentialReference: 'secret:third-work',
+  credentialReference: 'env:SERVICE_TOKEN',
   trust: {
     ownerId: 'owner',
     metadataPermission: 'allow',

@@ -4,6 +4,7 @@ import {
   type ServiceConnectionVersions,
 } from './service-connection.js';
 import {
+  authorityDenseArray,
   authorityBoundedJson,
   authorityInstant as instant,
   authorityKeys as keys,
@@ -41,7 +42,8 @@ export function validServiceJson(v: unknown, depth = 0): v is ServiceJson {
   if (depth > 64) return false;
   if (v === null || typeof v === 'boolean' || typeof v === 'string') return true;
   if (typeof v === 'number') return Number.isFinite(v);
-  if (Array.isArray(v)) return v.every((e: unknown) => validServiceJson(e, depth + 1));
+  if (Array.isArray(v))
+    return authorityDenseArray(v) && v.every((e: unknown) => validServiceJson(e, depth + 1));
   return object(v) && Object.values(v).every((e) => validServiceJson(e, depth + 1));
 }
 function provenance(v: unknown): boolean {
@@ -99,6 +101,7 @@ export function validServiceCatalogSnapshot(v: unknown): v is ServiceCatalogSnap
   return (
     Array.isArray(tools) &&
     tools.length <= SERVICE_PLUGIN_MAX_TOOLS &&
+    authorityDenseArray(tools) &&
     tools.every(validServiceToolDefinition) &&
     new Set(tools.map((t) => t.name)).size === tools.length &&
     authorityBoundedJson(v, SERVICE_PLUGIN_MAX_DISCOVERY_BYTES)

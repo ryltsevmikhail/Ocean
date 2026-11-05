@@ -1,5 +1,6 @@
 import { validOwnerResources, type OwnerResourceScope } from './effect-resource-scope.js';
 import {
+  authorityDenseArray,
   authorityBoundedJson,
   authorityInstant as instant,
   authorityKeys as keys,
@@ -147,6 +148,7 @@ export function validOwnerScopeGrant(v: unknown): v is OwnerScopeGrant {
     Array.isArray(p) &&
     p.length > 0 &&
     p.length <= 256 &&
+    authorityDenseArray(p) &&
     p.every(validOwnerPermission) &&
     authorityBoundedJson(v, 65536)
   );

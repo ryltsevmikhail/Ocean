@@ -180,9 +180,13 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
         if (
           result !== null &&
           (typeof result === 'object' || typeof result === 'function') &&
-          'then' in result
-        )
+          'then' in result &&
+          typeof result.then === 'function'
+        ) {
+          // Misuse is reported synchronously; observe the discarded async failure too.
+          void Promise.resolve(result).catch(() => {});
           throw Error('service authority callback must be synchronous');
+        }
         return result;
       });
     } finally {

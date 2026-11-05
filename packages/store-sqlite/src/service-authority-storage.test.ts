@@ -101,7 +101,7 @@ describe('inert durable service authority', () => {
       const changed = {
         ...serviceConnection,
         credentialRevision: 2,
-        credentialReference: 'secret:rotated',
+        credentialReference: 'env:ROTATED_TOKEN',
       };
       expect(tx.putConnection(changed, authorityVersions)).toBe(true);
       expect(tx.putConnection(serviceConnection, authorityVersions)).toBe(false);
@@ -158,7 +158,7 @@ describe('inert durable service authority', () => {
       const current = tx.connection('third')!;
       expect(
         tx.putConnection(
-          { ...current, credentialRevision: 2, credentialReference: 'secret:rotated' },
+          { ...current, credentialRevision: 2, credentialReference: 'env:ROTATED_TOKEN' },
           authorityVersions,
         ),
       ).toBe(true);
@@ -195,7 +195,7 @@ describe('inert durable service authority', () => {
       tx.publishCatalog('third', authorityVersions, 'catalog-2');
       const connection = tx.connection('third')!;
       tx.putConnection(
-        { ...connection, credentialReference: 'secret:new', credentialRevision: 2 },
+        { ...connection, credentialReference: 'env:NEW_TOKEN', credentialRevision: 2 },
         authorityVersions,
       );
       expect(tx.grant('grant')).toEqual(ownerGrant);

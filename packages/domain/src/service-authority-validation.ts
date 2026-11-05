@@ -17,11 +17,19 @@ export const authorityInstant = (v: unknown): v is string =>
   /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(v) &&
   Number.isFinite(Date.parse(v)) &&
   new Date(v).toISOString() === v;
+/** Every array index must be an own element; Array.every alone skips holes. */
+export function authorityDenseArray(value: readonly unknown[]): boolean {
+  for (let index = 0; index < value.length; index++) {
+    if (!Object.hasOwn(value, index)) return false;
+  }
+  return true;
+}
 export function authorityNames(v: unknown, max = 256): v is readonly string[] {
   return (
     Array.isArray(v) &&
     v.length > 0 &&
     v.length <= max &&
+    authorityDenseArray(v) &&
     v.every((n) => authorityText(n)) &&
     new Set(v).size === v.length
   );

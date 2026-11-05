@@ -23,7 +23,7 @@ describe('neutral service authority contracts', () => {
           kind: 'stdio',
           executable: '/opt/server',
           sha256: 'b'.repeat(64),
-          args: ['--stdio'],
+          args: [],
         },
       }),
     ).toBe(true);

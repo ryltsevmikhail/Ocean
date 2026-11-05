@@ -1,4 +1,5 @@
 import {
+  authorityDenseArray,
   authorityKeys as keys,
   authorityObject as object,
   authorityText as text,
@@ -57,6 +58,7 @@ export function validOwnerResources(v: unknown): v is readonly OwnerResourceScop
     Array.isArray(v) &&
     v.length > 0 &&
     v.length <= 256 &&
+    authorityDenseArray(v) &&
     v.every(validOwnerResourceScope) &&
     new Set(v.map((s) => JSON.stringify(s))).size === v.length
   );

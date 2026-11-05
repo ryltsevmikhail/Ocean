@@ -1,6 +1,8 @@
+import { validCredentialReference } from './plugin-catalog.js';
 import { validPluginSchemaDigest } from './plugin-connection.js';
 import { validOwnerResourceScope, type OwnerResourceScope } from './effect-resource-scope.js';
 import {
+  authorityDenseArray,
   authorityBoundedJson,
   authorityInstant as instant,
   authorityKeys as keys,
@@ -19,6 +21,7 @@ export type ServiceConfiguration =
       readonly kind: 'stdio';
       readonly executable: string;
       readonly sha256: string;
+      /** Inert stage18.2 accepts only an empty list; qualified launch forms follow18.4. */
       readonly args: readonly string[];
     };
 export interface ServiceTrustBinding {
@@ -45,7 +48,7 @@ export interface ServiceConnection extends ServiceConnectionVersions {
   readonly id: string;
   readonly name: string;
   readonly configuration: ServiceConfiguration;
-  /** Non-secret opaque identifier, never literal credentials or SDK credential objects. */
+  /** Non-secret env:UPPER_CASE_NAME handle; never literal credential bytes. */
   readonly credentialReference: string | null;
   readonly trust: ServiceTrustBinding;
   readonly state: 'active' | 'disconnected';
@@ -70,8 +73,8 @@ export function validServiceConfiguration(v: unknown): v is ServiceConfiguration
       String(v['executable']).startsWith('/') &&
       validPluginSchemaDigest(v['sha256']) &&
       Array.isArray(v['args']) &&
-      v['args'].length <= 64 &&
-      v['args'].every((a) => text(a, 1024))
+      v['args'].length === 0 &&
+      authorityDenseArray(v['args'])
     );
   if (v['kind'] !== 'http' || !keys(v, ['kind', 'url']) || !text(v['url'], 4096)) return false;
   // No literal authentication headers, userinfo, query parameters or fragments.
@@ -112,6 +115,7 @@ export function validServiceTrustBinding(v: unknown): v is ServiceTrustBinding {
   return (
     Array.isArray(v['resourceEnforcement']) &&
     v['resourceEnforcement'].length <= 256 &&
+    authorityDenseArray(v['resourceEnforcement']) &&
     v['resourceEnforcement'].every(
       (e: unknown) =>
         object(e) &&
@@ -147,7 +151,8 @@ export function validServiceConnection(v: unknown): v is ServiceConnection {
     validServiceConfiguration(v['configuration']) &&
     (v['credentialReference'] === null ||
       (typeof v['credentialReference'] === 'string' &&
-        /^[a-zA-Z][a-zA-Z0-9:._/-]{0,127}$/.test(v['credentialReference']))) &&
+        v['credentialReference'].startsWith('env:') &&
+        validCredentialReference(v['credentialReference'].slice(4)))) &&
     validServiceTrustBinding(v['trust']) &&
     (v['state'] === 'active' || v['state'] === 'disconnected') &&
     (v['currentCatalogId'] === null || text(v['currentCatalogId'])) &&
