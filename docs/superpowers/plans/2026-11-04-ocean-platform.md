@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16), интеграционная приёмка (17) и этапы C–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Интеграционная приёмка (17) и этапы C–H пока запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -432,13 +432,13 @@ Each task's numbered steps are red test → run → minimal implementation → g
 
 ### Task 16: Minimal connection and bot-binding settings UI
 
-**Files:** Modify desktop/src/ui/{ProviderSettings.vue,provider-state.ts,provider-state.test.ts,provider-text.ts,provider-text.test.ts}; Create desktop/src/ui/{bot-model-state,bot-model-state.test}.ts and focused bot-binding component; connect existing preload/client boundary through public tools-node methods.
+**Files:** Modify desktop/src/ui/{ProviderSettings.vue,provider-state.ts,provider-state.test.ts}; Create desktop/src/ui/{bot-model-state,bot-model-state.test}.ts and focused bot-binding component, model-settings-text.ts and its tests; retain provider-text.ts/provider-text.test.ts for the frozen legacy form under the approved small-module split. Connect existing preload/client boundary through public tools-node methods.
 **Interfaces:** Consumes Task 15 DTO/client. Produces metadata-only connection selector, explicit Cloud/Local/auth mode, per-bot model selector, check/disconnect and revision-conflict refresh. Existing provider form remains usable when new feature absent.
 
-- [ ] Tests two bindings survive refresh, defaults do not mass-rebind, write-only key input clears after submission, auth-none needs no dummy key, restored/disconnected status honest, unknown usage not shown as 0 actual tokens and unsupported capabilities visibly refuse.
-- [ ] Run `pnpm exec vitest run --config vitest.source.config.ts apps/desktop/src/ui/provider-state.test.ts apps/desktop/src/ui/provider-text.test.ts apps/desktop/src/ui/bot-model-state.test.ts` red.
-- [ ] Implement bounded settings flow, no model calls/client database access or automatic credential import. Handle stale revisions with explicit refreshed state, no blind resubmission. Keep graphical chat redesign in E.
-- [ ] Run green and `pnpm build`; commit Task 16. Native UI qualification remains Task 17.
+- [x] Tests two bindings survive refresh, defaults do not mass-rebind, write-only key input clears after submission, auth-none needs no dummy key, restored/disconnected status honest, unknown usage not shown as 0 actual tokens and unsupported capabilities visibly refuse.
+- [x] Run `pnpm exec vitest run --config vitest.source.config.ts apps/desktop/src/ui/provider-state.test.ts apps/desktop/src/ui/provider-text.test.ts apps/desktop/src/ui/bot-model-state.test.ts` red.
+- [x] Implement bounded settings flow, no model calls/client database access or automatic credential import. Handle stale revisions with explicit refreshed state, no blind resubmission. Keep graphical chat redesign in E.
+- [x] Run green and `pnpm build`; commit Task 16. Native UI qualification remains Task 17.
 
 ### Task 17: Integrated migration/restart/package and live qualification gates
 
@@ -453,6 +453,70 @@ Each task's numbered steps are red test → run → minimal implementation → g
 - [ ] Run workspace root `pnpm check`, `pnpm build`, `pnpm format:check`; commit only scoped verified work. Qualify native Desktop/installation/rollback separately with scratch profiles; no in-place DB downgrade.
 - [ ] With explicitly available prerequisites, run local offline text+tool gate and endpoint failure, record backend/full artifact digest, peak RAM/shared GPU/swap, cold/warm latency and tool/usage fidelity. Run each cloud live gate separately with provided credentials. Missing prerequisites are open gates, not passes. Full autonomous A→B→A delivery identity gate remains D/F; B proves mixed direct/broadcast routing.
 
+The following sequential checkpoints close Task17; the parent stays open until all applicable evidence is reconciled. Existing user approval covers these implementation decisions and the preserved SDD method. Native prerequisites are deliberately prepared only in owned isolated qualification paths; installed Ocean1.0/RC2 and real profiles remain separate. OpenAI/Anthropic live remains explicitly deferred, never a pass. Final C/F gates must fix the protected catalog debt.
+
+#### Task 17.1: Strict test compiler coverage and fixture typing
+
+**Files:** modify package.json/tsconfig.tests.json; create tsconfig.tests.node.json and tsconfig.tests.desktop.json; repair only actual diagnostic fixtures identified by fresh compiler output and task-17-test-types-preflight.md. Preserve protected catalog test/rig semantics and bytes until C owns them. No production port weakened for stale mocks.
+
+**Interfaces:** Consumes current public ProviderPort/ProviderEvent/Changeset/ToolJournalPort/TuiApp/ChatRunBook and desktop send signatures; inspect settled16 changes before exact fixture edits. Produces scripts typecheck:tests:node, typecheck:tests:desktop, aggregate typecheck:tests, and root check order production types -> test types -> lint -> source -> built process.
+
+- [ ] Capture fresh unmodified aggregate diagnostic command/exit and original TS root manifest; no fixed63 subtraction or grandfathered added diagnostics.
+- [ ] Partition Node ES2023+node and desktop ES2023+DOM+DOM.Iterable+node roots with the inherited strict flags/noEmit. Preserve source aliases and explicitly resolve public subpaths to source, never stale dist. No global DOM in base, any/ignore/no-check/skipLibCheck increase or test exclusions without ownership in other context.
+- [ ] Repair complete typed fixtures/callers with existing behavior assertions retained. Run both strict contexts to0. Baseline compiler failure is meaningful RED; no fabricated runtime bug.
+- [ ] Audit root union covers every original root and runnable source/process test, all fixture/setup/config roots including formerly missing test-fixtures and vitest*.config.ts; report overlap and resolved workspace paths using showConfig/listFilesOnly or compiler API. Vue SFC compilation remains separate.
+- [ ] Run affected runtime suites, root check/build/format and fresh separate process controls when catalog baseline skips them; source<=300; self-review/owned commit/independent review. Expected strict test types0; remaining catalog/format baseline explicitly disclosed, not green.
+
+#### Task 17.2: Migration, durable run projections and recovery regressions
+
+**Files:** packages/store-sqlite/src/command-disposition.test.ts; application model-execution-reads tests/new focused snapshot test; CLI local-runtime model connection/recovery process cases and fixtures; model/projection code only for demonstrated integration defect. New exact model-connections-process.test.ts can own mixed routing; existing model-recovery-process.test.ts retains accepted15.3 cases.
+
+**Interfaces:** Consumes executeWithDisposition/execute historical receipts, ModelActivationSnapshot/RoomModelExecutionReads and accepted per-bot bindings/canonical settings. Produces stronger regression coverage and truthful known-not-sent versus unknown turn projections, no new engine/authority.
+
+- [ ] After SQLite reopen replay same admitted command through both public execute APIs and compare exact retained receipt JSON plus unchanged rows.
+- [ ] Add delayed journal-load/head-advance snapshot and cross-attempt category regressions without replacing one-materialization fold. Counts/null/legacy prefix and runVersion remain one committed view.
+- [ ] Prove separate cloud/local direct/broadcast bindings, key/model rotation and same request replay across restart, committed model start before kill/no redispatch, unknown usage versus completion, restore all connections inert and explicit reconnect of only one. Backup/foreign-key/raw legacy receipt integrity preserved.
+- [ ] If known local preflight not_sent is projected as unknown/holding, demonstrate RED and fix from durable TaskRun/effect facts; actual unknown stays held. A separately addressed cloud sibling runs; failed local never falls back to cloud.
+- [ ] Close deferred15.3 r6 sensitive assertion diagnostics with fixed Boolean comparisons and original denied plugin.catalog read coverage alongside new mutation refusal; no assertion removal/permission relaxation.
+- [ ] Run strict0, focused source/process+backup gates, root check/build/format; freeze evidence, owned commit and scoped review. Real vendors/native inference remain later.
+
+#### Task 17.3: Exact installed Linux artifact and compatibility
+
+**Files:** apps/cli/src/release/package.ts and related release tests only for proven closure gaps; existing desktop qa/package-native.mjs/current-backup.mjs/installed-tui.py or coherent focused helpers. Product qualification docs record artifact paths/revision/hash.
+
+**Interfaces:** Consumes exact accepted committed revision, packageRelease existing command/installed launchers, public new provider entrypoints and archive backup/rebind paths. Produces isolated candidate archive/inventory/SHA256 and installation evidence. Installed Ocean1.0/RC2 and real profiles untouched.
+
+- [ ] Create clean isolated qualification worktree of exact commit; never stash/reset/clean protected source. Reconcile pinned dependencies honestly, run required root/build/format at exact revision (catalog debt disclosed). Build actual desktop web/preload/host and use pinned Node26.
+- [ ] Resolve pinned Electron45 binary explicitly; validate cached/downloaded official artifact checksum/license before execution. SystemElectron39 is not equivalent. No accidental implicit package import download.
+- [ ] Package qualification candidate1.1.0-rc.3 without publishing, generate SHA256/inventory/licenses. Prove installed public imports for OpenAI/Anthropic/local from outside repository with no source/global NODE_PATH resolution. Audit TEST_ONLY_MODULE cleanup/fixture exclusion against actual runtime dependency closure; don't blindly ship all test fixtures.
+- [ ] Install into disposable prefix; offline CLI/TUI/ACP, room/history, restore synthetic1.0 profile, doctor/Python3 socket, sandbox test/typecheck/lint/build presets and resource limits. Run native gates explicitly rather than claiming skipped tests.
+- [ ] Use archived RC2 read-only binaries/artifacts with scratch HOME/profile for actual older-binary newer-schema refusal and update/backup/rollback. Never execute a real-profile launcher that sources credentials, in-place downgrade DB, or modify real installed release. Verify no mutation on refusal and compatible backup rollback.
+- [ ] Freeze exact artifact/evidence/commands/exits; code fixes require regression+review. This candidate is qualification input, not stable publication. F repackages after C/D/E changes.
+
+#### Task 17.4: Native local backend and mixed-provider B acceptance
+
+**Files:** bounded opt-in qualification helpers/product evidence docs; provider/application source only for demonstrated native integration gaps with regression and scoped review. Read task-17-native-prerequisites.md and existing controller notes; primary upstream docs/version/digest verified at setup time.
+
+**Interfaces:** Consumes accepted local candidate qwen3:1.7b/qwen3/1.7B/Q4_K_M, metadata version/tags/show and model connections, actual local ProviderPort and same engine. Produces measured native/offline text+tool/usage evidence and mixed cloud/local direct/broadcast proof. Not autonomous A->B->A (D).
+
+- [ ] Prepare necessary verified backend/model under isolated qualification paths/ports without changing real services/profiles; existing user full implementation authorization persists. No marketplace/automatic install product feature. Record exact backend version/full manifest/artifact digest and positive local GGUF/tensor/capacity>=4096 evidence. No short digest qualification.
+- [ ] Bound CPU/memory/time and measure cold/warm response, peak RAM/swap/shared GPU (or explicitly CPU-only), exact think:false/num_ctx4096/num_predict<=512. Existing memory pressure recorded. No unsupported acceleration/peak claims.
+- [ ] Prove actual offline text and harmless tool round in the existing engine with available local weights/backend and no Internet path; endpoint failure and durable known-not_sent versus unknown separately. No cloud fallback.
+- [ ] With authorized DeepSeek source only in memory/isolation, run addressed cloud/local mixed team/B broadcast and one failed local child plus independently addressed cloud child, with request counters and exact admitted identities. Synthetic prompts only, no personal transcripts/credential printing/copy to Git. OpenAI/Anthropic live keys remain explicitly deferred, not passes; no CLI credential import.
+- [ ] Record actual command exits/counters/resources/full digest and precise limitations; regression/full gates after any code fix, owned commit/report and independent review. Missing or failed qualification cannot be marked passed; controller resolves setup/model choice within approved architecture.
+
+#### Task 17.5: Native Desktop model contract acceptance
+
+**Files:** existing desktop qa/provider-settings.mjs and focused helper(s) for negotiated settings; current-window/owner/private proof infrastructure, source only for demonstrated GUI defect. Preserve external design checkout.
+
+**Interfaces:** Consumes accepted16 UI plus exact current installed candidate/pinned Electron45 and isolated runtime profile. Produces real visible GUI proof at1024/1280/1920 and two-client recovery, not only state tests. No StageE redesign.
+
+- [ ] Launch actual app using qualified binary/current build with synthetic HOME/all XDG/TMP/userData and absolute Wayland socket. No real profile/D-Bus/key session. Record exact code/artifact revision; rebuild/repackage after any source correction, no stale artifact claims.
+- [ ] Click through paginated connection selection, explicit per-bot binding/new bot/group/team choices, cloud/local/auth-none, immediate key clearing while pending, explicit check/readiness, conflict refresh/no blind retry and exact original recovery with two owner clients.
+- [ ] Verify actual legacy supported-host path and unsafe-host refusal; unknown/estimated/actual-zero displays, frozen admitted identity after rebind, disconnect versus cancellation, focus/escape/alerts and composer layout. No secrets in screenshots/console/browser storage.
+- [ ] Preserve attachments/vision/history, reconnect and closing window during generation; second client sees same run/result. Use synthetic transport for fault boundaries and label it; actual DeepSeek/local scope from17.4 is separate evidence.
+- [ ] Run exact final source/built/native gates after fixes, record reproducible commands/screenshots/sanitized results and review. Reconcile every parent17 item, current deferred live status and catalog root debt. Then C begins; stable release still requires finalF all-root0/current artifacts/whole-branch review.
+
 ## Minimal adapter decisions and live prerequisites
 
 OpenAI: initial connection endpoint `https://api.openai.com` only (base origin, no proxy fallback); raw `POST https://api.openai.com/v1/chat/completions`, model `gpt-5.6-terra`, bearer auth, stream/include_usage, max_completion_tokens, no temperature/retries. Text+image/tools/streaming are documented; do not infer other IDs from names. Initial metadata: context 1050000, max output 128000. Honor an explicit safe-integer maxTokens in 1..128000; use 4096 only when omitted. The current engine supplies known capacity, so this omission fallback is not a production budget; add no hidden clamp. [Create](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create), [model](https://developers.openai.com/api/docs/models/gpt-5.6-terra).
@@ -461,7 +525,7 @@ Anthropic: canonical connection origin `https://api.anthropic.com` only; raw `/v
 
 Local: initial qualified profile is exact `qwen3:1.7b`; other names are not implicitly supported. Ollama `/api/chat` native NDJSON, explicit auth-none or API key, metadata checks only at /api/version,/api/tags,/api/show. Candidate `qwen3:1.7b` Q4_K_M, think:false, num_ctx4096, num_predict up to512 (default512; larger/invalid explicit bounds refuse, never clamp); tag page lists 1.4GB/short digest 8f68893c685c, not a qualified full digest. Pin actual installed identity/version during live qualification. Metadata must prove capacity >=4096; configured context records the explicitly requested 4096, not observed allocation. Require positive local GGUF tensor metadata and consistent full manifest digest/details, not merely absent remote flags. This trusts the configured backend; offline/cloud-disabled operation is a separate gate. [Chat](https://docs.ollama.com/api/chat), [model metadata](https://docs.ollama.com/api-reference/show-model-details), [cloud caveat](https://docs.ollama.com/api/authentication), [candidate](https://ollama.com/library/qwen3:1.7b).
 
-Observed notebook: i5-13420H, ~15GiB RAM, Intel UHD; no ollama/llama-server in PATH, Ollama inactive, loopback11434 unavailable, no standard model directory found. Backend/weights, full digest/version, live resource/tool/offline evidence and explicitly provided cloud keys are missing prerequisites. Do not install/download/start services automatically to close them. Keep DeepSeek adapter behavior and documented model metadata intact.
+Observed notebook: i5-13420H, ~15GiB RAM, Intel UHD; no ollama/llama-server in PATH, Ollama inactive, loopback11434 unavailable, no standard model directory found. Backend/weights, full digest/version and live resource/tool/offline evidence were missing in the bounded inventory. With the user’s existing full implementation approval, prepare verified backend/weights and pinned Electron deliberately under isolated qualification paths and ports in 17.3–17.5; preserve real services, profiles and installed releases. This is qualification setup, not an automatic backend installer in the product. Missing or deferred cloud credentials do not become passed live gates. Keep DeepSeek adapter behavior and documented model metadata intact.
 
 Решение пользователя 2026-11-04: живые проверки OpenAI/Anthropic и сбор
 отдельных API-ключей пока отложены. Реализация адаптеров и проверки на fixtures
