@@ -17,7 +17,7 @@ function details(value: unknown): void {
     !Array.isArray(d['families']) ||
     d['families'].length !== 1 ||
     d['families'][0] !== 'qwen3' ||
-    d['parameter_size'] !== '1.7B'
+    d['parameter_size'] !== '2.0B'
   )
     refuse('unsupported local model details');
 }

@@ -7,7 +7,7 @@ export function localMetadata(url: URL): HttpResponse {
     format: 'gguf',
     family: 'qwen3',
     families: ['qwen3'],
-    parameter_size: '1.7B',
+    parameter_size: '2.0B',
     quantization_level: 'Q4_K_M',
   };
   const bodies: Record<string, unknown> = {

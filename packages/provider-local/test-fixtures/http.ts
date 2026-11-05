@@ -6,7 +6,7 @@ export const details = {
   family: 'qwen3',
   families: ['qwen3'],
   quantization_level: 'Q4_K_M',
-  parameter_size: '1.7B',
+  parameter_size: '2.0B',
 };
 export const version = { version: 'fixture-0.1' };
 export const tags = {
