@@ -38,7 +38,7 @@ export async function wait(condition, ms = 15000) {
   throw Error('qualification timeout');
 }
 export async function currentWindow(f, label, executable) {
-  const userData = join(f.root, 'desktop'),
+  const userData = f.desktopUserData ?? join(f.root, 'desktop'),
     portFile = join(userData, 'DevToolsActivePort');
   rmSync(portFile, { force: true });
   const env = {

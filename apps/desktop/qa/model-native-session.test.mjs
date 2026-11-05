@@ -35,6 +35,7 @@ test('direct process identity distinguishes disappearance from unavailable evide
   assert.throws(() => processIdentity(123, () => ''), /invalid process identity/);
 });
 for (const stage of [
+  'resume',
   'readiness',
   'fast-owner',
   'proof-sink',
@@ -150,9 +151,15 @@ for (const stage of [
             desktopExecutable: executable,
             root,
             label: 'native',
+            ...(stage === 'resume' ? { resumeProfile: join(base, 'retained', 'profile') } : {}),
           },
           options,
         );
+      if (stage === 'resume') {
+        await assert.rejects(run, /unowned resume profile/);
+        assert.equal(existsSync(root), false);
+        return;
+      }
       if (stage === 'prior-proof' || stage === 'profile') {
         await assert.rejects(run, /direct child/);
         assert.deepEqual(readdirSync(join(base, stage)), []);

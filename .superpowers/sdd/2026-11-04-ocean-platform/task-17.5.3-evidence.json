@@ -1,0 +1,247 @@
+[
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/before-restart.json",
+    "bytes": 8887,
+    "sha256": "360f60b14a4021ccdb364839383bbf780170c0e8b005e099fc24a5837962255e"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/children-observed.jsonl",
+    "bytes": 5900,
+    "sha256": "f5b74c990937be9f475fb826939d4099c46cc15562e9c799cd3073e51788e1f1"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/children.jsonl",
+    "bytes": 8361,
+    "sha256": "842aa7aba55a93697077f67ffab14fb745108a997ea7486de071dbc9481c84b0"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/cleanup.json",
+    "bytes": 20709,
+    "sha256": "eb71f34f78d9785b81cb7cf565f63f21ee71bdd46120e6eed851a25e95111149"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/desktop-launch.json",
+    "bytes": 152,
+    "sha256": "8dd2b74db46f3a634fc38947b4824598aea8415738bc721b1af395efa592be16"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/dropped.jsonl",
+    "bytes": 259,
+    "sha256": "af5832fb9d5edf66a83e5c3a7ebd99991aeffe1436454b15cd750403c0369bd5"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/gui-handoff.json",
+    "bytes": 11275,
+    "sha256": "14f398c9ffe70457b2b9fffe1285a8e3c00ef2d508a8b01d59a80fb5f311e3aa"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/gui-held.png",
+    "bytes": 70590,
+    "sha256": "91eaa403813246fe869d7d70c0b1c9da0e080e373744f79465a186e7db9e3db5"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/identity.json",
+    "bytes": 4343,
+    "sha256": "dc5f26c3978986551c923dbc7d8cf495f449105a67aebef85459335c973bf953"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/lost-chat.json",
+    "bytes": 8044,
+    "sha256": "06ac5b4842b6e90de23e514f8cdf7cf24bfefa9d38c315cdffd519ffc7413f5f"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/native.jsonl",
+    "bytes": 1039,
+    "sha256": "9f43777bf8ca5883566455752358b4b63ed00dde451cc0ea727ca5953ab4462e"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/owner-launch.json",
+    "bytes": 152,
+    "sha256": "1e5d5f0a91c7a9e999c7fc35de9c4bb00e8ba95ccff3734d63209fa1fc7aefd7"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/provider.jsonl",
+    "bytes": 878,
+    "sha256": "7088def08c39b165a6258bd3a4940a081756e442dce0b78222e334af298c8a3d"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/receipts.jsonl",
+    "bytes": 5821,
+    "sha256": "9706343a23f12025dc2ca19b1124df1e611fe35f295b88d857e81e35b0992061"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopened-retirement.json",
+    "bytes": 1114,
+    "sha256": "f76c3aa499de3df5c5c79d9a2b34bab030dfe4e0fd62f74153e0912e7e5f07d1"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/requests.jsonl",
+    "bytes": 252,
+    "sha256": "9eb006220e3e08949c16d56acc41290a5de532699c6518c1c78097813a3574e8"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/submissions.jsonl",
+    "bytes": 12535,
+    "sha256": "8d5a0d8aa4464e1754c5fab61a8ca4baac046abfa3cd59d296430974ee85d7ca"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/tui-handoff.json",
+    "bytes": 14565,
+    "sha256": "b4a6d7454df452af31d2d203259d4ed7a3be94fd51ae81eaee69ccfea6853c3a"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/tui.json",
+    "bytes": 9106,
+    "sha256": "5b0386b33fb58b55d3a70f030f8fecad9f7ee9fd8dd072675d44df191db1d595"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/vision-fixture.png",
+    "bytes": 114847,
+    "sha256": "24a0767df18d4dd46c865a121f2fa615b50253bcacc7de23ad3109f742c1b167"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/assets.json",
+    "bytes": 1607,
+    "sha256": "0d292b978b23cdec0dfd685696bdcf21603d68f1a3773a9bc1506b621b8e22f0"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/attachments-history.png",
+    "bytes": 97187,
+    "sha256": "06566fe01ab2960de4a1c496335f2f5b99c4bbd41fc311f45727737088a6f3be"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/bounds-1024.json",
+    "bytes": 4225,
+    "sha256": "577187eb41a6c0e8bb66ac95e970c2b430a4b6c5b52f48ae6c6dd3ef29c6fefe"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/bounds-1280.json",
+    "bytes": 4279,
+    "sha256": "2f6d19fbb0854bc6551adf250eb2e4299b0587e8aba10a847df096e2a9c0c944"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/bounds-1920.json",
+    "bytes": 4220,
+    "sha256": "aa4f36d7da28dc4df0067758d433bc654d5166965741218ae62726b0706f4d86"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/children-observed.jsonl",
+    "bytes": 3908,
+    "sha256": "d55b04af88c87faac309b2041053d6a0ee2eec86228cbf933486b30f975cda59"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/children.jsonl",
+    "bytes": 8065,
+    "sha256": "2e1faefa776172972e5297d5a9a4adc5c6f37229223888ec67e77432d73d0139"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/desktop-launch.json",
+    "bytes": 152,
+    "sha256": "950490bb7b14848cc81bd47b889b8fc556cb3838ee485de0423ed915aab8bc3e"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/draft-originals-image.png",
+    "bytes": 88467,
+    "sha256": "746527dccf796799bec4ee12d9cc39d1629810b63de99fb86c8212d75873ea4a"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/draft-originals.json",
+    "bytes": 1077,
+    "sha256": "5a3fa1706dbba4fdaf25b93ea01660f22ab8135c88fef7e9a40e8d1ec273dae1"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/history-originals-image.png",
+    "bytes": 92226,
+    "sha256": "ae53c6b30684f0bc1475f5a208e8799a1cb180ac4e276ea3f38c218feb4061d8"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/history-originals.json",
+    "bytes": 1076,
+    "sha256": "e631217eaf6873d4e4d128a33b1b971f11f0a52693c0a825e994d194710c1cf9"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/native.jsonl",
+    "bytes": 1039,
+    "sha256": "9f43777bf8ca5883566455752358b4b63ed00dde451cc0ea727ca5953ab4462e"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/width-1024.png",
+    "bytes": 137390,
+    "sha256": "0bf9fc3d6141e877f6ccb862ad0afdf0b67b2e2162457fe9fd6fb9cf6fa41580"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/width-1280.png",
+    "bytes": 143159,
+    "sha256": "95581dcac2672fee255b5dbd190346a0282a8da79ae14bddef9c3a4458e02d7c"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9/reopen/width-1920.png",
+    "bytes": 146073,
+    "sha256": "44e2a16f12e92670b431115403ecf56274b9235ef593efa80f19ff5a71a6ae43"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/children-observed.jsonl",
+    "bytes": 4783,
+    "sha256": "37f04e12293a941355f054c59c00b0cd572ded6adbed54e8faed91b6a66fdd00"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/children.jsonl",
+    "bytes": 8024,
+    "sha256": "3856e6b59ad79e477c0592a2b4e77213fcdaed118c66858e1a62cd389eef6cef"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/cleanup.json",
+    "bytes": 9633,
+    "sha256": "52573c64a66b506ac8009c29a49b2cf2c7e5da3f978cf5ca64649e239abf447e"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/desktop-launch.json",
+    "bytes": 152,
+    "sha256": "56ce3b2a252ff0cb680c49df52a66f35a4662ec1558206c6c66fbfc3c9642841"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/identity.json",
+    "bytes": 4174,
+    "sha256": "5b3fc79ff6d161e8da96393177d3ae01bd38dc1e601e6cdd5f10fceb3bef77b8"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/native.jsonl",
+    "bytes": 1039,
+    "sha256": "9f43777bf8ca5883566455752358b4b63ed00dde451cc0ea727ca5953ab4462e"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/owner-launch.json",
+    "bytes": 152,
+    "sha256": "6af68af8c547fe78fc71fa2153a99fed64923bd4b71d7a90eaa6ed3d686b13c2"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/receipts.jsonl",
+    "bytes": 259,
+    "sha256": "af5832fb9d5edf66a83e5c3a7ebd99991aeffe1436454b15cd750403c0369bd5"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/restart.json",
+    "bytes": 8203,
+    "sha256": "1264206acc7f0755c00385987c39e364bbb1c70f285b940975eb110bba065027"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/restarted-history.png",
+    "bytes": 85781,
+    "sha256": "dafa9f61a4bfeb2c91369244ae1ad2762cd3cddf7dabab581b047a646fab1850"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/restarted-originals-image.png",
+    "bytes": 76349,
+    "sha256": "e79d61127b0db55fb3dae10d871ff6b38a1ba3c9ac78d3801d126663e10b4298"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/restarted-originals.json",
+    "bytes": 1080,
+    "sha256": "0c97946d4a648a669b6c2947a8dc9130770189ac80f830febc84aeb11c1e254f"
+  },
+  {
+    "path": "/home/ryltsevmg/Projects/Ocean-artifacts/task-17.5.3-handoff9-restart/submissions.jsonl",
+    "bytes": 426,
+    "sha256": "49bbefa8745f6c4cacb39f88ed2527774317ac5d0df25f98bf180a787aa4a84e"
+  }
+]

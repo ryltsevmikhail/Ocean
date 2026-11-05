@@ -1,0 +1,37 @@
+✔ accepts the three-column push layout with details open (1.049726ms)
+✔ rejects the pre-fix 280px overlay covering composer and Send (0.255861ms)
+✔ rejects layout defects other than the details overlay (0.289886ms)
+✔ synthetic HTTP vision/hold/abort and committed receipt drop have no network fallback (83.149622ms)
+✔ direct process identity distinguishes disappearance from unavailable evidence (1.255145ms)
+✔ owned native session: resume (5.663317ms)
+✔ owned native session: readiness (1536.265773ms)
+ℹ {"stage":"readiness","original":"Error: installed owner exited before readiness","failures":[],"shortAbsent":true,"owner":[{"pid":3348662,"start":"15537031","parent":3348589,"session":3348662,"group":3348662,"state":"S"},{"pid":3348670,"start":"15537034","parent":1027,"session":3348662,"group":3348662,"state":"S"}]}
+✔ owned native session: fast-owner (89.929305ms)
+ℹ {"stage":"fast-owner","original":"Error: installed owner exited before readiness","failures":[],"shortAbsent":true,"owner":[{"pid":3348798,"start":"15537185","parent":3348589,"session":3348798,"group":3348798,"state":"R"}]}
+✔ owned native session: proof-sink (130.261064ms)
+ℹ {"stage":"proof-sink","launch":{"observation":"observed","pid":3348814,"start":"15537194","parent":3348589,"session":3348814,"group":3348814,"state":"R"},"shortRetired":true,"primary":"ENOSPC","cleanup":"AggregateError: native cleanup: Error: EEXIST: file already exists, open '/tmp/oa-9vi2hj6j/t/native-failure-iPigQr/proof/cleanup.json'"}
+✔ owned native session: retirement-sink (207.916548ms)
+✔ owned native session: launch (173.247036ms)
+ℹ {"stage":"launch","original":"Error: Desktop exited ","failures":[],"shortAbsent":true,"owner":[{"pid":3348863,"start":"15537227","parent":3348589,"session":3348863,"group":3348863,"state":"R"}],"desktop":[{"pid":3348888,"start":"15537233","parent":3348589,"session":3348888,"group":3348888,"state":"Z"}]}
+✔ owned native session: mismatch (122.091619ms)
+ℹ {"stage":"mismatch","original":"AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n'wrong' !== 'qa'\n","failures":[],"shortAbsent":true,"owner":[{"pid":3348929,"start":"15537245","parent":3348589,"session":3348929,"group":3348929,"state":"S"}]}
+✔ owned native session: existing (2.266215ms)
+✔ owned native session: symlink (1.831203ms)
+✔ owned native session: prior-proof (1.231807ms)
+✔ owned native session: profile (0.960679ms)
+✔ owned native session: setup (1.093602ms)
+ℹ {"stage":"setup","original":"Error: fixture evidence sink full","failures":[],"shortAbsent":true}
+✔ owned native session: owner-sink (136.329352ms)
+ℹ {"stage":"owner-sink","original":"Error: fixture evidence sink full","failures":[],"shortAbsent":true,"owner":[{"pid":3348943,"start":"15537259","parent":3348589,"session":3348943,"group":3348943,"state":"S"}]}
+✔ owned native session: desktop-sink (229.193398ms)
+ℹ {"stage":"desktop-sink","original":"Error: fixture evidence sink full","failures":[],"shortAbsent":true,"owner":[{"pid":3348957,"start":"15537272","parent":3348589,"session":3348957,"group":3348957,"state":"Z"}],"desktop":[{"pid":3348964,"start":"15537277","parent":3348589,"session":3348964,"group":3348964,"state":"S"},{"pid":3348965,"start":"15537278","parent":3348964,"session":3348964,"group":3348964,"state":"S"}]}
+✔ a missing page close reaches teardown after a rejected evaluation (20.847768ms)
+✔ a missing page close reaches teardown after a stalled evaluation (21.130316ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2939.672706

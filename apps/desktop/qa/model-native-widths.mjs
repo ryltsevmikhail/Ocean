@@ -32,7 +32,11 @@ function dispatch(row, action) {
   );
   assert.match(reply, /ok/);
 }
-export async function nativeWidths({ page, desktop, inspectMain, fixture: { root } }, step) {
+export async function nativeWidths(
+  { page, desktop, inspectMain, fixture: { root } },
+  step,
+  { draftText, recipientValue = 'dev' } = {},
+) {
   const original = step(() => client(desktop.pid));
   if (!original.floating) {
     step(() => dispatch(original, 'float({action="on",window=w})'));
@@ -62,13 +66,26 @@ export async function nativeWidths({ page, desktop, inspectMain, fixture: { root
     if ((await step(() => details.getAttribute('aria-expanded'))) !== 'true')
       await step(() => details.click());
     const field = page.getByLabel('Сообщение', { exact: true });
-    const draft = 'Native ' + width;
+    const draft = draftText ?? 'Native ' + width;
     const recipient = page.getByLabel('Кому');
-    if (await step(() => recipient.count())) await step(() => recipient.selectOption('dev'));
+    if (await step(() => recipient.count()))
+      await step(() => recipient.selectOption(recipientValue));
     await step(() => field.click());
     await step(() => field.fill(draft));
+    await step(() =>
+      page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(resolve)),
+          ),
+      ),
+    );
     const layout = await step(() => measureLayout(page));
     assert.equal(layout.controls.textarea.focused, true);
+    if (draftText) {
+      assert.equal(layout.history.scrollable, true);
+      assert.equal(layout.history.pinned, true);
+    }
     assert.deepEqual(
       checkReachable(layout, layout.viewport.width, { detailsOpen: true, draft }),
       [],

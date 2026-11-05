@@ -19,6 +19,7 @@ import { setTimeout, clearTimeout } from 'node:timers';
 import { pathToFileURL } from 'node:url';
 import { bounded, currentWindow, wait } from './current-window.mjs';
 import { launchDesktopGroup } from './desktop-launcher.mjs';
+const initializedProfiles = new Set();
 
 export async function openModelNativeSession(
   {
@@ -28,6 +29,7 @@ export async function openModelNativeSession(
     root,
     label = 'desktop',
     ownerHook,
+    resumeProfile,
     qualificationParent = defaultQualificationParent,
   },
   { setupDirectory = directory, appendEvidence = appendFileSync } = {},
@@ -76,6 +78,7 @@ export async function openModelNativeSession(
     },
     { once: true },
   );
+  if (resumeProfile) assert.ok(initializedProfiles.has(resumeProfile), 'unowned resume profile');
   fresh(root, qualificationParent);
   async function cleanup(original) {
     async function attempt(fn) {
@@ -87,7 +90,7 @@ export async function openModelNativeSession(
     }
     if (control.signal.aborted && peer) await attempt(() => peer.close());
     if (desktop) {
-      if (!control.signal.aborted) await attempt(() => desktop.close());
+      if (!control.signal.aborted && !desktop.page.isClosed()) await attempt(() => desktop.close());
       await attempt(() => desktop.dispose());
     }
     if (peer) {
@@ -126,7 +129,7 @@ export async function openModelNativeSession(
   }
   try {
     short = mkdtempSync('/tmp/oa-native-');
-    const profile = join(root, 'profile'),
+    const profile = resumeProfile ?? join(root, 'profile'),
       workspace = join(root, 'workspace');
     setupDirectory(workspace);
     const env = {
@@ -152,6 +155,7 @@ export async function openModelNativeSession(
       root,
       env,
       profile,
+      desktopUserData: resumeProfile ? join(dirname(resumeProfile), 'desktop') : undefined,
       signal: control.signal,
       fail: sinkFailed,
       inspectorStep: control.step,
@@ -160,15 +164,18 @@ export async function openModelNativeSession(
     };
     const cli = join(runtimeRoot, 'launch.js');
     const args = ['--profile', profile, '--json'];
-    const init = JSON.parse(
-      execFileSync(process.execPath, [cli, 'init', '--workspace', workspace, ...args], {
-        env,
-        encoding: 'utf8',
-        timeout: 15000,
-        killSignal: 'SIGKILL',
-      }),
-    );
+    const init = resumeProfile
+      ? { ok: true }
+      : JSON.parse(
+          execFileSync(process.execPath, [cli, 'init', '--workspace', workspace, ...args], {
+            env,
+            encoding: 'utf8',
+            timeout: 15000,
+            killSignal: 'SIGKILL',
+          }),
+        );
     assert.equal(init.ok, true);
+    if (!resumeProfile) initializedProfiles.add(profile);
     const hook = verified(ownerHook ?? join(import.meta.dirname, 'model-native-transport.mjs'));
     owner = launchDesktopGroup(
       process.execPath,
@@ -236,7 +243,7 @@ export async function openModelNativeSession(
     assert.equal(gui.ok, true);
     assert.equal(gui.data.instanceId, status.instanceId);
     assert.equal(gui.data.profileId, digest(profile));
-    await page.getByRole('heading', { name: 'Начните с Ocean Team' }).waitFor();
+    if (!resumeProfile) await page.getByRole('heading', { name: 'Начните с Ocean Team' }).waitFor();
     const body = await page.locator('body').innerText();
     assert.ok(body.trim().length > 30 && !body.includes('Internal Server Error'));
     assert.ok(
