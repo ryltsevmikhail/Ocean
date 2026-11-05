@@ -1,3 +1,5 @@
+import { codingResourceAdmission, codingResourceWorktree } from '@runnets/application';
+import { codingProjectId } from './service-run-scope.js';
 import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import {
@@ -177,7 +179,18 @@ export function finalizationStore(
           holds: (taskId) => {
             const unresolved = journal.inspectPending?.();
             if (!unresolved) throw Error('finalization_effects_unavailable');
-            const holds: CodingFinalizationHold[] = unresolved.map((effect) => ({
+            const task = currentTask(taskId),
+              worktree = changesetStorage(db).worktree(taskId);
+            const admission =
+              journal.inspectConflicts && codingResourceWorktree(task, worktree)
+                ? codingResourceAdmission(
+                    task.projectRoot,
+                    codingProjectId(task.projectRoot),
+                    worktree ? { id: task.id, root: worktree.root } : undefined,
+                  )
+                : undefined;
+            const conflicts = journal.inspectConflicts?.(admission) ?? unresolved;
+            const holds: CodingFinalizationHold[] = conflicts.map((effect) => ({
               id: effect.id,
               kind: effect.tool,
               outcome: effect.outcome,
@@ -205,7 +218,7 @@ export function finalizationStore(
                 outcome: 'pending',
                 scope: 'task',
               });
-            holds.push(...codingClaimHolds(db, currentTask(taskId)));
+            holds.push(...codingClaimHolds(db, task, admission));
             for (const row of db
               .prepare(
                 "SELECT id FROM ocean_coding_review_requests WHERE json_extract(payload,'$.binding.taskId')=? AND json_extract(payload,'$.status') IN ('requested','dispatching','uncertain')",
@@ -217,7 +230,6 @@ export function finalizationStore(
                 outcome: 'unresolved',
                 scope: 'task',
               });
-            const worktree = changesetStorage(db).worktree(taskId);
             if (worktree && worktree.state !== 'ready')
               holds.push({
                 id: worktree.taskId,

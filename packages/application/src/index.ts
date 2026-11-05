@@ -36,6 +36,7 @@ export * from './chat-review.js';
 
 export * from './coding-ports.js';
 export * from './coding-service.js';
+export * from './coding-resource-scope.js';
 
 export * from './changeset-ports.js';
 

@@ -4,6 +4,7 @@ import {
   journalCodingApproval,
 } from './coding-journal-receipt.js';
 import type { ToolEffectRecord } from '@runnets/application';
+import type { ToolEffectAdmission } from '@runnets/domain';
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 import { unresolvedEffectSql } from './tool-effect-resolution.js';
 
@@ -49,14 +50,22 @@ export function inspectPendingEffects(
   return records;
 }
 
-function effectiveAdmission(db: DatabaseSync, row: Record<string, SQLOutputValue>) {
+export function readEffectiveToolAdmission(
+  db: DatabaseSync,
+  row: Record<string, SQLOutputValue>,
+): ToolEffectAdmission | undefined {
   const admission = readToolAdmission(row['admission']);
-  if (!admission) return {};
+  if (!admission) return undefined;
   const a = journalCodingApproval(db, row);
-  if (a !== undefined) return a && exactCodingReceipt(a, admission) ? { admission } : {};
+  if (a !== undefined) return a && exactCodingReceipt(a, admission) ? admission : undefined;
   const codingWorktree =
     (row['tool'] === 'coding_write' || row['tool'] === 'coding_test') &&
     admission.scope.kind === 'resources' &&
     admission.scope.resources.some((r) => r.kind === 'project-worktree');
-  return codingWorktree ? {} : { admission };
+  return codingWorktree ? undefined : admission;
+}
+
+function effectiveAdmission(db: DatabaseSync, row: Record<string, SQLOutputValue>) {
+  const admission = readEffectiveToolAdmission(db, row);
+  return admission ? { admission } : {};
 }

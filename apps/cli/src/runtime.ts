@@ -85,6 +85,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       ...(images === undefined ? {} : { images }),
     };
     const codingDeps = {
+      projectId: (root: string) => createHash('sha256').update(root).digest('hex'),
       store: store.coding,
       leases: new SqliteProjectLeases(),
       projects: new GitCodingProject(),

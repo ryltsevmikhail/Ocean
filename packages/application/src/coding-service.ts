@@ -8,7 +8,9 @@ import {
   type CodingPolicy,
   type ProjectLease,
   type CodingErrorCode,
+  type ToolEffectAdmission,
 } from '@runnets/domain';
+import { codingResourceAdmission, codingResourceWorktree } from './coding-resource-scope.js';
 import type { Clock } from './ports.js';
 import type { ToolJournalPort } from './tools.js';
 import type {
@@ -29,6 +31,8 @@ export interface CodingServiceDeps {
   readonly clock: Clock;
   readonly restored?: boolean;
   readonly enabled?: boolean;
+  /** Trusted canonical-root identity, shared with durable coding admission. */
+  readonly projectId?: (canonicalRoot: string) => string;
 }
 /** Reservation and admission only. No worktree or executable capability is created in stage 1. */
 export class CodingTaskService {
@@ -36,11 +40,41 @@ export class CodingTaskService {
   constructor(deps: CodingServiceDeps) {
     this.#deps = deps;
   }
-  #pending(): boolean {
+  #resource(root: string, worktree?: { id: string; root: string }) {
+    try {
+      const id = this.#deps.projectId?.(root);
+      return id ? codingResourceAdmission(root, id, worktree) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  #pending(admission?: ToolEffectAdmission): boolean {
+    const journal = this.#deps.journal;
     return (
-      this.#deps.journal.inspectPending === undefined ||
-      this.#deps.journal.inspectPending().length > 0
+      !journal.inspectPending ||
+      (journal.inspectConflicts?.(admission) ?? journal.inspectPending()).length > 0
     );
+  }
+  #scope(tx: CodingTransaction, task: CodingTask) {
+    const worktree = tx.worktree(task.id);
+    if (
+      !codingResourceWorktree(task, worktree) ||
+      !this.#deps.leases.owns(task.lease) ||
+      (worktree && !this.#deps.leases.owns(worktree.lease))
+    )
+      return undefined;
+    return this.#resource(
+      task.projectRoot,
+      worktree ? { id: task.id, root: worktree.root } : undefined,
+    );
+  }
+  // No requested-path scope before inspection. Only qualified evidence permits this read.
+  #inspectionHeld(): boolean {
+    const journal = this.#deps.journal;
+    return !this.#deps.projectId || !journal.inspectConflicts
+      ? this.#pending()
+      : !journal.inspectPending ||
+          journal.inspectPending().some((r) => r.admission?.scope.kind !== 'resources');
   }
   async start(request: StartCodingTask, owner: CodingOwnerPort): Promise<CodingResult<CodingTask>> {
     if (this.#deps.enabled === false) return codingFailure('coding_unavailable');
@@ -55,7 +89,7 @@ export class CodingTaskService {
       if (task && task.lease.ownerId !== this.#deps.ownerId) return codingFailure('coding_denied');
       return task ? ok(task) : codingFailure('recovery_required');
     }
-    if (this.#pending()) return codingFailure('recovery_required');
+    if (this.#inspectionHeld()) return codingFailure('recovery_required');
     // A finalizing/uncertain finalization still owns the project reservation.
     if (this.#deps.store.projectHeld(i.projectRoot)) return codingFailure('recovery_required');
     if (this.#deps.store.atomic((tx) => tx.task(i.taskId)))
@@ -66,6 +100,7 @@ export class CodingTaskService {
     } catch {
       return codingFailure('invalid_input');
     }
+    if (this.#pending(this.#resource(project.root))) return codingFailure('recovery_required');
     if (!project.clean) return codingFailure('project_changed');
     if (this.#deps.store.projectHeld(project.root)) return codingFailure('recovery_required');
     if (!this.#deps.store.atomic((tx) => codingParticipants(tx, i, project.root)))
@@ -93,6 +128,8 @@ export class CodingTaskService {
       ))
     )
       return codingFailure('approval_required');
+    if (this.#pending(this.#resource(project.root)) || this.#deps.store.projectHeld(project.root))
+      return codingFailure('recovery_required');
     const lease = this.#deps.leases.acquire(project.root, {
       ownerId: this.#deps.ownerId,
       taskId: i.taskId,
@@ -122,7 +159,7 @@ export class CodingTaskService {
           : codingFailure('request_conflict');
       if (tx.task(i.taskId)) return this.#rejectUnused(tx, lease.value, 'request_conflict');
       if (
-        this.#pending() ||
+        this.#pending(this.#resource(project.root)) ||
         this.#deps.store.projectHeld(i.projectRoot) ||
         this.#deps.store.projectHeld(project.root)
       )
@@ -172,9 +209,8 @@ export class CodingTaskService {
     access: CodingAccess,
   ): CodingResult<{ readonly taskId: string; readonly executionEnabled: false }> {
     if (this.#deps.enabled === false) return codingFailure('coding_unavailable');
-    if (this.#deps.restored || this.#pending()) return codingFailure('recovery_required');
+    if (this.#deps.restored) return codingFailure('recovery_required');
     return this.#deps.store.atomic((tx) => {
-      if (this.#pending()) return codingFailure('recovery_required');
       const task = tx.task(access.taskId);
       if (
         !task ||
@@ -183,7 +219,13 @@ export class CodingTaskService {
         !tx.participates(access.workspaceId, access.roomId, access.botId)
       )
         return codingFailure('coding_denied');
-      if (!this.#deps.leases.owns(task.lease)) return codingFailure('project_busy');
+      if (this.#pending(this.#scope(tx, task))) return codingFailure('recovery_required');
+      const worktree = tx.worktree(task.id);
+      if (
+        !this.#deps.leases.owns(task.lease) ||
+        (worktree && !this.#deps.leases.owns(worktree.lease))
+      )
+        return codingFailure('project_busy');
       return ok({ taskId: task.id, executionEnabled: false as const });
     });
   }
@@ -193,11 +235,17 @@ export class CodingTaskService {
     owner: CodingOwnerPort,
   ): Promise<CodingResult<CodingTask>> {
     if (this.#deps.enabled === false) return codingFailure('coding_unavailable');
-    if (this.#deps.restored || this.#pending()) return codingFailure('recovery_required');
+    if (this.#deps.restored) return codingFailure('recovery_required');
     const task = this.#deps.store.atomic((tx) => tx.task(taskId));
     if (!task || task.workspaceId !== workspaceId || task.lease.ownerId !== this.#deps.ownerId)
       return codingFailure('coding_denied');
-    if (task.worktreeRoot !== null) return codingFailure('recovery_required');
+    if (
+      task.worktreeRoot !== null ||
+      this.#deps.store.atomic((tx) => this.#pending(this.#scope(tx, task)))
+    )
+      return codingFailure('recovery_required');
+    if (!this.#deps.leases.owns(task.lease) && task.status !== 'cancelled')
+      return codingFailure('project_busy');
     // Finalization is not cancellation: never claim a disabled task was cancelled.
     if (task.status !== 'reserved' && task.status !== 'cancelled')
       return codingFailure('recovery_required');
@@ -221,8 +269,15 @@ export class CodingTaskService {
       return codingFailure('approval_required');
     const result = this.#deps.store.atomic((tx) => {
       const current = tx.task(taskId);
-      if (!current || current.worktreeRoot !== null || this.#pending())
+      if (
+        !current ||
+        current.worktreeRoot !== null ||
+        (current.status !== 'reserved' && current.status !== 'cancelled') ||
+        this.#pending(this.#scope(tx, current))
+      )
         return codingFailure('recovery_required');
+      if (current.status === 'reserved' && !this.#deps.leases.owns(current.lease))
+        return codingFailure('project_busy');
       const cancelled = { ...current, status: 'cancelled' as const };
       tx.putTask(cancelled);
       return ok(cancelled);

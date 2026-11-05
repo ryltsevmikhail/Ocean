@@ -1,7 +1,12 @@
+import { codingResourceWorktree } from '@runnets/application';
+import { changesetStorage } from './changeset-storage.js';
+import { readEffectiveToolAdmission } from './tool-journal-reads.js';
 import { readToolAdmission, exactCodingReceipt } from './coding-journal-receipt.js';
 import type { DatabaseSync } from 'node:sqlite';
 import {
   codingApprovalClaimKey,
+  effectResourcesConflict,
+  type ToolEffectAdmission,
   type CodingApproval,
   type CodingFinalizationHold,
   type CodingTask,
@@ -76,7 +81,11 @@ function quiescent(db: DatabaseSync, a: CodingApproval, task: CodingTask): boole
   );
 }
 /** Historical consumed claims stay spent. Only exact, proven settlement removes a hold. */
-export function codingClaimHolds(db: DatabaseSync, task: CodingTask): CodingFinalizationHold[] {
+export function codingClaimHolds(
+  db: DatabaseSync,
+  task: CodingTask,
+  target?: ToolEffectAdmission,
+): CodingFinalizationHold[] {
   const rows = db
     .prepare(
       `SELECT c.invocation_key,c.approval_id,a.id AS approval_row_id,a.payload
@@ -109,6 +118,28 @@ export function codingClaimHolds(db: DatabaseSync, task: CodingTask): CodingFina
                 .get(approval.binding.taskId),
             );
       if (owningTask && quiescent(db, approval, owningTask)) continue;
+      if (
+        target &&
+        owningTask &&
+        owningTask.id !== task.id &&
+        codingResourceWorktree(owningTask, changesetStorage(db).worktree(owningTask.id)) &&
+        approval.binding.workspaceId === owningTask.workspaceId &&
+        approval.binding.projectRoot === owningTask.projectRoot &&
+        approval.binding.worktreeRoot === owningTask.worktreeRoot &&
+        approval.binding.roomId === owningTask.ownerRoomId &&
+        approval.binding.botId === owningTask.devBotId &&
+        approval.binding.policyVersion === owningTask.policyVersion
+      ) {
+        const b = approval.binding;
+        const journal = db
+          .prepare(
+            'SELECT * FROM tool_invocations_v2 WHERE id=? AND task_run_id=? AND attempt_id=?',
+          )
+          .get(b.invocationId, b.runId, b.attemptId);
+        const evidence = journal && readEffectiveToolAdmission(db, journal);
+        if (exactCodingReceipt(approval, evidence) && !effectResourcesConflict(evidence, target))
+          continue;
+      }
     } catch {
       // Malformed, unsupported or contradictory records cannot erase an effect hold.
     }
