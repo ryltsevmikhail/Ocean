@@ -57,6 +57,16 @@ export interface ConversationReceipt {
 }
 /** Synchronous transaction surface; implementations must roll back writes on exceptions. */
 export interface ConversationTransaction {
+  /**
+   * Optional fail-closed publication evidence. Head and complete unresolved effects
+   * (this run plus unscoped legacy) MUST share this authoritative transaction/write
+   * lock with putChatTurn. Unrelated adapters or incomplete evidence return null.
+   */
+  chatFailureEvidence?(taskRunId: string): {
+    readonly taskVersion: number;
+    readonly relatedPendingEffects: number;
+  } | null;
+
   roomModelPolicy(roomId: string): RoomModelPolicy | null;
   putRoomModelPolicy(policy: RoomModelPolicy): void;
   review(id: string): ChatReview | null;

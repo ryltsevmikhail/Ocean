@@ -24,7 +24,7 @@ import { publishChat } from './direct-chat-publication.js';
 import { runTurn } from './turn.js';
 import type { TurnUpdate } from './turn-update.js';
 import type { TurnInput } from './types.js';
-import { knownChatFailure, type ChatFailureEvidence } from './chat-known-failure.js';
+import { publishKnownChatFailure, type ChatFailureEvidence } from './chat-known-failure.js';
 import type { GrantedPluginTools, GrantedToolSource } from './plugin-turn-tools.js';
 
 export type ChatCodingTools = NonNullable<TurnInput['tools']> & { readonly cleanupConfirmed: true };
@@ -125,15 +125,14 @@ export async function executeChatTurn(
       },
     });
     if (outcome.kind === 'completed') return await publishChat(store, tasks, clock, turn);
+    if (outcome.kind !== 'cancelled') {
+      const failed = await publishKnownChatFailure(deps, turn);
+      if (failed !== null) return failed;
+    }
     // A dispatched stream failure can leave remote work or billing unknown.
     const next = {
       ...turn,
-      status:
-        outcome.kind === 'cancelled'
-          ? ('cancelled' as const)
-          : (await knownChatFailure(deps, turn))
-            ? ('failed' as const)
-            : ('uncertain' as const),
+      status: outcome.kind === 'cancelled' ? ('cancelled' as const) : ('uncertain' as const),
       text: '',
     };
     updateChat(store, turn, next);

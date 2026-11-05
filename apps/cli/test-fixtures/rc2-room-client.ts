@@ -1,6 +1,6 @@
-/** Frozen RC2 room decoder from cfa8490; positional pagination contract. */
+/** RC2 room decoder (cfa8490); runtime validators pinned to archived RC2 5e10ec32179063be78a55f6835866a1a864991ac. */
+import { localRuntimeRecord } from './rc2-wire-primitives.ts';
 import {
-  localRuntimeRecord,
   localPosition,
   localId,
   isLocalRoomsQuery,
@@ -10,8 +10,9 @@ import {
   isLocalObserveQuery,
   isLocalRoomObserveQuery,
   isLocalCancelRequest,
-  isLocalRunQuery,
-  isLocalRunSnapshot,
+} from './rc2-query-contract.ts';
+import { isLocalRunQuery, isLocalRunSnapshot } from './rc2-turn-contract.ts';
+import {
   type LocalRuntimeIdentity,
   type LocalRoomsQuery,
   type LocalRoomListQuery,

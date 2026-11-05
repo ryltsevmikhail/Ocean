@@ -1,7 +1,7 @@
 import { taskRunId, type ChatTurn } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
 import type { TaskRunService } from './service.js';
-import { knownChatFailure } from './chat-known-failure.js';
+import { publishKnownChatFailure } from './chat-known-failure.js';
 import type { ChatReviewService } from './chat-review.js';
 import type { Clock } from './ports.js';
 
@@ -50,8 +50,7 @@ export async function recoverChats(
   for (const turn of turns) {
     // A queued broadcast child was never dispatched; batch recovery owns its state.
     if (['queued', 'completed', 'failed', 'cancelled'].includes(turn.status)) continue;
-    if (await knownChatFailure({ store, tasks, ...(reviews ? { reviews } : {}) }, turn)) {
-      store.atomic((tx) => tx.putChatTurn({ ...turn, status: 'failed' }));
+    if (await publishKnownChatFailure({ store, tasks, ...(reviews ? { reviews } : {}) }, turn)) {
       continue;
     }
     if (turn.status === 'uncertain') continue;
@@ -78,9 +77,10 @@ export async function recoverChats(
     if (turn.status === 'prepared' && state.status === 'succeeded') {
       await publishChat(store, tasks, clock, turn);
     } else {
-      store.atomic((tx) =>
-        tx.putChatTurn({ ...turn, status: turn.status === 'accepted' ? 'failed' : 'uncertain' }),
-      );
+      store.atomic((tx) => {
+        if (JSON.stringify(tx.chatTurn(turn.id)) !== JSON.stringify(turn)) return;
+        tx.putChatTurn({ ...turn, status: turn.status === 'accepted' ? 'failed' : 'uncertain' });
+      });
     }
   }
 }

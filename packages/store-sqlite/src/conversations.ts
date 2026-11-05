@@ -1,3 +1,6 @@
+import { taskRunId } from '@runnets/domain';
+import { committedTaskVersion } from './event-log.js';
+import { inspectPendingEffects } from './tool-journal-reads.js';
 import { roomModelPolicyStorage } from './room-model-policy-storage.js';
 import { validRoomModelPolicy } from '@runnets/domain';
 import { legacyReviewKey } from './owner-decisions.js';
@@ -64,6 +67,19 @@ export class SqliteConversationStore implements ConversationStore {
     return withImmediateTransaction(db, () =>
       work({
         ...chatStorage(db),
+        ...(current
+          ? {
+              chatFailureEvidence: (id: string) => {
+                if (!db.isTransaction) return null;
+                return {
+                  taskVersion: committedTaskVersion(db, taskRunId(id)),
+                  relatedPendingEffects: inspectPendingEffects(db).filter(
+                    (e) => e.taskRunId === id || e.taskRunId === '',
+                  ).length,
+                };
+              },
+            }
+          : {}),
         ...reviewStorage(db),
         ...(current
           ? roomModelPolicyStorage(db)

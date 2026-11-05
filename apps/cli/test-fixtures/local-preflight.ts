@@ -99,5 +99,5 @@ export function preflightFixture() {
     signal: new AbortController().signal,
     emit: () => {},
   };
-  return { ...deps, close, legacyClaim, store, reviews, chat, input, http, conversations };
+  return { ...deps, path, close, legacyClaim, store, reviews, chat, input, http, conversations };
 }

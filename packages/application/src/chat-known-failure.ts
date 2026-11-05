@@ -8,11 +8,11 @@ export interface ChatFailureEvidence {
   readonly store: ConversationStore;
   readonly reviews?: Pick<ChatReviewService, 'review'>;
 }
-/** Only the first local request can prove this narrow preflight failure; no effect is settled here. */
-export async function knownChatFailure(
+/** Commit a proven first local preflight failure with current transaction-bound evidence. */
+export async function publishKnownChatFailure(
   deps: ChatFailureEvidence,
   turn: ChatTurn,
-): Promise<boolean> {
+): Promise<ChatTurn | null> {
   try {
     if (
       !['dispatching', 'uncertain'].includes(turn.status) ||
@@ -20,7 +20,7 @@ export async function knownChatFailure(
       turn.codingTaskId !== undefined ||
       turn.continuationReviewId !== undefined
     )
-      return false;
+      return null;
     const state = await deps.tasks.state(taskRunId(turn.taskRunId));
     const activation = turn.activation;
     if (
@@ -38,7 +38,7 @@ export async function knownChatFailure(
       activation.identity.modelId !== turn.modelBinding?.modelId ||
       activation.identity.connectionId !== turn.modelBinding.connectionId
     )
-      return false;
+      return null;
     const execution = state.modelExecution,
       last = execution?.lastRequest;
     const settlement = last?.settlement;
@@ -53,7 +53,7 @@ export async function knownChatFailure(
       settlement.usage.kind !== 'unavailable' ||
       JSON.stringify(execution.activation) !== JSON.stringify(activation)
     )
-      return false;
+      return null;
     const review = await deps.reviews.review(turn.workspaceId, turn.taskRunId);
     if (
       !review.ok ||
@@ -64,18 +64,28 @@ export async function knownChatFailure(
       review.value.turnStatus !== turn.status ||
       review.value.relatedPendingEffects !== 0
     )
-      return false;
+      return null;
     return deps.store.atomic((tx) => {
       const current = tx.chatTurn(turn.id);
-      return (
-        tx.workspace()?.id === turn.workspaceId &&
-        current !== null &&
-        JSON.stringify(current) === JSON.stringify(turn) &&
-        current.continuationReviewId === undefined &&
-        deps.tasks.committedVersion(taskRunId(turn.taskRunId)) === state.version
-      );
+      const evidence = tx.chatFailureEvidence?.(turn.taskRunId);
+      if (
+        tx.workspace()?.id !== turn.workspaceId ||
+        current === null ||
+        JSON.stringify(current) !== JSON.stringify(turn) ||
+        current.continuationReviewId !== undefined ||
+        evidence === null ||
+        evidence === undefined ||
+        !Number.isSafeInteger(evidence.taskVersion) ||
+        evidence.taskVersion !== state.version ||
+        !Number.isSafeInteger(evidence.relatedPendingEffects) ||
+        evidence.relatedPendingEffects !== 0
+      )
+        return null;
+      const failed = { ...current, status: 'failed' as const, text: '' };
+      tx.putChatTurn(failed);
+      return failed;
     });
   } catch {
-    return false;
+    return null;
   }
 }

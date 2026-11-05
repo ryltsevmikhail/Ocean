@@ -52,10 +52,19 @@ it('preserves receipt JSON across both APIs and closing and reopening SQLite', a
       'version',
       'events',
     ]);
+    expect(Object.keys(original.value)).toEqual(['commandId', 'taskRunId', 'version', 'events']);
+    expect(Object.keys(fresh.value)).toEqual(['receipt', 'disposition']);
+    expect(JSON.stringify(fresh.value)).not.toContain('request_binding');
     const originals = [
-      [command, JSON.stringify(original.value)],
-      [second, JSON.stringify(fresh.value.receipt)],
+      [command, original.value],
+      [second, fresh.value.receipt],
     ] as const;
+    for (const [request, receipt] of originals) {
+      const stored = fixture.db
+        .prepare('SELECT events FROM command_receipts WHERE command_id=?')
+        .get(request.commandId);
+      expect(stored?.['events']).toBe(JSON.stringify(receipt.events));
+    }
     fixture.db.close();
     fixture = open();
     const advanced = await fixture.service.execute({
@@ -73,16 +82,40 @@ it('preserves receipt JSON across both APIs and closing and reopening SQLite', a
         events: fixture.db.prepare('SELECT * FROM events ORDER BY aggregate_id,sequence').all(),
         meta: fixture.db.prepare('SELECT * FROM meta ORDER BY key').all(),
       });
-    for (const [request, bytes] of originals) {
+    for (const [request, retained] of originals) {
+      const bytes = JSON.stringify(retained);
       for (const api of ['execute', 'executeWithDisposition'] as const) {
         const before = rows();
-        const replay = await fixture.service[api](request);
-        if (!replay.ok) throw replay.error;
-        const receipt = 'receipt' in replay.value ? replay.value.receipt : replay.value;
-        expect(JSON.stringify(receipt)).toBe(bytes);
-        if ('disposition' in replay.value) expect(replay.value.disposition).toBe('replayed');
+        if (api === 'execute') {
+          const replay = await fixture.service.execute(request);
+          expect(replay).toEqual({ ok: true, value: retained });
+          if (!replay.ok) throw replay.error;
+          expect(Object.keys(replay.value)).toEqual([
+            'commandId',
+            'taskRunId',
+            'version',
+            'events',
+          ]);
+          expect(JSON.stringify(replay.value)).toBe(bytes);
+          expect(JSON.stringify(replay)).not.toContain('request_binding');
+        } else {
+          const replay = await fixture.service.executeWithDisposition(request);
+          expect(replay).toEqual({
+            ok: true,
+            value: { receipt: retained, disposition: 'replayed' },
+          });
+          if (!replay.ok) throw replay.error;
+          expect(Object.keys(replay.value)).toEqual(['receipt', 'disposition']);
+          expect(Object.keys(replay.value.receipt)).toEqual([
+            'commandId',
+            'taskRunId',
+            'version',
+            'events',
+          ]);
+          expect(JSON.stringify(replay.value.receipt)).toBe(bytes);
+          expect(JSON.stringify(replay)).not.toContain('request_binding');
+        }
         expect(rows()).toBe(before);
-        expect(JSON.stringify(receipt)).not.toContain('request_binding');
       }
     }
   } finally {

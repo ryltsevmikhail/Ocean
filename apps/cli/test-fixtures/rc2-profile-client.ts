@@ -1,15 +1,16 @@
-/** Frozen RC2 ordinary profile decoder from cfa8490. */
+/** RC2 profile client (cfa8490), with validators pinned to archived RC2 5e10ec32179063be78a55f6835866a1a864991ac. */
 import {
   isBotInput,
   isBotProfile,
   isDirectInput,
   isGroupInput,
   isRoomRecord,
-  isLocalRoomsQuery,
   isPendingQuery,
-  localPosition,
   localApplicationId,
-  localRuntimeRecord,
+} from './rc2-profile-guards.ts';
+import { localRuntimeRecord } from './rc2-wire-primitives.ts';
+import { isLocalRoomsQuery, localPosition } from './rc2-query-contract.ts';
+import {
   type LocalBotInput,
   type LocalBotProfile,
   type LocalDirectInput,
