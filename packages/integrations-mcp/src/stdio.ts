@@ -25,6 +25,7 @@ export async function serviceStdio(
     connectionId: c.id,
     artifact: cfg.executable,
     sha256: cfg.sha256,
+    ...(cfg.packageJsonSha256 ? { packageJsonSha256: cfg.packageJsonSha256 } : {}),
     args: cfg.args,
     signal: AbortSignal.any([writer.lifetime, writer.discovery.signal]),
   });

@@ -21,6 +21,8 @@ export type ServiceConfiguration =
       readonly kind: 'stdio';
       readonly executable: string;
       readonly sha256: string;
+      /** Optional exact sibling package.json used by the bundled server to read its version. */
+      readonly packageJsonSha256?: string;
       /** Only the isolated /workspace directory may be passed to the pinned Node artifact. */
       readonly args: readonly string[];
     };
@@ -68,7 +70,9 @@ export function validServiceConfiguration(v: unknown): v is ServiceConfiguration
   if (!object(v)) return false;
   if (v['kind'] === 'stdio')
     return (
-      keys(v, ['kind', 'executable', 'sha256', 'args']) &&
+      (keys(v, ['kind', 'executable', 'sha256', 'args']) ||
+        (keys(v, ['kind', 'executable', 'sha256', 'args', 'packageJsonSha256']) &&
+          validPluginSchemaDigest(v['packageJsonSha256']))) &&
       text(v['executable'], 4096) &&
       String(v['executable']).startsWith('/') &&
       validPluginSchemaDigest(v['sha256']) &&

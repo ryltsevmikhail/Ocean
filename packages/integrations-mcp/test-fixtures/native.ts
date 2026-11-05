@@ -28,12 +28,19 @@ const run = join(dir, mode),
 mkdirSync(run);
 mkdirSync(profile);
 mkdirSync(workspace);
-const file = join(dir, mode === 'ready' ? 'filesystem.mjs' : 'fault.mjs');
+const file = join(dir, mode === 'ready' ? 'official/filesystem.mjs' : 'fault.mjs');
 const cfg = connection({
   kind: 'stdio',
   executable: file,
   sha256: createHash('sha256').update(readFileSync(file)).digest('hex'),
   args: ['/workspace'],
+  ...(mode === 'ready'
+    ? {
+        packageJsonSha256: createHash('sha256')
+          .update(readFileSync(join(dir, 'official/package.json')))
+          .digest('hex'),
+      }
+    : {}),
 });
 const canary = join(profile, 'canary'),
   socket = join(process.env['TMPDIR']!, 'owner.sock');
@@ -179,6 +186,7 @@ try {
       socket: boolean;
     };
     assert.equal(obs.cwd, '/workspace');
+    assert.equal(obs.env['PWD'], '/workspace');
     assert.equal(obs.env['HOME'], '/home/worker');
     assert.equal(obs.canary, false);
     assert.equal(obs.socket, false);
@@ -188,6 +196,7 @@ try {
         'HOME',
         'LANG',
         'PATH',
+        'PWD',
         'TMPDIR',
         'XDG_CACHE_HOME',
         'XDG_CONFIG_HOME',

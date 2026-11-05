@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { open, realpath, readFile, readdir } from 'node:fs/promises';
 import { homedir, userInfo } from 'node:os';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { sandboxArgv, sandboxRoot, SANDBOX_NODE } from './sandbox-layout.js';
 import { sandboxLauncher } from './sandbox-launcher.js';
@@ -17,8 +17,32 @@ export interface ManagedStdioRequest {
   readonly connectionId: string;
   readonly artifact: string;
   readonly sha256: string;
+  readonly packageJsonSha256?: string;
   readonly args: readonly string[];
   readonly signal: AbortSignal;
+}
+async function pin(artifact: string, digest: string, limit: number) {
+  const f = await open(artifact, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+
+  try {
+    const st = await f.stat();
+    if (!st.isFile() || st.size > limit || st.nlink !== 1) throw Error('invalid artifact');
+    const bytes = Buffer.alloc(st.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const { bytesRead } = await f.read(bytes, offset, bytes.length - offset, offset);
+      if (!bytesRead) throw Error('short artifact');
+      offset += bytesRead;
+    }
+    if (createHash('sha256').update(bytes).digest('hex') !== digest)
+      throw Error('artifact changed');
+    return createHash('sha256')
+      .update(JSON.stringify([String(st.mode), String(st.size)]))
+      .update(bytes)
+      .digest('hex');
+  } finally {
+    await f.close();
+  }
 }
 /** One isolated, pinned JS bundle. The parent is the authority holder; only this server enters the unit. */
 export async function prepareManagedStdio(r: ManagedStdioRequest) {
@@ -40,25 +64,11 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
   )
     throw Error('invalid stdio enrollment');
   await sandboxRoot(root, [], undefined, true);
-  const f = await open(
-    r.artifact,
-    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-  );
-  let fingerprint: string;
-  try {
-    const st = await f.stat();
-    if (!st.isFile() || st.size > 32 * 1024 * 1024 || st.nlink !== 1)
-      throw Error('invalid artifact');
-    const bytes = await f.readFile();
-    if (createHash('sha256').update(bytes).digest('hex') !== r.sha256)
-      throw Error('artifact changed');
-    fingerprint = createHash('sha256')
-      .update(JSON.stringify([String(st.mode), String(st.size)]))
-      .update(bytes)
-      .digest('hex');
-  } finally {
-    await f.close();
-  }
+  const expected: Record<string, string> = {
+    [r.artifact]: await pin(r.artifact, r.sha256, 32 * 1024 * 1024),
+  };
+  const metadata = join(dirname(r.artifact), 'package.json');
+  if (r.packageJsonSha256) expected[metadata] = await pin(metadata, r.packageJsonSha256, 65536);
   const prefix = 'ocean-mcp-' + sha(JSON.stringify([profile, r.connectionId])).slice(0, 32) + '-';
   const unit = prefix + randomUUID() + '.service';
   const slice = (await control(['show', 'app.slice', '--property=ControlGroup', '--value'])).trim();
@@ -92,6 +102,7 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
     '--ro-bind',
     r.artifact,
     '/toolchain/server.mjs',
+    ...(r.packageJsonSha256 ? ['--ro-bind', metadata, '/toolchain/package.json'] : []),
     ...Object.entries({
       TMPDIR: '/tmp',
       XDG_CONFIG_HOME: '/home/worker/config',
@@ -111,7 +122,7 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
     if(!ownerAlive() || !read('/proc/self/cgroup','utf8').split('\\n').includes(${JSON.stringify('0::' + path)}))process.exit(75);
     setInterval(()=>{if(!ownerAlive())process.exit(75);},100).unref();
   `;
-  const launcher = guardian + (await sandboxLauncher(argv, { [r.artifact]: fingerprint }));
+  const launcher = guardian + (await sandboxLauncher(argv, expected));
   const args = [
     '--user',
     '--quiet',
