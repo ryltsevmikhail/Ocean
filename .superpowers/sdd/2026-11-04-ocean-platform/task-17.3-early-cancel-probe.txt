@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {setTimeout as delay} from 'node:timers/promises';
+import {createSandboxBackend} from '@runnets/tools-node';
+const artifact=process.env.OCEAN_QA_ARTIFACT,root=path.join(artifact,'sandbox-early-cancel');fs.mkdirSync(root,{mode:0o700});fs.mkdirSync(path.join(root,'node_modules'));fs.writeFileSync(path.join(root,'.git'),'synthetic inert');
+const dependencies=path.join(artifact,'sandbox-dependencies');const options={root,dependencyProjectRoot:dependencies,mounts:[{source:path.join(dependencies,'node_modules'),target:'/workspace/node_modules'}]};
+const preset={id:'controlled-pre-admission',program:'/toolchain/node',args:['-e',"require('node:fs').writeFileSync('/workspace/dispatched','unexpected');setInterval(()=>{},100)"],cwd:'.'};
+const backend=await createSandboxBackend(options,[preset],async()=>'fixed synthetic source');
+const ctl=args=>execFileSync('/usr/bin/systemctl',['--user',...args],{encoding:'utf8',env:{PATH:'/usr/bin:/bin',XDG_RUNTIME_DIR:'/run/user/'+process.getuid()}});
+const units=()=>ctl(['list-units','--all','--plain','--no-legend','ocean-worker-*.service']).split('\n').map(s=>s.trim().split(/\s+/)[0]).filter(Boolean);
+const controller=new AbortController(),prior=new Set(units());const pending=backend.command(preset.program,preset.args,preset.cwd,controller.signal);let observed;
+for(let i=0;i<600;i++){
+ const unit=units().find(n=>!prior.has(n)&&ctl(['show',n,'--property=ExecStart']).includes(root));
+ if(unit){const props=ctl(['show',unit,'--property=ControlGroup,MainPID,ActiveState,MemoryMax,TasksMax']);const cgroup=/^ControlGroup=(.*)$/m.exec(props)?.[1];observed={unit,props,cgroup,events:cgroup?fs.readFileSync('/sys/fs/cgroup'+cgroup+'/cgroup.events','utf8'):null,projectDispatched:fs.existsSync(path.join(root,'dispatched'))};controller.abort();break;}await delay(50);
+}
+assert.ok(observed);const outcome=await pending;const evidence=JSON.parse(outcome.output);assert.equal(evidence.reason,'cancelled');assert.equal(observed.projectDispatched,false);assert.equal(fs.existsSync(path.join(root,'dispatched')),false);assert.equal(evidence.cleanupConfirmed,false);assert.equal(evidence.cgroup,null);assert.equal(outcome.isError,true);assert.equal(outcome.uncertain,true);
+for(const action of [()=>backend.read('x'),()=>backend.write('x','x',null),()=>backend.command(preset.program,preset.args,preset.cwd,new AbortController().signal)])await assert.rejects(action,e=>e.code==='effect_uncertain');
+let afterEvents;try{afterEvents=fs.readFileSync('/sys/fs/cgroup'+observed.cgroup+'/cgroup.events','utf8');}catch(e){afterEvents=e.code;}
+const proof={observed,evidence,reportedUncertainty:outcome.uncertain,subsequentReadWriteCommandHeld:true,projectDispatches:0,afterEvents,qualification:'service visibility precedes verified launcher readiness; product preserves unconfirmed cleanup and refuses subsequent work; external observation does not upgrade product evidence'};
+fs.writeFileSync(path.join(artifact,'early-cancel-proof.json'),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify(proof,null,2));

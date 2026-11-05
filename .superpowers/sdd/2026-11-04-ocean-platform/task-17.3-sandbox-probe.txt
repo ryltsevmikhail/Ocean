@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {setTimeout as delay} from 'node:timers/promises';
+import {createSandboxBackend,probeSandbox} from '@runnets/tools-node';
+const artifact=process.env.OCEAN_QA_ARTIFACT;
+const root=path.join(artifact,'sandbox-task');fs.mkdirSync(root,{mode:0o700});
+for(const [name,body] of Object.entries({'.git':'gitdir: /synthetic/inert','math.cjs':'module.exports=(a,b)=>a+b;\n','math.ts':'export function add(a:number,b:number):number{return a+b;}\n','math.test.cjs':"const t=require('node:test'),a=require('node:assert/strict');t('adds',()=>a.equal(require('./math.cjs')(2,3),5));\n",'tsconfig.json':JSON.stringify({compilerOptions:{strict:true,target:'ES2023',module:'commonjs',types:[],skipLibCheck:true},files:['math.ts']})}))fs.writeFileSync(path.join(root,name),body);
+fs.mkdirSync(path.join(root,'node_modules'));
+const dependencies=path.join(artifact,'sandbox-dependencies');
+const options={root,dependencyProjectRoot:dependencies,mounts:[{source:path.join(dependencies,'node_modules'),target:'/workspace/node_modules'}]};
+const snapshot=async()=>createHash('sha256').update(['math.cjs','math.ts','math.test.cjs','tsconfig.json'].map(n=>fs.readFileSync(path.join(root,n))).join('\n')).digest('hex');
+const presets=[
+ {id:'test',program:'/toolchain/node',args:['--test','math.test.cjs'],cwd:'.'},
+ {id:'typecheck',program:'/toolchain/node',args:['node_modules/typescript/bin/tsc','-p','tsconfig.json','--noEmit'],cwd:'.'},
+ {id:'lint',program:'/toolchain/node',args:['node_modules/eslint/bin/eslint.js','--no-config-lookup','--rule','no-eval:error','--rule','no-unused-vars:error','math.cjs'],cwd:'.'},
+ {id:'build',program:'/toolchain/node',args:['node_modules/typescript/bin/tsc','-p','tsconfig.json','--outDir','/tmp/build'],cwd:'.'},
+ {id:'loud',program:'/toolchain/node',args:['-e',"process.stdout.write('x'.repeat(100000))"],cwd:'.'},
+ {id:'wait',program:'/toolchain/node',args:['-e',"require('node:fs').writeFileSync('/workspace/admitted','yes');setInterval(()=>{},100)"],cwd:'.'},
+ {id:'timeout',program:'/toolchain/node',args:['-e',"const c=require('node:child_process').spawn('/toolchain/node',['-e',\"setInterval(()=>require('node:fs').appendFileSync('/workspace/ticks','x'),25)\"],{detached:true,stdio:'ignore'});c.unref();setInterval(()=>{},100);"],cwd:'.'},
+];
+const proof={qualification:await probeSandbox(options),presets:[],resourceProperties:null};
+assert.equal(proof.qualification.qualified,true);
+const backend=await createSandboxBackend(options,presets,snapshot);
+const invoke=async(p,signal=new AbortController().signal)=>{
+ const start=Date.now();const result=await backend.command(p.program,p.args,p.cwd,signal);
+ const evidence=JSON.parse(result.output);fs.appendFileSync(path.join(artifact,'sandbox-results.jsonl'),JSON.stringify({id:p.id,...evidence,output:evidence.output.length>2000?'[bounded output]':evidence.output})+'\n');console.log('native preset',p.id,'exit',evidence.exitCode,'cleanup',evidence.cleanupConfirmed);return {id:p.id,isError:result.isError,elapsedMs:Date.now()-start,...evidence};
+};
+for(const p of presets.slice(0,4)){
+ const result=await invoke(p);proof.presets.push(result);assert.equal(result.isError,false);assert.equal(result.exitCode,0);assert.equal(result.cleanupConfirmed,true);assert.equal(result.sourceUnchanged,true);assert.equal(result.dependenciesUnchanged,true);
+}
+await assert.rejects(backend.command('/toolchain/node',['-e','process.exit(0)'],'.',new AbortController().signal),e=>e.code==='preset_denied');
+const loud=await invoke(presets[4]);proof.presets.push({...loud,outputBytes:Buffer.byteLength(loud.output),output:'[bounded synthetic output]'});assert.equal(loud.truncated,true);assert.equal(loud.cleanupConfirmed,true);assert.equal(Buffer.byteLength(loud.output),32768);
+const ctl=args=>execFileSync('/usr/bin/systemctl',['--user',...args],{encoding:'utf8',env:{PATH:'/usr/bin:/bin',XDG_RUNTIME_DIR:'/run/user/'+process.getuid()}});
+const units=()=>ctl(['list-units','--all','--plain','--no-legend','ocean-worker-*.service']).split('\n').map(s=>s.trim().split(/\s+/)[0]).filter(Boolean);
+const controller=new AbortController();const beforeCancel=new Set(units());const cancelled=invoke(presets[5],controller.signal);
+for(let i=0;i<600;i++){if(fs.existsSync(path.join(root,'admitted'))){controller.abort();break;}await delay(100);}
+const cancellation=await cancelled;proof.presets.push(cancellation);assert.equal(cancellation.reason,'cancelled');assert.equal(cancellation.cleanupConfirmed,true);
+const prior=new Set(units());const timed=invoke(presets[6]);
+for(let i=0;i<300;i++){
+ const unit=units().find(n=>!prior.has(n)&&ctl(['show',n,'--property=ExecStart']).includes(root));
+ if(unit){const props=ctl(['show',unit,'--property=MemoryMax,TasksMax,RuntimeMaxUSec,KillMode,NoNewPrivileges,ProtectControlGroups,ControlGroup']);proof.resourceProperties={unit,props};break;}
+ await delay(100);
+}
+const timeout=await timed;proof.presets.push(timeout);assert.equal(timeout.reason,'timeout');assert.equal(timeout.cleanupConfirmed,true);assert.ok(proof.resourceProperties);assert.equal(proof.resourceProperties.unit,path.basename(timeout.cgroup));assert.match(proof.resourceProperties.props,/MemoryMax=2147483648/);assert.match(proof.resourceProperties.props,/TasksMax=256/);assert.match(proof.resourceProperties.props,/KillMode=control-group/);
+const ticks=fs.readFileSync(path.join(root,'ticks'),'utf8');await delay(150);assert.equal(fs.readFileSync(path.join(root,'ticks'),'utf8'),ticks);
+proof.negativeChecks=['exact preset refusal','32768-byte output cap','real cancellation','60000ms timeout','detached descendant ticks stopped','cgroup empty/removed cleanup'];
+fs.writeFileSync(path.join(artifact,'sandbox-proof.json'),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify(proof,null,2));

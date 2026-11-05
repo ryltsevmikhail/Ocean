@@ -1,0 +1,63 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {spawn,execFileSync,spawnSync} from 'node:child_process';
+import {once} from 'node:events';
+import {setTimeout as delay} from 'node:timers/promises';
+import {createRuntime} from './apps/cli/dist/runtime.js';
+import {connectLocalRuntime} from '@runnets/tools-node';
+import {readCodingBackupInventory} from '@runnets/store-sqlite';
+const artifact=process.env.OCEAN_QA_ARTIFACT,root=path.join(artifact,'rebind-rehearsal');fs.mkdirSync(root,{mode:0o700});
+process.env.HOME=path.join(root,'home');fs.mkdirSync(process.env.HOME,{mode:0o700});
+const profile=path.join(root,'source-profile'),project=path.join(root,'project'),selected=path.join(root,'selected-project'),restored=path.join(root,'restored-profile');
+fs.mkdirSync(profile,{mode:0o700});fs.mkdirSync(project,{mode:0o700});fs.writeFileSync(path.join(project,'math.cjs'),'module.exports=(a,b)=>a+b;\n');
+const git=(...args)=>execFileSync('/usr/bin/git',['-C',project,...args],{encoding:'utf8'}).trim();
+git('init','-q');git('add','.');git('-c','user.name=Synthetic','-c','user.email=fixture@example.invalid','commit','-qm','base');
+const runtime=createRuntime({dbPath:path.join(profile,'runtime.sqlite')});
+await runtime.ready;let sequence=0;
+const execute=value=>{const r=runtime.conversations.execute({workspaceId:'ws_ocean',requestId:'seed-'+(++sequence),...value});assert.equal(r.ok,true);return r.value.data.id;};
+execute({type:'BindWorkspace',root:project});
+const bot=handle=>execute({type:'CreateBot',handle,name:handle,role:'Synthetic',provider:'deepseek',model:'deepseek-flash'});
+const dev=bot('dev'),review=bot('review');const room=execute({type:'OpenDirectRoom',botId:dev}),reviewRoom=execute({type:'OpenDirectRoom',botId:review});
+const started=await runtime.coding.start({workspaceId:'ws_ocean',taskId:'task',requestId:'seed-task',projectRoot:project,ownerRoomId:room,devBotId:dev,reviewRoomId:reviewRoom,reviewBotId:review,devCapabilities:['project_read','propose_write','run_test_preset'],testPresets:[{id:'test',program:'/toolchain/node',args:['-e',"require('node:assert/strict').equal(require('./math.cjs')(2,3),5)"],cwd:'.'}]},{confirm:async()=>true});assert.equal(started.ok,true);
+const prepared=await runtime.codingChanges.prepare({workspaceId:'ws_ocean',taskId:'task',roomId:room,botId:dev,policyVersion:1,capability:'project_read'},{confirm:async()=>true});assert.equal(prepared.ok,true);
+fs.writeFileSync(path.join(prepared.value.root,'answer.txt'),'restored exact marker\n');runtime.close();fs.chmodSync(path.join(profile,'runtime.sqlite'),0o600);
+const task=readCodingBackupInventory(path.join(profile,'runtime.sqlite')).tasks[0];
+fs.writeFileSync(path.join(profile,'coding-projects.json'),JSON.stringify([{id:'project',root:project,testPresets:task.policy.testPresets,mounts:[]}]),{mode:0o600});
+execFileSync('/usr/bin/git',['clone','--no-hardlinks','--quiet',project,selected]);
+const entry=path.join(process.cwd(),'launch.js'),ledger=[];
+const command=(p,...args)=>{const r=spawnSync(process.execPath,[entry,...args,'--profile',p,'--json'],{encoding:'utf8',env:process.env});ledger.push({argv:[entry,...args,'--profile',p,'--json'],exit:r.status,stdout:r.stdout,stderr:r.stderr});return {code:r.status,reply:JSON.parse(r.stdout)};};
+const effects=path.join(root,'http-effects.jsonl');
+const hook=`import fs from 'node:fs';globalThis.fetch=async(url,o={})=>{const u=new URL(String(url));fs.appendFileSync(${JSON.stringify(effects)},JSON.stringify({origin:u.origin,path:u.pathname,method:o.method??'GET'})+'\\n');if(u.origin!=='https://api.openai.com')throw Error('offline_origin_refused');if(u.pathname.endsWith('/models'))return new Response(JSON.stringify({data:[{id:'gpt-5.6-terra'}]}));const b=JSON.parse(o.body);const chunks=[{model:b.model,choices:[{index:0,delta:{content:'installed reconnect answer'}}]},{model:b.model,choices:[{index:0,delta:{},finish_reason:'stop'}]},{model:b.model,choices:[],usage:{prompt_tokens:0,completion_tokens:0,total_tokens:0}}];return new Response(chunks.map(c=>'data: '+JSON.stringify(c)+'\\n\\n').join('')+'data: [DONE]\\n\\n');};`;
+let owner,closed,client;const hosts=[];
+async function start(p,mode='start'){
+ let output='';owner=spawn(process.execPath,['--import','data:text/javascript,'+encodeURIComponent(hook),entry,'runtime',mode,'--profile',p,'--json'],{env:process.env,stdio:['ignore','pipe','pipe']});closed=once(owner,'close');owner.stdout.on('data',b=>output+=b);owner.stderr.on('data',b=>output+=b);
+ for(let i=0;i<500;i++){if(output.includes('"ready"')){hosts.push({pid:owner.pid,mode,profile:p});client=await connectLocalRuntime({profile:p});return;}if(owner.exitCode!==null)throw Error(output);await delay(20);}throw Error('owner startup timeout '+output);
+}
+async function stop(){if(client){assert.equal((await client.stop()).outcome,'complete');client.close();client=undefined;}if(owner){const [code]=await closed;assert.equal(code,0);owner=undefined;}}
+const descriptors=[{connectionId:'openai',providerId:'openai',kind:'cloud',endpoint:'https://api.openai.com',auth:'api_key',defaultModelId:'gpt-5.6-terra',key:'synthetic-qualification-key',requestId:'seed-openai',expectedRevision:null},{connectionId:'anthropic',providerId:'anthropic',kind:'cloud',endpoint:'https://api.anthropic.com',auth:'api_key',defaultModelId:'claude-haiku-5-5',key:'synthetic-qualification-key',requestId:'seed-anthropic',expectedRevision:null},{connectionId:'local',providerId:'ollama',kind:'local',endpoint:'http://127.0.0.1:11434',auth:'none',defaultModelId:'qwen3:1.7b',requestId:'seed-local',expectedRevision:null}];
+try{
+ await start(profile);for(const d of descriptors)await client.setModelConnection(d);assert.equal((await client.checkModelConnection({connectionId:'openai'})).check.outcome,'ok');
+ const bound=await client.createBoundBot({workspaceId:'ws_ocean',requestId:'bound',handle:'bound',name:'Bound',role:'Synthetic',binding:{connectionId:'openai',modelId:'gpt-5.6-terra'}});
+ const boundRoom=(await client.openDirect({workspaceId:'ws_ocean',requestId:'bound-room',botId:bound.bot.id})).data.id;await stop();
+ const archive=path.join(root,'archive');assert.equal(command(profile,'backup','--to',archive).code,0);fs.rmSync(profile,{recursive:true});assert.equal(command(restored,'restore','--from',archive).code,0);
+ const blocked=command(restored,'runtime','start');assert.equal(blocked.code,4);assert.equal(blocked.reply.error.code,'restore_restricted');
+ const effectBaseline=fs.readFileSync(effects,'utf8');await start(restored,'restore');
+ let rows=(await client.listModelConnections()).items.filter(r=>descriptors.some(d=>d.connectionId===r.connectionId));assert.equal(rows.length,3);for(const row of rows){assert.equal(row.configuration.configuredAfterRestore,false);assert.equal(row.restriction,'restore_restricted');}
+ await assert.rejects(client.submit({workspaceId:'ws_ocean',roomId:boundRoom,requestId:'maintenance-no-turn',text:'inert'}),/restore_restricted/);
+ await assert.rejects(client.setModelConnection({...descriptors[0],expectedRevision:rows.find(r=>r.connectionId==='openai').revision,requestId:'maintenance-no-set'}),/restore_restricted/);assert.equal(fs.readFileSync(effects,'utf8'),effectBaseline);
+ const inspect={requestId:'installed-rebind',workspaceId:'ws_ocean',roomId:room,taskId:task.id,projectRoot:selected,policy:task.policy};const config=path.join(root,'inspect.json');fs.writeFileSync(config,JSON.stringify(inspect),{mode:0o600});
+ const inspection=command(restored,'rebind','inspect','--config',config);assert.equal(inspection.code,0);const selection=inspection.reply.data.selection;const selectionConfig=path.join(root,'selection.json');fs.writeFileSync(selectionConfig,JSON.stringify(selection),{mode:0o600});
+ const preview=command(restored,'rebind','preview','--config',selectionConfig);assert.equal(preview.code,0);assert.deepEqual(preview.reply.data.preview.selection,selection);
+ const refused=command(restored,'rebind','confirm','--config',selectionConfig);assert.equal(refused.code,4);assert.equal(refused.reply.error.code,'approval_required');
+ execFileSync('python3',[process.env.OCEAN_QA_TTY_HELPER,process.execPath,entry,restored,selectionConfig,root],{env:process.env,encoding:'utf8'});
+ let result;for(let i=0;i<500;i++){result=command(restored,'rebind','result','--config',selectionConfig);assert.equal(result.code,0);if(['ready','held','refused'].includes(result.reply.data.state))break;await delay(20);}assert.equal(result.reply.data.state,'ready');assert.ok(result.reply.data.successorTaskId);assert.ok(fs.existsSync(path.join(restored,'restore-guard.json')));await stop();
+ await start(restored);rows=(await client.listModelConnections()).items.filter(r=>descriptors.some(d=>d.connectionId===r.connectionId));assert.deepEqual(rows.map(r=>r.configuration.configuredAfterRestore),[false,false,false]);assert.equal(fs.readFileSync(effects,'utf8'),effectBaseline);
+ const revision=rows.find(r=>r.connectionId==='openai').revision;await client.setModelConnection({...descriptors[0],expectedRevision:revision,requestId:'explicit-installed-openai-reconnect'});assert.equal((await client.checkModelConnection({connectionId:'openai'})).check.outcome,'ok');
+ const receipt=await client.submit({workspaceId:'ws_ocean',roomId:boundRoom,requestId:'installed-reconnected-turn',text:'new explicit turn'});const query={workspaceId:'ws_ocean',roomId:boundRoom,runId:receipt.runId};let run;
+ for(let i=0;i<500;i++){run=await client.getRun(query);if(['completed','failed','reconciling'].includes(run?.turnStatus))break;await delay(20);}assert.equal(run.turnStatus,'completed');
+ const final=(await client.listModelConnections()).items.filter(r=>descriptors.some(d=>d.connectionId===r.connectionId));assert.equal(final.find(r=>r.connectionId==='openai').configuration.configuredAfterRestore,true);for(const id of ['anthropic','local'])assert.equal(final.find(r=>r.connectionId===id).configuration.configuredAfterRestore,false);
+ const after=fs.readFileSync(effects,'utf8').trim().split('\n').map(JSON.parse);assert.ok(after.every(e=>e.origin==='https://api.openai.com'));assert.equal(after.filter(e=>e.path.endsWith('/chat/completions')).length,1);
+ const proof={installedRoot:process.cwd(),hosts,ordinaryStartupBeforeRebind:'restore_restricted',maintenanceAllInert:true,maintenanceNoEffects:true,inspect:inspection.reply.data,preview:preview.reply.data,result:result.reply.data,nonTTYConfirm:'approval_required',actualTTY:true,normalOwnerReconnectOne:true,configured:final.map(r=>({connectionId:r.connectionId,configuredAfterRestore:r.configuration.configuredAfterRestore})),run,effects:after};
+ fs.writeFileSync(path.join(artifact,'rebind-proof.json'),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify(proof,null,2));
+}finally{try{await stop();}finally{if(owner&&owner.exitCode===null){owner.kill('SIGKILL');await closed;}fs.writeFileSync(path.join(root,'commands.json'),JSON.stringify(ledger,null,2)+'\n');}}

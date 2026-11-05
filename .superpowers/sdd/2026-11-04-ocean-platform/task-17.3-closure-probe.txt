@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {builtinModules} from 'node:module';
+import {pathToFileURL,fileURLToPath} from 'node:url';
+const root=process.cwd();
+assert.ok(root.includes('/prefix/lib/ocean/releases/'));
+assert.equal(process.env.NODE_PATH,undefined);assert.equal(process.env.NODE_OPTIONS,undefined);
+const ts=(await import(process.env.OCEAN_QA_TYPESCRIPT)).default;
+const manifest=JSON.parse(fs.readFileSync('manifest.json','utf8'));
+const imports=[],unresolved=[],dynamic=[],resourceURLs=[];
+for(const name of Object.keys(manifest.files).filter(n=>n.endsWith('.js'))){
+ const filename=path.join(root,name),code=fs.readFileSync(filename,'utf8');
+ const source=ts.createSourceFile(filename,code,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+
+ const check=(specifier,kind)=>{
+  if(specifier.startsWith('node:')||builtinModules.includes(specifier))return;
+  try{
+   const resolved=fileURLToPath(import.meta.resolve(specifier,pathToFileURL(filename).href));assert.ok(resolved.startsWith(root+'/'),specifier+' escaped installed root');
+   assert.ok(fs.existsSync(resolved));imports.push({from:name,specifier,kind,resolved:path.relative(root,resolved)});
+  }catch(e){unresolved.push({from:name,specifier,kind,error:e.code??e.message});}
+ };
+ const visit=node=>{
+  if((ts.isImportDeclaration(node)||ts.isExportDeclaration(node))&&node.moduleSpecifier)check(node.moduleSpecifier.text,'static');
+  if(ts.isCallExpression(node)&&(node.expression.kind===ts.SyntaxKind.ImportKeyword||(ts.isIdentifier(node.expression)&&node.expression.text==='require'))){
+   const arg=node.arguments[0];
+   if(arg&&(ts.isStringLiteral(arg)||ts.isNoSubstitutionTemplateLiteral(arg)))check(arg.text,'dynamic-literal');
+   else dynamic.push({from:name,expression:node.getText(source).slice(0,250)});
+  }
+  if(ts.isNewExpression(node)&&ts.isIdentifier(node.expression)&&node.expression.text==='URL'&&node.arguments?.[1]?.getText(source)==='import.meta.url'){
+   const arg=node.arguments[0];if(arg&&(ts.isStringLiteral(arg)||ts.isNoSubstitutionTemplateLiteral(arg))){if(arg.text.startsWith('.'))check(arg.text,'module-relative-URL');}else resourceURLs.push({from:name,expression:node.getText(source).slice(0,250)});
+  }
+  ts.forEachChild(node,visit);
+ };visit(source);
+}
+const providers={};
+for(const [name,factory,probe] of [['openai','createOpenAIProvider','probeOpenAIModels'],['anthropic','createAnthropicProvider','probeAnthropicModels'],['local','createLocalProvider','checkLocalModel']]){
+ const specifier='@runnets/provider-'+name, url=import.meta.resolve(specifier);assert.ok(url.startsWith('file://'+root+'/'));
+ const module=await import(specifier);assert.equal(typeof module[factory],'function');assert.equal(typeof module[probe],'function');
+ providers[name]={url,exports:Object.keys(module).sort()};
+}
+const adapter=await import('@runnets/integrations-executor');
+const base={tenantId:'qualification-tenant',subjectId:'qualification-subject',allowedOrigins:['http://127.0.0.1:1']};
+const defaultRefusal=await adapter.ExecutorServicePluginTransport.open(base).then(()=>null).catch(e=>e.reason);assert.equal(defaultRefusal,'execution_not_enabled');
+const transport=await adapter.ExecutorServicePluginTransport.open({...base,enableExecution:true});const qualification=transport.qualification();await transport.close();assert.equal(qualification.qualified,true);assert.equal(qualification.integrityMode,'bundle');
+assert.equal(resourceURLs.length,1);assert.equal(resourceURLs[0].from,'node_modules/@runnets/integrations-executor/dist/index.js');assert.equal(resourceURLs[0].expression,'new URL(`../node_modules/@executor-js/sdk/${PINNED_SDK_CHUNK}`, import.meta.url)');
+const sourceLayoutFallbackAudit={resourceURLs,packagedMode:qualification.integrityMode,qualified:qualification.qualified,bundleFileCount:qualification.bundleFileCount,defaultRefusal,discoveryOrInvokeCalls:0};
+const helper=['node_modules/@runnets/application/dist/chat-known-failure.js','node_modules/@runnets/store-sqlite/dist/conversations.js','node_modules/@runnets/store-sqlite/dist/event-log.js','node_modules/@runnets/store-sqlite/dist/tool-journal-reads.js'];
+for(const name of helper)assert.ok(manifest.files[name],name+' missing');
+assert.match(fs.readFileSync(path.join(root,helper[1]),'utf8'),/chatFailureEvidence/);
+const advertisedTypes=Object.keys(manifest.files).filter(n=>n.endsWith('/package.json')).flatMap(n=>{const m=JSON.parse(fs.readFileSync(path.join(root,n),'utf8'));const types=m.types??m.exports?.['.']?.types;return types?[{package:m.name,path:types,shipped:fs.existsSync(path.resolve(root,path.dirname(n),types))}]:[];});
+const declarations=Object.keys(manifest.files).filter(n=>n.endsWith('.d.ts'));
+console.log(JSON.stringify({revision:manifest.revision,node:process.version,providers,modules:Object.keys(manifest.files).filter(n=>n.endsWith('.js')).length,imports:imports.length,unresolved,dynamic,sourceLayoutFallbackAudit,helper,shippedDeclarations:declarations.length,advertisedTypes,fixtures:Object.keys(manifest.files).filter(n=>/(fixture|cleanup).*\.js$/i.test(n))},null,2));
+assert.equal(unresolved.length,0);assert.equal(dynamic.length,0);
