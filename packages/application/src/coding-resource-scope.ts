@@ -56,3 +56,21 @@ export function codingResourceWorktree(task: CodingTask, worktree: CodingWorktre
         worktree.lease.kind === 'coding')
   );
 }
+
+/** Before inspecting any requested path, every held selector needs supported canonical facts. */
+export function qualifiedCodingResourceFootprint(admission?: ToolEffectAdmission): boolean {
+  if (!validToolEffectAdmission(admission) || admission.scope.kind !== 'resources') return false;
+  const binding = admission.binding;
+  if (!binding || typeof binding !== 'object' || Array.isArray(binding)) return false;
+  const facts = binding as Readonly<Record<string, unknown>>;
+  return (
+    typeof facts['projectRoot'] === 'string' &&
+    canonicalRoot(facts['projectRoot']) &&
+    admission.scope.resources.every(
+      (r) =>
+        r.kind === 'project-worktree' &&
+        (r.worktreeId === null ||
+          (typeof facts['worktreeRoot'] === 'string' && canonicalRoot(facts['worktreeRoot']))),
+    )
+  );
+}

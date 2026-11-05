@@ -130,6 +130,7 @@ it.each(['legacy', 'inspect', 'owner', 'latest', 'canonical-conflict'] as const)
     expect(f.store.coding.atomic((tx) => tx.task('new'))).toBeNull();
     expect(f.counts().confirmations).toBe(phase === 'owner' || phase === 'latest' ? 1 : 0);
     expect(f.counts().acquisitions).toBe(phase === 'latest' ? 1 : 0);
+    if (phase === 'legacy') expect(f.counts().inspections).toBe(0);
     expect(f.live.has('new')).toBe(false);
   },
 );
@@ -159,3 +160,85 @@ it.each(['owner-conflict', 'lease-loss', 'release-unknown'] as const)(
     expect(f.holds().length).toBeGreaterThan(0);
   },
 );
+
+it.each([
+  'missing-binding',
+  'missing-project-root',
+  'missing-worktree-root',
+  'relative-root',
+  'alias-root',
+  'unsupported',
+  'mixed',
+  'unknown',
+  'malformed-binding',
+  'github',
+] as const)('performs zero inspections for an unqualified %s pending footprint', async (mode) => {
+  const f = setup();
+  const project = {
+    kind: 'project-worktree',
+    projectId: 'held-project',
+    worktreeId: mode === 'missing-project-root' ? null : 'held-worktree',
+  };
+  const resource = { kind: 'connection', connectionId: 'remote' };
+  const github = {
+    kind: 'github-repository',
+    connectionId: 'remote',
+    accountId: 'account',
+    repository: 'org/repo',
+  };
+  const admission = {
+    effectKind: 'mutation',
+    grantReference: null,
+    scope: {
+      kind: 'resources',
+      resources:
+        mode === 'unknown'
+          ? [{ kind: 'unknown' }]
+          : mode === 'github'
+            ? [github]
+            : mode === 'unsupported'
+              ? [resource]
+              : mode === 'mixed'
+                ? [project, resource]
+                : [project],
+    },
+    binding:
+      mode === 'malformed-binding'
+        ? []
+        : mode === 'missing-binding'
+          ? {}
+          : mode === 'missing-project-root'
+            ? { worktreeRoot: '/held-worktree' }
+            : mode === 'missing-worktree-root'
+              ? { projectRoot: '/held-project' }
+              : {
+                  projectRoot: '/held-project',
+                  worktreeRoot:
+                    mode === 'relative-root'
+                      ? 'relative'
+                      : mode === 'alias-root'
+                        ? '/held/../else'
+                        : '/held-worktree',
+                },
+  };
+  f.db
+    .prepare(
+      'INSERT INTO tool_invocations_v2(id,tool,task_run_id,attempt_id,fingerprint,outcome,admission) VALUES(?,?,?,?,?,?,?)',
+    )
+    .run(
+      'held',
+      'command',
+      'held-run',
+      'held-attempt',
+      'fingerprint',
+      'uncertain',
+      JSON.stringify(admission),
+    );
+  const before = f.rows();
+  expect(await new CodingTaskService(f.deps).start(f.input, f.owner)).toMatchObject({
+    ok: false,
+    error: { code: 'recovery_required' },
+  });
+  expect(f.counts()).toEqual({ inspections: 0, confirmations: 0, acquisitions: 0 });
+  expect(f.rows()).toEqual(before);
+});

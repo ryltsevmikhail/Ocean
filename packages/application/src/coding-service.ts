@@ -10,7 +10,11 @@ import {
   type CodingErrorCode,
   type ToolEffectAdmission,
 } from '@runnets/domain';
-import { codingResourceAdmission, codingResourceWorktree } from './coding-resource-scope.js';
+import {
+  codingResourceAdmission,
+  codingResourceWorktree,
+  qualifiedCodingResourceFootprint,
+} from './coding-resource-scope.js';
 import type { Clock } from './ports.js';
 import type { ToolJournalPort } from './tools.js';
 import type {
@@ -74,7 +78,7 @@ export class CodingTaskService {
     return !this.#deps.projectId || !journal.inspectConflicts
       ? this.#pending()
       : !journal.inspectPending ||
-          journal.inspectPending().some((r) => r.admission?.scope.kind !== 'resources');
+          journal.inspectPending().some((r) => !qualifiedCodingResourceFootprint(r.admission));
   }
   async start(request: StartCodingTask, owner: CodingOwnerPort): Promise<CodingResult<CodingTask>> {
     if (this.#deps.enabled === false) return codingFailure('coding_unavailable');

@@ -170,3 +170,72 @@ it('leaves unguarded B approval and source apply admission globally blocked', as
   );
   expect(result).toBe(false);
 });
+
+it.each(['uncertain', 'failed'] as const)(
+  'keeps a coding claim global after contradictory tool with outcome %s',
+  async (outcome) => {
+    const f = setup();
+    await f.uncertainA();
+    if (outcome === 'uncertain') f.db.exec("UPDATE tool_invocations_v2 SET tool='command'");
+    else
+      f.db.exec(
+        "UPDATE tool_invocations_v2 SET tool='command',fingerprint='wrong',outcome='failed'",
+      );
+    const before = f.aRows(),
+      holds = f.holds();
+    if (outcome === 'uncertain') {
+      expect(f.store.tools.inspectPending!()).toHaveLength(1);
+      expect(f.tasks.authorize(f.access())).toMatchObject({ ok: false });
+    }
+    expect(f.store.finalization.atomic((tx) => tx.holds(f.b.id))).toContainEqual(
+      expect.objectContaining({ kind: 'claim', scope: 'global' }),
+    );
+    const { service, selection, released } = consumerFinalization(f);
+    try {
+      await expect(service.preview(selection, new AbortController().signal)).rejects.toThrow(
+        'finalization_effects_held',
+      );
+      expect(released).toEqual([]);
+    } finally {
+      await service.close();
+    }
+    expect(f.aRows()).toEqual(before);
+    expect(f.holds()).toEqual(holds);
+    expect(f.sends()).toBe(1);
+  },
+);
+
+it.each(['command', 'coding_write'])(
+  'preserves unrelated noncoding %s receipt beside a coding claim',
+  async (tool) => {
+    const f = setup();
+    await f.uncertainA();
+    const admission = {
+      effectKind: 'mutation',
+      scope: { kind: 'resources', resources: [{ kind: 'connection', connectionId: 'remote' }] },
+      grantReference: { grantId: 'remote-grant', revision: 1 },
+      binding: { connectionId: 'remote' },
+    };
+    f.db
+      .prepare(
+        'INSERT INTO tool_invocations_v2(id,tool,task_run_id,attempt_id,fingerprint,outcome,admission) VALUES(?,?,?,?,?,?,?)',
+      )
+      .run(
+        'remote',
+        tool,
+        'remote-run',
+        'remote-attempt',
+        'remote-fingerprint',
+        'uncertain',
+        JSON.stringify(admission),
+      );
+    const before = f.rows();
+    expect(f.store.tools.inspectPending!().find((row) => row.id === 'remote')?.admission).toEqual(
+      admission,
+    );
+    expect(
+      f.store.serviceAuthority.atomic((tx) => tx.grantCalls('remote-run', 'remote-grant')),
+    ).toBe(1);
+    expect(f.rows()).toEqual(before);
+  },
+);

@@ -36,7 +36,7 @@ export function journalCodingApproval(
   db: DatabaseSync,
   row: Record<string, SQLOutputValue>,
 ): CodingApproval | null | undefined {
-  if (row['tool'] !== 'coding_write' && row['tool'] !== 'coding_test') return undefined;
+  // Invocation identity establishes association; a contradictory tool name cannot erase it.
   if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE name='ocean_coding_approval_claims'").get())
     return undefined;
   const key = 'CASE WHEN json_valid(c.invocation_key) THEN c.invocation_key END';

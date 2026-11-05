@@ -218,3 +218,89 @@ d6ea013e8333688abb36e51c7a09922a077f5a1726f203258bc06f49e642c031  apps/cli/test-
 
 Their existing dirty/untracked/staging state is preserved and excluded from the
 owned commit. No stash, reset, clean, exclusions or added skips were used.
+
+## Independent review correction 1
+
+Fix base: `dcb198224398fc16cf4829637812f9edd63b16fe`. Read the complete
+`task-18.3.1-review.md` and `task-18.3.1-fix1.md`. Both Important findings were
+reproduced and corrected. The review's Minor M1 duplicate finalization reads remain
+deferred to ledger F; this correction does not change that path.
+
+### Changed semantics
+
+- I1: `journalCodingApproval` now resolves a journal row's coding association by
+  its existing run/attempt/invocation identity before classifying its tool name.
+  An associated row with a contradictory tool or fingerprint returns contradictory
+  evidence, so the existing effective reader cannot accept its raw metadata as a
+  generic receipt. Its existing exact guarded receipt checks continue to apply
+  both to pending normal consumers and foreign finalization claims. No new
+  association mechanism, journal schema or repair operation was added.
+- Legitimately unrelated generic receipts keep their own admission and grant
+  accounting, including a remote tool named `coding_write`. Existing no-coding-schema
+  and coding-schema colliding-name tests pass, as do two new cases beside an
+  actual guarded coding claim using different invocation identities.
+- I2: the small pure `qualifiedCodingResourceFootprint` predicate requires a valid
+  admission containing only project/worktree selectors and canonical project/root
+  facts (plus canonical worktree root for a worktree selector). Start applies it
+  before requested-path inspection. Unknown, unsupported, mixed, malformed and
+  incomplete footprints stop with zero project inspections, zero owner calls and
+  zero lease acquisitions. The requested alias still supplies no scope; the
+  existing canonical rechecks after inspection/owner awaits remain unchanged.
+- Valid guarded A/disjoint B factory, grant, registered preset and owner-finalization
+  positives remain green. Consumers do not rewrite A's records, release its lease,
+  settle its unknown effect or infer cancellation/replay permission.
+
+### Correction RED and GREEN
+
+Used the same unchanged private runner `P` defined above. Before production edits:
+
+```text
+P pnpm exec vitest run --config vitest.source.config.ts \
+ apps/cli/src/coding-turn-factory.test.ts \
+ packages/store-sqlite/src/coding-consumer-scope.test.ts \
+ packages/store-sqlite/src/coding-consumer-lifecycle.test.ts
+```
+
+Exit 1: 3 files failed, 10 tests failed and 42 passed. The tool-only pending-row
+case incorrectly authorized B and allowed the normal factory to resolve. With tool
+and fingerprint changed and outcome failed, B had no foreign claim hold. Seven
+unqualified footprint cases each performed one inspection instead of zero.
+
+After the minimal production edits, the same three files plus
+`packages/store-sqlite/src/tool-journal.test.ts` exited 0: 4 files, 57 tests passed.
+Final coverage adds direct actual finalization-service refusal for both tampered
+outcomes, preservation of A's recorded state/holds/spent call, unrelated generic
+receipts, and unknown/malformed/unsupported footprints.
+
+Final covering command is the 18-file command above with
+`packages/store-sqlite/src/tool-journal.test.ts` appended. Exit 0: **19 files,
+226 tests passed**, no new skips. Final strict/scoped commands all exited 0:
+
+```text
+P pnpm exec tsc -b --pretty false
+P pnpm exec tsc -p tsconfig.tests.node.json --pretty false
+P pnpm exec tsc -p tsconfig.tests.desktop.json --pretty false
+P pnpm exec eslint \
+ packages/store-sqlite/src/coding-journal-receipt.ts \
+ packages/application/src/coding-resource-scope.ts \
+ packages/application/src/coding-service.ts \
+ apps/cli/src/coding-turn-factory.test.ts \
+ packages/store-sqlite/src/coding-consumer-scope.test.ts \
+ packages/store-sqlite/src/coding-consumer-lifecycle.test.ts
+P pnpm exec prettier --check \
+ packages/store-sqlite/src/coding-journal-receipt.ts \
+ packages/application/src/coding-resource-scope.ts \
+ packages/application/src/coding-service.ts \
+ apps/cli/src/coding-turn-factory.test.ts \
+ packages/store-sqlite/src/coding-consumer-scope.test.ts \
+ packages/store-sqlite/src/coding-consumer-lifecycle.test.ts
+```
+
+No root check/build/format, native, model, external-service or GUI loop was repeated.
+The original root results above remain facts about the original `dcb1982` source;
+this correction's current verification is the covering/strict/scoped evidence here.
+All owned source remains within 300 physical lines (factory test 295, coding
+service 293). `git diff --check` passed. The protected hashes listed above and
+original dirty/untracked/staging state were verified unchanged again. Self-review
+covered only I1/I2 and new regression risk. No helper agents/reviewer, push or merge
+was used. Controller-owned fresh scoped review remains required before acceptance.

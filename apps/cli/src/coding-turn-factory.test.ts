@@ -202,11 +202,15 @@ it('normal factory reads, edits and runs a registered preset under B grant while
     await service.close();
   }
 });
-it('normal factory refuses a conflicting task with zero platform effects', async () => {
+it.each([
+  ['same-task', 'task'],
+  ['wrong-tool', 'task-b'],
+])('normal factory refuses %s with zero platform effects', async (mode, codingTaskId) => {
   const f = setup();
   await f.uncertainA();
+  if (mode === 'wrong-tool') f.db.exec("UPDATE tool_invocations_v2 SET tool='command'");
   await expect(
-    f.factory.forTurn({ ...f.turn, codingTaskId: f.task.id }, new AbortController().signal),
+    f.factory.forTurn({ ...f.turn, codingTaskId }, new AbortController().signal),
   ).rejects.toThrow();
   expect(script.effects).toEqual([]);
   expect(f.prompts()).toBe(0);
