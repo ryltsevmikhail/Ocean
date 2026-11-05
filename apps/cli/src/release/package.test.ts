@@ -41,6 +41,7 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   const release = await packageRelease(repo, '1.1.0-rc.2', join(root, 'artifact'));
   const files = archiveFiles(readFileSync(release.archive));
   const names = [...files.keys()];
+  expect(names.filter((name) => name.includes('integrations-mcp'))).toEqual([]);
   expect(names.filter((name) => name.endsWith('.map'))).toEqual([]);
   expect(names.filter((name) => name.includes('/node_modules/'))).toEqual([]);
   expect(names.filter((name) => name.includes('node_modules/.pnpm'))).toEqual([]);

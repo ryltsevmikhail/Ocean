@@ -144,7 +144,8 @@ export async function packageRelease(
       else throw new Error('Unexpected document link');
     }
   };
-  const modules = readdirSync(join(root, 'packages'));
+  // C18.1 is a qualification harness, outside the installed runtime.
+  const modules = readdirSync(join(root, 'packages')).filter((name) => name !== 'integrations-mcp');
   if (!modules.includes(ADAPTER_DIRECTORY))
     throw new Error('Release packaging requires the bundled adapter package ' + ADAPTER_PACKAGE);
   const adapter = await buildAdapterBundle(root);
