@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { rig, setInput } from './model-process-rig.ts';
 import { activeWitness, publicReceipt, receiptOwner } from './model-process-witness.ts';
 export async function lostReply() {
@@ -14,23 +15,37 @@ export async function lostReply() {
       connectionId: setInput.connectionId,
     });
     await assert.rejects(a.client.setModelConnection(setInput), /^Error: connection_closed$/);
+    // Immutable serialized copy of the actual suppressed response, not a later database value.
+    const capturedOriginal = readFileSync(f.profile + '/suppressed-public-result.json', 'utf8');
     const committed = activeWitness(f.profile, setInput.requestId, receiptFamily);
+    assert.equal(
+      JSON.stringify(publicReceipt(committed, receiptFamily)) === capturedOriginal,
+      true,
+      'post-close public result differs from captured suppressed original',
+    );
+    const verifyStored = () => {
+      const current = activeWitness(f.profile, setInput.requestId, receiptFamily);
+      assert.equal(
+        JSON.stringify(publicReceipt(current, receiptFamily)) === capturedOriginal,
+        true,
+        'stored public result differs from captured suppressed original',
+      );
+      assert.equal(
+        JSON.stringify(current) === JSON.stringify(committed),
+        true,
+        'stored receipt bytes changed',
+      );
+    };
     const snapshot = await owner.snapshot();
     assert.ok(snapshot.phases.includes('reply-suppressed-after-active-receipt'));
     assert.equal(snapshot.counters.published - baseline.counters.published, 1);
     const b = await f.peer();
-    const receipt = publicReceipt(committed, receiptFamily);
     assert.equal(
-      JSON.stringify(await b.client.setModelConnection(setInput)) === JSON.stringify(receipt),
+      JSON.stringify(await b.client.setModelConnection(setInput)) === capturedOriginal,
       true,
       'first replay differs from original persisted/suppressed public result',
     );
-    assert.equal(
-      JSON.stringify(activeWitness(f.profile, setInput.requestId, receiptFamily)) ===
-        JSON.stringify(committed),
-      true,
-      'stored receipt bytes changed',
-    );
+    verifyStored();
     assert.deepEqual(await owner.snapshot(), snapshot);
     await owner.kill();
     const next = await f.launch();
@@ -40,7 +55,7 @@ export async function lostReply() {
     const restarted = await next.snapshot();
     assert.equal(restarted.counters.attempt, 0);
     assert.equal(
-      JSON.stringify(await c.client.setModelConnection(setInput)) === JSON.stringify(receipt),
+      JSON.stringify(await c.client.setModelConnection(setInput)) === capturedOriginal,
       true,
       'restart replay differs from original public result',
     );
@@ -49,7 +64,7 @@ export async function lostReply() {
       d.client.setModelConnection(setInput),
     ]);
     assert.equal(
-      replays.every((r) => JSON.stringify(r) === JSON.stringify(receipt)),
+      replays.every((r) => JSON.stringify(r) === capturedOriginal),
       true,
       'concurrent replay differs from original public result',
     );
@@ -62,12 +77,7 @@ export async function lostReply() {
         c.client.setModelConnection({ ...setInput, ...changed }),
         /request_conflict/,
       );
-    assert.equal(
-      JSON.stringify(activeWitness(f.profile, setInput.requestId, receiptFamily)) ===
-        JSON.stringify(committed),
-      true,
-      'stored receipt bytes changed',
-    );
+    verifyStored();
     assert.deepEqual(await next.snapshot(), restarted);
     return {
       suppressed: 1,

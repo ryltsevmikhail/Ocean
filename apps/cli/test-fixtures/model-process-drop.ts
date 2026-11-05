@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Socket } from 'node:net';
+import { writeFileSync } from 'node:fs';
 import { activeWitness, publicReceipt, receiptOwner } from './model-process-witness.ts';
 /** Fixture-only interposition. IDs are correlated independently on each incoming socket. */
 export function dropper(profile: string, record: (phase: string) => void) {
@@ -45,6 +46,12 @@ export function dropper(profile: string, record: (phase: string) => void) {
           true,
           'suppressed public result differs from original persisted result',
         );
+        // Preserve only the actual outbound public DTO before closing, once per private rig.
+        writeFileSync(profile + '/suppressed-public-result.json', JSON.stringify(frame.result), {
+          flag: 'wx',
+          mode: 0o600,
+          flush: true,
+        });
         target = null;
         record('reply-suppressed-after-active-receipt');
         this.destroy();
