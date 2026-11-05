@@ -14,7 +14,7 @@ if mode=='offline':
     assert [r['outcome']['kind'] for r in proof['runs'][:3]]==['completed']*3
     assert len(proof['effects'])==1 and proof['noRetryOfUnknown']
     assert proof['loaded']['models'][0]['size_vram']==0
-    assert supervisor['exit']==0 and supervisor['scopeGone'] and supervisor['pidIdentitiesGone'] and supervisor['oomFree'] and supervisor['privateNetnsDifferent'] and supervisor['backendClientNamespacesMatch']
+    assert supervisor['exit']==0 and supervisor['scopeGone'] and supervisor['pidIdentitiesGone'] and supervisor['oomFree'] and supervisor['privateNetnsDifferent'] and supervisor['identityValidation']['ok'] and supervisor['scopeRetirement']['confirmed']
     assert inner['captureExit']==0 and inner['listenersAfterBackendStop']['backend']=='closed'
     witness=[json.loads(line) for line in (phase/'http-witness.jsonl').read_text().splitlines()]
     assert not any(r.get('gap') or r.get('truncated') for r in witness)

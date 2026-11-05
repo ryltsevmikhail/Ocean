@@ -143,3 +143,69 @@ Exact final commands: `python3 P/task-17.4-freeze.py final` exit0, with exclusiv
 Final syntax/size proof (`setup/final-syntax.json`):11 Python AST parses and7 JavaScript module syntax checks, all0; maximum helper175 physical lines. The six actual source/test/doc files were reviewed against BASE; production delta is the single exact size guard plus accurate fixtures/regression/doc. Final QA scripts are trusted opt-in infrastructure, not a product install/model-download feature. Only those QA scripts, location pointer, report and public qualification facts are in the later QA commit; actual assets/profiles/transcripts/private backend-generated identity remain outside Git.
 
 Read-only final hashing confirms all six original17.3 fix1/fix2 inventory/seal/attestation anchors unchanged. No old qualification program was rerun and no sealed old path was written. Real Ocean1.0/RC2 installations, services, keys, profiles and other checkouts remain untouched. Controller owns the independent review and publication decision; this worker spawned no helper/reviewer and performed no push/merge.
+
+## Correction1/5 — three Important qualification-helper findings
+
+FIX_BASE `1a95a2e8abcf0037e771ccd3e71886850192ba91`. This correction is limited to I1/I2/I3 and new breakage in those changes. The full independent review supports the actual native/offline and online mixed facts and product28909ea. No product source, model/backend inference, DeepSeek key read, packaging/build, broad pnpm/native suite, real service/profile or old seal was changed or rerun. The explicit focused contract is `task-17.4-fix1.md`; the controller owns the scoped re-review and deferred minors.
+
+New owned evidence is **Q/fix1**. Original executed driver snapshots stay byte-for-byte in the old51/385 chains. Current helpers have separate new snapshots/hashes; the new helper code is not attributed retrospectively to the original native runs.
+
+### I1 — complete role and security predicate
+
+`task-17.4-identities.py` defines explicit phase contracts and inspects every matching sample observation, using PID/starttime identities, actual comm names (`ollama`, `llama-server`, `node`, `node-MainThread`) and trusted argv role patterns. Full native offline requires backend, runner, driver, CLI-init, CLI-history and binder; mixed online requires backend, runner, driver and CLI-init. Metadata-only requires backend+driver, not a model runner. Additional observed Node identities also receive namespace/capability/NNP checks; a late good observation cannot erase an earlier bad one. Missing/invalid identities, unknown phase policy, missing required roles or security mismatch refuse.
+
+Sparse offline policy is explicit private netns unequal to outer, CapEff/CapBnd0x2000 and NoNewPrivs1. Online uses the ordinary nonroot policy: host netns, nonroot trusted outer UID, CapEff0/NNP0 and bounding set equal to the trusted outer launch reference. The supervisor now captures that reference independently before launching candidate processes. For read-only historical comparison, `historical-predicates.json` labels the reference as a **CURRENT host comparison**, not a newly invented historical launch attestation. The controller approved this distinction; expected security values are never learned from candidate rows.
+
+Copied final offline samples pass with6 relevant identities/545 relevant observations and all6 roles; copied online pass with4 identities/473 observations/all4 roles. The original metadata-green samples lack capability/NNP fields: their new full-security predicate is explicitly **unavailable/refused**, not requalified or fabricated. Actual final native acceptance already covers the positive candidate metadata and complete security facts.
+
+The exact legacy predicate was extracted from the pinned BASE helper bytes for RED. Proper RED:14 tests,12 failures/2 positives, exit1. GREEN:14/14, exit0. Cases include missing all Node clients, missing history client, missing runner, wrong runner namespace, one transient wrong client namespace, wrong client CapEff, runner bounding set/NNP, online wrong CapEff/NNP, malformed starttime and metadata-without-runner. A preliminary RED harness had indentation errors; it is retained but is not the behavioral RED. The actual supervisor postprocessing now calls this validator for offline and online; the freezer requires the full identity verdict and confirmed scope retirement, so the old boolean alone cannot certify evidence.
+
+### I2 — retirement follows cgroup population
+
+`task-17.4-scope.py` captures the unique unit ID/InvocationID, canonical current-user cgroup path, device/inode and owning UID. Before every signal it verifies the same unit/cgroup identity. It reads actual cgroup.events population and cgroup.procs, drives bounded TERM/grace/KILL regardless of launcher exit, and confirms actual disappearance or population0/procs0. It never signals by a bare PID or another scope. Unit unloading can precede cgroup disappearance: empty-state reads use the recorded inode independently, while all signal targets still require live verified unit identity. Observation/ownership failure remains explicit cleanup-unknown, never a pass.
+
+The supervisor invokes this retirement on normal and exceptional paths after monitoring, even when its launcher is already gone. It then independently reaps the launcher and checks all recorded PID/starttime identities; an original work/observation error remains a failing qualification even if cleanup succeeds. Final exit requires the full identity policy, confirmed scope retirement, independent process disappearance and other existing gate facts.
+
+Real disposable controls use only fresh `ocean-17-4-fix1-*` user scopes with MemoryMax64M/SwapMax0/TasksMax16/CPUQuota100% and a clean-env tiny Python process. The launcher actually forks a TERM-ignoring orphan and exits0 while cgroup.events remains populated1. Exact legacy post-launch code reproduces the bug: one failure/two new-control skips, exit1; the independent test supervisor verifies the owned unit before KILL and reaps the orphan even on this RED.
+
+GREEN3/3, exit0: the orphan is retired by TERM→KILL after launcher0; unavailable observation does not certify cleanup or signal without observation; wrong InvocationID never signals. The outer fixture safely retires/reaps the negative-case scopes and verifies cgroup disappearance and PID/starttime absence. All16 disposable orphan identities from preliminary/final attempts are gone (`all-disposable-cleanup.json`); no other scope was targeted. The first attempted private-runner command could not reach the user manager bus and started no orphan; the valid scope test runs in the existing outer manager environment, while its child receives a clean environment. Intermediate unit-unload/empty-cgroup races in both helper observation and test-finalizer handling were found, retained and corrected. One interrupted intermediate finalizer did not write its case proof; independent final verification confirms that already-killed PID identity and scope gone. The valid RED and final GREEN controls have complete reaping/cleanup records.
+
+### I3 — resource output is exclusive and fresh
+
+`task-17.4-resources.py` now uses exclusive descriptor-relative O_CREAT|O_EXCL|O_NOFOLLOW publication, mode0600, validated private directory ancestry and parent identity checks. The default existing Q/resources-summary.json refuses before aggregation or truncation. An explicit follow-up output must be a new file below the owned Q/fix1 root; outside/traversal/symlink paths refuse. A concurrent competing file is preserved. No real sealed resource output was ever opened for truncation in a RED test.
+
+Exact legacy helper RED used only a disposable preexisting dummy: it replaced the dummy bytes, one failure/five new cases skipped, exit1. GREEN6/6, exit0: existing collision, fresh default/second-call refusal, explicit fresh follow-up, outside/traversal/escaping-symlink refusal, exclusive-create collision race, and real sealed-default refusal with identical hash/mode/mtime. Actual documented CLI `python3 P/task-17.4-resources.py` now exits1/FileExistsError, with original sealed resource-summary hash/mode/mtime unchanged (`default-summary-refusal.json`). Tests used dummy roots and never regenerated the original summary.
+
+### Final focused commands and checks
+
+`python3 P/task-17.4-fix1-gates.py final2` exit0. `fix1/final2-commands.json` records exact argv/cwd/exits/durations; its scopes require the existing outer user manager, while all other tests use the unchanged private runner.
+
+| Command | Actual result |
+| --- | --- |
+| private `task-17.4-identity-test.py --legacy` | exit1; proper RED12 failures/2 positives |
+| `task-17.4-scope-test.py --legacy` | exit1; proper RED1 failure/2 new-control skips, orphan reaped/scope gone |
+| private `task-17.4-resource-test.py --legacy` | exit1; RED1 failure/5 new-case skips, disposable dummy only |
+| private `task-17.4-identity-test.py` final | exit0;14 passed |
+| `task-17.4-scope-test.py` final | exit0;3 passed, all owned descendants retired/reaped |
+| private `task-17.4-resource-test.py` final | exit0;6 passed |
+| private `task-17.4-fix1-integration-test.py` final | exit0;4 passed |
+| documented default resource-summary CLI | exit1/FileExistsError as required; sealed bytes/mode/mtime unchanged |
+| Python AST/physical-line checks | 11 parsed,0 errors; maximum180 lines |
+
+Total final covering tests: **27 passed /0 failed /0 skipped**. Integration executes the actual AST-selected supervisor postprocessing/final-exit and freezer guard against copied facts/dummy records; it verifies6/4 actual identity coverage, refuses the old namespace boolean alone, refuses unconfirmed retirement, and preserves an original failure. These controls do not invoke the backend, model, product owner or cloud.
+
+Product source28909ea, CLI SHA256 `6b41ce641fa470d55799883b959a0baf764f95f90db4a778f9eee8a23a782daa`, ASAR SHA256 `96837046186d298fb6466e723ecba8c31c58dadf1e7925b26e8f0c66a660b06a` remain unchanged. Root check/build/format/model/GUI suites are deliberately not rerun under this evidence-helper-only correction contract. Prior catalog3/format2 debt, original generic-tool UNKNOWN, CPU-only measurement scope, deferred OpenAI/Anthropic, D/E/17.5/F and review limitations remain as previously disclosed. The two Minor findings are parked for the controller; they did not expand this fix loop.
+
+### Correction1 immutable handoff
+
+`Q/fix1/freeze-final` contains117 focused new files: exact current helper/test/collector/private-runner snapshots; copied selected sample inputs/provenance and historical predicate results; real disposable scope argv/exits/TERM/KILL/observation/cleanup records; collision/dummy/default-refusal records; final27-test command logs/ledger and syntax results. Original model/product history is referenced by its old anchors, not requalified or copied wholesale. An exclusive noncircular seal binds inventory and exact collector bytes; `fix1/freeze-invocation.json` records actual argv/cwd/exit0 and stdout/stderr hashes outside the primary inventory.
+
+Pinned raw SHA256:
+
+- Fix1 inventory: `861bd2c9867cf12fcba5dfa9d7a167d5089487647da1fe516ca625d523e65b06`.
+- Fix1 seal: `d13375cf4a2557af7128617fe84013a1659c892c7f39d4ea68052a611ae6ad93`.
+- Post-freeze validation attestation: `7d8bdd010340e4c42d9ac91e952d30d4f40f7658d9ac6a6cbaca2647efaa78c9`.
+
+Exact freeze command: `python3 P/task-17.4-fix1-freeze.py freeze`, exit0. Copied `freeze-final/inputs/run-private.py` executed copied `task-17.4-fix1-freeze.py verify FIX1_FREEZE PINNED_SEAL_SHA`, exit0, all117 bytes/sizes/modes verified. The post-freeze attestation binds that exact validation command/result/output and verifies the freeze invocation stdout/stderr hashes. Freeze read-only verification confirmed all original51+385=436 listed records and old inventory/seal/attestation anchors; six original17.3 fix1/fix2 anchors also still match. No old seal/input was overwritten.
+
+Protected file hashes remain `d6ea013e8333688abb36e51c7a09922a077f5a1726f203258bc06f49e642c031` and `68f28f549e0713f5c21d47950b6db96babdb27a7b9264684268c571b7cde62a3`. Controller plan changes are excluded. This owned QA correction commit requires independent scoped FIX_BASE..HEAD review; no helper/reviewer, push/merge, Task17.5 work or release claim occurred.

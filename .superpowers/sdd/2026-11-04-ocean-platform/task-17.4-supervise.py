@@ -3,6 +3,9 @@ import json,os,pathlib,subprocess,sys,time,socket,signal,tempfile,traceback
 P=pathlib.Path(__file__).resolve().parent
 Q=pathlib.Path(json.loads((P/'task-17.4-location.json').read_text())['root'])
 FILES=['cpu.max','cpu.stat','memory.high','memory.max','memory.current','memory.peak','memory.swap.max','memory.swap.current','memory.swap.peak','memory.events','memory.swap.events','pids.max','pids.current','pids.events','cgroup.events','cgroup.procs']
+def helper(name):
+    import importlib.util
+    spec=importlib.util.spec_from_file_location(name,P/('task-17.4-'+name+'.py'));module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 def write(path,value):
     with path.open('x') as f: json.dump(value,f,indent=2); f.write('\n')
 def proc(pid):
@@ -88,7 +91,7 @@ if sys.argv[1]=='inner':
             try: result['backendExit']=backend.wait(timeout=10)
             except subprocess.TimeoutExpired: backend.kill(); result['backendExit']=backend.wait(timeout=5); result['backendKilled']=True
             backendLog.close()
-        
+
         if capture is not None:
             capture.terminate(); result['captureExit']=capture.wait(timeout=3)
         closure={}
@@ -106,7 +109,7 @@ name=sys.argv[1]; installed=pathlib.Path(sys.argv[2]); driver=pathlib.Path(sys.a
 phase=Q/name; phase.mkdir(mode=0o700)
 import shutil,hashlib
 inputs=phase/'inputs'; inputs.mkdir(mode=0o700)
-for source in [pathlib.Path(__file__).resolve(),P/'task-17.4-capture.py',P/'task-17.4-sparse.py',P/'task-17.4-location.json',driver]: shutil.copyfile(source,inputs/source.name)
+for source in [pathlib.Path(__file__).resolve(),P/'task-17.4-capture.py',P/'task-17.4-sparse.py',P/'task-17.4-identities.py',P/'task-17.4-scope.py',P/'task-17.4-location.json',driver]: shutil.copyfile(source,inputs/source.name)
 driver=inputs/driver.name
 write(inputs/'hashes.json',{f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in inputs.iterdir() if f.is_file()})
 short=pathlib.Path(tempfile.mkdtemp(prefix='oa174-')); short.chmod(0o700)
@@ -124,7 +127,11 @@ if offline:
     setup="import os,subprocess,sys; subprocess.run(['ip','link','set','lo','up'],check=True,close_fds=True); os.execv('/usr/bin/bwrap',sys.argv[1:])"
     inner=['unshare','--user','--map-root-user','--net','--pid','--fork','--kill-child','python3','-c',setup,*sparse.sparse_command(Q,phase,installed,short,inner)]
 command=['systemd-run','--user','--scope','--unit='+unit,'-p','CPUAccounting=yes','-p','MemoryAccounting=yes','-p','CPUQuota=200%','-p','MemoryHigh=3G','-p','MemoryMax=3584M','-p','MemorySwapMax=0','-p','TasksMax=256','timeout','--signal=TERM','--kill-after=10s','900s','env','-i',*[k+'='+v for k,v in env.items()],*inner]
-record={'argv':command,'outerNetns':outerNamespace,'driver':str(driver),'started':time.time()}; seen={}; cg=None
+scopeHelper=helper('scope');identityHelper=helper('identities');scopeHandle=None
+outerSecurity={'uid':os.getuid(),**{line.split(':')[0]:line.split(':',1)[1].strip()for line in pathlib.Path('/proc/self/status').read_text().splitlines()if line.startswith(('CapEff','CapBnd','NoNewPrivs'))}}
+policy=identityHelper.DRIVERS.get(driver.name)
+if policy is None:raise ValueError('explicit phase identity policy required')
+record={'outerSecurity':outerSecurity,'identityPolicy':policy,'argv':command,'outerNetns':outerNamespace,'driver':str(driver),'started':time.time()}; seen={}; cg=None
 with (phase/'supervisor.log').open('x') as log,(phase/'samples.jsonl').open('x') as samples:
     child=subprocess.Popen(command,stdout=log,stderr=log,close_fds=True)
     deadline=time.monotonic()+920
@@ -135,6 +142,7 @@ with (phase/'supervisor.log').open('x') as log,(phase/'samples.jsonl').open('x')
             if child.poll() is not None: raise RuntimeError('scope failed before admission')
             time.sleep(.05)
         if cg is None: raise RuntimeError('cgroup readiness timeout')
+        scopeHandle=scopeHelper.capture(unit+'.scope',cg);record['scopeIdentity']=scopeHandle
         record['cgroup']=str(cg); initial=snapshot(cg); write(phase/'cgroup-initial.json',initial)
         controls=initial['cgroup']; assert controls['cpu.max']=='200000 100000' and controls['memory.max']=='3758096384' and controls['memory.high']=='3221225472' and controls['memory.swap.max']=='0' and controls['pids.max']=='256'
         while child.poll() is None:
@@ -147,29 +155,26 @@ with (phase/'supervisor.log').open('x') as log,(phase/'samples.jsonl').open('x')
         record['exit']=child.wait(timeout=2)
     except Exception as error:
         record['error']=str(error)
-        if cg is not None:
-            record['term']=subprocess.run(['systemctl','--user','kill','--signal=TERM',unit+'.scope'],capture_output=True,text=True,timeout=3).returncode
-            try: child.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                record['kill']=subprocess.run(['systemctl','--user','kill','--signal=KILL',unit+'.scope'],capture_output=True,text=True,timeout=3).returncode; child.wait(timeout=5)
-        elif child.poll() is None: child.terminate(); child.wait(timeout=5)
-        record['exit']=child.returncode
-for _ in range(30):
-    if cg is None or not cg.exists() or (cg/'cgroup.events').read_text().startswith('populated 0'): break
-    time.sleep(.1)
-record['scopeGone']=cg is not None and not cg.exists(); record['remaining']=snapshot(cg) if cg is not None and cg.exists() else None
+        record['exit']=child.poll()
+# Retirement follows actual population even when the launcher has already exited.
+record['scopeRetirement']=scopeHelper.retire(scopeHandle) if scopeHandle is not None else {'confirmed':False,'signals':[],'errors':['no verified scope identity']}
+try:record['exit']=child.wait(timeout=3)
+except subprocess.TimeoutExpired:record.setdefault('error','launcher did not reap after scope retirement')
+record['scopeGone']=cg is not None and not cg.exists();record['scopeEmpty']=record['scopeRetirement']['confirmed'];record['remaining']=snapshot(cg) if cg is not None and cg.exists() else None
 record['pidIdentitiesGone']=all(not (v:=proc(pid)) or v['starttime']!=start for pid,start in seen)
 record['seenProcesses']=list(seen.values())
 if (phase/'cgroup-final.json').exists():
     final=json.loads((phase/'cgroup-final.json').read_text()); events=final['cgroup']['memory.events'] or ''
     record['oomFree']=all(int(line.split()[1])==0 for line in events.splitlines() if line.split()[0] in ['oom','oom_kill','oom_group_kill'])
 else: record['oomFree']=False
-if offline and (phase/'network.json').exists():
-    network=json.loads((phase/'network.json').read_text()); record['privateNetnsDifferent']=network['namespace']!=outerNamespace
-    actual=[v for v in seen.values() if v['name'] in ['ollama','node']]
-    record['backendClientNamespacesMatch']=bool(actual) and all(v['netns']==network['namespace'] for v in actual)
+if (phase/'network.json').exists():
+    network=json.loads((phase/'network.json').read_text());record['privateNetnsDifferent']=network['namespace']!=outerNamespace
+    rows=[json.loads(line)for line in (phase/'samples.jsonl').read_text().splitlines()]
+    record['identityValidation']=identityHelper.validate(rows,policy,network['namespace'],outerNamespace,outerSecurity)
+    record['backendClientNamespacesMatch']=record['identityValidation']['ok']
+else:record['identityValidation']={'ok':False,'errors':['missing network evidence']}
 # The listening address is unreachable from the outer netns; retirement is proven by all recorded identities and cgroup emptiness.
 import shutil
 shutil.rmtree(short); record['shortFixtureRemoved']=not short.exists(); record['ended']=time.time()
 write(phase/'supervisor-result.json',record); print(json.dumps(record,indent=2))
-sys.exit(0 if record.get('exit')==0 and record['scopeGone'] and record['pidIdentitiesGone'] and record['oomFree'] and (not offline or (record.get('privateNetnsDifferent') and record.get('backendClientNamespacesMatch'))) else 1)
+sys.exit(0 if 'error' not in record and record.get('exit')==0 and (record['scopeGone'] or record['scopeEmpty']) and record['pidIdentitiesGone'] and record['oomFree'] and record['scopeRetirement']['confirmed'] and record['identityValidation']['ok'] else 1)
