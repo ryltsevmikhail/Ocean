@@ -1,0 +1,30 @@
+import { startLocalRuntime } from '../dist/local-runtime/host.js';
+import { ports } from './model-process-ports.ts';
+import { dropper } from './model-process-drop.ts';
+import { serve } from './model-process-rpc.ts';
+const profile = process.argv[2]!;
+const p = ports(profile, process.argv[3]!);
+const drop = dropper(profile, p.record);
+const host = await startLocalRuntime({
+  profile,
+  providerSecretStore: p.secrets,
+  providerHttpClient: p.http,
+});
+serve((method, input) => {
+  if (method === 'snapshot') return p.snapshot();
+  if (method === 'fault') return p.fault(input);
+  if (method === 'drop') return drop(input);
+  if (method === 'hold') return p.hold();
+  if (method === 'release') return p.release();
+  throw Error('fixture_unknown_control');
+});
+process.send!({
+  ready: {
+    pid: process.pid,
+    identity: host.identity,
+    host: import.meta.resolve('../dist/local-runtime/host.js'),
+    sdk: import.meta.resolve('@runnets/tools-node'),
+    store: import.meta.resolve('@runnets/store-sqlite'),
+  },
+});
+await host.closed;

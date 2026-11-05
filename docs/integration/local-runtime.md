@@ -530,3 +530,11 @@ for the same durable origin head; restoring a later archive into a new generatio
 clears executable epoch authority and keeps archived intents readable. See the
 [profile backup contract](profile-backup.md#format-2-lineage-and-owner-rebind-79-development-source)
 for the exact state machine, lineage envelope and current 7.9 limitations.
+
+## Model settings and execution evidence (development source)
+
+The negotiated model connection, exact bot binding, room policy and historical
+run-evidence methods are implemented in the shared runtime and public SDK. See
+[the model settings contract](model-contract.md) for method names, pagination,
+explicit recovery boundaries, compatibility limits and built-process commands.
+Desktop, installed/native and live-provider qualification remain separate gates.
