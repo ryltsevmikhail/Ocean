@@ -1,3 +1,4 @@
+import { InvocationSend } from './prototype-send.js';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,7 @@ async function issueRead(path: string) {
   const c = client(false);
   let stage = 'approved token file';
   let httpStatus = 0;
+  let invocation: InvocationSend | undefined;
   try {
     if (path !== approved) throw Error('wrong path');
     const fd = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -40,6 +42,7 @@ async function issueRead(path: string) {
         if (method === 'tools/call') {
           r.sdkAttempts++;
           if (stage !== 'issue read' || r.sdkAttempts !== 1) throw Error('unexpected dispatch');
+          InvocationSend.current().admit();
           r.businessAttempts++;
         } else {
           if (
@@ -77,12 +80,15 @@ async function issueRead(path: string) {
     const issue = tools.find((t) => t.name === 'issue_read');
     if (!issue) throw Error('missing read tool');
     stage = 'issue read';
-    const reply = await c.callTool(
-      {
-        name: issue.name,
-        arguments: { method: 'get', owner: 'ryltsevmikhail', repo: 'Ocean', issue_number: 5 },
-      },
-      { toolDefinition: immutable(issue), timeout: 8000, signal: stop },
+    invocation = new InvocationSend(8000, stop);
+    const reply = await invocation.run(() =>
+      c.callTool(
+        {
+          name: issue.name,
+          arguments: { method: 'get', owner: 'ryltsevmikhail', repo: 'Ocean', issue_number: 5 },
+        },
+        { toolDefinition: immutable(issue), timeout: 8000, signal: stop },
+      ),
     );
     r.outcome = 'observed';
     // Retain only issue identity/status, never its title/body, headers or raw errors.
@@ -108,7 +114,7 @@ async function issueRead(path: string) {
     });
   } catch (e) {
     r.status = r.sdkAttempts > 1 ? 'failed' : 'unqualified';
-    r.outcome ??= r.businessAttempts ? 'uncertain' : null;
+    if (r.outcome === null && invocation) r.outcome = invocation.sent ? 'uncertain' : 'not_started';
     r.detail = JSON.stringify({
       stage,
       httpStatus,

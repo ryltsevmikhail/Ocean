@@ -1,3 +1,4 @@
+import { InvocationSend } from './prototype-send.js';
 import { client, empty, immutable } from './prototype-types.js';
 import { httpTransport } from './prototype-http.js';
 import { httpFixture } from './prototype-http-fixture.js';
@@ -32,6 +33,7 @@ export async function accountCase() {
               arrive();
               await paused;
             }
+            InvocationSend.current().admit();
             r.businessAttempts++;
           } else r.metadataAttempts++;
           return fetch(url, init);
@@ -42,9 +44,11 @@ export async function accountCase() {
     const invoke = async (c: typeof left, value: string) => {
       const tool = (await c.listTools(undefined, { cacheMode: 'refresh', timeout: 2000 })).tools[0];
       if (!tool) throw Error('missing tool');
-      return c.callTool(
-        { name: 'write', arguments: { value } },
-        { toolDefinition: immutable(tool), timeout: 2000 },
+      return new InvocationSend(2000).run(() =>
+        c.callTool(
+          { name: 'write', arguments: { value } },
+          { toolDefinition: immutable(tool), timeout: 2000 },
+        ),
       );
     };
     const old = invoke(left, 'alpha');

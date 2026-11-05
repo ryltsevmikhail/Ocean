@@ -39,6 +39,7 @@ async function observation<T>(dir: string, name: string): Promise<T | null> {
   }
 }
 export const nativeCases = [
+  'held-timeout',
   'default',
   'custom',
   'revoked',
@@ -107,7 +108,8 @@ export async function runStdioCase(
     r.businessAttempts = caller?.businessAttempts ?? 0;
     r.outcome = caller?.outcome ?? null;
     r.observedEffects = effect ? 1 : 0;
-    const expected = mode === 'revoked' ? 0 : 1;
+    const withheld = mode === 'revoked' || mode === 'held-timeout';
+    const expected = withheld ? 0 : 1;
     r.detail = JSON.stringify({
       env,
       client: caller?.client,
@@ -121,12 +123,11 @@ export async function runStdioCase(
       cleanupConfirmed: evidence.cleanupConfirmed,
       truncated: evidence.truncated,
     });
-    const outcome =
-      mode === 'revoked'
-        ? 'not_started'
-        : ['default', 'custom'].includes(mode)
-          ? 'observed'
-          : 'uncertain';
+    const outcome = withheld
+      ? 'not_started'
+      : ['default', 'custom'].includes(mode)
+        ? 'observed'
+        : 'uncertain';
     r.status =
       (mode !== 'overflow' || caller?.overflowDetected === true) &&
       evidence.cleanupConfirmed &&

@@ -33,6 +33,12 @@ export async function httpFixture(name: string) {
   const headers: string[] = [];
   const types: string[] = [];
   const stats = { effects: 0, calls: 0, version: 'alpha', notified: 0 };
+  const held = name.startsWith('held-') || name === 'status-race';
+  const legacy = ['sse', 'notification'].includes(name) || held;
+  let releaseResponse = () => {};
+  const responseGate = new Promise<void>((r) => {
+    releaseResponse = r;
+  });
   const factory = () => {
     const protocol = new Server(
       { name: 'fixture', version: '1' },
@@ -68,7 +74,7 @@ export async function httpFixture(name: string) {
   const handler = createMcpHandler(factory);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: randomUUID,
-    enableJsonResponse: name !== 'sse' && name !== 'notification',
+    enableJsonResponse: !legacy,
   });
   await protocol.connect(transport);
   const http = createServer((req, res) => {
@@ -77,15 +83,24 @@ export async function httpFixture(name: string) {
         const chunks: Buffer[] = [];
         for await (const chunk of req as AsyncIterable<Buffer>) chunks.push(chunk);
         const body = Buffer.concat(chunks).toString();
-        const method = body
-          ? ((JSON.parse(body) as { method?: string }).method ?? 'response')
-          : (req.method ?? 'GET');
+        const message = body
+          ? (JSON.parse(body) as { method?: string; params?: { arguments?: { value?: string } } })
+          : undefined;
+        const method = message ? (message.method ?? 'response') : (req.method ?? 'GET');
         rows.push(method);
         if (method === 'tools/call') {
           stats.calls++;
           headers.push(
             String(req.headers['mcp-param-alpha'] ?? req.headers['mcp-param-bravo'] ?? ''),
           );
+          if (
+            ['held-concurrent', 'status-race'].includes(name) &&
+            message?.params?.arguments?.value === 'bravo'
+          ) {
+            res.writeHead(401);
+            res.end('fixture auth wall');
+            return;
+          }
           if (['401', '403', '404', '500', 'redirect'].includes(name)) {
             res.writeHead(name === 'redirect' ? 307 : Number(name), {
               'www-authenticate': 'Bearer error="insufficient_scope", scope="write"',
@@ -102,7 +117,7 @@ export async function httpFixture(name: string) {
           ),
           ...(body ? { body } : {}),
         });
-        const response = ['sse', 'notification'].includes(name)
+        const response = legacy
           ? await transport.handleRequest(request)
           : await handler.fetch(request);
         if (method === 'tools/call') {
@@ -112,6 +127,7 @@ export async function httpFixture(name: string) {
             return;
           }
           if (name === 'timeout' || name === 'abort') await delay(230);
+          if (name === 'status-race') await responseGate;
         }
         res.writeHead(response.status, Object.fromEntries(response.headers));
         res.flushHeaders();
@@ -137,12 +153,15 @@ export async function httpFixture(name: string) {
   const addr = http.address();
   if (!addr || typeof addr === 'string') throw Error('missing loopback address');
   return {
+    legacy,
+    releaseResponse,
     url: new URL('http://127.0.0.1:' + addr.port + '/mcp'),
     rows,
     headers,
     types,
     stats,
     async close() {
+      releaseResponse();
       await handler.close();
       await protocol.close();
       http.closeAllConnections();
@@ -150,3 +169,31 @@ export async function httpFixture(name: string) {
     },
   };
 }
+
+export const httpCases = [
+  'held-timeout',
+  'held-abort',
+  'held-concurrent',
+  'status-race',
+  'json',
+  'sse',
+  'drop',
+  '401',
+  '403',
+  '404',
+  '500',
+  'redirect',
+  'protocol',
+  'header',
+  'input',
+  'invalid',
+  'timeout',
+  'abort',
+  'revoked',
+  'post-revoke',
+  'bad-schema',
+  'catalog',
+  'notification',
+  'restart',
+  'restart-drop',
+] as const;

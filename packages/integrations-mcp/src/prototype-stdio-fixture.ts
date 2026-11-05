@@ -1,3 +1,4 @@
+import { InvocationSend } from './prototype-send.js';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { Server } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
@@ -74,6 +75,10 @@ async function caller() {
   const gate = new Promise<void>((r) => {
     release = r;
   });
+  let drained = () => {};
+  const writerDone = new Promise<void>((r) => {
+    drained = r;
+  });
   if (mode === 'revoked')
     void entered.then(() => {
       current = false;
@@ -100,23 +105,31 @@ async function caller() {
     });
   class Measured extends StdioClientTransport {
     override async send(message: Parameters<StdioClientTransport['send']>[0]) {
-      if (!('method' in message) || message.method !== 'tools/call') r.metadataAttempts++;
-      else {
-        r.sdkAttempts++;
-        if (mode === 'revoked') {
-          notify();
-          await gate;
+      const held =
+        mode === 'held-timeout' && 'method' in message && message.method === 'tools/call';
+      try {
+        if (!('method' in message) || message.method !== 'tools/call') r.metadataAttempts++;
+        else {
+          r.sdkAttempts++;
+          if (mode === 'revoked' || mode === 'held-timeout') {
+            notify();
+            await gate;
+          }
+          if (!current) throw Error('no current authority');
+          InvocationSend.current().admit(() => {
+            r.businessAttempts++;
+            // Synchronous evidence and the public writer invocation are adjacent.
+            r.outcome = 'uncertain';
+            save();
+          });
         }
-        if (!current) throw Error('no current authority');
-        r.businessAttempts++;
-        // Synchronous evidence and the public writer invocation are adjacent.
-        r.outcome = 'uncertain';
-        save();
+        const sending = super.send(message);
+        if ('method' in message && message.method === 'tools/call' && mode === 'custom')
+          current = false;
+        return await sending;
+      } finally {
+        if (held) drained();
       }
-      const sending = super.send(message);
-      if ('method' in message && message.method === 'tools/call' && mode === 'custom')
-        current = false;
-      return sending;
     }
   }
   const transport = new Measured({
@@ -187,14 +200,25 @@ async function caller() {
         if (mode === 'parent-failure') process.kill(process.pid, 'SIGKILL');
         ac.abort();
       })();
+    const timeout = mode === 'held-timeout' ? 200 : 5000;
+    const invocation = new InvocationSend(timeout, ac.signal);
     try {
-      const result = await c.callTool(
-        { name: 'write', arguments: {} },
-        { toolDefinition: immutable(tool), timeout: 5000, signal: ac.signal },
+      const result = await invocation.run(() =>
+        c.callTool(
+          { name: 'write', arguments: {} },
+          { toolDefinition: immutable(tool), timeout, signal: ac.signal },
+        ),
       );
       if (!result.isError) r.outcome = 'observed';
     } catch {
-      r.outcome = r.businessAttempts ? 'uncertain' : 'not_started';
+      r.outcome = invocation.sent ? 'uncertain' : 'not_started';
+    }
+    if (mode === 'held-timeout') {
+      if (r.sdkAttempts !== 1 || r.outcome !== 'not_started')
+        throw Error('expected one held writer at settlement');
+      release();
+      await writerDone;
+      await c.ping({ timeout: 2000 });
     }
     save();
   } finally {
