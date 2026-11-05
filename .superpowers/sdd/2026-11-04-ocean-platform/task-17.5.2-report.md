@@ -82,3 +82,16 @@ python3 "$P/run-private.py" node "$A/1.1.0-rc.2/cli/ocean-install.mjs" --archive
 ```
 
 Worker owned commit recorded in final handoff; no push/merge. Controller rootgate/review appendix to follow on that exactcommit. Mainplan/statusdocs remain controller-owned.
+
+
+## Controller root gates — exact worker revision69bdf1e
+
+Executed once after the worker commit, with private HOME/XDG/environment and a separate owned session for each command. Actual commands: `python3 "$P/run-private.py" pnpm check`, then `pnpm build` and `pnpm format:check` under the same wrapper. The command arrays, exact source, exits, durations and full-log paths are in `task-17.5.2-controller-gates.jsonl`.
+
+| Root command | Exit | Result |
+|---|---:|---|
+| `pnpm check` | 1 | Main/test Node/test Desktop strict checks and ESLint passed; source3412passed,3failed,44skipped. All failures are the same protected catalog-lifetime regressions. Root process phase was not reached. |
+| `pnpm build` | 0 | Workspace TypeScript build passed. |
+| `pnpm format:check` | 1 | Only protected `apps/cli/src/plugin-catalog-lifetime.test.ts` and `apps/cli/test-fixtures/github-session-rig.ts`. |
+
+No exclusions or foreign-file changes. Both protected SHA256values still match the brief. These results satisfy execution of the required root commands, not a green root gate or stable release. C owns the catalog and formatting debt. Controller viewed the actual unsafe-RC2 refusal screenshot: Provider disabled, `plugin_runtime_upgrade_required` visible; no mutation controls exposed. Independent task review accepted the five-checkbox scope with no Critical/Important findings. The supplemental late-run-facts absence check does not establish renderer settlement after delivery; required late-context proof instead waits for original-bot confirmation before checking the other bot/profile. This Minor is retained for final review. Unsafe temporary-root independent removal remains unavailable; no all-runs-clean claim.
