@@ -1,5 +1,5 @@
 """Direct stat-only process identity proof; unavailable is never disappearance."""
-import errno,pathlib
+import errno,pathlib,re
 
 def observe(pid,starttime):
     result={'pid':pid,'starttime':starttime,'state':'unavailable'}
@@ -11,7 +11,7 @@ def observe(pid,starttime):
         opening=text.find('(')
         if opening<0 or close<=opening or text[:opening].strip()!=str(pid):raise ValueError('malformed proc stat identity')
         fields=text[close+1:].split()if close>=0 else[]
-        if len(fields)<20 or not fields[19].isdecimal() or int(fields[19])<=0:raise ValueError('malformed proc stat')
+        if len(fields)<20 or re.fullmatch('[1-9][0-9]*',fields[19])is None:raise ValueError('malformed proc stat')
         actual=fields[19]
         return {**result,'state':'present'if actual==starttime else'gone','observedStarttime':actual,'reason':'same identity'if actual==starttime else'PID reused'}
     except OSError as error:

@@ -16,3 +16,22 @@ def finish(record,handle,launcher,identities,retire,check,work_error=None):
     if not record['pidIdentitiesGone']and error is None:error=RuntimeError('owned process identity disappearance unconfirmed')
     if error is not None:record.setdefault('error',str(error));record['originalErrorType']=type(error).__name__
     return error
+
+
+def exit_code(record):
+    good=('error'not in record and record.get('exit')==0 and(record.get('scopeGone')or record.get('scopeEmpty'))and record.get('pidIdentityCheck',{}).get('confirmedGone')is True and record.get('launcherReaped')is True and record.get('oomFree')is True and record.get('scopeRetirement',{}).get('confirmed')is True and record.get('identityValidation',{}).get('ok')is True)
+    return 0 if good else 1
+
+def complete(record,handle,launcher,identities,retire,check,diagnostics,writer,work_error=None):
+    error=finish(record,handle,launcher,identities,retire,check,work_error)
+    try:
+        for name,diagnostic in diagnostics:
+            try:diagnostic()
+            except Exception as failure:
+                record.setdefault('secondaryErrors',[]).append({'diagnostic':name,'type':type(failure).__name__,'message':str(failure)})
+                if error is None:
+                    error=failure;record.setdefault('error',str(failure));record['originalErrorType']=type(failure).__name__
+    finally:
+        status=exit_code(record)
+        writer(record)
+    return error,status

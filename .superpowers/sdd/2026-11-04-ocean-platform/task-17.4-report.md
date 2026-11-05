@@ -267,3 +267,51 @@ Pinned raw SHA256:
 Exact freeze: `python3 P/task-17.4-fix2-freeze.py freeze`, exit0. Copied private runner executes copied collector's `verify FIX2_FREEZE PINNED_SEAL_SHA`, exit0, all164 file bytes/sizes/modes verified. Freeze argv/cwd/exit and stdout/stderr hashes are separately recorded; post-freeze attestation binds and checks them without a self-hash cycle. Read-only verification matches **51/385/117** old entries, their seals/inventories/attestations and all six17.3 anchors. No old sealed input was replaced.
 
 Product source/artifacts, protected C files and controller plan are unchanged by this correction; root build/check/format/native/live suites are deliberately not run under the focused contract. The remaining original generic-tool UNKNOWN, C debt, deferred vendors, CPU-only scope and out-of-scope release/GUI/D/E limitations remain disclosed. N4 and prior documentation Minors stay with the controller. Independent scoped c27b33e..FIX_HEAD review is required; no reviewer/helper, push/merge or17.5 work occurred.
+
+## Correction3/5 — remaining Important I1/I2/N3
+
+FIX_BASE `9966242fadb79ec3e47092ebd81c509c01eb3cb9`. This round changes only the three remaining Important evidence-helper findings and their direct caller tests. The previously supported actual native/offline and live mixed B results remain historical qualification facts. No real scope/orphan, model/backend, provider/key read, product edit, broad suite, rebuild, GUI, helper/reviewer, push/merge or Task17.5 work occurred. Every new output is below Q/fix3; old51/385/117/164 chains are read-only references.
+
+### Consistent identity observations before role filtering
+
+I1 now discovers recognized PID/starttime witnesses before filtering role names, then checks every occurrence of those identities for the same canonical fingerprint. A duplicate recognized Node identity reported as `sleep`, including changed argv/namespace, refuses whether it appears before, after or in another observation. A simultaneous unknown-name row reusing a recognized PID with a different or malformed starttime also refuses. An unrelated helper identity receives no Node policy. Canonical `node`/`node-MainThread` aliases, separate required role identities, legitimate PID reuse across observations, all complete6/4-role positives, metadata-only phase distinctions and the fixed trusted-outer online policy remain covered. No expected identity or privilege value is learned from candidate observations.
+
+I2 validates the observed `/proc/PID/stat` starttime as canonical positive ASCII decimal before comparing it with the recorded tick. A leading-zero spelling of the same tick now yields **unavailable**, rather than falsely proving PID reuse. Signed, Unicode-digit and zero ticks also remain unavailable. Successful canonical different-tick observation and ENOENT/ESRCH retain the limited gone proof; present/denied/malformed remain distinct. The only actual process observation in this round reads the test process's own PID stat without mutation.
+
+### Actual supervisor publication survives secondary diagnostic failure
+
+N3 moves post-finish secondary diagnostics into `task-17.4-finalize.py`'s shared `complete` path. Each diagnostic exception is recorded, the original work exception object/cause is retained, final failure status is calculated and the supervisor-result writer runs from `finally`. The actual supervisor tail invokes this path for the remaining scope/resource/identity/fixture diagnostics, so a secondary snapshot UnicodeDecodeError cannot escape before failure-ledger publication.
+
+The caller regression executes the **actual supervisor tail and its AST-selected actual writer**, with copied/mocked cleanup data; it does not replace publication with a synthetic test writer. Original UnicodeDecodeError plus structured manager TimeoutExpired and a secondary snapshot UnicodeDecodeError preserve the original error object, record the secondary failure, execute independent wait/identity checks, publish supervisor-result.json and produce status1. The healthy actual tail produces status0; a secondary-only failure is recorded and fails the gate. These tests do not start a supervisor/backend process or signal a real scope.
+
+### Actual RED/GREEN commands and source attribution
+
+Commands below ran from `/home/ryltsevmg/Projects/Ocean-stable`; P/Q retain the exact roots defined earlier. The fresh per-run ledger `Q/fix3/runs/final/commands.json` records every exact argv/cwd/numeric exit and its separate log.
+
+| Actual command/control | Exit / result |
+| --- | --- |
+| private `task-17.4-fix3-test.py --legacy`, initial BASE copies | 1;10 tests,7 failures/3 positive controls |
+| current shared-PID contradictory-start regression before its guard | 1;11 tests,1 failure/10 positives |
+| private `task-17.4-fix3-test.py --legacy`, final counterexample set | 1;11 tests,8 failures/3 positive controls |
+| `python3 P/task-17.4-fix3-gates.py green` | 0;50 non-scope tests before the extra shared-PID control |
+| `python3 P/task-17.4-fix3-gates.py final` | 0;**51 passed,0 failed,0 skipped** |
+| final gate AST syntax record | 0;29 helper files parsed |
+| collector's final current source/dependency checks | 0;19 files parsed, maximum179 physical lines |
+
+The final51 comprise11 correction3 caller/identity/stat tests,9 correction2 regressions,7 safety controls,14 existing identity tests,6 resource tests and4 supervisor/freezer integration tests. They use copied actual samples, mocks and disposable filesystem outputs, plus the single read-only own-PID observation. No historical scope controls are counted in51.
+
+`Q/fix3/historical-scope-attribution.json` explicitly attributes the older three scope controls (one real gated scope plus two mocked negative controls) to source9966242 and `Q/fix2/runs/green2/scope-test.log`. This is documentary correspondence with sealed source snapshots, not an execution-time source attestation. Scope-test, scope-pilot, scope and orphan-fixture source hashes still match that historical set; process.py differs: historical `fd7f4dc624833632c79a08df0c658d1376f70451e58145a467ea8630414cbb05`, current `543b6fdf624ef4f0679400a5ac13c261f4fbd7fb6bd444b8ade1be8f23165149`. Those three controls were **not rerun against current process.py** and do not establish a current43-test aggregate.
+
+Remaining Minor N1 (fixture's cumulative12-second budget is not shared through manager retirement) and Minor N2 (FileNotFoundError on executable launch can omit attempted argv from its ledger) are parked, not fixed or loop drivers. N4 and prior documentation Minors remain parked. This round makes no new claim about those paths or about arbitrary filesystem isolation.
+
+### Correction3 immutable evidence and handoff
+
+`Q/fix3/freeze-final` seals167 focused files: BASE helper snapshots and copied sample provenance; actual RED/GREEN logs and fresh command/syntax ledgers; caller/stat/identity controls; current19 helper/dependency snapshots; selection and historical-source attribution; exact collector/private runner. No old historical tree was regenerated.
+
+- Fix3 inventory SHA256: `2cb13f79b960401ac26c06b096c9d243cb70a4842ea4a68bf76f6c7a740f7c67`.
+- Fix3 seal SHA256: `6ca7b21bb03eded061a21775c6b2c58ef4be8ec9f072adccdfac35c49d0b989c`.
+- Post-freeze attestation SHA256: `c7900fd600f4f1d5d399e3aa7284a508c31a1822c65f28438dc08d83b5d1ff30`.
+
+Exact freeze command `python3 P/task-17.4-fix3-freeze.py freeze` exited0. Exact post-freeze validation was `python3 Q/fix3/freeze-final/inputs/run-private.py python3 Q/fix3/freeze-final/inputs/task-17.4-fix3-freeze.py verify Q/fix3/freeze-final 6ca7b21bb03eded061a21775c6b2c58ef4be8ec9f072adccdfac35c49d0b989c`, exit0; all167 bytes/sizes/modes matched. Attestation binds that argv/cwd/result/output hashes and the actual freeze invocation. Freeze stdout SHA256 is `81941547190efe5f2635c0b12076ba5a5fee8ce02b569d2e91e3fb034d1b7fb3`; validation stdout is `17b7809989489c7ac4048cd8a5c35ba270f8a54df28344333dbdf3af9f13ad24`; both stderr files are empty. Read-only verification matched all old51/385/117/164 entries and their inventory/seal/attestation anchors, plus all six17.3 anchors. No old seal was rewritten.
+
+Product source28909ea, CLI SHA256 `6b41ce641fa470d55799883b959a0baf764f95f90db4a778f9eee8a23a782daa` and ASAR SHA256 `96837046186d298fb6466e723ecba8c31c58dadf1e7925b26e8f0c66a660b06a` are unchanged. Prior native/live authority limits, original unexplained generic-tool UNKNOWN, C debt, CPU-only scope, deferred OpenAI/Anthropic and D/E/GUI/release exclusions remain disclosed. Root check/build/format and model/provider qualification are deliberately not repeated under this narrow QA contract. Protected file hashes remain `d6ea013e8333688abb36e51c7a09922a077f5a1726f203258bc06f49e642c031` and `68f28f549e0713f5c21d47950b6db96babdb27a7b9264684268c571b7cde62a3`; controller plan changes are excluded. The owned correction commit is discoverable from this report's Git history. Fresh independent scoped9966242..FIX_HEAD review is required before stage closure; this report does not claim review or release completion.

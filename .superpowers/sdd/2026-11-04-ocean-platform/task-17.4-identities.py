@@ -20,6 +20,14 @@ def role(p):
         if ' -e ' in argv and 'server.listen({ fd:' in argv and "process.once('disconnect'" in argv:return 'binder'
         return 'additional-node'
     return 'unrecognized'
+def identity_key(p):
+    pid,start=p.get('pid'),p.get('starttime')
+    return (pid,start)if type(pid)is int and pid>0 and isinstance(start,str)and re.fullmatch('[1-9][0-9]*',start)else None
+
+def fingerprint(p,policy):
+    name=p.get('name');canonical='node'if isinstance(name,str)and name in {'node','node-MainThread'}else name
+    return (canonical,p.get('argv'),p.get('netns'),p.get('CapEff'),p.get('CapBnd'),p.get('NoNewPrivs'),policy)
+
 def validate(samples,policy,namespace,outer_namespace,outer_security):
     errors=[];identities={};roles=set();observations=0;fingerprints={};witnesses={}
     if policy not in REQUIRED:return {'ok':False,'errors':['unknown phase policy']}
@@ -27,19 +35,33 @@ def validate(samples,policy,namespace,outer_namespace,outer_security):
     if not isinstance(namespace,str) or not re.fullmatch(r'net:\[\d+\]',namespace):errors.append('invalid namespace identity')
     if (namespace==outer_namespace)!=online:errors.append('namespace policy mismatch')
     if online and (type(outer_security.get('uid')) is not int or outer_security['uid']<=0 or outer_security.get('CapEff')!='0000000000000000' or outer_security.get('NoNewPrivs')!='0' or not re.fullmatch('[0-9a-f]{16}',outer_security.get('CapBnd',''))):errors.append('invalid trusted nonroot launch policy')
+    recognized={}
     for row in samples:
+        for p in row.get('processes',[]):
+            name=p.get('name');key=identity_key(p)
+            if isinstance(name,str)and name in RELEVANT and key is not None:recognized.setdefault(key,fingerprint(p,policy))
+    for row in samples:
+        # A PID cannot have two simultaneous incarnations, including an unrecognized row.
+        related={}
+        for p in row.get('processes',[]):
+            key=identity_key(p);name=p.get('name')
+            if key is not None and isinstance(name,str)and name in RELEVANT:related.setdefault(key[0],set()).add(key[1])
+        # Check every record attached to a known witness before unrelated names are filtered.
+        for p in row.get('processes',[]):
+            key=identity_key(p);pid=p.get('pid')
+            if type(pid)is int and pid in related and(key is None or key[1]not in related[pid]or len(related[pid])!=1):errors.append('contradictory shared PID in one observation')
+            if key in recognized and fingerprint(p,policy)!=recognized[key]:errors.append(f'contradictory recognized identity {key[0]}:{key[1]}')
         row_pids={}
         for p in row.get('processes',[]):
-            if p.get('name') not in RELEVANT:continue
+            if not isinstance(p.get('name'),str)or p['name']not in RELEVANT:continue
             observations+=1;pid,start=p.get('pid'),p.get('starttime')
             if type(pid) is not int or pid<=0 or not isinstance(start,str) or not start.isdecimal() or not int(start)or str(int(start))!=start:errors.append('invalid PID/starttime');continue
             key=(pid,start);r=role(p);roles.add(r)
             if pid in row_pids and row_pids[pid]!=start:errors.append('contradictory same-observation PID starttime')
             row_pids[pid]=start
-            canonical='node'if p['name']in {'node','node-MainThread'}else p['name']
-            fingerprint=(canonical,p.get('argv'),p.get('netns'),p.get('CapEff'),p.get('CapBnd'),p.get('NoNewPrivs'),policy)
-            if key in fingerprints and fingerprints[key]!=fingerprint:errors.append(f'contradictory identity {pid}:{start}')
-            fingerprints.setdefault(key,fingerprint);witnesses.setdefault(r,set()).add(key)
+            value=fingerprint(p,policy)
+            if key in fingerprints and fingerprints[key]!=value:errors.append(f'contradictory identity {pid}:{start}')
+            fingerprints.setdefault(key,value);witnesses.setdefault(r,set()).add(key)
             identities.setdefault(key,{'pid':pid,'starttime':start,'name':p['name'],'roles':[]})
             if r not in identities[key]['roles']:identities[key]['roles'].append(r)
             if p.get('netns')!=namespace:errors.append(f'wrong namespace {pid}:{start}')

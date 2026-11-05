@@ -156,22 +156,24 @@ with (phase/'supervisor.log').open('x') as log,(phase/'samples.jsonl').open('x')
     except Exception as error:
         record['error']=str(error);workError=error
         record['exit']=child.poll()
-# Retirement follows actual population even when the launcher has already exited.
-workError=finalizeHelper.finish(record,scopeHandle,child,list(seen),scopeHelper.retire,processHelper.check,workError)
-record['scopeGone']=cg is not None and not cg.exists();record['scopeEmpty']=record['scopeRetirement']['confirmed'];record['remaining']=snapshot(cg) if cg is not None and cg.exists() else None
-record['seenProcesses']=list(seen.values())
-if (phase/'cgroup-final.json').exists():
-    final=json.loads((phase/'cgroup-final.json').read_text()); events=final['cgroup']['memory.events'] or ''
-    record['oomFree']=all(int(line.split()[1])==0 for line in events.splitlines() if line.split()[0] in ['oom','oom_kill','oom_group_kill'])
-else: record['oomFree']=False
-if (phase/'network.json').exists():
-    network=json.loads((phase/'network.json').read_text());record['privateNetnsDifferent']=network['namespace']!=outerNamespace
-    rows=[json.loads(line)for line in (phase/'samples.jsonl').read_text().splitlines()]
-    record['identityValidation']=identityHelper.validate(rows,policy,network['namespace'],outerNamespace,outerSecurity)
-    record['backendClientNamespacesMatch']=record['identityValidation']['ok']
-else:record['identityValidation']={'ok':False,'errors':['missing network evidence']}
-# The listening address is unreachable from the outer netns; retirement is proven by all recorded identities and cgroup emptiness.
-import shutil
-shutil.rmtree(short); record['shortFixtureRemoved']=not short.exists(); record['ended']=time.time()
-write(phase/'supervisor-result.json',record); print(json.dumps(record,indent=2))
-sys.exit(0 if 'error' not in record and record.get('exit')==0 and (record['scopeGone'] or record['scopeEmpty']) and record['pidIdentityCheck']['confirmedGone'] and record['launcherReaped'] and record['oomFree'] and record['scopeRetirement']['confirmed'] and record['identityValidation']['ok'] else 1)
+# Retirement follows actual population; secondary diagnostics cannot suppress the failure ledger.
+def scope_diagnostics():
+    record['scopeGone']=cg is not None and not cg.exists();record['scopeEmpty']=record['scopeRetirement']['confirmed'];record['remaining']=snapshot(cg)if cg is not None and cg.exists()else None
+    record['seenProcesses']=list(seen.values())
+def resource_diagnostics():
+    if (phase/'cgroup-final.json').exists():
+        final=json.loads((phase/'cgroup-final.json').read_text());events=final['cgroup']['memory.events']or''
+        record['oomFree']=all(int(line.split()[1])==0 for line in events.splitlines()if line.split()[0]in ['oom','oom_kill','oom_group_kill'])
+    else:record['oomFree']=False
+def identity_diagnostics():
+    if (phase/'network.json').exists():
+        network=json.loads((phase/'network.json').read_text());record['privateNetnsDifferent']=network['namespace']!=outerNamespace
+        rows=[json.loads(line)for line in(phase/'samples.jsonl').read_text().splitlines()]
+        record['identityValidation']=identityHelper.validate(rows,policy,network['namespace'],outerNamespace,outerSecurity)
+        record['backendClientNamespacesMatch']=record['identityValidation']['ok']
+    else:record['identityValidation']={'ok':False,'errors':['missing network evidence']}
+def fixture_diagnostics():
+    import shutil
+    shutil.rmtree(short);record['shortFixtureRemoved']=not short.exists();record['ended']=time.time()
+workError,status=finalizeHelper.complete(record,scopeHandle,child,list(seen),scopeHelper.retire,processHelper.check,[('remaining-scope',scope_diagnostics),('resources',resource_diagnostics),('identity',identity_diagnostics),('short-fixture',fixture_diagnostics)],lambda value:write(phase/'supervisor-result.json',value),workError)
+print(json.dumps(record,indent=2));sys.exit(status)
