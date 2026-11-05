@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {checkLocalModel,createLocalProvider} from '@runnets/provider-local';
+const endpoint='http://127.0.0.1:11474',auth={mode:'none'},phase=process.env.OCEAN_QA_PHASE;
+const q=await checkLocalModel({endpoint,auth},AbortSignal.timeout(10000));
+const events=[];
+const provider=createLocalProvider({endpoint,auth,qualification:q});
+// A new diagnostic request, never replaying the original engine TaskRun or admitting any effect.
+for await(const e of provider.stream({model:'qwen3:1.7b',messages:[{role:'user',content:'For a synthetic protocol diagnostic, call diagnostic_token with token diagnostic-unique-1. Do not perform any filesystem work.'}],tools:[{name:'diagnostic_token',description:'Diagnostic only; no executor exists. Return the exact fixed token.',parameters:{type:'object',properties:{token:{type:'string',enum:['diagnostic-unique-1']}},required:['token'],additionalProperties:false}}],signal:AbortSignal.timeout(120000)})){
+ events.push(e.type==='error'?{type:e.type,error:{code:e.error.code,message:e.error.message,dispatch:e.error.dispatch,retryable:e.error.retryable}}:e);
+}
+fs.writeFileSync(path.join(phase,'diagnostic-events.json'),JSON.stringify({qualification:q,events,noExecutor:true,noUnknownRunRetried:true},null,2),{flag:'wx'});
+console.log(JSON.stringify(events,null,2));
+assert.ok(events.length>0);

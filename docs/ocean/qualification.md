@@ -86,3 +86,54 @@ Task17.3 принят на `652dd56` после повторного незав�
 новых Critical/Important нет. Исходная ревизия продукта и хеши артефактов выше
 сохранены. Приёмка относится к установленному Linux-кандидату; 17.4 (native model
 и mixed DeepSeek), 17.5 (настоящий GUI) и финальный выпуск F остаются открытыми.
+
+## Task17.4: native local и mixed B (2026-11-05)
+
+Продуктовая ревизия `28909ea025c0ef46a7a1b4b539ca8a36c0e0bedc` исправляет только
+точную metadata-идентичность кандидата: тег остаётся `qwen3:1.7b`, фактический
+GGUF/Ollama сообщает `2.0B`/Q4_K_M. Полностью проверены manifest
+`8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7` и model-layer
+`3d0b790534fe4b79525fc3692950408dca41171676ed7e21db57af5c65ef6ab6`;
+311 tensor shapes дают 2,031,739,904 параметра, capacity40960. Новый архив CLI
+1475324 bytes SHA256 `6b41ce641fa470d55799883b959a0baf764f95f90db4a778f9eee8a23a782daa`
+установлен только в disposable prefix. Реальные релизы и профили не менялись.
+
+На Ollama0.40.14 в отдельном user/net/PID namespace и sparse filesystem fixture
+пройдены реальные cold/warm text, один harmless tool effect с durable claim до
+исполнения и model continuation, обычный owner/SDK/отдельный CLI, durable reopen.
+Это существующий engine/default fetch, без canned HTTP или второго agent loop.
+Фактические 6 inference-запросов: 5 полных native terminal и отдельный прерванный
+после первого text delta запрос, который сохраняет UNKNOWN и не повторяется.
+Остановленный endpoint отдельно даёт not_sent. Внутри только loopback,
+внешних IPv4/IPv6 routes нет, literal egress probes отказали; это не обещание
+произвольной filesystem-изоляции. `/usr` смонтирован read-only как системный
+toolchain; whole host root/home и реальные credentials/profiles не монтировались.
+
+Cold first-text/terminal2434.8/3122.9ms, warm1020.0/1785.0ms; cold означает новый
+backend без loaded model, без сброса OS page cache. Settings: thinkfalse,
+ctx4096/predict512; provider120s/metadata10s ceilings сохранены. Фактический
+CPU runner и `/api/ps` size_vram0/context4096 подтверждают CPU-only. При CPUQuota200%,
+MemoryMax3.5GiB/High3GiB/SwapMax0/TasksMax256 kernel charged peak составил
+2750685184 bytes; simultaneous RSS/PSS sampled maxima2405457920/2280729600.
+OOM и cgroup swap отсутствуют; cleanup подтверждён исчезновением scope и всех
+PID/starttime, закрытием socket. Peaks RSS/PSS являются sampled, не точным GPU/RAM
+benchmark.
+
+Только после sealed offline acceptance выполнена отдельная ONLINE mixed B:
+3 local и 7 настоящих DeepSeek inference requests, direct/addressed group,
+healthy broadcast, failed local child и независимо адресованные cloud children.
+Unaddressed sibling не запускается, fallback отсутствует; admitted identities и
+revisions сохранены. DeepSeek key использован только в памяти, без argv/env/logs
+или credential import; exact-key scan owned phase files не нашёл копий.
+OpenAI/Anthropic live **DEFERRED**, автономный A→B→A (D) и настоящий GUI17.5 не
+квалифицированы этим результатом.
+
+Ограничения сохранены: первый generic-tool native run неожиданно стал UNKNOWN
+без effect; полных causal bytes у раннего capture нет, причина не установлена.
+Два отдельных raw/native diagnostics совместимы с decoder; stream code не менялся.
+Успешная финальная fixture имеет явно scoped harmless tool instructions и новые
+profile/run IDs/token, прежний UNKNOWN не повторялся. Предыдущие setup/driver
+failures сохранены в отчёте; независимое controller review остаётся обязательным.
+Root3412 pass/3 protected catalog failures/44 skip, strict/lint/build/bundle0,
+affected built process21 pass; format остаётся с двумя protected C-файлами.
+Эти факты не закрывают C, D/E, родительский Task17 или финальный выпуск F.

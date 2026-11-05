@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const phase=process.env.OCEAN_QA_PHASE,installed=process.env.OCEAN_QA_INSTALLED;
+const source=fs.readFileSync(path.join(installed,'node_modules/@runnets/application/dist/turn.js'),'utf8');
+const system=source.match(/const SYSTEM = `([\s\S]*?)`;/)?.[1];assert.ok(system);
+const body={model:'qwen3:1.7b',stream:true,think:false,options:{num_ctx:4096,num_predict:512},messages:[{role:'system',content:system},{role:'user',content:'Call diagnostic_token exactly once with token raw-diagnostic-unique-2. After receiving its tool result, reply DIAGNOSTIC_OK.'}],tools:[{type:'function',function:{name:'diagnostic_token',description:'Return the fixed harmless diagnostic token. Call exactly once before final response.',parameters:{type:'object',properties:{token:{type:'string',enum:['raw-diagnostic-unique-2']}},required:['token'],additionalProperties:false}}}]};
+fs.writeFileSync(path.join(phase,'raw-request.json'),JSON.stringify(body,null,2),{flag:'wx'});
+const response=await fetch('http://127.0.0.1:11474/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(120000)});assert.equal(response.status,200);
+const bytes=Buffer.from(await response.arrayBuffer());fs.writeFileSync(path.join(phase,'raw-response.ndjson'),bytes,{flag:'wx'});
+const rows=bytes.toString('utf8').trimEnd().split('\n').map(line=>JSON.parse(line));
+console.log(JSON.stringify({diagnosticOnly:true,completeBytes:bytes.length,rows,noExecutor:true,originalUnknownNotRetried:true},null,2));
+assert.equal(rows.at(-1).done,true);

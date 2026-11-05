@@ -1,0 +1,19 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {checkLocalModel} from '@runnets/provider-local';
+const phase=process.env.OCEAN_QA_PHASE, endpoint='http://127.0.0.1:11474';
+const raw={};
+for(const name of ['version','tags','show']){
+ const response=await fetch(endpoint+'/api/'+name,{signal:AbortSignal.timeout(10000),...(name==='show'?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({model:'qwen3:1.7b',verbose:true})}:{})});
+ assert.equal(response.status,200); raw[name]=await response.json();
+}
+fs.writeFileSync(path.join(phase,'actual-metadata.json'),JSON.stringify(raw,null,2),{flag:'wx'});
+let observed;
+try{await checkLocalModel({endpoint,auth:{mode:'none'}},AbortSignal.timeout(10000));}
+catch(error){observed={code:error.code,message:error.message,dispatch:error.dispatch,retryable:error.retryable};}
+console.log(JSON.stringify({expectedRed:true,tagDetails:raw.tags.models[0]?.details,showDetails:raw.show.details,tensors:raw.show.tensors?.length,context:raw.show.model_info?.['qwen3.context_length'],observed},null,2));
+assert.equal(raw.show.details.parameter_size,'2.0B');
+assert.equal(observed?.message,'unsupported local model details');
+assert.equal(observed?.dispatch,'not_sent');
+// This successful harness exit means the actual unmodified product was RED, not qualification PASS.

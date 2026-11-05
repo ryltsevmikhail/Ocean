@@ -1,0 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {checkLocalModel} from '@runnets/provider-local';
+const qualification=await checkLocalModel({endpoint:'http://127.0.0.1:11474',auth:{mode:'none'}},AbortSignal.timeout(10000));
+assert.equal(qualification.artifactDigest,'8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7');
+assert.equal(qualification.backendVersion,'0.40.14');assert.equal(qualification.configuredContextTokens,4096);
+fs.writeFileSync(path.join(process.env.OCEAN_QA_PHASE,'qualification.json'),JSON.stringify(qualification,null,2),{flag:'wx'});
+console.log(JSON.stringify({nativeMetadataGreen:true,inferenceRequests:0,qualification},null,2));

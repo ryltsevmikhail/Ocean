@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {TaskRunService,executeStep,runTurn,ToolService} from '@runnets/application';
+import {taskRunId,conversationId,workspaceId,unlimitedBudget} from '@runnets/domain';
+import {SequentialIdGenerator} from '@runnets/store';
+import {openSqliteStore} from '@runnets/store-sqlite';
+import {checkLocalModel,createLocalProvider} from '@runnets/provider-local';
+const phase=process.env.OCEAN_QA_PHASE,endpoint='http://127.0.0.1:11474',db=path.join(phase,'engine.sqlite');
+const auth={mode:'none'},q=await checkLocalModel({endpoint,auth},AbortSignal.timeout(10000));
+fs.writeFileSync(path.join(phase,'qualification.json'),JSON.stringify(q,null,2),{flag:'wx'});
+const store=openSqliteStore({path:db}),ids=new SequentialIdGenerator(),clock={now:()=>new Date()};
+const service=new TaskRunService({log:store.log,dedup:store.dedup,ids,clock});
+const provider=createLocalProvider({endpoint,auth,qualification:q}); // real default fetch, unchanged deadlines
+const proof={qualification:q,ownerNetns:fs.readlinkSync('/proc/self/ns/net'),runs:[],effects:[]};
+const write=()=>fs.writeFileSync(path.join(phase,'engine-proof.json'),JSON.stringify(proof,null,2));
+async function execute(label,text,tools,onDelta){
+ const id=taskRunId('tr_acceptance4_'+label),created=await executeStep(service,id,'CreateTaskRun',{
+ conversationId:conversationId('cv_native_'+label),workspaceId:workspaceId('ws_native'),parentTaskRunId:null,model:'qwen3:1.7b',policyId:'pl_native',budget:unlimitedBudget()},0);
+ assert.equal(created.ok,true);
+ const start=performance.now();let first=null,interrupted=false;
+ const outcome=await runTurn({service,taskRunId:id,provider,model:'qwen3:1.7b',messages:[{role:'user',content:text}],signal:AbortSignal.timeout(180000),
+ ...(tools?{tools,maxModelRequests:3}:{}),emit:update=>{
+ if(update.sessionUpdate==='agent_message_chunk' && first===null){first=performance.now()-start;if(onDelta&&!interrupted){interrupted=true;onDelta();}}
+ }});
+ const events=await service.events(id),state=await service.state(id);
+ const result={label,id,outcome,firstDeltaMs:first,terminalMs:performance.now()-start,events,state};proof.runs.push(result);write();return result;
+}
+try{
+ const installed=process.env.OCEAN_QA_INSTALLED,profile=path.join(phase,'profile'),workspace=path.join(phase,'workspace');fs.mkdirSync(workspace);
+ const {execFile}=await import('node:child_process');const {promisify}=await import('node:util');const exec=promisify(execFile);
+ const cli=async(args)=>{const argv=[path.join(installed,'launch.js'),...args,'--profile',profile,'--json'];const {stdout:output}=await exec(process.execPath,argv,{encoding:'utf8',timeout:15000});return {argv,exit:0,output:JSON.parse(output)};};
+ proof.cli=[await cli(['init','--workspace',workspace])];
+ const before=await fetch(endpoint+'/api/ps').then(r=>r.json());assert.equal(before.models.length,0);proof.beforeCold=before;
+ const cold=await execute('cold','Reply with exactly COLD_PHASE_FOUR_OK.');assert.equal(cold.outcome.kind,'completed');
+ const warm=await execute('warm','Reply with exactly WARM_PHASE_FOUR_OK.');assert.equal(warm.outcome.kind,'completed');
+ let toolEffects=0;
+ const tools=new ToolService({definitions:[{name:'qualification_echo',description:'Return the fixed harmless qualification token. Call exactly once before final response.',parameters:{type:'object',properties:{token:{type:'string',enum:['ocean-native-17-4-d']}},required:['token'],additionalProperties:false}}],prepare:async call=>{
+ assert.equal(call.name,'qualification_echo');assert.deepEqual(JSON.parse(call.arguments),{token:'ocean-native-17-4-d'});
+ return {title:'Fixed native fixture token',kind:'read',preview:'Fixed synthetic token; no user files',execute:async()=>{
+ const pending=await store.tools.pending();assert.equal(pending.length,1);assert.equal(pending[0].id,call.id);
+ const events=await service.events(taskRunId(pending[0].taskRunId));const settlement=events.findLast(e=>e.type==='attempt.model_request_settled');assert.equal(settlement.payload.completion.kind,'terminal');
+ fs.appendFileSync(path.join(phase,'effect-witness.jsonl'),JSON.stringify({call,pending,precedingSettlement:settlement})+'\n',{mode:0o600});
+ toolEffects++;proof.effects.push({id:call.id,token:'ocean-native-17-4-d'});return {output:'TOOL_RESULT_ocean-native-17-4-d',isError:false};}};
+ }},{review:async()=> 'allow_once'},store.tools);
+ const scopedTools=Object.assign(tools,{instructions:'This is a harmless synthetic protocol qualification. The only available tool is qualification_echo. Call it exactly once with the requested fixed token. After its result, return TOOL_OK without more tool calls. No filesystem or coding work is available.'});
+ const tool=await execute('tool','Call qualification_echo exactly once with token ocean-native-17-4-d. After receiving its tool result, reply TOOL_OK.',scopedTools);
+ assert.equal(tool.outcome.kind,'completed');assert.equal(toolEffects,1);assert.deepEqual(await store.tools.pending(),[]);
+ proof.loaded=await fetch(endpoint+'/api/ps').then(r=>r.json());assert.equal(proof.loaded.models.length,1);assert.equal(proof.loaded.models[0].size_vram,0);
+ // Installed normal host, public SDK client, and separate installed CLI process share this netns.
+ const {startLocalRuntime}=await import('file://'+installed+'/apps/cli/dist/local-runtime/host.js');
+ const {connectLocalRuntime,localRuntimePaths}=await import('@runnets/tools-node');
+ const host=await startLocalRuntime({profile}),client=await connectLocalRuntime({profile});
+ try{
+ await client.setModelConnection({connectionId:'native',providerId:'ollama',kind:'local',endpoint,auth:'none',defaultModelId:'qwen3:1.7b',requestId:'native-set',expectedRevision:null});
+ assert.equal((await client.checkModelConnection({connectionId:'native'})).check.outcome,'ok');
+ const bot=await client.createBoundBot({workspaceId:'ws_ocean',requestId:'native-bot',handle:'native',name:'Native',role:'Synthetic native qualification',binding:{connectionId:'native',modelId:'qwen3:1.7b'}});
+ const room=(await client.openDirect({workspaceId:'ws_ocean',requestId:'native-room',botId:bot.bot.id})).data.id;
+ const receipt=await client.submit({workspaceId:'ws_ocean',roomId:room,requestId:'native-host-text',text:'Reply with exactly HOST_OK.'});
+ const query={workspaceId:'ws_ocean',roomId:room,runId:receipt.runId};let run;
+ for(let i=0;i<1600;i++){run=await client.getRun(query);if(['completed','failed','uncertain','cancelled'].includes(run?.turnStatus))break;await new Promise(r=>setTimeout(r,50));}
+ assert.equal(run.turnStatus,'completed');const execution=await client.getRunModelExecution(query);assert.equal(execution.execution.lastRequest.settlement.completion.kind,'terminal');
+ proof.host={identity:host.identity,bot,receipt,run,execution,result:await client.getResult(query),networkNamespace:fs.readlinkSync('/proc/self/ns/net')};
+ proof.cli.push(await cli(['history',room]));
+ }finally{client.close();proof.hostStop=await host.stop();await host.closed;proof.runtimeSocketClosed=!fs.existsSync(localRuntimePaths(profile).endpoint);}
+ // Actual native post-dispatch fault: terminate only the owned backend after an observed text delta.
+ const unknown=await execute('interrupted','Count from one to one hundred, spelling every number, one per line.',undefined,()=>process.kill(Number(process.env.OCEAN_QA_BACKEND_PID),'SIGKILL'));
+ const settlements=unknown.events.filter(e=>e.type==='attempt.model_request_settled');assert.equal(settlements.length,1);assert.equal(settlements[0].payload.completion.kind,'unknown');
+ await new Promise(r=>setTimeout(r,500));
+ const notSent=await execute('stopped_endpoint','Reply ENDPOINT_OK.');
+ const failedSettlements=notSent.events.filter(e=>e.type==='attempt.model_request_settled');assert.equal(failedSettlements.length,1);assert.equal(failedSettlements[0].payload.completion.kind,'not_sent');
+ assert.equal(notSent.outcome.kind,'failed');proof.noRetryOfUnknown=true;
+}finally{write();store.close();}
+const reopened=openSqliteStore({path:db});
+try{for(const run of proof.runs){assert.deepEqual(await reopened.log.load(taskRunId(run.id)),run.events);}proof.durableReopen=true;}finally{reopened.close();}
+write();console.log(JSON.stringify({runs:proof.runs.map(({label,outcome,firstDeltaMs,terminalMs})=>({label,outcome,firstDeltaMs,terminalMs})),effects:proof.effects,loaded:proof.loaded,durableReopen:proof.durableReopen},null,2));
