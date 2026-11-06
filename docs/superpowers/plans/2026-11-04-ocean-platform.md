@@ -1189,8 +1189,10 @@ D–H remain ordered after C; this checkpoint does not complete the release.
 
 **Files:** existing CLI catalog-lifetime test and fixtures; current service-turn
 projection/admission tests only if an actual failing regression requires a fix;
-existing release/native fixtures and implementation-status docs. No SDK removal
-in this task. Preserve historical tests and migration/archive handling until18.6.2.
+existing MCP session/transport owner-refresh scheduler if a normal admission RED
+shows a dropped eligible hint; existing release/native fixtures and implementation-
+status docs. No SDK removal in this task. Preserve historical tests and migration/
+archive handling until18.6.2.
 
 **Interfaces:** production public MCP SDK2.4.0 uses cacheTTL0 and the exact frozen
 public callTool.toolDefinition. Runtime-owned metadata refresh is distinct from

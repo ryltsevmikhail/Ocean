@@ -56,7 +56,12 @@ export function createMcpServiceTransport(
     const s = new Session(
       freezeJson(structuredClone(connection)),
       { ...opts, signal, deadlineMs },
-      options,
+      {
+        ...options,
+        refreshNeeded: (id) => {
+          if (!closed && !unknown) options.refreshNeeded?.(id);
+        },
+      },
     );
     sessions.add(s);
     s.onLoss = () => {

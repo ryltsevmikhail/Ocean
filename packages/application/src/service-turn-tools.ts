@@ -9,6 +9,7 @@ import {
   type OwnerScopeGrant,
   type ServiceConnection,
   type ServiceCatalogSnapshot,
+  type ServiceToolDefinition,
 } from '@runnets/domain';
 import type { GrantedPluginTools, GrantedToolSource } from './plugin-turn-tools.js';
 import type { ServiceAuthorityStorePort } from './service-authority-ports.js';
@@ -36,6 +37,20 @@ export interface ServiceTurnToolsOptions {
   readonly ready: (connection: ServiceConnection, catalog: ServiceCatalogSnapshot) => boolean;
 }
 type Route = Omit<ServiceCallRequest, 'arguments' | 'taskRunId' | 'attemptId' | 'invocationId'>;
+type SelectedRoute = {
+  request: Route;
+  connection: ServiceConnection;
+  definition: ServiceToolDefinition;
+};
+function authority(c: ServiceConnection) {
+  const {
+    configRevision: _revision,
+    currentCatalogId: _catalog,
+    updatedAt: _updated,
+    ...facts
+  } = c;
+  return canonicalJson(facts);
+}
 /** Projection only. C3 remains the sole current-authority, claim and settlement owner. */
 export class ServiceTurnTools implements GrantedToolSource {
   private readonly options: ServiceTurnToolsOptions;
@@ -55,7 +70,7 @@ export class ServiceTurnTools implements GrantedToolSource {
       subject.taskId !== (turn.codingTaskId ?? null)
     )
       return null;
-    const routes = new Map<string, Route>(),
+    const routes = new Map<string, SelectedRoute>(),
       definitions: ToolSchema[] = [];
     this.options.store.atomic((tx) => {
       if (!tx.participates(subject)) return;
@@ -77,7 +92,7 @@ export class ServiceTurnTools implements GrantedToolSource {
             const name = serviceAlias(this.options.sha256, [c.id, tool.name]);
             const previous = routes.get(name);
             if (previous) {
-              if (previous.connectionId !== c.id || previous.tool !== tool.name)
+              if (previous.request.connectionId !== c.id || previous.request.tool !== tool.name)
                 throw Error('service_name_collision');
               continue;
             }
@@ -86,11 +101,15 @@ export class ServiceTurnTools implements GrantedToolSource {
             routes.set(
               name,
               freezeServiceFact({
-                ...subject,
-                connectionId: c.id,
-                catalogId: catalog.id,
-                tool: tool.name,
-                grantReference: { grantId: g.id, revision: g.revision },
+                request: {
+                  ...subject,
+                  connectionId: c.id,
+                  catalogId: catalog.id,
+                  tool: tool.name,
+                  grantReference: { grantId: g.id, revision: g.revision },
+                },
+                connection: structuredClone(c),
+                definition: structuredClone(tool),
               }),
             );
             definitions.push(definition);
@@ -144,12 +163,30 @@ export class ServiceTurnTools implements GrantedToolSource {
         } catch {
           return refuse(serviceRefusal('invalid_arguments'));
         }
+        // Refresh may replace the catalog while the provider holds its selected snapshot.
+        // Rebase only identical full facts; C3 still owns current grant/claim/dispatch checks.
+        const currentRoute = this.options.store.atomic((tx) => {
+          const c = tx.connection(route.request.connectionId);
+          const catalog = c && currentServiceCatalog(tx, c);
+          const tool = catalog?.tools.find((t) => t.name === route.request.tool);
+          if (
+            !c ||
+            !catalog ||
+            !tool ||
+            !this.options.ready(c, catalog) ||
+            authority(c) !== authority(route.connection) ||
+            canonicalJson(tool) !== canonicalJson(route.definition)
+          )
+            return null;
+          return { ...route.request, catalogId: catalog.id };
+        });
+        if (!currentRoute) return refuse(serviceRefusal('catalog_stale'));
         const identity = key;
         if (!/^[a-f0-9]{64}$/.test(identity)) throw Error('invalid_service_hash');
         calls++;
         const result = this.options.admission
           .call(
-            { ...route, arguments: args, ...context, invocationId: 'service_' + identity },
+            { ...currentRoute, arguments: args, ...context, invocationId: 'service_' + identity },
             AbortSignal.any([signal, callSignal]),
           )
           .then(serviceResult, serviceUncertain)

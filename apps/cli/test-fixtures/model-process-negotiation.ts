@@ -16,7 +16,7 @@ export async function negotiationWaves(
     for (const [peer, size, plugins, models] of [
       [rc2, 45, false, false],
       [a3, 65, true, false],
-      [sdk, 66, true, true],
+      [sdk, 77, true, true],
       [modelOnly, 46, false, true],
       [unknown, 45, false, false],
     ] as const) {
@@ -24,6 +24,8 @@ export async function negotiationWaves(
       assert.equal(status.capabilities.length, size);
       assert.equal(status.capabilities.includes('plugin.session-authority-v1'), plugins);
       assert.equal(status.capabilities.includes('model.connections-v1'), models);
+      assert.equal(status.capabilities.includes('decisions.service-v1'), peer === sdk);
+      assert.equal(status.capabilities.includes('service.authority-v2'), peer === sdk);
     }
   };
   const denied = async (run: () => Promise<unknown>) => {

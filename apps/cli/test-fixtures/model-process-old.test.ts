@@ -31,7 +31,12 @@ export async function oldHosts() {
           await assert.rejects(peer.call(method), /^Error: model_runtime_upgrade_required$/);
       }
       const observed = await host.call<{ methods: string[]; features: string[] }>('inspect');
-      assert.deepEqual(observed.features, ['plugin.session-authority-v1', 'model.connections-v1']);
+      assert.deepEqual(observed.features, [
+        'plugin.session-authority-v1',
+        'model.connections-v1',
+        'decisions.service-v1',
+        'service.authority-v2',
+      ]);
       assert.deepEqual(
         observed.methods,
         mode === 'unsafe'

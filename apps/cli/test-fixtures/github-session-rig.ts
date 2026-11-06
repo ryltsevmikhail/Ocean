@@ -26,6 +26,8 @@ export async function sessionRig() {
     schemaRevision: 1,
     modern: false,
     toolStatus: 200,
+    notifyToolsChanged: false,
+    initializeGate: null as Promise<void> | null,
     listGate: null as Promise<void> | null,
     callGate: null as Promise<void> | null,
   };
@@ -93,6 +95,7 @@ export async function sessionRig() {
       return;
     }
     if (message.method === 'tools/list') await controls.listGate;
+    if (message.method === 'initialize') await controls.initializeGate;
     if (message.method === 'tools/call') await controls.callGate;
     if (
       message.method === 'tools/call' &&
@@ -116,7 +119,7 @@ export async function sessionRig() {
       message.method === 'server/discover' && controls.modern
         ? {
             supportedVersions: ['2026-07-28'],
-            capabilities: { tools: {} },
+            capabilities: { tools: { listChanged: true } },
             _meta: {
               'io.modelcontextprotocol/serverInfo': { name: 'account-fixture', version: '1' },
             },
@@ -147,6 +150,23 @@ export async function sessionRig() {
                   isError: false,
                 }
               : undefined;
+    if (message.method === 'tools/call' && controls.notifyToolsChanged) {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.write(
+        'event: message\ndata: ' +
+          JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'notifications/tools/list_changed',
+          }) +
+          '\n\n',
+      );
+      res.end(
+        'event: message\ndata: ' +
+          JSON.stringify({ jsonrpc: '2.0', id: message.id, result }) +
+          '\n\n',
+      );
+      return;
+    }
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(
       JSON.stringify(

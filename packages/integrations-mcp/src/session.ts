@@ -70,7 +70,9 @@ export class Session {
     this.client = client(options.protocol === '2026-07-28');
     this.client.onclose = () => this.lost();
     this.client.onerror = () => this.lost();
-    this.client.setNotificationHandler('notifications/tools/list_changed', () => this.refresh());
+    this.client.setNotificationHandler('notifications/tools/list_changed', () =>
+      this.refresh(true),
+    );
   }
   private lost() {
     if (!this.writer.usable) return;
@@ -78,14 +80,16 @@ export class Session {
     this.refresh();
     if (!this.writer.discovering) this.onLoss?.();
   }
-  private refresh() {
+  private refresh(retainOnRetirement = false) {
     this.hint = true;
     if (this.published && !this.notified && !this.retiring) {
       this.notified = true;
       // This callback only schedules separate owner work. It cannot list inside a call.
       setImmediate(() =>
         InvocationSend.outside(() => {
-          if (this.published && !this.stop.signal.aborted)
+          // Eligibility was captured above. Local retirement can follow a completed
+          // call's SSE abort; it must not erase this separately owned metadata hint.
+          if (retainOnRetirement || (this.published && !this.stop.signal.aborted))
             this.options.refreshNeeded?.(this.connection.id);
         }),
       );
@@ -98,9 +102,9 @@ export class Session {
   activate(id: string) {
     this.wasPublished = true;
     this.published = id;
-    this.timer = setTimeout(() => this.refresh(), this.catalog!.ttlMs);
+    this.timer = setTimeout(() => this.refresh(true), this.catalog!.ttlMs);
     this.timer.unref();
-    if (this.hint) queueMicrotask(() => this.refresh());
+    if (this.hint) queueMicrotask(() => this.refresh(true));
   }
   async discover() {
     const c = this.connection,
