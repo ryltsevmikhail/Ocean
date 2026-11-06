@@ -5,6 +5,7 @@
  * with their own update sink and cancellation signal.
  */
 
+import type { RoomHandoff } from './room-slice-handoff.js';
 import type { ToolService } from './tools.js';
 import type { TaskRunService } from './service.js';
 import type { TurnUpdate, StopReason } from './turn-update.js';
@@ -39,3 +40,5 @@ export type TurnOutcome =
   | { readonly kind: 'uncertain'; readonly stopReason: 'refusal'; readonly text: string }
   | { readonly kind: 'failed'; readonly stopReason: StopReason; readonly text: string }
   | { readonly kind: 'cancelled'; readonly stopReason: 'cancelled'; readonly text: string };
+
+export type YieldedRoomSlice = { readonly kind: 'yielded'; readonly handoff: RoomHandoff };

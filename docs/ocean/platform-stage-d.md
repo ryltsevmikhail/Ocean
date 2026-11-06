@@ -107,6 +107,30 @@ and does not qualify provider, service or native behavior.
 `pnpm build` и `pnpm format:check` прошли. Все восемь замороженных RC2-фикстур
 сохранены побайтно. Шум унаследованных тестовых фикстур учтён для финального F.
 
+## Implemented: D19.2.3 local slice engine foundation
+
+The common `runTurn` engine now accepts an explicit room-turn opt-in. A trusted
+in-process tool result can carry detached, frozen committed-delegation evidence
+through a private exact-object association. The existing serial tool loop stops
+at that result, records skipped suffix calls using their provider call IDs and
+finalizes the local TaskRun with one version-bound `Complete`. It resolves as a
+yielded slice without another model request, answer preparation or child wait.
+Ordinary tools, one-argument turns and ACP stop reasons retain their contracts.
+
+Success requires an exact command receipt and matching committed succeeded head.
+A lost Complete response permits one lookup of the unchanged command; conflicting
+identity, version, cancellation or evidence stops uncertain without redispatch.
+Model settlement and required usage still precede tool admission and completion.
+This is qualified with scripted providers and real in-memory TaskRunService only.
+The internal evidence factory has no production caller or public barrel export.
+
+This engine contract introduces no room producer, send endpoint, delivery claim,
+host job or new permission. Durable send/proof persistence and crash repair before
+generic recovery, gated child claims, versioned parent-result delivery, bounded
+fresh continuation history, root identity/model pins and current privacy/physical
+authority checks remain planned. Actual A→B→A execution and the full D/native gate
+remain incomplete; existing result/status wire contracts have not changed.
+
 ## Planned: execution and host integration
 
 D is not complete. This persistence surface is deliberately unwired: no runtime

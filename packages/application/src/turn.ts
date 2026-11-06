@@ -18,7 +18,8 @@ import { beginModelRequest, settleModelRequest, ModelRequestRefused } from './mo
 import { legacyModelRequestLimit, normalizeModelActivation, modelNow } from './model-activation.js';
 import { DomainError } from '@runnets/domain';
 import { executeTools } from './tool-round.js';
-import type { TurnInput, TurnOutcome } from './types.js';
+import { finishRoomHandoff } from './room-slice-handoff.js';
+import type { TurnInput, TurnOutcome, YieldedRoomSlice } from './types.js';
 
 const SYSTEM = `This session runs in Ocean in the selected project.
 Read AGENTS.md and project instructions before editing. Inspect files before editing. Use list_files and read_file to understand the project.
@@ -33,7 +34,15 @@ Do not push, deploy, delete user data or change credentials unless the user expl
 const activeTurns = new WeakMap<TurnInput['service'], Set<TurnInput['taskRunId']>>();
 
 /** Exclude overlapping turns before any lifecycle command or external dispatch. */
-export async function runTurn(input: TurnInput): Promise<TurnOutcome> {
+export function runTurn(
+  input: TurnInput,
+  room: { readonly turnId: string },
+): Promise<TurnOutcome | YieldedRoomSlice>;
+export function runTurn(input: TurnInput): Promise<TurnOutcome>;
+export async function runTurn(
+  input: TurnInput,
+  room?: { readonly turnId: string },
+): Promise<TurnOutcome | YieldedRoomSlice> {
   let active = activeTurns.get(input.service);
   if (active === undefined) {
     active = new Set();
@@ -47,7 +56,7 @@ export async function runTurn(input: TurnInput): Promise<TurnOutcome> {
   // Claim synchronously: command deduplication cannot exclude two external dispatches.
   active.add(input.taskRunId);
   try {
-    return await runExclusiveTurn(input);
+    return await runExclusiveTurn(input, room);
   } finally {
     active.delete(input.taskRunId);
     if (active.size === 0) activeTurns.delete(input.service);
@@ -55,7 +64,10 @@ export async function runTurn(input: TurnInput): Promise<TurnOutcome> {
 }
 
 /** Run bounded model/tool rounds; normal completion requires a final assistant response. */
-async function runExclusiveTurn(input: TurnInput): Promise<TurnOutcome> {
+async function runExclusiveTurn(
+  input: TurnInput,
+  room?: { readonly turnId: string },
+): Promise<TurnOutcome | YieldedRoomSlice> {
   const started = await beginAttempt(input);
   const { attemptId } = started;
   if (input.signal.aborted) return cancelRun(input, attemptId, null, '', true);
@@ -184,8 +196,13 @@ async function runExclusiveTurn(input: TurnInput): Promise<TurnOutcome> {
         history.push(...messages.slice(prior));
         input.onHistory?.(history.splice(0));
         // Uncertain effects take precedence over a concurrently requested cancellation.
-        if (executed.uncertain)
+        if (executed.kind === 'uncertain')
           return uncertainRun(input, 'tool outcome uncertain; inspect effects before retrying');
+        if (executed.kind === 'delegated') {
+          if (room?.turnId !== executed.handoff.turnId)
+            return uncertainRun(input, 'room handoff context uncertain; reconcile before retrying');
+          return await finishRoomHandoff(input, executed.handoff);
+        }
       } catch {
         // Once execution is entered, a lost response cannot prove absence of effects.
         return uncertainRun(input, 'tool outcome uncertain; inspect effects before retrying');
