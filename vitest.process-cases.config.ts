@@ -14,5 +14,5 @@ export const processCases = [
   'packages/tools-node/src/coding-dependency-native.test.ts',
   'packages/tools-node/src/desktop-assets-native.test.ts',
   'packages/tools-node/src/local-runtime-types.test.ts',
-  'apps/cli/src/release/{bundle,mcp-bundle,package,installed}.test.ts',
+  'apps/cli/src/release/{mcp-bundle,historical-installer,package,installed}.test.ts',
 ];

@@ -21,8 +21,5 @@
     "@runnets/provider-local": "workspace:*",
     "@runnets/integrations-mcp": "workspace:*"
   },
-  "license": "Apache-2.0",
-  "devDependencies": {
-    "@runnets/integrations-executor": "workspace:*"
-  }
+  "license": "Apache-2.0"
 }

@@ -29,9 +29,6 @@
       "path": "packages/integrations-mcp"
     },
     {
-      "path": "packages/integrations-executor"
-    },
-    {
       "path": "apps/cli"
     },
     {

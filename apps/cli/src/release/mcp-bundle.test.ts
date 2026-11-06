@@ -1,8 +1,5 @@
-import { createArchive } from './archive.js';
-import { installArchive, sha256 } from './installer.js';
-import { buildAdapterBundle as historicalBundle } from './legacy-bundle.js';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -36,54 +33,6 @@ it('bundles only the production public MCP root and imports it in isolation', as
     const code = bundle.files.get('dist/index.js')!.toString();
     expect(code).not.toMatch(
       /from ["'](?:@executor-js|@modelcontextprotocol\/server|rolldown)|qualification\.js/,
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-it('retains exact supported historical Executor archive validation for rollback', async () => {
-  const legacy = await historicalBundle(workspace);
-  const dir = mkdtempSync(join(tmpdir(), 'historical-adapter-'));
-  try {
-    const files = new Map<string, { body: Buffer; mode: number }>();
-    const add = (name: string, body: string | Buffer) =>
-      files.set(name, { body: Buffer.from(body), mode: 0o644 });
-    const base = 'node_modules/@runnets/integrations-executor/';
-    for (const name of ['bin/ocean', 'apps/cli/dist/main.js', 'LICENSE', 'NOTICE', 'package.json'])
-      add(name, '{}');
-    add(base + 'package.json', '{}');
-    add(base + 'LICENSE', readFileSync(join(workspace, 'LICENSE')));
-    for (const [name, body] of legacy.files) add(base + name, body);
-    const inventory = Object.fromEntries(
-      [...files].map(([name, file]) => [name, { sha256: sha256(file.body), mode: file.mode }]),
-    );
-    add(
-      'manifest.json',
-      JSON.stringify({
-        format: 1,
-        version: '1.1.0-rc.2',
-        revision: 'a'.repeat(40),
-        node: process.version,
-        platform: 'linux',
-        arch: 'x64',
-        lockfileSha256: 'b'.repeat(64),
-        files: inventory,
-        bundle: {
-          adapter: '@runnets/integrations-executor',
-          entry: 'dist/index.js',
-          integrity: 'dist/bundle-integrity.json',
-          integritySha256: legacy.integritySha256,
-          files: legacy.filesSha256,
-          identities: legacy.identities,
-        },
-      }),
-    );
-    const bytes = createArchive(files),
-      archive = join(dir, 'historical.tar.gz');
-    writeFileSync(archive, bytes);
-    expect(installArchive(archive, sha256(bytes), join(dir, 'prefix')).bundle?.adapter).toBe(
-      '@runnets/integrations-executor',
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

@@ -1,10 +1,11 @@
 # Ocean Platform: прогресс этапа C
 
-Дата: 2026-11-06. Приняты C18.1 (`79bbce9`), C18.2 (`7bbb502`),
-C18.3 с normal coding consumers (`b868d32`) и C18.4.1 (`165e1c0`)
-после независимых ревью и исправлений. Прямой MCP transport и managed stdio
-квалифицированы; штатный runtime пока использует Executor. Его переключение,
-owner RPC/UI, миграция и установленная замена ещё запланированы.
+Дата: 2026-11-06. C18.1–C18.6.1 приняты после независимых ревью.
+Штатный runtime использует прямой публичный MCP transport; owner settings,
+консервативный импорт и установленная замена квалифицированы в C18.5–C18.6.1.
+C18.6.2 удаляет старый Executor SDK/patch и development producer; этот шаг
+ожидает независимого ревью. Родительский C остаётся открыт до сверки требований.
+Ниже ранние записи описывают состояние на момент каждого checkpoint.
 
 ## Что квалифицировано
 
@@ -361,3 +362,26 @@ root3819+158 прошедших,44+36 настроенных пропусков,
 записаны для F. Теперь18.6.2 удаляет Executor по принятому свидетельству замены. Затем D — сохраняемые
 поручения и свободное взаимодействие команды, E/F — клиент и выпуск.
 [Канонический план](../superpowers/plans/2026-11-04-ocean-platform.md).
+
+## C18.6.2: удаление отставленного SDK — кандидат на ревью
+
+Удалены Executor workspace, vendor patch, CLI development transport и SDK-only
+producer/fixtures. Effect overrides и msgpackr build setting удалены после проверки
+оставшегося dependency graph; публичный MCP SDK2.4.0 и Rolldown1.2.16 сохранены.
+Карта каждого удалённого семейства тестов находится в
+[отчёте C18.6.2](../../.superpowers/sdd/2026-11-04-ocean-platform/task-18.6.2-report.md).
+
+Исторические records, inert import, owner reconciliation и unknown holds остаются.
+Installer validation не менялась: небольшие структурные архивы заменяют старую
+SDK-сборку как тестовые inputs для manifest/hash/tamper/rollback правил. Эти тесты
+не являются квалификацией загрузки исторического runtime. LICENSE/NOTICE и
+историческая атрибуция сохранены. Current MCP, admission, owner settings и клиенты
+не менялись, кроме узкой HTTP-проверки размера сериализованного запроса до prepare/send.
+Она сохраняет старую границу1MiB для JSON-RPC envelope; аргументы могут быть
+меньше cap, а envelope — больше. Такой доказанный pre-send отказ возвращает
+not_started, с нулём fetch/tools-call. Release pin полного lockfile обновлён
+после удаления graph.
+
+Этот шаг не закрывает F typing/native/device/restore/release gates и не включает
+D, schedules, Sources, marketplace, universal OAuth или CLI agents. Все прежние
+Minors/Rulings сохраняются для F; завершение C требует независимого ревью.

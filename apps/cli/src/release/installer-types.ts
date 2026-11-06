@@ -15,6 +15,6 @@ export interface ReleaseManifest {
   readonly arch: 'x64';
   readonly lockfileSha256: string;
   readonly files: Readonly<Record<string, { sha256: string; mode: number }>>;
-  /** Present when the archive ships the pre-bundled Executor adapter. */
+  /** Present when the archive ships a modern or supported historical adapter bundle. */
   readonly bundle?: ReleaseBundleRecord;
 }

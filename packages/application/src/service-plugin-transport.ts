@@ -1,11 +1,9 @@
 /**
  * Service-plugin transport port.
  *
- * Ocean reaches installed service plugins (OpenAPI services and MCP servers)
- * through this application-owned seam. Only the adapter
- * (`@runnets/integrations-executor`) may touch the pinned Executor SDK and its
- * Effect runtime; every type below is plain TypeScript so domain rules and the
- * application layer stay independent of both.
+ * Historical service-plugin records and their inert compatibility services use
+ * this application-owned seam. Its plain TypeScript types remain available for
+ * old profiles; current execution uses ServiceCallTransportPort and direct MCP.
  *
  * The contract is fail-closed:
  *

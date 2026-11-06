@@ -1270,8 +1270,10 @@ qualification only; SDK removal, parent C and the full release remain incomplete
 **Files:** retired packages/integrations-executor and patches SDK artifact;
 CLI explicit development plugin-transport and SDK-only fixtures/tests;
 root/CLI package, TypeScript and Vitest graph, pnpm workspace/lock configuration;
-existing release historical fixture/tests and implementation-status docs. Keep the
-current MCP adapter, admission, owner settings and clients intact unless a concrete
+existing release historical fixture/tests and implementation-status docs; current
+MCP http.ts serialized-request byte guard plus owning HTTP tests for the demonstrated
+under-cap arguments/over-cap JSON-RPC envelope gap. Keep the remaining current
+MCP adapter, admission, owner settings and clients intact unless a concrete
 removal regression requires a small compatible correction. No new API/table/engine.
 
 **Interfaces:** accepted18.6.1 sourceffeb3d3 and installed candidate prove the direct

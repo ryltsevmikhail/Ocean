@@ -1,4 +1,5 @@
 import { SERVICE_PLUGIN_MAX_DISCOVERY_BYTES } from '@runnets/domain';
+import { SERVICE_PLUGIN_MAX_REQUEST_BYTES } from '@runnets/application';
 import { httpTransport, methodOf } from './profile.js';
 import type { SessionWriter } from './session-writer.js';
 
@@ -29,6 +30,11 @@ export function serviceHttp(
     (target, init) =>
       writer.track(async () => {
         if (String(target) !== endpoint.href) throw Error('unexpected target');
+        if (
+          typeof init?.body === 'string' &&
+          Buffer.byteLength(init.body) > SERVICE_PLUGIN_MAX_REQUEST_BYTES
+        )
+          throw Error('request limit');
         const method = methodOf(init);
         const invocation = await writer.prepare(method);
         const signal = AbortSignal.any([

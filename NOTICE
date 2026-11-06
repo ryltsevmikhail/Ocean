@@ -22,13 +22,15 @@ OpenCode source code is vendored in this repository.
 Ocean is a separate project. It is not a fork of OpenCode and is not
 endorsed by or affiliated with the OpenCode project.
 
-EXECUTOR SDK — PINNED PATCHED DEPENDENCY
+EXECUTOR SDK — HISTORICAL RC2 ATTRIBUTION
 ========================================
 
-Ocean's RC2 service-plugin transport (`packages/integrations-executor`) depends
-on the Executor SDK and its MCP/OpenAPI plugins. The npm tarballs ship no
-LICENSE file; the upstream project's MIT license text and exact copyright line
-are reproduced below and in `packages/integrations-executor/THIRD_PARTY_LICENSES/executor-MIT.txt`.
+Ocean's historical RC2 service-plugin transport depended on the Executor SDK
+and its MCP/OpenAPI plugins. C18.6.2 removes that source, dependency and patch;
+current releases use the public MCP client. The historical artifact and patch
+record below describe RC2, not current packaging or runtime behavior. The npm
+tarballs shipped no LICENSE file; the upstream MIT terms and exact copyright
+line remain reproduced below for attribution and retained historical records.
 
   Project:    Executor (UsefulSoftwareCo/executor)
   Commit:     3cf6e54659cb34ac731fe3cf747ca139be769b93 (LICENSE retrieved 2026-11-04)
@@ -52,14 +54,14 @@ Patch notice: the installed `@executor-js/sdk@1.6.11` bundle is NOT pristine
 upstream bytes. One 18-line block was replaced by two lines to remove a
 reactive OAuth refresh-and-replay that sent a second upstream business request
 after an HTTP 401, bypassing policy, approval, annotation and argument
-validation. The patch lives at `patches/@executor-js__sdk@1.6.11.patch`, sha256
-e1c1bfa9a41049321f45747f3ae8907d89604fca06872ec0a4871483db1b9fad, and is
-applied by pnpm's `patchedDependencies`. The upstream MIT terms and copyright
+validation. The retired patch lived at `patches/@executor-js__sdk@1.6.11.patch`, sha256
+e1c1bfa9a41049321f45747f3ae8907d89604fca06872ec0a4871483db1b9fad, and
+was applied by pnpm's `patchedDependencies`. The upstream MIT terms and copyright
 notice continue to apply to the patched artifact; the modification is recorded
-here and in `patches/README.md`. The runtime refuses to enable execution unless
-the installed chunk matches the pinned patched digest above.
+here and in the historical Git record. The RC2 runtime refused to enable execution unless
+the installed chunk matched the pinned patched digest above.
 
-Packaged release verification: the release archive does not ship the Executor
+Historical RC2 packaged release verification: its archive did not ship the Executor
 `node_modules` tree. `pnpm package:release` first asserts the installed patched
 chunk digest, the patch digest, the lockfile `patch_hash` records, the pinned
 SDK/plugin/Effect/`@effect/platform-node-shared` versions and the pinned

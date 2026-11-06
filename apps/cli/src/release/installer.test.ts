@@ -8,7 +8,6 @@ import {
   fsyncSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -122,9 +121,6 @@ function releaseRepo(base: string, options: { licenses?: boolean } = {}): string
     join(adapter, 'node_modules'),
   );
   symlinkSync(join(workspace, 'node_modules'), join(repo, 'node_modules'));
-  mkdirSync(join(repo, 'patches'), { recursive: true });
-  for (const name of readdirSync(join(workspace, 'patches')))
-    writeFileSync(join(repo, 'patches', name), readFileSync(join(workspace, 'patches', name)));
   if (options.licenses !== false) {
     mkdirSync(join(repo, 'LICENSES'), { recursive: true });
     writeFileSync(join(repo, 'LICENSES/fixture-notice.txt'), 'fixture notice');

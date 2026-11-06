@@ -78,7 +78,7 @@ export function releaseRepo(base: string, target: ReleaseRepoTarget = {}): strin
       join(source, 'THIRD_PARTY_LICENSES/modelcontextprotocol-client-LICENSE'),
       join(destination, 'THIRD_PARTY_LICENSES/modelcontextprotocol-client-LICENSE'),
     );
-    // Real pinned identities (patch, SDK chunk, versions) resolve through this link.
+    // Real pinned public SDK identities resolve through this link.
     symlinkSync(join(source, 'node_modules'), join(destination, 'node_modules'));
   }
   symlinkSync(join(workspace, 'apps', 'cli'), join(repo, 'apps', 'cli'));
@@ -87,9 +87,6 @@ export function releaseRepo(base: string, target: ReleaseRepoTarget = {}): strin
   symlinkSync(join(workspace, 'node_modules'), join(repo, 'node_modules'));
   for (const name of ['LICENSE', 'NOTICE', 'README.md', 'pnpm-lock.yaml'])
     copyFileSync(join(workspace, name), join(repo, name));
-  mkdirSync(join(repo, 'patches'));
-  for (const name of readdirSync(join(workspace, 'patches')))
-    copyFileSync(join(workspace, 'patches', name), join(repo, 'patches', name));
   git(repo, 'init', '-q');
   commitReleaseRepo(repo);
   return repo;
@@ -106,10 +103,4 @@ export function addReleaseRepoPackage(
   mkdirSync(join(directory, 'dist'), { recursive: true });
   writeJson(join(directory, 'package.json'), manifest);
   for (const [path, body] of Object.entries(files)) writeFileSync(join(directory, path), body);
-}
-
-/** Replace the copied patch with deliberately drifted bytes. */
-export function tamperReleaseRepoPatch(repo: string): void {
-  const patch = join(repo, 'patches', '@executor-js__sdk@1.6.11.patch');
-  writeFileSync(patch, readFileSync(patch, 'utf8') + '\n// deliberate drift\n');
 }

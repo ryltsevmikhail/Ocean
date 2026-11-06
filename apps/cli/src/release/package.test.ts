@@ -1,6 +1,6 @@
 import { malformed } from '../../test-fixtures/mcp-malformed-archive.js';
 /**
- * Release packaging regressions for the pre-bundled Executor adapter.
+ * Release packaging regressions for the bundled public MCP adapter.
  *
  * These are process cases: they run after `pnpm build` and package real built
  * modules with real pinned identities. Assembly-only fixtures use a synthetic

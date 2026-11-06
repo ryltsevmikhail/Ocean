@@ -20,7 +20,6 @@
       "@runnets/provider-anthropic": ["packages/provider-anthropic/src/index.ts"],
       "@runnets/provider-local": ["packages/provider-local/src/index.ts"],
       "@runnets/integrations-mcp": ["packages/integrations-mcp/src/index.ts"],
-      "@runnets/integrations-executor": ["packages/integrations-executor/src/index.ts"],
       "@runnets/tools-node/local-runtime-client": [
         "packages/tools-node/src/local-runtime-client.ts"
       ]
