@@ -5,6 +5,7 @@ import {
   validServiceCatalogSnapshot,
   validServiceOwnerOperation,
   validServiceReceiptQuery,
+  validConversationText,
   type ServiceConnection,
   type OwnerScopeGrant,
   type ServiceCatalogSnapshot,
@@ -35,7 +36,9 @@ export interface LocalServiceOwnerOperationsPage {
 }
 const keys = (v: Record<string, unknown>, ks: string[]) =>
   Object.keys(v).length === ks.length && ks.every((k) => Object.hasOwn(v, k));
-const text = (v: unknown): v is string => validServiceReceiptQuery({ requestId: v });
+const requestId = (v: unknown): v is string => validServiceReceiptQuery({ requestId: v });
+const recordText = (v: unknown): v is string =>
+  typeof v === 'string' && validConversationText(v, 128);
 const methods = [
   'service.connection-set',
   'service.connection-disconnect',
@@ -45,7 +48,7 @@ const methods = [
 ];
 function base(v: Record<string, unknown>) {
   return (
-    text(v['requestId']) &&
+    requestId(v['requestId']) &&
     typeof v['method'] === 'string' &&
     methods.includes(v['method']) &&
     (v['state'] === 'prepared'
@@ -60,13 +63,23 @@ const bounded = (v: unknown) => {
     return false;
   }
 };
+/** Authority-v2 metadata historically charged only serialized item characters. */
+function metadataBounded(items: readonly unknown[]): boolean {
+  try {
+    return items.reduce<number>((sum, item) => sum + canonicalJson(item).length, 0) <= 400000;
+  } catch {
+    return false;
+  }
+}
 export function isLocalServiceOwnerReceipt(v: unknown): v is LocalServiceOwnerReceipt {
   if (!object(v) || !keys(v, ['requestId', 'method', 'state', 'recovery', 'result']) || !base(v))
     return false;
   if (v['state'] === 'prepared') return v['result'] === null;
   if (v['method'] === 'service.connection-refresh')
     return validServiceConnection(v['result']) || validServiceCatalogSnapshot(v['result']);
-  return v['method'] === 'service.connection-set' || v['method'] === 'service.connection-disconnect'
+  if (v['method'] === 'service.connection-disconnect')
+    return validServiceConnection(v['result']) && v['result'].state === 'disconnected';
+  return v['method'] === 'service.connection-set'
     ? validServiceConnection(v['result'])
     : validOwnerScopeGrant(v['result']);
 }
@@ -77,10 +90,13 @@ export function isLocalServiceConnectionView(v: unknown): boolean {
     validServiceConnection(record) &&
     Array.isArray(tools) &&
     tools.length <= 256 &&
-    Array.from(tools).every((t) => text(t)) &&
+    Array.from(tools).every(recordText) &&
     new Set(tools).size === tools.length &&
     (!Object.hasOwn(v, 'readiness') ||
-      (typeof readiness === 'string' &&
+      ((record.state === 'disconnected'
+        ? readiness === 'disconnected' || readiness === 'unknown'
+        : readiness !== 'disconnected') &&
+        typeof readiness === 'string' &&
         ['ready', 'disconnected', 'metadata_required', 'unavailable', 'unknown'].includes(
           readiness,
         )))
@@ -94,7 +110,7 @@ export function normalizeLocalServiceConnections(
     !Array.isArray(v) ||
     v.length > 100 ||
     !Array.from(v).every(isLocalServiceConnectionView) ||
-    !bounded(v)
+    !metadataBounded(v)
   )
     return null;
   if (new Set(v.map((c: ServiceConnection) => c.id)).size !== v.length) return null;
@@ -111,25 +127,25 @@ export function isLocalServiceGrants(v: unknown): v is readonly OwnerScopeGrant[
     v.length <= 100 &&
     Array.from(v).every(validOwnerScopeGrant) &&
     new Set(v.map((g: OwnerScopeGrant) => g.id)).size === v.length &&
-    bounded(v)
+    metadataBounded(v)
   );
 }
 export function isLocalServiceOwnerOperationItem(v: unknown): v is LocalServiceOwnerOperationItem {
   if (
     !object(v) ||
     !keys(v, ['requestId', 'method', 'state', 'recovery', 'targetId', 'operation']) ||
-    !base(v) ||
-    !(v['targetId'] === null || text(v['targetId']))
+    !base(v)
   )
     return false;
   const op = v['operation'];
-  return (
-    op === null ||
-    (validServiceOwnerOperation(op) &&
-      op.method === v['method'] &&
-      op.input.requestId === v['requestId'] &&
-      op.input.connectionId === v['targetId'])
-  );
+  return op === null
+    ? v['state'] === 'prepared'
+      ? v['targetId'] === null
+      : recordText(v['targetId'])
+    : validServiceOwnerOperation(op) &&
+        op.method === v['method'] &&
+        op.input.requestId === v['requestId'] &&
+        op.input.connectionId === v['targetId'];
 }
 export function isLocalServiceOwnerOperationsPage(
   v: unknown,
@@ -140,7 +156,7 @@ export function isLocalServiceOwnerOperationsPage(
     Array.isArray(v['items']) &&
     v['items'].length <= 100 &&
     Array.from(v['items']).every(isLocalServiceOwnerOperationItem) &&
-    (v['next'] === null || text(v['next'])) &&
+    (v['next'] === null || requestId(v['next'])) &&
     bounded(v)
   );
 }
