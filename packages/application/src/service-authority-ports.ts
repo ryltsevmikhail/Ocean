@@ -1,3 +1,4 @@
+import type { ServiceOwnerReceipt } from './service-owner-receipt.js';
 import type { ToolEffectAdmission, ToolEffectRecord, ToolEffectOutcome } from './tools.js';
 import type { ServiceCallRequest } from './service-admission-types.js';
 import type {
@@ -8,6 +9,8 @@ import type {
 } from '@runnets/domain';
 /** Runtime-only storage; these operations grant no model-facing mutation capability. */
 export interface ServiceAuthorityTransaction {
+  ownerReceipt(requestId: string): ServiceOwnerReceipt | null;
+  putOwnerReceipt(receipt: ServiceOwnerReceipt, expectedState: 'prepared' | null): boolean;
   participates(subject: OwnerScopeGrant['subject']): boolean;
   runMatches(request: ServiceCallRequest): boolean;
   grantCalls(run: string, grantId: string): number;

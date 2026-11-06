@@ -25,13 +25,18 @@ function tables(db: DatabaseSync) {
 function snapshot(db: DatabaseSync) {
   return Object.fromEntries(
     tables(db)
-      .filter((t) => t !== 'meta' && !SERVICE_AUTHORITY_TABLES.some((n) => n === t))
+      .filter(
+        (t) =>
+          t !== 'meta' &&
+          !SERVICE_AUTHORITY_TABLES.some((n) => n === t) &&
+          t !== 'ocean_service_owner_receipts',
+      )
       .map((t) => [t, db.prepare('SELECT * FROM ' + t + ' ORDER BY rowid').all()]),
   );
 }
 function schema23(db: DatabaseSync) {
   db.exec(
-    "DROP TABLE ocean_owner_scope_grants; DROP TABLE ocean_service_connections; DROP TABLE ocean_service_catalogs; UPDATE meta SET value='23' WHERE key='schema_version'",
+    "DROP TABLE ocean_service_owner_receipts; DROP TABLE ocean_owner_scope_grants; DROP TABLE ocean_service_connections; DROP TABLE ocean_service_catalogs; UPDATE meta SET value='23' WHERE key='schema_version'",
   );
 }
 
@@ -55,15 +60,15 @@ describe('service authority migration 24', () => {
       oldTables = tables(f.db),
       pending = f.journal.inspectPending();
     initializeSchema(f.db);
-    expect(SCHEMA_VERSION).toBe(25);
+    expect(SCHEMA_VERSION).toBe(26);
     expect(f.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '25',
+      '26',
     );
     expect(
       tables(f.db)
         .filter((n) => !oldTables.includes(n))
         .sort(),
-    ).toEqual([...SERVICE_AUTHORITY_TABLES].sort());
+    ).toEqual([...SERVICE_AUTHORITY_TABLES, 'ocean_service_owner_receipts'].sort());
     for (const table of SERVICE_AUTHORITY_TABLES)
       expect(f.db.prepare('SELECT * FROM ' + table).all()).toEqual([]);
     expect(snapshot(f.db)).toEqual(before);
@@ -81,7 +86,7 @@ describe('service authority migration 24', () => {
     initializeSchema(db);
     schema23(db);
     db.exec(
-      "CREATE TRIGGER stop_authority BEFORE UPDATE ON meta WHEN NEW.value='25' BEGIN SELECT RAISE(ABORT,'publication failed'); END",
+      "CREATE TRIGGER stop_authority BEFORE UPDATE ON meta WHEN NEW.value='26' BEGIN SELECT RAISE(ABORT,'publication failed'); END",
     );
     expect(() => initializeSchema(db)).toThrow('publication failed');
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
@@ -93,10 +98,10 @@ describe('service authority migration 24', () => {
     const db = new DatabaseSync(':memory:');
     opened.push(db);
     initializeSchema(db);
-    db.exec("UPDATE meta SET value='26' WHERE key='schema_version'");
+    db.exec("UPDATE meta SET value='27' WHERE key='schema_version'");
     expect(() => initializeSchema(db)).toThrow(/newer/);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '26',
+      '27',
     );
     db.exec(
       "UPDATE meta SET value='24' WHERE key='schema_version'; DROP TABLE ocean_owner_scope_grants",

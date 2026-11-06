@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { afterEach, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -234,6 +235,7 @@ it('requires an injected task factory and binds task identity into the durable c
       forTurn: async (turn) => {
         seen.push(turn.codingTaskId!);
         return {
+          callDigest: (text: string) => createHash('sha256').update(text).digest('hex'),
           instructions: 'Task-scoped coding instructions',
           cleanupConfirmed: true as const,
           definitions: [],

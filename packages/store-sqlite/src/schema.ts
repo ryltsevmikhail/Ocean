@@ -16,8 +16,8 @@ import { applyMigrations } from './schema-migrations.js';
 
 import { ownerBusy } from './maintenance-owner.js';
 import { userTables } from './schema-inspection.js';
-/** Schema 25 adds optional admission evidence to the existing effect journal. */
-export const SCHEMA_VERSION = 25;
+/** Schema 26 adds bounded durable owner service mutation receipts. */
+export const SCHEMA_VERSION = 26;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 

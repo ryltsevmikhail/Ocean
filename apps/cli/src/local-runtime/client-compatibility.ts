@@ -24,11 +24,15 @@ export function clientIdentity<T extends LocalRuntimeIdentity>(
   identity: T,
   plugins: boolean,
   models = false,
+  services = false,
 ): T {
   return {
     ...identity,
     capabilities: identity.capabilities.filter(
-      (c) => (plugins || !c.startsWith('plugin.')) && (models || c !== LOCAL_MODEL_CONNECTIONS),
+      (c) =>
+        (plugins || !c.startsWith('plugin.')) &&
+        (models || c !== LOCAL_MODEL_CONNECTIONS) &&
+        (services || !c.startsWith('service.')),
     ),
   };
 }

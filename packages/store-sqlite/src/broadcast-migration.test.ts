@@ -106,7 +106,7 @@ function seedConversation(db: DatabaseSync) {
 describe('broadcast migration 16', () => {
   it('creates the batch table and admits target-less user messages plus queued children', () => {
     const db = memory();
-    expect(SCHEMA_VERSION).toBe(25);
+    expect(SCHEMA_VERSION).toBe(26);
     expect(tables(db)).toEqual(expect.arrayContaining([...BROADCAST_TABLES]));
     seedConversation(db);
     const storage = broadcastStorage(db);

@@ -17,7 +17,7 @@ export const ADAPTER_DEPENDENCIES: Readonly<Record<string, string>> = {
   '@runnets/tools-node': 'workspace:*',
 };
 export const PINNED_LOCKFILE_SHA256 =
-  '503cf1fadb723dd6c131540cae5d8ad9fdc01fdcb1a844c56aa64c8a77b31ec0';
+  '772997479409712d5501576dca97ea0fd475efbe5225a8311512ab9efda8515f';
 export const PINNED_VERSIONS = { client: '2.4.0', core: '2.4.0' } as const;
 export interface AdapterBundle {
   readonly files: ReadonlyMap<string, Buffer>;

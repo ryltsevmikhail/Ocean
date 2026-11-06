@@ -169,6 +169,15 @@ export function createMcpServiceTransport(
         pending.delete(work);
       }
     },
+    disconnect(id) {
+      const s = active.get(id);
+      if (!s) return;
+      active.delete(id);
+      s.deactivate();
+      const work = s.afterCalls().then(() => retire(s));
+      pending.add(work);
+      void work.finally(() => pending.delete(work));
+    },
     async close(): Promise<McpCleanupEvidence> {
       closed = true;
       for (const s of sessions) s.stop.abort();

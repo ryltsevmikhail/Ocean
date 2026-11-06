@@ -36,3 +36,5 @@ export * from './local-model-metadata-validate.js';
 export * from './local-model-bindings-validate.js';
 export * from './local-model-execution.js';
 export * from './local-model-execution-validate.js';
+
+export * from './local-services.js';

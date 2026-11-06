@@ -34,7 +34,7 @@ it('distinguishes a complete portable format2 identity from historical format1 m
   ).toBe(true);
   expect(validProfileBackupManifest({ ...body, format: 2 })).toBe(false);
 });
-it('accepts schema20 through schema25 backups while refusing unsupported future schemas', () => {
+it('accepts schema20 through schema26 backups while refusing unsupported future schemas', () => {
   expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 21 } })).toBe(
     true,
   );
@@ -54,6 +54,9 @@ it('accepts schema20 through schema25 backups while refusing unsupported future 
     true,
   );
   expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 26 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 27 } })).toBe(
     false,
   );
 });

@@ -296,7 +296,11 @@ importers:
         specifier: workspace:*
         version: link:../domain
 
-  packages/contracts: {}
+  packages/contracts:
+    dependencies:
+      '@runnets/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/domain: {}
 

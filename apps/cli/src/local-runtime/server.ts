@@ -11,6 +11,7 @@ import {
 import {
   isLocalRuntimeRequest,
   LOCAL_MODEL_METHODS,
+  LOCAL_SERVICE_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
   type LocalRuntimeDescriptor,
   type LocalRuntimeIdentity,
@@ -38,6 +39,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
     const detached = new AbortController();
     let authenticated = false;
     let plugins = false;
+    let services = false;
     let context: RuntimeWireContext = Object.freeze({ models: false });
     let stopping = false;
     let pending = 0;
@@ -80,12 +82,13 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
           return;
         }
         plugins = supportsPlugins(features);
+        services = features.includes(LOCAL_SERVICE_AUTHORITY);
         context = Object.freeze({ models: features.includes(LOCAL_MODEL_CONNECTIONS) });
         authenticated = true;
         clearTimeout(handshakeTimeout);
         writeLocalRuntimeFrame(socket, {
           id,
-          result: clientIdentity(operations.identity, plugins, context.models),
+          result: clientIdentity(operations.identity, plugins, context.models, services),
         });
         return;
       }
@@ -102,7 +105,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
       if (method === 'status') {
         writeLocalRuntimeFrame(socket, {
           id,
-          result: clientIdentity(operations.status(), plugins, context.models),
+          result: clientIdentity(operations.status(), plugins, context.models, services),
         });
         return;
       }
@@ -118,6 +121,10 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             reject('stop_incomplete');
             socket.end();
           });
+        return;
+      }
+      if (method.startsWith('service.') && !services) {
+        reject('service_runtime_upgrade_required');
         return;
       }
       if (method.startsWith('plugin.') && !plugins) {

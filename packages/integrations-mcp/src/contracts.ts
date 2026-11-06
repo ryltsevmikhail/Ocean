@@ -36,5 +36,7 @@ export interface McpServiceTransport extends ServiceCallTransportPort {
     confirmPublished: () => boolean,
   ): boolean;
   disposeCandidate(candidate: McpCatalogCandidate): Promise<McpCleanupEvidence>;
+  /** Removes readiness immediately; retires only after admitted calls settle. */
+  disconnect(connectionId: string): void;
   close(): Promise<McpCleanupEvidence>;
 }

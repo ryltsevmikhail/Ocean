@@ -162,3 +162,8 @@ export function validOwnerScopeGrant(v: unknown): v is OwnerScopeGrant {
     authorityBoundedJson(v, 65536)
   );
 }
+
+export type OwnerScopeIntent = Pick<
+  OwnerScopeGrant,
+  'id' | 'subject' | 'permissions' | 'limits'
+> & { readonly mode?: OwnerScopeGrant['mode'] };

@@ -14,7 +14,7 @@ const identity = {
   capabilities: runtimeCapabilities(false),
 };
 it('projects independent RC2/A3/model capability identities without shared negotiation state', () => {
-  expect(identity.capabilities).toHaveLength(66);
+  expect(identity.capabilities).toHaveLength(75);
   for (let i = 0; i < 3; i++) {
     const a3 = clientIdentity(identity, true, false);
     expect(a3.capabilities).toHaveLength(65);
@@ -23,7 +23,8 @@ it('projects independent RC2/A3/model capability identities without shared negot
     const old = clientIdentity(identity, false, false);
     expect(rc2(old)).toBe(true);
     expect(old.capabilities).toHaveLength(45);
-    const current = clientIdentity(identity, true, true);
+    const current = clientIdentity(identity, true, true, true);
+    expect(current.capabilities).toContain('service.authority-v2');
     expect(isLocalRuntimeIdentity(current)).toBe(true);
     expect(current.capabilities).toContain(LOCAL_MODEL_CONNECTIONS);
   }

@@ -52,8 +52,10 @@ export interface ServiceConnection extends ServiceConnectionVersions {
   readonly id: string;
   readonly name: string;
   readonly configuration: ServiceConfiguration;
-  /** Non-secret env:UPPER_CASE_NAME handle; never literal credential bytes. */
+  /** Non-secret env or opaque saved handle; never literal credential bytes. */
   readonly credentialReference: string | null;
+  /** Trusted material binding; absence is inert in production. Never account identity. */
+  readonly credentialBinding?: string;
   readonly trust: ServiceTrustBinding;
   readonly state: 'active' | 'disconnected';
   readonly currentCatalogId: string | null;
@@ -160,6 +162,7 @@ export function validServiceConnection(v: unknown): v is ServiceConnection {
       'credentialRevision',
       'configuration',
       'credentialReference',
+      ...(Object.hasOwn(v, 'credentialBinding') ? ['credentialBinding'] : []),
       'trust',
       'state',
       'currentCatalogId',
@@ -172,8 +175,11 @@ export function validServiceConnection(v: unknown): v is ServiceConnection {
     validServiceConfiguration(v['configuration']) &&
     (v['credentialReference'] === null ||
       (typeof v['credentialReference'] === 'string' &&
-        v['credentialReference'].startsWith('env:') &&
-        validCredentialReference(v['credentialReference'].slice(4)))) &&
+        ((v['credentialReference'].startsWith('env:') &&
+          validCredentialReference(v['credentialReference'].slice(4))) ||
+          /^saved:psec_[a-z0-9]{8,64}$/.test(v['credentialReference'])))) &&
+    (!Object.hasOwn(v, 'credentialBinding') ||
+      (v['credentialReference'] !== null && validPluginSchemaDigest(v['credentialBinding']))) &&
     validServiceTrustBinding(v['trust']) &&
     (v['state'] === 'active' || v['state'] === 'disconnected') &&
     (v['currentCatalogId'] === null || text(v['currentCatalogId'])) &&

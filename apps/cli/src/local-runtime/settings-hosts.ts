@@ -1,3 +1,4 @@
+import { RuntimeServiceSettings } from './services.js';
 /**
  * Host composition for runtime-owned settings surfaces.
  *
@@ -16,7 +17,12 @@ export interface SettingsHostsInput {
   readonly profile: string;
   readonly runtime: Pick<
     Runtime,
-    'providerConnections' | 'plugins' | 'pluginRuntime' | 'conversationStore' | 'service'
+    | 'providerConnections'
+    | 'plugins'
+    | 'pluginRuntime'
+    | 'conversationStore'
+    | 'service'
+    | 'services'
   >;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly now: (() => number) | undefined;
@@ -31,7 +37,7 @@ export interface SettingsHostsInput {
 
 /** Compose the provider activation resolver and the plugin owner API. */
 export function settingsHosts(input: SettingsHostsInput) {
-  if (!input.runtime.providerConnections || !input.runtime.plugins)
+  if (!input.runtime.providerConnections || !input.runtime.plugins || !input.runtime.services)
     throw Error('durable_runtime_required');
   const provider = providerHostSettings({
     store: input.runtime.providerConnections,
@@ -56,5 +62,10 @@ export function settingsHosts(input: SettingsHostsInput) {
   });
   if (!input.runtime.conversationStore) throw Error('durable_runtime_required');
   const models = provider.modelSettings(input.runtime.conversationStore, input.runtime.service);
-  return { provider, plugins, models };
+  return {
+    provider,
+    plugins,
+    models,
+    services: new RuntimeServiceSettings(input.runtime.services.owner),
+  };
 }

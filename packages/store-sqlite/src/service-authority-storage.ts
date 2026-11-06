@@ -1,3 +1,4 @@
+import { readServiceOwnerReceipt, putServiceOwnerReceipt } from './service-owner-receipts.js';
 import { SqliteToolJournal } from './tool-journal.js';
 import { participates } from './coding-store.js';
 import { runMatches } from './service-run-scope.js';
@@ -35,6 +36,14 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
     };
     const db = this.#db;
     const tx: ServiceAuthorityTransaction = {
+      ownerReceipt: (id) => {
+        guard();
+        return readServiceOwnerReceipt(db, id);
+      },
+      putOwnerReceipt: (r, expected) => {
+        guard();
+        return putServiceOwnerReceipt(db, r, expected);
+      },
       participates: (s) => {
         guard();
         return participates(db, s.workspaceId, s.roomId, s.botId);
@@ -100,6 +109,8 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
           );
         } else {
           if (
+            (record.credentialBinding !== old.credentialBinding &&
+              record.credentialRevision === old.credentialRevision) ||
             record.currentCatalogId !== old.currentCatalogId ||
             record.createdAt !== old.createdAt ||
             (canonical(record.configuration) !== canonical(old.configuration) &&

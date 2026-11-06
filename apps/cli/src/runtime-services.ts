@@ -1,6 +1,8 @@
+import { createProviderSecretStore, providerCredentialDirectory } from '@runnets/tools-node';
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  OwnerScopeService,
+  ServiceOwnerSettings,
+  keyDigest,
   ServiceCallAdmissionService,
   ServiceTurnTools,
   beginServiceCatalogRefresh,
@@ -8,6 +10,7 @@ import {
   currentServiceCatalog,
   type Clock,
   type ServiceAuthorityStorePort,
+  type ServiceAuthorityTransaction,
   type ConversationStore,
   type CodingStore,
 } from '@runnets/application';
@@ -23,7 +26,7 @@ import {
 export interface RuntimeServices {
   readonly tools: ServiceTurnTools;
   /** Trusted in-process capability only; never serialized to clients/models. */
-  readonly owner: OwnerScopeService;
+  readonly owner: ServiceOwnerSettings;
   start(): Promise<void>;
   refresh(connectionId: string, signal?: AbortSignal): Promise<ServiceCatalogSnapshot>;
   drain(): Promise<'settled' | 'uncertain'>;
@@ -48,7 +51,11 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
   const store = input.store.serviceAuthority,
     now = () => input.clock.now().getTime();
   const stop = new AbortController();
-  const jobs = new Map<string, Promise<ServiceCatalogSnapshot>>();
+  type Complete = (tx: ServiceAuthorityTransaction, snapshot: ServiceCatalogSnapshot) => void;
+  const jobs = new Map<
+    string,
+    { promise: Promise<ServiceCatalogSnapshot>; completed: Complete[] }
+  >();
   let started = false,
     draining = false,
     uncertain = false;
@@ -65,23 +72,41 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
         canonicalJson(c) === canonicalJson(expected)
       );
     });
+  const secrets = createProviderSecretStore(providerCredentialDirectory(input.profile));
   const transport = createMcpServiceTransport({
     stdio: { profileRoot: input.profile },
-    resolveCredential: (ref) => {
-      if (!/^env:[A-Z_][A-Z0-9_]*$/.test(ref)) return null;
-      const value = (input.env ?? process.env)[ref.slice(4)];
-      return typeof value === 'string' && value.length ? value : null;
-    },
     ...input.transportOptions,
+    resolveCredential: (ref, connection) => {
+      // Explicit injected transport seams are trusted test-only controls.
+      if (input.transportOptions?.resolveCredential)
+        return input.transportOptions.resolveCredential(ref, connection);
+      if (!connection.credentialBinding) return null;
+      let key: string | null = null;
+      if (/^env:[A-Z_][A-Z0-9_]*$/.test(ref))
+        key = (input.env ?? process.env)[ref.slice(4)] ?? null;
+      else if (ref.startsWith('saved:')) {
+        const saved = secrets.read(ref.slice(6));
+        if (saved.status === 'ok') key = saved.key;
+      }
+      return key && keyDigest(hash, key) === connection.credentialBinding ? key : null;
+    },
     refreshNeeded: (id) => {
       if (started && !draining) void refresh(id).catch(() => {});
     },
   });
-  function refresh(id: string, signal?: AbortSignal): Promise<ServiceCatalogSnapshot> {
+  function refresh(
+    id: string,
+    signal?: AbortSignal,
+    complete?: Complete,
+  ): Promise<ServiceCatalogSnapshot> {
     const previous = jobs.get(id);
-    if (previous) return previous;
+    if (previous) {
+      if (complete) previous.completed.push(complete);
+      return previous.promise;
+    }
     if (!started || draining || input.restored || jobs.size >= 8)
       return Promise.reject(Error('metadata_unavailable'));
+    const completed: Complete[] = complete ? [complete] : [];
     const work = (async () => {
       const connection = store.atomic((tx) => {
         const c = tx.connection(id);
@@ -97,7 +122,11 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
       try {
         if (
           !metadata(connection) ||
-          !store.atomic((tx) => publishServiceCatalogRefresh(tx, snapshot)) ||
+          !store.atomic((tx) => {
+            if (!publishServiceCatalogRefresh(tx, snapshot)) return false;
+            for (const finish of completed) finish(tx, snapshot);
+            return true;
+          }) ||
           !transport.activate(candidate, snapshot, () =>
             store.atomic((tx) => {
               const c = tx.connection(id);
@@ -121,10 +150,10 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
         throw error;
       }
     })();
-    jobs.set(id, work);
+    jobs.set(id, { promise: work, completed });
     void work
       .finally(() => {
-        if (jobs.get(id) === work) jobs.delete(id);
+        if (jobs.get(id)?.promise === work) jobs.delete(id);
       })
       .catch(() => {});
     return work;
@@ -136,7 +165,17 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
     restored: input.restored,
   });
   return {
-    owner: new OwnerScopeService(store, input.ownerId, now),
+    owner: new ServiceOwnerSettings({
+      store,
+      secrets,
+      ownerId: input.ownerId,
+      now,
+      sha256: hash,
+      nextId: () => randomUUID().replaceAll('-', ''),
+      writable: () => !draining && !input.restored,
+      disconnect: (id) => transport.disconnect(id),
+      refresh,
+    }),
     tools: new ServiceTurnTools({
       store,
       admission,
@@ -194,7 +233,7 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
       draining = true;
       stop.abort();
       const closing = transport.close();
-      await Promise.allSettled([...jobs.values()]);
+      await Promise.allSettled([...jobs.values()].map((job) => job.promise));
       const result = await closing;
       return uncertain || result.status === 'unknown' ? 'uncertain' : 'settled';
     },

@@ -107,6 +107,7 @@ describe('schema initialization', () => {
       'ocean_rooms',
       'ocean_service_catalogs',
       'ocean_service_connections',
+      'ocean_service_owner_receipts',
       'ocean_workspace',
       'ocean_worktrees',
     ]);

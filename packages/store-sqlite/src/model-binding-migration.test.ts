@@ -213,7 +213,7 @@ it('rolls back migration rows and version publication together, then reruns safe
   const db = previous();
   legacy(db, 'deepseek', 'pending', 2);
   db.exec(
-    "CREATE TRIGGER stop_model BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='25' BEGIN SELECT RAISE(ABORT,'synthetic interruption'); END",
+    "CREATE TRIGGER stop_model BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='26' BEGIN SELECT RAISE(ABORT,'synthetic interruption'); END",
   );
   expect(() => initializeSchema(db)).toThrow('synthetic interruption');
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(

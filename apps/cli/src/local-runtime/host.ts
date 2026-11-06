@@ -5,7 +5,7 @@ import {
   desktopImageResolver,
 } from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
-import { LOCAL_MODEL_METHODS } from '@runnets/contracts';
+import { LOCAL_MODEL_METHODS, LOCAL_SERVICE_METHODS } from '@runnets/contracts';
 import { LOCAL_RESTORE_METHODS } from '@runnets/contracts';
 import { profileCommand } from './profile-commands.js';
 import { PROFILE_METHODS } from '@runnets/contracts';
@@ -95,7 +95,7 @@ export async function startLocalRuntime(
     if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
       throw Error('durable_runtime_required');
     const restored = options.restore === true || runtime.restored === true;
-    const { provider, plugins, models } = settingsHosts({
+    const { provider, plugins, models, services } = settingsHosts({
       profile: paths.profile,
       runtime,
       env: process.env,
@@ -177,6 +177,7 @@ export async function startLocalRuntime(
             await assertRuntimeDrained(
               [
                 turns,
+                services,
                 runtime.services,
                 broadcasts,
                 options.drain,
@@ -238,6 +239,8 @@ export async function startLocalRuntime(
             return { error: { code: 'restore_restricted' } };
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
             return finalization.dispatch(method, params);
+          if (LOCAL_SERVICE_METHODS.some((m) => m === method))
+            return services.dispatch(method, params, detached);
           if (LOCAL_MODEL_METHODS.some((m) => m === method))
             return models.dispatch(method, params, detached);
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))

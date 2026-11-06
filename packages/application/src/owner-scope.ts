@@ -10,10 +10,8 @@ import type {
   ServiceAuthorityTransaction,
 } from './service-authority-ports.js';
 import { currentServiceCatalog } from './service-catalog-policy.js';
-export type OwnerScopeIntent = Pick<
-  OwnerScopeGrant,
-  'id' | 'subject' | 'permissions' | 'limits'
-> & { readonly mode?: OwnerScopeGrant['mode'] };
+export type { OwnerScopeIntent } from '@runnets/domain';
+import type { OwnerScopeIntent } from '@runnets/domain';
 function materialize(
   tx: ServiceAuthorityTransaction,
   owner: string,
@@ -54,15 +52,19 @@ export class OwnerScopeService {
     this.ownerId = ownerId;
     this.now = now;
   }
-  issue(intent: OwnerScopeIntent): OwnerScopeGrant {
-    return this.write(intent, null);
+  issue(intent: OwnerScopeIntent, tx?: ServiceAuthorityTransaction): OwnerScopeGrant {
+    return this.write(intent, null, tx);
   }
-  revise(reference: OwnerGrantReference, intent: OwnerScopeIntent): OwnerScopeGrant {
+  revise(
+    reference: OwnerGrantReference,
+    intent: OwnerScopeIntent,
+    tx?: ServiceAuthorityTransaction,
+  ): OwnerScopeGrant {
     if (reference.grantId !== intent.id) throw Error('grant_conflict');
-    return this.write(intent, reference.revision);
+    return this.write(intent, reference.revision, tx);
   }
-  revoke(ref: OwnerGrantReference): OwnerScopeGrant {
-    return this.store.atomic((tx) => {
+  revoke(ref: OwnerGrantReference, transaction?: ServiceAuthorityTransaction): OwnerScopeGrant {
+    return this.transact((tx) => {
       const old = tx.grant(ref.grantId);
       if (
         !old ||
@@ -79,16 +81,26 @@ export class OwnerScopeService {
       };
       if (!tx.putGrant(record, old.revision)) throw Error('grant_conflict');
       return record;
-    });
+    }, transaction);
   }
-  private write(intent: OwnerScopeIntent, expected: number | null): OwnerScopeGrant {
+  private transact<T>(
+    work: (tx: ServiceAuthorityTransaction) => T,
+    tx?: ServiceAuthorityTransaction,
+  ): T {
+    return tx ? work(tx) : this.store.atomic(work);
+  }
+  private write(
+    intent: OwnerScopeIntent,
+    expected: number | null,
+    transaction?: ServiceAuthorityTransaction,
+  ): OwnerScopeGrant {
     if (
       Object.keys(intent).some(
         (k) => !['id', 'subject', 'permissions', 'limits', 'mode'].includes(k),
       )
     )
       throw Error('invalid_owner_intent');
-    return this.store.atomic((tx) => {
+    return this.transact((tx) => {
       const old = tx.grant(intent.id);
       if (
         expected !== null &&
@@ -115,6 +127,6 @@ export class OwnerScopeService {
         throw Error('invalid_owner_scope');
       if (!tx.putGrant(grant, expected)) throw Error('grant_conflict');
       return structuredClone(grant);
-    });
+    }, transaction);
   }
 }

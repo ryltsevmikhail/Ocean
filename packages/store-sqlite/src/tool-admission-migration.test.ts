@@ -30,7 +30,7 @@ it('upgrades existing journal rows transactionally, retains spent identities, re
     const before = history(),
       resolutions = db.prepare('SELECT * FROM tool_effect_resolutions_v1').all();
     db.exec(
-      "CREATE TRIGGER stop_25 BEFORE UPDATE ON meta WHEN NEW.value='25' BEGIN SELECT RAISE(ABORT,'rollback25'); END",
+      "CREATE TRIGGER stop_25 BEFORE UPDATE ON meta WHEN NEW.value='26' BEGIN SELECT RAISE(ABORT,'rollback25'); END",
     );
     expect(() => initializeSchema(db)).toThrow('rollback25');
     expect(
