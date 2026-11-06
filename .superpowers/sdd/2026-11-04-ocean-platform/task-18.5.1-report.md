@@ -131,6 +131,8 @@ C18.5.2 exact decision confirmation, C18.5.3 UI/legacy conversion and Executor s
 
 ## Correction1 — C1, I1, I2 and I3
 
+Owned correction checkpoint: `ec187e08886bcd0e282b0f2fadf976c4089eff10` (`fix: preserve shared credentials and owner operation boundaries`), containing the 15 owned source/test/report paths. This later report-only commit records that immutable checkpoint for the scoped review.
+
 Worker status: **DONE_WITH_CONCERNS, correction ready for scoped independent review; acceptance remains pending.** FIX_BASE is `9243866459f9ba90a0cdcc2febb4d7c3da4d9362`. This correction addresses the four blocking findings in `task-18.5.1-review.md` under `task-18.5.1-fix1.md`. M1 bounded-list materialization and M2 the generic mutation process test's sleep witness remain explicitly deferred to F. No helper agent/reviewer, root suite, native/ready-server/live/GUI or package qualification was added or repeated.
 
 This appendix supersedes the original report's ordinary secret-publication/removal compatibility description. The original implementation could accumulate successful rotation entries, publish beyond the shared file's readable limit, then reset untrusted contents. That behavior is corrected; the review's C1 reproduction was valid.
