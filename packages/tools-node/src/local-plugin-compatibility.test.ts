@@ -73,6 +73,7 @@ it.each([
             'plugin.session-authority-v1',
             'model.connections-v1',
             'decisions.service-v1',
+            'service.authority-v2',
           ],
         },
       ]);

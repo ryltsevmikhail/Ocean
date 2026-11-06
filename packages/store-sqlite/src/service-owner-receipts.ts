@@ -1,6 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { ServiceOwnerReceipt } from '@runnets/application';
 import {
+  validServiceOwnerOperation,
+  validServiceOwnerOperationsQuery,
+  type ServiceOwnerOperationsQuery,
   validServiceConnection,
   validOwnerScopeGrant,
   validServiceCatalogSnapshot,
@@ -19,6 +22,10 @@ export function readServiceOwnerReceipt(db: DatabaseSync, id: string): ServiceOw
   const r = JSON.parse(String(row['record'])) as ServiceOwnerReceipt;
   if (
     r.requestId !== id ||
+    (Object.hasOwn(r, 'operation') &&
+      (!validServiceOwnerOperation(r.operation) ||
+        r.operation.method !== r.method ||
+        r.operation.input.requestId !== r.requestId)) ||
     r.ownerId !== row['owner_id'] ||
     r.state !== row['state'] ||
     !/^[a-f0-9]{64}$/.test(r.binding) ||
@@ -53,7 +60,8 @@ export function putServiceOwnerReceipt(
         old.state !== expected ||
         old.ownerId !== r.ownerId ||
         old.binding !== r.binding ||
-        old.method !== r.method
+        old.method !== r.method ||
+        JSON.stringify(old.operation) !== JSON.stringify(r.operation)
   )
     return false;
   if (expected !== null && r.state !== 'completed') return false;
@@ -62,4 +70,21 @@ export function putServiceOwnerReceipt(
   ).run(r.requestId, r.ownerId, r.state, JSON.stringify(r));
   readServiceOwnerReceipt(db, r.requestId);
   return true;
+}
+
+/** Filter before expansion; one bounded lookahead preserves a non-skipping cursor. */
+export function listServiceOwnerReceipts(
+  db: DatabaseSync,
+  ownerId: string,
+  query: ServiceOwnerOperationsQuery,
+): readonly ServiceOwnerReceipt[] {
+  if (!validServiceOwnerOperationsQuery(query)) throw Error('invalid_params');
+  return db
+    .prepare(
+      `SELECT request_id FROM ocean_service_owner_receipts
+    WHERE owner_id=? AND request_id>? ${query.state ? 'AND state=?' : ''}
+    ORDER BY request_id LIMIT ?`,
+    )
+    .all(ownerId, query.after ?? '', ...(query.state ? [query.state] : []), (query.limit ?? 50) + 1)
+    .map((row) => readServiceOwnerReceipt(db, String(row['request_id']))!);
 }

@@ -1,3 +1,4 @@
+import { localServiceClient, type LocalServiceClient } from './local-service-client.js';
 import {
   localModelConnectionsClient,
   type LocalModelConnectionsClient,
@@ -17,6 +18,7 @@ import {
   LOCAL_PLUGIN_SESSION_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
   LOCAL_SERVICE_CONFIRMATIONS,
+  LOCAL_SERVICE_AUTHORITY,
   isLocalRuntimeIdentity,
   isLocalReceiptQuery,
   isLocalRunQuery,
@@ -42,6 +44,7 @@ import { localBroadcastClient, type LocalBroadcastClient } from './local-broadca
 import { localPluginClient, type LocalPluginClient } from './local-plugin-client.js';
 export interface LocalRuntimeClient
   extends
+    LocalServiceClient,
     LocalModelConnectionsClient,
     LocalRestoreClient,
     LocalDesktopClient,
@@ -156,6 +159,7 @@ async function connectDescriptor(
         LOCAL_PLUGIN_SESSION_AUTHORITY,
         LOCAL_MODEL_CONNECTIONS,
         LOCAL_SERVICE_CONFIRMATIONS,
+        LOCAL_SERVICE_AUTHORITY,
       ],
     });
     if (
@@ -171,6 +175,7 @@ async function connectDescriptor(
       throw Error('plugin_runtime_upgrade_required');
     return {
       identity,
+      ...localServiceClient(peer.request.bind(peer), identity),
       ...localModelConnectionsClient(peer.request.bind(peer), identity),
       ...localRestoreClient(peer.request.bind(peer)),
       ...localDesktopClient((method, params) => peer.request(method, params)),

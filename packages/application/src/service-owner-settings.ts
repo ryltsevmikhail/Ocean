@@ -9,6 +9,8 @@ import {
   type ServiceGrantSetRequest,
   type ServiceGrantRevokeRequest,
   type ServiceCatalogSnapshot,
+  type ServiceConnection,
+  type ServiceOwnerOperationsQuery,
 } from '@runnets/domain';
 import type {
   ServiceAuthorityStorePort,
@@ -16,7 +18,7 @@ import type {
 } from './service-authority-ports.js';
 import type { ProviderSecretStorePort } from './provider-connection-ports.js';
 import { keyDigest, validRequestId, type Sha256 } from './provider-connection-request.js';
-import { currentServiceCatalog } from './service-catalog-policy.js';
+import { ownerConnections, ownerGrants, ownerOperations } from './service-owner-views.js';
 import { OwnerScopeService } from './owner-scope.js';
 import {
   ownedConnection,
@@ -36,6 +38,7 @@ export interface ServiceOwnerSettingsOptions {
   readonly sha256: Sha256;
   readonly nextId: () => string;
   readonly writable: () => boolean;
+  readonly ready?: (connection: ServiceConnection, catalog: ServiceCatalogSnapshot) => boolean;
   readonly disconnect?: (connectionId: string) => void;
   readonly refresh: (
     connectionId: string,
@@ -52,32 +55,13 @@ export class ServiceOwnerSettings {
     this.#owner = new OwnerScopeService(options.store, options.ownerId, options.now);
   }
   connections() {
-    return this.#o.store.atomic((tx) =>
-      this.#bounded(
-        tx
-          .listConnections()
-          .filter((c) => c.trust.ownerId === this.#o.ownerId)
-          .map((c) => ({
-            ...c,
-            tools: currentServiceCatalog(tx, c)?.tools.map((t) => t.name) ?? [],
-          })),
-      ),
-    );
+    return this.#o.store.atomic((tx) => ownerConnections(tx, this.#o.ownerId, this.#o.ready));
   }
   grants() {
-    return this.#o.store.atomic((tx) =>
-      this.#bounded(tx.listGrants().filter((g) => g.owner.ownerId === this.#o.ownerId)),
-    );
+    return this.#o.store.atomic((tx) => ownerGrants(tx, this.#o.ownerId));
   }
-  #bounded<T>(values: readonly T[]): readonly T[] {
-    const result: T[] = [];
-    let size = 0;
-    for (const value of values) {
-      size += canonicalJson(value).length;
-      if (result.length === 100 || size > 400000) break;
-      result.push(value);
-    }
-    return result;
+  operations(query: ServiceOwnerOperationsQuery) {
+    return this.#o.store.atomic((tx) => ownerOperations(tx, this.#o.ownerId, query));
   }
   receipt(requestId: string) {
     validRequestId(requestId);
@@ -126,12 +110,14 @@ export class ServiceOwnerSettings {
   setConnection(request: ServiceConnectionSetRequest) {
     this.#assertWritable();
     if (!validServiceConnectionSetRequest(request)) throw Error('invalid_params');
-    const method = 'service.connection-set',
+    const method = 'service.connection-set' as const,
       binding = this.#binding(method, request);
     const prior = this.#o.store.atomic((tx) => this.#replay(tx, request.requestId, binding));
     if (prior) return serviceOwnerReceiptView(prior);
+    const { key: _key, ...input } = request;
     const receipt = {
       ...this.#receipt(request.requestId, method, binding),
+      operation: { method, input: structuredClone(input), requiresKey: request.key !== undefined },
       expectedVersions: request.expectedVersions,
       secretReference: request.key === undefined ? null : 'psec_' + this.#o.nextId(),
     };
@@ -240,6 +226,7 @@ export class ServiceOwnerSettings {
           {
             ...this.#receipt(request.requestId, method, binding),
             expectedVersions: request.expectedVersions,
+            operation: { method, input: structuredClone(request), requiresKey: false },
           },
           null,
         )

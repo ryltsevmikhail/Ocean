@@ -176,6 +176,7 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
       sha256: hash,
       nextId: () => randomUUID().replaceAll('-', ''),
       writable: () => !draining && !input.restored,
+      ready: (c, s) => !draining && !input.restored && transport.ready(c, s),
       disconnect: (id) => transport.disconnect(id),
       refresh,
     }),

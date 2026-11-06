@@ -1,4 +1,5 @@
 import type {
+  ServiceOwnerOperation,
   OwnerScopeGrant,
   ServiceCatalogSnapshot,
   ServiceConnection,
@@ -15,6 +16,7 @@ export interface ServiceOwnerReceipt {
   readonly secretReference: string | null;
   readonly expectedVersions: ServiceConnectionVersions | null;
   readonly result: ServiceOwnerResult | null;
+  readonly operation?: ServiceOwnerOperation;
 }
 export type ServiceOwnerReceiptView = Pick<
   ServiceOwnerReceipt,

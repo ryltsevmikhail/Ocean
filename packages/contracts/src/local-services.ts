@@ -4,6 +4,7 @@ export const LOCAL_SERVICE_READ_METHODS = [
   'service.connections',
   'service.grants',
   'service.receipt',
+  'service.owner-operations',
 ] as const;
 export const LOCAL_SERVICE_METHODS = [
   ...LOCAL_SERVICE_READ_METHODS,
@@ -15,6 +16,7 @@ export const LOCAL_SERVICE_METHODS = [
 ] as const;
 export {
   validServiceOwnerQuery as isLocalServiceQuery,
+  validServiceOwnerOperationsQuery as isLocalServiceOwnerOperationsQuery,
   validServiceReceiptQuery as isLocalServiceReceiptQuery,
   validServiceConnectionRequest as isLocalServiceConnectionRequest,
   validServiceConnectionSetRequest as isLocalServiceConnectionSetRequest,

@@ -84,3 +84,4 @@ export * from './service-permissions.js';
 export * from './effect-resource-conflicts.js';
 
 export * from './service-owner-requests.js';
+export * from './service-owner-operations.js';

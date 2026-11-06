@@ -14,7 +14,7 @@ const identity = {
   capabilities: runtimeCapabilities(false),
 };
 it('projects independent RC2/A3/model capability identities without shared negotiation state', () => {
-  expect(identity.capabilities).toHaveLength(76);
+  expect(identity.capabilities).toHaveLength(77);
   for (let i = 0; i < 3; i++) {
     const a3 = clientIdentity(identity, true, false);
     expect(a3.capabilities).toHaveLength(65);

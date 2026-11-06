@@ -9,13 +9,12 @@ const exec = promisify(execFile);
 it('an independent owner client observes the durable original receipt after a lost reply and owner restart', async () => {
   const f = await privateRoot();
   let host = await startLocalRuntime({ profile: f.profile, provider: null });
-  const helper = new URL('../../test-fixtures/service-owner-peer.ts', import.meta.url).href;
   const client = async (action: string) => {
-    const script = `import {serviceOwnerPeer} from ${JSON.stringify(helper)};
-      const p=await serviceOwnerPeer(process.argv[1]);
+    const script = `import {connectLocalRuntime} from '@runnets/tools-node/local-runtime-client';
+      const p=await connectLocalRuntime({profile:process.argv[1]});
       const input={requestId:'detached',connectionId:'owned',expectedVersions:null,name:'Before',configuration:{kind:'http',url:'http://127.0.0.1:1/mcp'},metadataPermission:'none'};
-      if(process.argv[2]==='detach') {p.request('service.connection-set',input); await new Promise(r=>setTimeout(r,25)); p.close();}
-      else {const original=await p.request('service.connection-set',input);const current=await p.request('service.connections',{});p.close();console.log(JSON.stringify({original,current}));}`;
+      if(process.argv[2]==='detach') {p.setServiceConnection(input); await new Promise(r=>setTimeout(r,25)); p.close();}
+      else {const original=await p.setServiceConnection(input);const current=await p.serviceConnections();const page=await p.listServiceOwnerOperations({});if(page.items[0]?.requestId!=='detached')throw Error('missing original intent');p.close();console.log(JSON.stringify({original,current}));}`;
     return exec(process.execPath, ['--input-type=module', '-e', script, f.profile, action], {
       timeout: 10000,
     });

@@ -1,5 +1,7 @@
 import type { ServiceOwnerSettings } from '@runnets/application';
 import {
+  LOCAL_SERVICE_READ_METHODS,
+  isLocalServiceOwnerOperationsQuery,
   isLocalServiceQuery,
   isLocalServiceReceiptQuery,
   isLocalServiceConnectionRequest,
@@ -48,6 +50,10 @@ export class RuntimeServiceSettings {
         if (!isLocalServiceQuery(params)) return this.#invalid();
         work = () => s.grants();
         break;
+      case 'service.owner-operations':
+        if (!isLocalServiceOwnerOperationsQuery(params)) return this.#invalid();
+        work = () => s.operations(params);
+        break;
       case 'service.receipt':
         if (!isLocalServiceReceiptQuery(params)) return this.#invalid();
         work = () => s.receipt(params.requestId);
@@ -76,10 +82,7 @@ export class RuntimeServiceSettings {
       default:
         return this.#invalid();
     }
-    if (
-      this.#draining &&
-      !['service.connections', 'service.grants', 'service.receipt'].includes(method)
-    )
+    if (this.#draining && !LOCAL_SERVICE_READ_METHODS.some((m) => m === method))
       return { error: { code: 'runtime_draining' } };
     const job = this.#run(work);
     this.#jobs.add(job);

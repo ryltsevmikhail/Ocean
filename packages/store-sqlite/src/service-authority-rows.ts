@@ -56,3 +56,24 @@ export function authorityCanonical(value: unknown): string {
     );
   return JSON.stringify(value);
 }
+
+/** No-argument callers retain complete core enumeration; owner views bound SQL first. */
+export function authorityMetadataIds(
+  db: DatabaseSync,
+  table: 'ocean_service_connections' | 'ocean_owner_scope_grants',
+  query?: { readonly ownerId: string; readonly limit: number },
+) {
+  if (
+    query &&
+    (!query.ownerId || !Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 100)
+  )
+    throw Error('invalid_params');
+  const owner = table === 'ocean_service_connections' ? '$.trust.ownerId' : '$.owner.ownerId';
+  return query
+    ? db
+        .prepare(
+          `SELECT id FROM ${table} WHERE json_extract(record, '${owner}')=? ORDER BY id LIMIT ?`,
+        )
+        .all(query.ownerId, query.limit)
+    : db.prepare(`SELECT id FROM ${table} ORDER BY id`).all();
+}

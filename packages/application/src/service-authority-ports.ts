@@ -2,6 +2,7 @@ import type { ServiceOwnerReceipt } from './service-owner-receipt.js';
 import type { ToolEffectAdmission, ToolEffectRecord, ToolEffectOutcome } from './tools.js';
 import type { ServiceCallRequest } from './service-admission-types.js';
 import type {
+  ServiceOwnerOperationsQuery,
   OwnerScopeGrant,
   ServiceCatalogSnapshot,
   ServiceConnection,
@@ -9,6 +10,10 @@ import type {
 } from '@runnets/domain';
 /** Runtime-only storage; these operations grant no model-facing mutation capability. */
 export interface ServiceAuthorityTransaction {
+  listOwnerReceipts(
+    ownerId: string,
+    query: ServiceOwnerOperationsQuery,
+  ): readonly ServiceOwnerReceipt[];
   ownerReceipt(requestId: string): ServiceOwnerReceipt | null;
   putOwnerReceipt(receipt: ServiceOwnerReceipt, expectedState: 'prepared' | null): boolean;
   participates(subject: OwnerScopeGrant['subject']): boolean;
@@ -18,7 +23,10 @@ export interface ServiceAuthorityTransaction {
   pending(): readonly ToolEffectRecord[];
   settle(request: ServiceCallRequest, outcome: Exclude<ToolEffectOutcome, 'started'>): void;
   connection(id: string): ServiceConnection | null;
-  listConnections(): readonly ServiceConnection[];
+  listConnections(query?: {
+    readonly ownerId: string;
+    readonly limit: number;
+  }): readonly ServiceConnection[];
   /** null creates revision-1 axes; false is a stale/missing expected version. */
   putConnection(
     record: ServiceConnection,
@@ -33,7 +41,10 @@ export interface ServiceAuthorityTransaction {
     snapshotId: string,
   ): boolean;
   grant(id: string): OwnerScopeGrant | null;
-  listGrants(): readonly OwnerScopeGrant[];
+  listGrants(query?: {
+    readonly ownerId: string;
+    readonly limit: number;
+  }): readonly OwnerScopeGrant[];
   /** null creates revision 1; replacement must advance exactly one revision. */
   putGrant(record: OwnerScopeGrant, expectedRevision: number | null): boolean;
 }

@@ -1,4 +1,8 @@
-import { readServiceOwnerReceipt, putServiceOwnerReceipt } from './service-owner-receipts.js';
+import {
+  readServiceOwnerReceipt,
+  putServiceOwnerReceipt,
+  listServiceOwnerReceipts,
+} from './service-owner-receipts.js';
 import { SqliteToolJournal } from './tool-journal.js';
 import { participates } from './coding-store.js';
 import { runMatches } from './service-run-scope.js';
@@ -13,6 +17,7 @@ import {
 } from '@runnets/domain';
 import {
   authorityCanonical as canonical,
+  authorityMetadataIds,
   readAuthorityCatalog as catalog,
   readAuthorityConnection as connection,
   readAuthorityGrant as grant,
@@ -36,6 +41,10 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
     };
     const db = this.#db;
     const tx: ServiceAuthorityTransaction = {
+      listOwnerReceipts: (ownerId, query) => {
+        guard();
+        return listServiceOwnerReceipts(db, ownerId, query);
+      },
       ownerReceipt: (id) => {
         guard();
         return readServiceOwnerReceipt(db, id);
@@ -72,12 +81,11 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
         guard();
         return connection(db, id);
       },
-      listConnections: () => {
+      listConnections: (query) => {
         guard();
-        return db
-          .prepare('SELECT id FROM ocean_service_connections ORDER BY id')
-          .all()
-          .map((r) => connection(db, String(r['id']))!);
+        return authorityMetadataIds(db, 'ocean_service_connections', query).map((r) =>
+          connection(db, String(r['id']))!,
+        );
       },
       putConnection: (record, expected) => {
         guard();
@@ -190,12 +198,11 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
         guard();
         return grant(db, id);
       },
-      listGrants: () => {
+      listGrants: (query) => {
         guard();
-        return db
-          .prepare('SELECT id FROM ocean_owner_scope_grants ORDER BY id')
-          .all()
-          .map((r) => grant(db, String(r['id']))!);
+        return authorityMetadataIds(db, 'ocean_owner_scope_grants', query).map((r) =>
+          grant(db, String(r['id']))!,
+        );
       },
       putGrant: (record, expected) => {
         guard();
