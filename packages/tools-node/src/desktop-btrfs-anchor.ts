@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 /** Fixed Linux x86_64 ABI; receives only an already-open directory at descriptor 3. */
-const helper = `import ctypes,fcntl,json,struct
+export const desktopBtrfsProgram = `import ctypes,fcntl,json,struct
 libc=ctypes.CDLL(None,use_errno=True)
 class Handle(ctypes.Structure):
  _fields_=[("size",ctypes.c_uint),("type",ctypes.c_int),("bytes",ctypes.c_ubyte*128)]
@@ -18,7 +18,7 @@ print(json.dumps({"filesystem":bytes(filesystem[16:32]).hex(),"subvolume":bytes(
 export function desktopBtrfsAnchor(fd: number): string | null {
   if (process.platform !== 'linux' || process.arch !== 'x64') return null;
   if (Number(fs.statfsSync('/proc/self/fd/' + String(fd)).type) !== 0x9123683e) return null;
-  const result = spawnSync('/usr/bin/python3', ['-I', '-S', '-c', helper], {
+  const result = spawnSync('/usr/bin/python3', ['-I', '-S', '-c', desktopBtrfsProgram], {
     cwd: '/',
     env: {},
     stdio: ['ignore', 'pipe', 'pipe', fd],

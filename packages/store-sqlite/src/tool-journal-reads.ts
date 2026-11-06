@@ -1,3 +1,10 @@
+import { createHash } from 'node:crypto';
+import {
+  MANAGED_LIFETIME_RUN,
+  MANAGED_LIFETIME_TOOL,
+  validManagedLifetime,
+  managedLifetimeFingerprint,
+} from '@runnets/domain';
 import {
   readToolAdmission,
   exactCodingReceipt,
@@ -56,6 +63,28 @@ export function readEffectiveToolAdmission(
 ): ToolEffectAdmission | undefined {
   const admission = readToolAdmission(row['admission']);
   if (!admission) return undefined;
+  if (
+    String(row['task_run_id']).includes('\0') ||
+    String(row['tool']).includes('\0') ||
+    (admission.binding &&
+      typeof admission.binding === 'object' &&
+      'managedLifetime' in admission.binding)
+  ) {
+    const r = {
+      taskRunId: String(row['task_run_id']),
+      attemptId: String(row['attempt_id']),
+      id: String(row['id']),
+      tool: String(row['tool']),
+      admission,
+    };
+    return r.taskRunId === MANAGED_LIFETIME_RUN &&
+      r.tool === MANAGED_LIFETIME_TOOL &&
+      validManagedLifetime(r) &&
+      createHash('sha256').update(managedLifetimeFingerprint(r)).digest('hex') ===
+        row['fingerprint']
+      ? admission
+      : undefined;
+  }
   const a = journalCodingApproval(db, row);
   if (a !== undefined) return a && exactCodingReceipt(a, admission) ? admission : undefined;
   const codingWorktree =

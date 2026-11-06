@@ -153,3 +153,5 @@ export {
 export { roomCompleteEvidence } from './room-slice-handoff.js';
 
 export { releaseUnstartedRoomClaim } from './room-task-cancellation.js';
+
+export * from './service-resource-evidence.js';

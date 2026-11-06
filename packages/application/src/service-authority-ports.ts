@@ -1,3 +1,4 @@
+import type { ServiceResourceFacts } from './service-resource-evidence.js';
 import type { RoomPhysicalScope } from './room-task-authority.js';
 import type { ServiceOwnerReceipt } from './service-owner-receipt.js';
 import type { ToolEffectAdmission, ToolEffectRecord, ToolEffectOutcome } from './tools.js';
@@ -26,7 +27,16 @@ export interface ServiceAuthorityTransaction {
     fingerprint: string,
     admission: ToolEffectAdmission,
     at?: number,
+    facts?: ServiceResourceFacts,
   ): boolean;
+  claimLifetime(
+    record: Omit<ToolEffectRecord, 'outcome' | 'fingerprint'>,
+    facts: ServiceResourceFacts,
+  ): boolean;
+  settleLifetime(
+    record: ToolEffectRecord,
+    outcome: 'completed' | 'not_started' | 'uncertain',
+  ): void;
   pending(): readonly ToolEffectRecord[];
   settle(request: ServiceCallRequest, outcome: Exclude<ToolEffectOutcome, 'started'>): void;
   connection(id: string): ServiceConnection | null;

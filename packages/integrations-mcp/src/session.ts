@@ -37,7 +37,12 @@ export class Session {
   published: string | undefined;
   wasPublished = false;
   onLoss: (() => void) | undefined;
+  get managed() {
+    return this.stdio?.managed ?? null;
+  }
+  private controlled = false;
   private stdio: Awaited<ReturnType<typeof serviceStdio>> | undefined;
+  private stdioPreparing: ReturnType<typeof serviceStdio> | undefined;
   get preparingStdio() {
     return this.connection.configuration.kind === 'stdio' && !this.stdio;
   }
@@ -47,12 +52,12 @@ export class Session {
   private hint = false;
   private notified = false;
   private calls = 0;
-  private drained: (() => void) | undefined;
+  private readonly drained = new Set<() => void>();
   afterCalls() {
     return this.calls === 0
       ? Promise.resolve()
       : new Promise<void>((done) => {
-          this.drained = done;
+          this.drained.add(done);
         });
   }
   readonly connection: ServiceConnection;
@@ -74,7 +79,12 @@ export class Session {
       this.refresh(true),
     );
   }
+  markUncertain() {
+    this.stdio?.lost();
+    this.lost();
+  }
   private lost() {
+    if (!this.controlled) this.stdio?.lost();
     if (!this.writer.usable) return;
     this.writer.usable = false;
     this.refresh();
@@ -121,7 +131,12 @@ export class Session {
     const transport =
       cfg.kind === 'http'
         ? serviceHttp(cfg.url, this.secret, this.options.githubIssueReadOnly === true, this.writer)
-        : (this.stdio = await serviceStdio(c, this.options, this.writer, this.secret)).transport;
+        : (this.stdio = await (this.stdioPreparing = serviceStdio(
+            c,
+            this.options,
+            this.writer,
+            this.secret,
+          ))).transport;
     signal.throwIfAborted();
     if (!d.authorizeMetadata()) throw Error('metadata denied');
     await this.client.connect(transport, { signal, timeout: d.deadlineMs });
@@ -173,7 +188,14 @@ export class Session {
     const timeout = Math.min(input.deadlineMs, SERVICE_PLUGIN_CALL_DEADLINE_MS);
     if (!Number.isSafeInteger(timeout) || timeout < 1 || input.signal.aborted) return refused;
     const signal = AbortSignal.any([input.signal, this.stop.signal, AbortSignal.timeout(timeout)]);
-    const send = new InvocationSend(timeout, signal, invocationId, () => input.authorizeDispatch());
+    const send = new InvocationSend(
+      timeout,
+      signal,
+      invocationId,
+      () => input.authorizeDispatch(),
+      input.prepareDispatch ? () => input.prepareDispatch!() : undefined,
+      input.managedSession,
+    );
     this.calls++;
     try {
       const reply = await send.run(() =>
@@ -207,6 +229,7 @@ export class Session {
           result: null,
           vendorErrorCode: 'service_rejected',
         };
+      if (this.stdio) this.lost();
       return {
         kind: 'uncertain',
         invocationId,
@@ -214,7 +237,10 @@ export class Session {
         detail: 'no valid response after dispatch',
       };
     } finally {
-      if (--this.calls === 0) this.drained?.();
+      if (--this.calls === 0) {
+        for (const done of this.drained) done();
+        this.drained.clear();
+      }
     }
   }
   retire() {
@@ -223,6 +249,9 @@ export class Session {
     this.deactivate();
     this.stop.abort();
     this.retiring = (async (): Promise<McpCleanupEvidence> => {
+      if (this.stdioPreparing) this.stdio = await this.stdioPreparing.catch(() => undefined);
+      await this.stdio?.prepareRetirement();
+      this.controlled = true;
       let closed = true;
       try {
         await this.client.close();
@@ -230,6 +259,7 @@ export class Session {
         closed = false;
       }
       await this.writer.afterWork();
+      await this.afterCalls();
       const evidence = this.stdio
         ? await this.stdio.cleanup()
         : ({

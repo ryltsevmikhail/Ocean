@@ -1,3 +1,8 @@
+import {
+  managedEnrollment,
+  managedLifetimeFingerprint,
+  validManagedLifetime,
+} from '@runnets/domain';
 import { roomHostPhysicalScope } from './room-host-command.js';
 import type { RoomHostBinding } from './room-host-storage.js';
 import {
@@ -77,9 +82,34 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
         guard();
         return this.#journal.grantCalls(run, id);
       },
-      claim: (r, fingerprint, admission, at) => {
+      claim: (r, fingerprint, admission, at, facts) => {
         guard();
-        return this.#journal.claimNow(r.invocationId, r.tool, r, fingerprint, admission, at);
+        return this.#journal.claimNow(r.invocationId, r.tool, r, fingerprint, admission, at, facts);
+      },
+      claimLifetime: (r, facts) => {
+        guard();
+        if (!validManagedLifetime(r)) throw Error('invalid managed lifetime');
+        const binding = r.admission!.binding as Record<string, unknown>;
+        const c = connection(db, String(binding['connectionId']));
+        if (!c || managedEnrollment(c) !== binding['managedEnrollment']) return false;
+        return this.#journal.claimNow(
+          r.id,
+          r.tool,
+          r,
+          managedLifetimeFingerprint(r),
+          r.admission,
+          undefined,
+          facts,
+        );
+      },
+      settleLifetime: (r, outcome) => {
+        guard();
+        if (
+          !validManagedLifetime(r) ||
+          !this.#journal.inspectPending().some((p) => canonical(p) === canonical(r))
+        )
+          throw Error('managed lifetime missing');
+        this.#journal.settleNow(r.id, outcome, r);
       },
       pending: () => {
         guard();

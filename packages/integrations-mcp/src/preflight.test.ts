@@ -15,12 +15,12 @@ vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof Fs>();
   return {
     ...fs,
-    readdir: async (...args: Parameters<typeof fs.readdir>) => {
+    realpath: async (...args: Parameters<typeof fs.realpath>) => {
       if (String(args[0]) === hold.root) {
         hold.reads++;
         await hold.release;
       }
-      return fs.readdir(...args);
+      return fs.realpath(...args);
     },
   };
 });
@@ -54,7 +54,10 @@ it.each(['deadline', 'cancel'])(
       args: [],
     });
     const t = createMcpServiceTransport({
-      stdio: { profileRoot, workspaces: { [c.id]: workspace } },
+      stdio: {
+        profileRoot,
+        workspaces: Object.fromEntries(Array.from({ length: 8 }, (_, n) => [c.id + n, workspace])),
+      },
     });
     const starts = vi.spyOn(StdioClientTransport.prototype, 'start');
     let release!: () => void;
@@ -64,12 +67,15 @@ it.each(['deadline', 'cancel'])(
       release = r;
     });
     const ac = new AbortController();
-    const discover = () =>
-      t.discover(c, {
-        signal: ac.signal,
-        deadlineMs: mode === 'deadline' ? 250 : 2000,
-        authorizeMetadata: () => true,
-      });
+    const discover = (_: unknown, n: number) =>
+      t.discover(
+        { ...c, id: c.id + n },
+        {
+          signal: ac.signal,
+          deadlineMs: mode === 'deadline' ? 250 : 2000,
+          authorizeMetadata: () => true,
+        },
+      );
     const calls = Promise.allSettled(Array.from({ length: 8 }, discover));
     try {
       await vi.waitFor(() => expect(hold.reads).toBe(8), { timeout: 200 });
@@ -105,3 +111,67 @@ it.each(['deadline', 'cancel'])(
     }
   },
 );
+it('keeps a replaced same-connection preflight counted until its held kernel work unwinds', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcp-replaced-preflight-'));
+  const workspace = join(dir, 'workspace'),
+    profileRoot = join(dir, 'profile'),
+    file = join(dir, 'server.mjs');
+  await mkdir(workspace);
+  await mkdir(profileRoot);
+  await writeFile(file, 'fixture');
+  const c = connection({
+    kind: 'stdio',
+    executable: file,
+    sha256: createHash('sha256').update('fixture').digest('hex'),
+    args: [],
+  });
+  const t = createMcpServiceTransport({
+    stdio: {
+      profileRoot,
+      workspaces: Object.fromEntries(
+        ['fresh', c.id, ...Array.from({ length: 6 }, (_, n) => c.id + n)].map((id) => [
+          id,
+          workspace,
+        ]),
+      ),
+    },
+  });
+  let release!: () => void;
+  hold.root = workspace;
+  hold.reads = hold.commands = 0;
+  hold.release = new Promise<void>((r) => {
+    release = r;
+  });
+  const ac = new AbortController();
+  const discover = (id: string) =>
+    t.discover(
+      { ...c, id },
+      { signal: ac.signal, deadlineMs: 2000, authorizeMetadata: () => true },
+    );
+  const first = Promise.allSettled([discover(c.id)]);
+  let rest = Promise.resolve([] as PromiseSettledResult<unknown>[]);
+  try {
+    await vi.waitFor(() => expect(hold.reads).toBe(1), { timeout: 200 });
+    rest = Promise.allSettled([
+      discover(c.id),
+      ...Array.from({ length: 6 }, (_, n) => discover(c.id + n)),
+    ]);
+    await vi.waitFor(() => expect(hold.reads).toBeGreaterThanOrEqual(7), { timeout: 200 });
+    const capacity = await Promise.race([
+      discover('fresh').then(
+        () => 'accepted',
+        () => 'refused',
+      ),
+      delay(50, 'slot reused'),
+    ]);
+    expect(capacity).toBe('refused');
+    expect(hold.reads).toBe(7);
+  } finally {
+    ac.abort();
+    release();
+    await first;
+    await rest;
+    await t.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

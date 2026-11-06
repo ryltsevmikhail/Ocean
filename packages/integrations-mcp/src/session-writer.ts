@@ -16,11 +16,13 @@ export class SessionWriter {
   async afterWork(): Promise<void> {
     while (this.pending.size) await Promise.allSettled([...this.pending]);
   }
+  managedSession: string | null = null;
   discovering = true;
   usable = true;
   transmitted = false;
   private metadataAttempts = 0;
   private metadataBytes = 0;
+  readonly expiresAt: number;
   readonly lifetime: AbortSignal;
   readonly discovery: McpDiscoveryOptions;
   readonly options: McpServiceTransportOptions;
@@ -29,6 +31,7 @@ export class SessionWriter {
     discovery: McpDiscoveryOptions,
     options: McpServiceTransportOptions,
   ) {
+    this.expiresAt = Date.now() + discovery.deadlineMs;
     this.lifetime = lifetime;
     this.discovery = discovery;
     this.options = options;
@@ -36,7 +39,10 @@ export class SessionWriter {
   async prepare(method: string) {
     if (method !== 'tools/call') return undefined;
     const send = InvocationSend.current();
+    if (this.managedSession !== null && send.managedSession !== this.managedSession)
+      throw Error('managed generation evidence missing');
     await this.options.prepareDispatch?.(send.id);
+    await send.prepare?.();
     return send;
   }
   admit(method: string, send: InvocationSend | undefined) {

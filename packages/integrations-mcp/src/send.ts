@@ -11,9 +11,20 @@ export class InvocationSend {
   private closed = false;
 
   readonly id: string;
+  readonly managedSession: string | undefined;
+  readonly prepare: (() => Promise<void>) | undefined;
   private readonly authorize: (() => boolean) | undefined;
-  constructor(timeoutMs: number, signal?: AbortSignal, id = '', authorize?: () => boolean) {
+  constructor(
+    timeoutMs: number,
+    signal?: AbortSignal,
+    id = '',
+    authorize?: () => boolean,
+    prepare?: () => Promise<void>,
+    managedSession?: string,
+  ) {
     this.id = id;
+    this.prepare = prepare;
+    this.managedSession = managedSession;
     this.authorize = authorize;
     this.deadline = performance.now() + timeoutMs;
     this.signal = signal;

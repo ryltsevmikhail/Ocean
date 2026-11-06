@@ -27,7 +27,10 @@ export function rig(
   invoke: ServiceCallTransportPort['invoke'],
   deadlineMs = 2000,
   options: Partial<
-    Pick<ServiceCallAdmissionOptions, 'classify' | 'credentialContinuous' | 'confirmation'>
+    Pick<
+      ServiceCallAdmissionOptions,
+      'classify' | 'credentialContinuous' | 'confirmation' | 'prepareResources'
+    >
   > = {},
   file = false,
 ) {

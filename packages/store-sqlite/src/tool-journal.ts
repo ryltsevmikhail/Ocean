@@ -1,3 +1,14 @@
+import {
+  serviceResourceFactsCurrent,
+  serviceResourceConflicts,
+  type ServiceResourceFacts,
+} from '@runnets/application';
+import {
+  MANAGED_LIFETIME_RUN,
+  MANAGED_LIFETIME_TOOL,
+  validManagedLifetime,
+  managedLifetimeFingerprint,
+} from '@runnets/domain';
 import { roomHostToolAllowed } from './room-host-command.js';
 import type { RoomHostBinding } from './room-host-storage.js';
 import { journalCodingApproval } from './coding-journal-receipt.js';
@@ -59,11 +70,21 @@ export class SqliteToolJournal implements ToolJournalPort {
     fingerprint: string,
     admission?: ToolEffectAdmission,
     at?: number,
+    facts?: ServiceResourceFacts,
   ): boolean {
     if (!context.taskRunId || !context.attemptId || !fingerprint)
       throw Error('tool claim requires run, attempt and request identity');
     if (admission !== undefined && !validToolEffectAdmission(admission))
       throw Error('invalid tool effect admission');
+    if (
+      (context.taskRunId.includes('\0') || tool.includes('\0')) &&
+      (!validManagedLifetime({ ...context, id, tool, ...(admission ? { admission } : {}) }) ||
+        context.taskRunId !== MANAGED_LIFETIME_RUN ||
+        tool !== MANAGED_LIFETIME_TOOL ||
+        fingerprint !==
+          managedLifetimeFingerprint({ ...context, id, tool, ...(admission ? { admission } : {}) }))
+    )
+      throw Error('invalid managed lifetime claim');
     const insert = () => {
       if (
         this.#db
@@ -73,11 +94,15 @@ export class SqliteToolJournal implements ToolJournalPort {
           .get(context.taskRunId, context.attemptId, id)
       )
         return false;
+      if (admission && !serviceResourceFactsCurrent(this.inspectPending(), admission, facts))
+        return false;
       if (!roomHostToolAllowed(this.#db, this.#host, context.taskRunId, at ?? NaN, admission))
         return false;
       if (
         this.#db.prepare('SELECT id FROM tool_invocations_v1 WHERE id=?').get(id) ||
-        this.inspectConflicts(admission).length
+        this.inspectPending().some((row) =>
+          admission ? serviceResourceConflicts(row, admission, facts) : true,
+        )
       )
         return false;
       return (

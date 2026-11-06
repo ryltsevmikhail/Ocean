@@ -1,3 +1,5 @@
+import type { ManagedWorkspace } from '@runnets/domain';
+import { managedWorkspaceBootstrap } from './managed-workspace-bootstrap.js';
 import { fingerprintTree, treeFingerprintScript } from './sandbox-tree.js';
 import { fingerprintFile } from './sandbox-mounts.js';
 import { lstat } from 'node:fs/promises';
@@ -8,6 +10,7 @@ export async function sandboxLauncher(
   argv: readonly string[],
   expectedInputs: Readonly<Record<string, string>> = {},
   stdioSignal?: AbortSignal,
+  managedWorkspace?: ManagedWorkspace,
 ): Promise<string> {
   const trees: Record<string, string> = {};
   const identities: Record<string, string[]> = {};
@@ -42,6 +45,7 @@ export async function sandboxLauncher(
     const fs=require('node:fs'), cp=require('node:child_process'),crypto=require('node:crypto'),os=require('node:os'),path=require('node:path');
     const argv=${JSON.stringify(argv)}, identities=${JSON.stringify(identities)}, descriptors=[];
     const trees=${JSON.stringify(trees)}, fingerprintTree=(${treeFingerprintScript});
+    ${managedWorkspace ? managedWorkspaceBootstrap(managedWorkspace) : 'const checkWorkspace=()=>{};'}
     const staged=[];
     process.once('exit',()=>{for(const dir of staged)fs.rmSync(dir,{recursive:true,force:true});});
     try {
@@ -50,6 +54,7 @@ export async function sandboxLauncher(
         if(argv[i+1]==='/dev/null') {i+=2;continue;}
         let fd=fs.openSync(argv[i+1],fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
         descriptors.push(fd);
+        checkWorkspace(fd,argv[i+1]);
         const stat=fs.fstatSync(fd,{bigint:true});
         const actual=[stat.dev,stat.ino,stat.mode,stat.size,stat.mtimeNs,stat.ctimeNs].map(String);
         if(stat.isFile()) {
@@ -94,7 +99,7 @@ export async function sandboxLauncher(
         argv[i+1]=String(descriptors.length+2);
         i+=2;
       }
-      const child=cp.spawn('/usr/bin/bwrap',argv,{
+      const child=cp.spawn(${JSON.stringify(managedWorkspace ? '/usr/bin/unshare' : '/usr/bin/bwrap')},${managedWorkspace ? "['--user','--map-root-user','--mount','--propagation','private','/usr/bin/bwrap',...argv]" : 'argv'},{
         env:process.env,stdio:['inherit','inherit','inherit',...descriptors],shell:false});
       child.on('error',()=>process.exit(127));
       child.on('exit',(code)=>process.exit(code??128));

@@ -1,3 +1,4 @@
+import { managedPairDisjoint, type ManagedWorkspacePair } from './managed-workspace.js';
 import {
   validEffectResourceScope,
   type EffectResourceScope,
@@ -77,10 +78,12 @@ function githubRepositoryId(binding: ServiceJson, name: string): string | null {
 export function effectResourcesConflict(
   existing: ToolEffectAdmission | undefined,
   incoming: ToolEffectAdmission | undefined,
+  pair?: ManagedWorkspacePair,
 ): boolean {
   if (!existing || !incoming) return true;
   if (incoming.effectKind === 'observation' && incoming.scope.kind === 'resources') return false;
   if (existing.scope.kind !== 'resources' || incoming.scope.kind !== 'resources') return true;
+  if (managedPairDisjoint(existing, incoming, pair)) return false;
   const resources = incoming.scope.resources;
   return existing.scope.resources.some((a) =>
     resources.some((b) => !disjoint(a, b, existing, incoming)),

@@ -1,3 +1,5 @@
+import type { ManagedStdioHandle } from '@runnets/tools-node';
+import type { ToolEffectRecord } from '@runnets/application';
 import type { ServiceCatalogSnapshot, ServiceConnection } from '@runnets/domain';
 import type { ServiceCallTransportPort } from '@runnets/application';
 
@@ -9,7 +11,22 @@ export interface McpDiscoveryOptions {
   authorizeMetadata(): boolean;
 }
 export type McpCleanupEvidence = { readonly status: 'confirmed' | 'never_started' | 'unknown' };
+export interface McpManagedLifetime {
+  readonly record: ToolEffectRecord;
+  begin(): boolean;
+  finish(status: McpCleanupEvidence['status'], lost: boolean): void;
+}
+export interface McpManagedSession {
+  readonly handle: ManagedStdioHandle;
+  readonly lifetime: McpManagedLifetime;
+}
 export interface McpServiceTransportOptions {
+  /** Private owner-enrolled process claim, committed synchronously before executable start. */
+  prepareManagedLifetime?(
+    connection: ServiceConnection,
+    handle: ManagedStdioHandle,
+  ): Promise<McpManagedLifetime>;
+
   readonly protocol?: 'legacy' | '2026-07-28';
   /** Called only for the explicit reference of this exact connection generation. */
   resolveCredential?(reference: string, connection: ServiceConnection): string | null;
@@ -25,6 +42,7 @@ export interface McpServiceTransportOptions {
   refreshNeeded?(connectionId: string): void;
 }
 export interface McpServiceTransport extends ServiceCallTransportPort {
+  managed(connection: ServiceConnection): McpManagedSession | null;
   ready(connection: ServiceConnection, catalog: ServiceCatalogSnapshot): boolean;
   discover(
     connection: ServiceConnection,

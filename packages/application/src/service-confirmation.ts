@@ -13,6 +13,9 @@ function operation(request: ServiceCallRequest, p: Prepared): ServiceCallConfirm
   const binding = { ...(p.admission.binding as Record<string, unknown>) };
   delete binding['catalogId'];
   delete binding['configRevision'];
+  delete binding['managedWorkspace'];
+  delete binding['managedEnrollment'];
+  delete binding['managedSession'];
   return freezeServiceFact(
     structuredClone({
       request: semanticRequest,

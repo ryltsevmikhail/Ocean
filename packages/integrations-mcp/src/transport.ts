@@ -1,5 +1,6 @@
 import {
   canonicalJson,
+  managedEnrollment,
   validServiceConnection,
   validServiceCatalogSnapshot,
   type ServiceConnection,
@@ -69,6 +70,16 @@ export function createMcpServiceTransport(
     };
     const work = (async () => {
       try {
+        if (connection.configuration.kind === 'stdio') {
+          for (const old of [...sessions])
+            if (old !== s && old.connection.id === connection.id) {
+              old.deactivate();
+              active.delete(connection.id);
+              await old.afterCalls();
+              await retire(old);
+            }
+          if (closed || unknown || s.stop.signal.aborted) throw Error('retired before launch');
+        }
         const candidate = await s.discover();
         if (closed || unknown) throw Error('closed');
         candidates.set(candidate, s);
@@ -104,6 +115,19 @@ export function createMcpServiceTransport(
   }
   return {
     discover,
+    managed(connection) {
+      const s = active.get(connection.id);
+      return s &&
+        !closed &&
+        !unknown &&
+        s.writer.usable &&
+        !s.stop.signal.aborted &&
+        s.published === connection.currentCatalogId &&
+        managedEnrollment(s.connection) === managedEnrollment(connection) &&
+        s.managed
+        ? s.managed
+        : null;
+    },
     ready(connection, catalog) {
       const s = active.get(connection.id);
       return (
@@ -173,6 +197,13 @@ export function createMcpServiceTransport(
       } finally {
         pending.delete(work);
       }
+    },
+    async retireUncertain(connection) {
+      const s = active.get(connection.id);
+      if (!s || s.connection.configuration.kind !== 'stdio') return;
+      active.delete(connection.id);
+      s.markUncertain();
+      await retire(s);
     },
     disconnect(id) {
       const s = active.get(id);

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -10,15 +10,28 @@ import { startLocalRuntime } from './host.js';
 const prepared = vi.hoisted(() => ({ calls: 0 }));
 vi.mock('@runnets/tools-node', async (original) => ({
   ...(await original<typeof Platform>()),
+  verifyManagedStdioEnrollments: async () => {},
   // Exercise the real SDK stdio protocol using owned pinned JS; existing native isolation is a separate gate.
   prepareManagedStdio: async (r: Parameters<typeof Platform.prepareManagedStdio>[0]) => {
     expect(createHash('sha256').update(readFileSync(r.artifact)).digest('hex')).toBe(r.sha256);
     prepared.calls++;
+    const witness = (await original<typeof Platform>()).openManagedWorkspace(r.workspace, r.signal);
+    const nonce = randomUUID(),
+      unit = 'ocean-mcp-' + 'a'.repeat(32) + '-' + nonce + '.service';
     return {
+      nonce,
+      unit,
+      cgroup: '/user.slice/user-1000.slice/user@1000.service/app.slice/' + unit,
+      footprint: witness.footprint,
+      inspect: () => witness.inspect(),
+      preparationSignal: r.signal,
+      deadlineAt: r.deadlineAt ?? Date.now() + 15000,
+      running: async () => true,
       parameters: { command: process.execPath, args: [r.artifact], env: {}, stderr: 'pipe' },
       start() {},
       async observe() {},
       async cleanup() {
+        witness.close();
         return 'confirmed';
       },
     };

@@ -5,4 +5,6 @@ export type {
   McpDiscoveryOptions,
   McpCatalogCandidate,
   McpCleanupEvidence,
+  McpManagedLifetime,
+  McpManagedSession,
 } from './contracts.js';

@@ -1,3 +1,4 @@
+import { runtimeManagedAuthority } from './runtime-managed-services.js';
 import { createProviderSecretStore, providerCredentialDirectory } from '@runnets/tools-node';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -75,6 +76,9 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
       );
     });
   const secrets = createProviderSecretStore(providerCredentialDirectory(input.profile));
+  const managed = runtimeManagedAuthority(store, input.profile, stop.signal, metadata, (c) =>
+    transport.managed(c),
+  );
   const transport = createMcpServiceTransport({
     stdio: { profileRoot: input.profile },
     ...input.transportOptions,
@@ -92,6 +96,7 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
       }
       return key && keyDigest(hash, key) === connection.credentialBinding ? key : null;
     },
+    ...managed.transport,
     refreshNeeded: (id) => {
       if (started && !draining) void refresh(id).catch(() => {});
     },
@@ -166,6 +171,7 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
     now,
     restored: input.restored,
     confirmation: input.confirmation,
+    ...managed.admission,
   });
   return {
     owner: new ServiceOwnerSettings({

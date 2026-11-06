@@ -1,6 +1,10 @@
 import {
+  serviceResourceFactsCurrent,
+  serviceResourceConflicts,
+  type ServiceResourceEvidence,
+} from './service-resource-evidence.js';
+import {
   canonicalJson,
-  effectResourcesConflict,
   validServiceJson,
   validOwnerGrantReference,
   validConversationText,
@@ -69,29 +73,33 @@ export class ServiceCallAdmissionService {
     const ms = this.options.deadlineMs ?? SERVICE_PLUGIN_CALL_DEADLINE_MS;
     if (!Number.isSafeInteger(ms) || ms < 1 || ms > 2147483647)
       return { code: 'invalid_deadline', outcome: null };
-    let prepared = this.options.store.atomic((tx) => {
-      const p = prepare(tx, r, this.options);
-      if (typeof p === 'string' || p.confirmationRequired) return p;
-      return tx.claim(r, canonicalJson([r, p.admission]), p.admission, this.options.now())
-        ? p
-        : 'claim_refused';
-    });
+    let prepared = this.options.store.atomic((tx) => prepare(tx, r, this.options));
     if (typeof prepared === 'string') return { code: prepared, outcome: null };
     if (prepared.confirmationRequired) {
       const confirmed = await confirmedPreparation(this.options, r, prepared, signal);
       if (typeof confirmed === 'string') return { code: confirmed, outcome: null };
-      prepared = this.options.store.atomic((tx) => {
-        const current = confirmed(tx);
-        if (typeof current === 'string') return current;
-        r = current.request;
-        const p = current.prepared;
-        return tx.claim(r, canonicalJson([r, p.admission]), p.admission, this.options.now())
-          ? p
-          : 'claim_refused';
-      });
-      if (typeof prepared === 'string') return { code: prepared, outcome: null };
+      const current = this.options.store.atomic(confirmed);
+      if (typeof current === 'string') return { code: current, outcome: null };
+      r = current.request;
+      prepared = current.prepared;
     }
+    let resource: ServiceResourceEvidence | undefined;
+    const refreshResources = async () => {
+      const next = await this.options.prepareResources?.(
+        admitted.admission,
+        lifetime.signal,
+        expire,
+      );
+      if (closed || lifetime.signal.aborted || Date.now() >= expire) {
+        next?.close();
+        throw Error('resource preparation expired');
+      }
+      resource?.close();
+      resource = next;
+    };
     const admitted = prepared;
+    const managedSession = (admitted.admission.binding as { managedSession?: unknown })
+      .managedSession;
     const lifetime = new AbortController();
     let sent = false,
       closed = false;
@@ -114,8 +122,47 @@ export class ServiceCallAdmissionService {
             code: 'execution_disabled',
             detail: 'dispatch guard did not admit the invocation',
           };
+    try {
+      await refreshResources();
+      const claimed =
+        (!resource || resource.inspect()) &&
+        this.options.store.atomic((tx) => {
+          const current = prepare(tx, r, this.options);
+          if (
+            typeof current === 'string' ||
+            canonicalJson(current.admission) !== canonicalJson(admitted.admission) ||
+            (admitted.confirmationRequired && !sameConfirmation(r, admitted, current))
+          )
+            return false;
+          return tx.claim(
+            r,
+            canonicalJson([r, admitted.admission]),
+            admitted.admission,
+            this.options.now(),
+            resource?.facts,
+          );
+        });
+      if (!claimed) {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+        resource?.close();
+        return { code: 'claim_refused', outcome: null };
+      }
+    } catch {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+      resource?.close();
+      return { code: 'claim_refused', outcome: null };
+    }
     const authorizeDispatch = () => {
-      if (closed || sent || lifetime.signal.aborted || Date.now() >= expire) return false;
+      if (
+        closed ||
+        sent ||
+        lifetime.signal.aborted ||
+        Date.now() >= expire ||
+        (resource && !resource.inspect())
+      )
+        return false;
       try {
         const ok = this.options.store.atomic((tx) => {
           const current = prepare(tx, r, this.options, admitted);
@@ -129,6 +176,7 @@ export class ServiceCallAdmissionService {
           const own = (e: (typeof pending)[number]) =>
             e.taskRunId === r.taskRunId && e.attemptId === r.attemptId && e.id === r.invocationId;
           return (
+            serviceResourceFactsCurrent(pending, admitted.admission, resource?.facts) &&
             pending.some(
               (e) =>
                 own(e) &&
@@ -136,7 +184,7 @@ export class ServiceCallAdmissionService {
                 canonicalJson(e.admission) === canonicalJson(admitted.admission),
             ) &&
             !pending.some(
-              (e) => !own(e) && effectResourcesConflict(e.admission, admitted.admission),
+              (e) => !own(e) && serviceResourceConflicts(e, admitted.admission, resource?.facts),
             )
           );
         });
@@ -166,6 +214,8 @@ export class ServiceCallAdmissionService {
           signal: lifetime.signal,
           deadlineMs: ms,
           authorizeDispatch,
+          prepareDispatch: refreshResources,
+          ...(typeof managedSession === 'string' ? { managedSession } : {}),
         }),
         interrupted,
       ]);
@@ -181,10 +231,13 @@ export class ServiceCallAdmissionService {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       abort();
+      resource?.close();
     }
     const settlement =
       outcome.kind === 'observed' ? (outcome.code === 'ok' ? 'completed' : 'failed') : outcome.kind;
     this.options.store.atomic((tx) => tx.settle(r, settlement));
+    if (outcome.kind === 'uncertain')
+      await this.options.transport.retireUncertain?.(admitted.connection);
     return { code: outcome.code, outcome };
   }
 }

@@ -228,3 +228,51 @@ this source gate. Original ledger Minors/Rulings remain mandatory final-review i
 
 F review retains failed-start SQLite cleanup for malformed restore-origin data,
 unexpected claim diagnostics and the recorded historical read-path/test hygiene debt.
+
+## Implemented source candidate: D19.3 managed workspace boundaries
+
+The owning runtime now journals each explicitly persisted, pinned, writable stdio
+process before SDK launch. Metadata permission authorizes lifecycle writes only
+inside its verified enrolled workspace; it grants no bot business operation.
+Private NUL-prefixed lifecycle identities never create Core task runs, grants or
+room budget charges. Refresh retires the preceding generation before launching a
+new writable candidate. An exact active generation may exclude only its own
+started lifecycle row when claiming a currently granted business operation.
+Concurrent business claims still coordinate normally; advertised read annotations
+never turn managed calls into observations.
+
+The trusted adapter opens canonical directory chains without symlinks, checks
+physical protected-path overlap and rejects hardlinks, special files, bind aliases
+and imported submounts before traversing or executing the workspace. The trusted
+bootstrap rechecks the actual descriptor passed to bubblewrap, including the Btrfs
+generation anchor and bounded inventory. Managed launches enter an additional
+private mount namespace so future host mount propagation cannot enter /workspace.
+This does not defend against outside same-UID administrators rewriting the tree.
+
+Only fresh pair evidence on the same verified Linux Btrfs mount, subvolume, boot
+and mount namespace can prove disjoint roots. Different mounts/subvolumes,
+unsupported filesystems, missing/replaced roots and stale/malformed evidence stay
+conservative. Mixed coding/managed resources remain conflicting until compatible
+physical evidence exists for both. Connection names and unequal path strings
+supply no exemption. No filesystem identity registry or second model loop exists.
+
+Controlled retirement joins calls/writers and requires whole-unit cleanup before
+settling its lifecycle. Reply loss removes readiness and joins retirement; business
+uncertainty remains durable. Interrupted idle lifetimes become uncertain on restart
+and remain held even after independently observed cgroup retirement. Old unscoped
+unknown effects still block all managed writers. No automatic expiry, retry or new
+lifecycle-resolution API is introduced.
+
+19.3 controller acceptance remains pending independent review and final frozen
+source/native evidence. Scripted normal-host Linux tests and actual kernel alias
+preflight tests are separate evidence classes. Real mixed cloud/local services,
+live providers, GUI, installed/device/backup and release gates remain later work.
+
+Managed stdio retains the existing metadata TTL (at most 60 seconds), 15-second
+discovery and 30-second business deadline. Its hard watchdog is 120 seconds;
+coding sandbox bounds are unchanged. This leaves time for owner refresh to drain
+an admitted call, prove retirement and settle the old lifecycle before a fresh
+process starts. A drain that outlasts discovery defers replacement and keeps its
+claim. Actual watchdog loss remains uncertain; an overdue refresh cannot infer
+controlled completion from an already empty group. Retirement first checks current
+exact-unit liveness and monotonic age, separately from final cleanup evidence.

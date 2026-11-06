@@ -175,7 +175,16 @@ export {
   type LocalModelConnectionsClient,
 } from './local-model-connections-client.js';
 
-export { prepareManagedStdio, type ManagedStdioRequest } from './managed-stdio.js';
+export {
+  prepareManagedStdio,
+  type ManagedStdioRequest,
+  type ManagedStdioHandle,
+} from './managed-stdio.js';
 export type { LocalServiceClient } from './local-service-client.js';
 
 export * from './local-room-tasks-client.js';
+
+export { prepareManagedResourceEvidence } from './managed-resource-evidence.js';
+export { openManagedWorkspace, type ManagedWorkspaceWitness } from './managed-workspace.js';
+
+export { verifyManagedStdioEnrollments } from './managed-stdio-upgrade.js';

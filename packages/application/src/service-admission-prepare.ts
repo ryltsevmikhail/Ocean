@@ -166,6 +166,13 @@ export function prepare(
     grantReference: r.grantReference,
     binding: {
       ...(roomBasis ? { roomBasis } : {}),
+      ...(facts.managedWorkspace
+        ? {
+            managedWorkspace: { ...facts.managedWorkspace },
+            managedEnrollment: facts.managedEnrollment!,
+            managedSession: facts.managedSession!,
+          }
+        : {}),
       ...(facts.githubRepositoryIds ? { githubRepositoryIds: facts.githubRepositoryIds } : {}),
       workspaceId: r.workspaceId,
       roomId: r.roomId,
