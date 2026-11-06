@@ -385,3 +385,13 @@ not_started, с нулём fetch/tools-call. Release pin полного lockfile
 Этот шаг не закрывает F typing/native/device/restore/release gates и не включает
 D, schedules, Sources, marketplace, universal OAuth или CLI agents. Все прежние
 Minors/Rulings сохраняются для F; завершение C требует независимого ревью.
+
+Кандидат удаления `1f31974466425abc6d7aeca2ded8d3576bc4f304` прошёл actual clean
+pnpm12.16.1 frozen install (15 projects/231 packages), root check
+(3691 source+165 process pass; прежние44/36 skips), build и format:check — exit0.
+Приватный архив SHA256
+`5fdcd2b6eba91554cc0dd78bb856fabd3873c0dd5630f244a619b23a2d017d2c`
+установлен в одноразовый prefix;1261 file/525 declarations сверены, SDK/patch/dev
+code отсутствуют. Strict public installed types/imports, CLI/TUI/ACP offline и
+целевые HTTP wire-cap/healthy/drop controls прошли. Нативные/live свидетельства
+18.6.1 сохраняют собственную атрибуцию; unchanged matrices не повторялись.
