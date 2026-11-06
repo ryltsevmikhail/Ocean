@@ -85,3 +85,6 @@ export * from './effect-resource-conflicts.js';
 
 export * from './service-owner-requests.js';
 export * from './service-owner-operations.js';
+
+export * from './room-delivery.js';
+export * from './room-task.js';
