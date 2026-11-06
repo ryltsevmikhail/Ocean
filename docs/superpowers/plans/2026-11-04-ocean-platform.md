@@ -1484,6 +1484,222 @@ Exercise one-slot A→B→A, unrelated task progress, both mixed-provider outage
 privacy/revoke/stop/budget/receipt/restart races; qualify real mixed providers
 separately. Detailed interfaces follow the accepted earlier leaf, not guesses.
 
+### Task 19.2.1: Persist room tasks and addressed messages
+
+Detailed leaf frozen after19.1 acceptance at `4c85da7`. The observable result is a committed owner start or bot send,
+a scoped history entry and a retrievable receipt. Fresh admissions leave queued records inert. Two new tables suffice.
+
+#### First leaf and file map
+
+- `packages/application/src/room-task-persistence.ts` defines `RoomTaskPersistence.start` and `.send`, constructed with `ConversationStore`, trusted `ownerId`, `Clock`, `nextId` and the existing C-style `sha256:(text:string)=>string` dependency.
+- `packages/application/src/room-task-records.ts` defines the v1 records, input, receipt and narrow synchronous `RoomTaskTransaction` below.
+- `packages/application/src/room-task-start.ts` validates the owner intent and constructs the root member pins. `room-task-send.ts` validates the causal path and constructs a child.
+- `packages/application/src/conversation-ports.ts` adds optional `roomTasks?:RoomTaskTransaction` to `ConversationTransaction`. Fresh D work requires it. Public exports in `application/src/index.ts`.
+- `packages/domain/src/room-delivery.ts` factors the accepted strict request test and key/binding derivation into pure reusable helpers for receipt replay. Existing decision outputs stay byte-identical.
+- `packages/domain/src/chat-turn.ts` adds optional `roomDelivery:{version:1,taskId:string,deliveryId:string}` for a bot execution attached to an admitted delivery.
+- `packages/store-sqlite/src/room-task-schema.ts`, `room-task-history-schema.ts` define v27 migration/constraints. `schema.ts`, `schema-migrations.ts` install and verify v27.
+- `packages/store-sqlite/src/room-task-storage.ts` implements transaction reads/writes, `room-task-origin.ts` performs immutable and live origin resolution. Integrate in `conversations.ts` for current-schema transactions only.
+- Reuse `chat-storage.ts`, `model-connection-storage.ts:14` (`readModelConnection`), `service-authority-rows.ts:37` (`readAuthorityGrant`) and `restore-origin.ts` in the same DB transaction. Avoid nested store transactions.
+- `application/src/{direct-chat-admission,room-broadcast,room-model-policy}.ts` and `store-sqlite/src/chat-storage.ts` adapt the scoped admission/barrier reads described below.
+- `domain/src/profile-backup.ts`, `store-sqlite/src/maintenance.ts` and new `store-sqlite/src/room-task-maintenance.ts` cover schema bounds and held-room summary. Maintenance is already 299 lines.
+- Add focused SQLite tests `room-task-start.test.ts`, `room-task-send.test.ts`, `room-task-migration.test.ts`; put shared real profile/actor construction in `packages/store-sqlite/test-fixtures/room-tasks.ts`.
+- Update existing migration/backup test expectations which pin the _current_ schema. List below. No new client DTO, wake API, native test or provider fixture is needed here.
+
+#### Inputs and transaction surface
+
+`start(input:RoomTaskStart):ConversationResult<RoomTaskReceipt>`. The caller is the private owner host. No owner ID, authorship, model metadata or root/task IDs in the request.
+`RoomTaskStart={workspaceId,roomId,requestId,text,initialBotIds,participants,mandate}`. IDs ≤128 UTF-8 bytes, text ≤16384. Accept opaque valid text, including attachment-like markers. Reject binary/attachment fields. Persistence never opens an asset; before any later transfer, the engine must validate asset ownership, capability and privacy.
+`participants:readonly {botId:string,grantReferences:readonly OwnerGrantReference[]}[]` is a unique dense list of 1..32 actual room members. Refs are unique by grantId, 0..32 per bot.
+`initialBotIds` is a nonempty distinct subset of participants. Each initial bot gets its own task parented by the coordinating owner root, including single-bot starts.
+`mandate={projectId:string|null,codingTaskId:string|null,permissions:readonly OwnerPermission[]}`. Validate the exact owner C permission shapes (0..256), bound whole canonical intent ≤256 KiB.
+For a plain null/null mandate, derive each effective C subject from the stored workspace: `{workspaceId:workspace.id, roomId, botId, projectId:sha256(workspace.root), taskId:null}` (`apps/cli/src/runtime-services.ts:193–202`). A supplied project without a coding task must equal that same stored-root digest.
+For a coding selection read the actual `CodingTask` in the same transaction. Match its id, workspace and owning room, derive `projectId=sha256(task.projectRoot)` and compare any supplied project. For a dev-scoped ref require its reserved task and dev bot as in `runtime-services.ts:203–214`. Reject unsupported assertions. Participants with zero refs gain local communication only.
+Use the accepted fixed root limits `{concurrentSlices:2,totalSlices:32,providerStarts:64,toolCalls:64}` in v1 storage. Per-request lowering/accounting can be introduced with execution.
+`send(actor:{turnId:string,taskRunId:string,attemptId:string,callId:string},request:unknown):ConversationResult<RoomTaskReceipt>` takes the first argument only from the runtime.
+`callId` is already round-qualified by `tool-round.ts:23`, max 512 bytes. Only `{kind:'message'|'delegate',toBotId,text}` is model input. Extra own keys (including symbol/hidden keys) fail.
+`RoomTaskReceipt={version:1,workspaceId,roomId,rootId,messageId,seq,deliveries:readonly {botId,taskId,deliveryId}[]}`. Return immutable facts in original initial-recipient order.
+Use one `ocean_receipts` row per owner start or tool invocation. Reuse `{kind:'message',data:ConversationMessage}` with exact canonical binding; join deliveries by receipt key + message ID for task IDs.
+This follows `room-broadcast.ts:158` and avoids a new receipt discriminator or parallel journal. Decode immutable receipt/message/target links and fail closed on missing/mixed/corrupt joins.
+Receipt queries never depend on mutable status, current model, grant revision, history tail or clock. Existing legacy `receipts.get` compatibility must not interpret D as new execution authority.
+The following application types specify the projection of the two rows. `kind` is derived from root/assignee nullability. Use readonly fields throughout.
+
+```ts
+type RoomTaskMandate = Readonly<{
+  projectId: string | null;
+  codingTaskId: string | null;
+  permissions: readonly OwnerPermission[];
+}>;
+type RoomTaskMemberPin = Readonly<{
+  botId: string;
+  grantReferences: readonly OwnerGrantReference[];
+  identity: Extract<ModelExecutionIdentity, { source: 'connection' }>;
+}>;
+type RoomTaskRootPayload = Readonly<{
+  ownerId: string;
+  mandate: RoomTaskMandate;
+  members: readonly RoomTaskMemberPin[];
+  limits: Readonly<{ concurrentSlices: 2; totalSlices: 32; providerStarts: 64; toolCalls: 64 }>;
+}>;
+type TaskRow = Readonly<{
+  version: 1;
+  revision: number;
+  id: string;
+  workspaceId: string;
+  roomId: string;
+  rootId: string;
+  status: RoomTaskAddress['status'];
+}>;
+type RoomTaskRoot = TaskRow &
+  Readonly<{
+    kind: 'root';
+    parentId: null;
+    assigneeBotId: null;
+    lastDeliverySeq: 0;
+    waitingChildId: null;
+    rootPayload: RoomTaskRootPayload;
+  }>;
+type RoomTaskBot = TaskRow &
+  Readonly<{
+    kind: 'bot';
+    parentId: string;
+    assigneeBotId: string;
+    lastDeliverySeq: number;
+    waitingChildId: string | null;
+    rootPayload: null;
+  }>;
+type RoomTaskRecord = RoomTaskRoot | RoomTaskBot;
+type RoomDeliveryRecord = RoomDeliveryAddress &
+  Readonly<{
+    version: 1;
+    position: number;
+    sourceAttemptId: string | null;
+    state: 'queued' | 'claimed' | 'consumed' | 'held';
+  }>;
+type RoomTaskOriginFacts = Readonly<{
+  root: RoomTaskRoot;
+  task: RoomTaskBot;
+  input: RoomDeliveryRecord;
+  turn: ChatTurn;
+  liveRun: TaskRunState | null;
+}>;
+interface RoomTaskTransaction {
+  task(id: string): RoomTaskRecord | null;
+  deliveriesForReceipt(key: string, messageId: string): readonly RoomDeliveryRecord[];
+  origin(
+    turnId: string,
+    runId: string,
+    attemptId: string,
+    live: boolean,
+  ): RoomTaskOriginFacts | null;
+  grant(id: string): OwnerScopeGrant | null;
+  modelConnection(id: string): ModelConnectionRecord | null;
+  codingTask(id: string): CodingTask | null;
+  restored(): boolean;
+  roomHold(roomId: string): boolean;
+  pendingTransfer(roomId: string): boolean;
+  putTask(row: RoomTaskRecord): void;
+  putDelivery(row: RoomDeliveryRecord): void;
+  waitFor(taskId: string, childId: string, expectedRevision: number): void;
+}
+```
+
+`modelConnection` returns the existing application `ModelConnectionRecord` (`model-connection-ports.ts`). Only the projected identity is persisted. `origin(...,false)` returns immutable joins with null liveRun. The replay caller verifies the attempt against the outgoing row from `deliveriesForReceipt`. `origin(...,true)` requires a verified liveRun or returns null. CAS mismatch in `waitFor` throws.
+All methods are synchronous. Each public operation enters exactly one `ConversationStore.atomic`; validate first, then write. After a first write any failure must throw through `withImmediateTransaction`,
+which commits on a normal return even if it contains `err(...)`. Map expected errors outside rollback. SQLite constraints/CAS are the final arbiter across two writers.
+
+#### Two-table schema and old history
+
+`ocean_room_tasks`: STRICT, `id TEXT PRIMARY KEY, workspace_id,room_id,root_id,parent_id,assignee_bot_id,status,version,revision,last_delivery_seq,waiting_child_id,root_payload`.
+`version=1` is record format, `revision>=1` is mutable CAS, `last_delivery_seq>=0`. Text IDs and positive integers use SQLite CHECK/NOT NULL, with exceptions below.
+Root row has `id=root_id`, null parent, assignee and waiting child, cursor 0. Status initially ready. Bot rows have distinct `id/root_id`, non-null nonself parent, assignee, null root_payload.
+Root payload contains trusted ownerId, immutable mandate, fixed limits and one member pin per selected bot, including the exact supplied references. Keep one copy per root.
+Task `status` uses accepted `RoomTaskAddress['status']`. Bot `waiting` requires its exact `waiting_child_id`. Protect identity, ancestry, root payload and room against update.
+FK `(workspace_id,room_id)` to room and `(workspace_id,assignee_bot_id)` to bot. Retain historical task/actor identity after live membership changes. Task/delivery/member pins must not FK to the live roster; join bot rows and recheck current membership on every fresh route.
+Composite UNIQUE `(workspace_id,room_id,root_id,id)` serves scoped parent/wait/target FKs. Root reference resolves to the self-root in this scope. An inserted bot parent must already exist.
+Enforce same root/room, actual root shape and direct child for a wait target using scoped FKs plus insert/wait validation. Index `(workspace_id,room_id,root_id)` for holds and ancestry.
+`ocean_room_deliveries`: STRICT, accepted `RoomDeliveryAddress` columns snake_case + `version=1, position, source_attempt_id, state`. Start/peer rows inserted as `queued`.
+`position` is receipt-target order 0..31. `state` in `queued|claimed|consumed|held`. Execution gate owns claim/consume/hold transitions and contiguous cursor advancement.
+Immutable ID, room/root, target/source, request key, source attempt, cause, message and seq. PK id, UNIQUE `(request_key,position)`, `(to_task_id,message_id)`, index `(to_task_id,seq)`.
+Scoped target/source task FKs as above. Verify target bot matches task assignee and source bot/parent match the source task. `start` has null source fields and targets a direct root child.
+`message|delegate` targets a new direct child of the originating bot task; non-null source turn/attempt/bot/task and cause ID of originating input delivery are mandatory.
+Limit DDL to these three producible kinds (or explicitly reject unimplemented `result` on insert in this leaf). Reserve the v1 addressing union for later parent result publication.
+Bind to actual message `(room_id,seq)` AND its `id` using unique `(room_id,seq,id)` + composite FK. Use DEFERRABLE INITIALLY DEFERRED FK to message and `ocean_receipts(request_id)`.
+Start permits multiple delivery rows for the one user message. Peer operations require exactly one target/position 0. Restrict duplicate recipient per request. Rows reference existing same-room source ChatTurn.
+No ChatTurn or TaskRun is created by fresh start/send. On later execution one marked turn owns one incoming delivery. Use UNIQUE partial expression index on `$.roomDelivery.deliveryId` in chat payload.
+Validate the marked turn against target task, workspace/room, bot, inboundMessageId/seq on insert, and make marker/identity immutable on update (old direct turns cannot acquire the marker).
+This avoids scheduling or creating placeholder model attempts while providing a durable reverse join for bot actors. No third link table.
+
+`group-schema.ts:19–30` currently requires author=target and `UNIQUE(turn_id)`. Preserve all ten physical message columns so existing positional inserts/row readers continue to work.
+Use author/target relation as the discriminator: user branch keeps its old check, ordinary final bot row has author=target, addressed peer bot row has both present and different.
+Partial UNIQUE `(turn_id) WHERE author='bot' AND author_bot_id=target_bot_id` preserves once-only ordinary publication. Preserve `UNIQUE(room_id,seq)`, membership/turn FKs and the direct-target trigger.
+Guard addressed inserts with a trigger requiring a matching previously inserted delivery with source turn, author, recipient, room, sequence and message ID plus that turn’s marked input lineage.
+Preserve the historic `(room_id,target_bot_id) -> ocean_members` FK on history: a bot already targeted by a retained message cannot literally be deleted from this roster while that row exists. Do not add an author-to-current-members FK.
+Prove member disappearance using a group’s shared target-null start: remove a still-queued bot with no targeted history, or remove a sender before its ordinary final reply when only peers have been targeted. Historical root pins/deliveries and receipts survive; fresh routing fails. No roster-management feature is needed.
+Store delivery first, addressed history next, then receipt, all under one lock. The deferred FK closes the cycle. Regular final replies keep `reply_<turn.id>`, addressed IDs use separately allocated message IDs.
+Preserve current `messageRow` and `LocalMessage` shape (`local-runtime-queries.ts:42`). `room-context.ts:72,93` keys attribution by `authorBotId`. SQLite result read uses both `turn_id` and `reply_` ID.
+Critical wire gate: `tools-node/src/local-room-client.ts:126` and the frozen RC2 client fixture both reject a bot whose author differs from target. Desktop’s independent Zod guard accepts separate IDs.
+Exercise SQL/application history in this private leaf. Before any host can produce D deliveries, the next wire gate must negotiate truthful addressed-history reads or explicitly refuse with an upgrade requirement when a client cannot represent them. Keep ordinary v26 frames/sequence behavior and the frozen RC2 fixture. Do not send such frames to RC2, drop rows from its contiguous pages, or rewrite authoritative author/target.
+`room-context.ts:121` treats its _current_ input as user data. Do not feed a peer delivery to that method in this leaf. Later execution must label peer input explicitly. Historical peer reads already preserve identity.
+
+#### Fresh write and replay rules
+
+Validate intent shape and bounds before receipt reads. For owner start use the supplied globally scoped owner `requestId`; bind `canonicalJson(['RoomTaskStart/v1',ownerId,workspaceId,roomId,text,initialBotIds,participants,mandate])`.
+Keep array order stable and bind every caller-selected field. Never include allocated IDs, current auth/model metadata, generated deadlines or current time in this binding.
+For send derive the accepted `canonicalJson(['room-agent/v1',turnId,attemptId,callId])` from trusted invocation identity before eligibility checks. Use it as logical requestKey.
+For the SQL receipt/delivery key use `'room-agent/v1:'+sha256(logicalKey)` with a trusted UTF-8 SHA-256 implementation and exactly 64 lowercase hex digits. Preserve the accepted logical key and canonical binding.
+The global owner request ID may intentionally equal this derived key. Compare exact operation kind, canonical binding, source and scoped delivery rows on replay. Any cross-kind collision returns `request_conflict`; never adopt the other receipt or allocate a replacement key.
+On a hit use immutable source joins (including source turn’s original taskRunId and delivery’s recorded source_attempt_id) to construct the exact 19.1 binding with the supplied request bytes.
+Compare receipt kind, binding and scoped rows. Match returns original receipt, mismatch `request_conflict`; existence alone confers no authority. Do not call the ready-only `decideRoomAddress` on replay.
+On a miss, prohibit fresh admission when restored/quarantined (`restoreOriginStore(db).origin()` in the same transaction; corrupt evidence fails closed). Prior receipts can still be inspected.
+Fence fresh autonomous work under the existing room `text_only` recovery restriction. For this inert leaf, exclude a source turn linked to a continuation review. The later engine must admit legitimate coding reviewers to local communication while limiting coding access to the immutable artifact, with no commands or writes. Coding rebind never reauthorizes copied D work.
+Owner start checks workspace, room, current selected membership and legacy holds, then validates every requested ref via `readAuthorityGrant`, `ownerGrantApplies` and exact owner/revision/subject.
+Reject an invalid initial selection before writes. Capture each selected bot’s profileVersion and B connection identity from `tx.bot`, `tx.modelBinding`, `readModelConnection`:
+project the connection form of `ModelExecutionIdentity` (connectionId/modelId, providerId, revision, kind, validated endpoint, auth mode, artifactDigest/backendVersion for qualified local model).
+Match bot.provider/model with selected B metadata. Require a configured stable record (active intent, valid endpoint; for local require qualification matching selected model). An unreachable configured endpoint can still queue.
+Do not call `ProviderActivationService.resolve` here: `provider-activation.ts:39` uses a credential factory/secrets. Copy no secretRef, pending change, credentials, host-provider fallback or per-turn deadline.
+Check `admitModelTransfer` under current room policy for selected members. Start writes root and bot tasks, one user message (target null for group; the room bot for direct), deliveries and one receipt.
+On fresh peer send verify the stored facts described below. Apply pure `decideRoomAddress` to the reconstructed projection + actual current room membership. On `delegate` CAS sender ready→waiting for this child.
+Check sender and recipient are current selected members. For the sender, require the persisted ChatTurn activation and settled Core run activation to match each other, and their identity to equal the sender’s immutable root pin. Owner edits after settlement do not invalidate this local tool call.
+For the recipient, compare its current B metadata identity with its root pin and apply current room transfer policy before writing text. A mismatch refuses a fresh send with zero writes. A subsequent new slice for either bot must match that bot’s pin before activation.
+Look up child’s ref list by recipient in immutable root pins; retain parent links and every originally captured ref. Never replace a changed revision, add a new grant or edit down a saved list.
+Local send itself needs no physical-operation grant. Revoking one selected C grant does not freeze safe local conversation, siblings, or separately permitted operations.
+At the later external boundary, authorization needs a valid matching captured ref for the concrete operation at **each** actual delegating level + recipient and the root mandate.
+A revoked/expired/ref-revised grant can never serve as that witness. Another unchanged selected grant can authorize its own eligible operation; no union of partial grants or implicit reselection.
+Confirm-mode/deny precedence remains C’s. This persistence leaf cannot dispatch any physical operation or promise that a pinned grant remains usable.
+
+#### Author proof and durable holds
+
+For a fresh peer operation `origin(...,true)` requires actual joined incoming delivery claimed, marked dispatching chat with null continuation review ID (this leaf), root ready, ready bot task, current memberships.
+Check JSON/SQL identity cross-consistency as in `service-run-scope.ts:6`: workspace, room, turn, run, bot, source message/seq, task/delivery and pinned recipient. Reject legacy/broadcast turns.
+Rebuild the run synchronously from the same locked DB using existing `event-record.ts` decode + `domain.replay` (or reuse `SqliteEventLog.loadAfter(runId,0)`); check contiguous sequence, aggregate identity/type.
+Require `status='running'`, no terminal/cancellation, exact activeAttempt, `cv_<room>`/`ws_<workspace>`, exact bot model/pinned activation. Require a settled terminal tool-call round for this attempt/ordinal.
+The accepted call ID is constructed as `${attemptId}_r${ordinal}_${providerCallId}`; require that prefix and nonempty suffix. Event settlement records the round, not individual provider call IDs.
+The trusted in-process tool callback supplies that suffix. A string from a client/model cannot grant tool invocation. No external RPC or production claim constructor exists in this leaf.
+Test with real queued rows from `start`; a test-only transaction attaches one matching marked ChatTurn and transitions the delivery to claimed. Commit real TaskRun create/admit/schedule/start/model-start/settle commands for that run via SQLite event log; no provider call.
+The positive path must use the exact production join/replay verification. Merely inserting a dispatching turn, passing `RoomDeliveryOrigin` to the service or supplying a mocked permission callback is insufficient.
+
+Old open/paused broadcast returns `batch_open`; old accepted/dispatching/prepared returns `room_busy`; unresolved old uncertainty returns `recovery_required` on new D starts. Preserve review-release semantics.
+Conversely a ready/waiting/paused D root holds its room against **legacy executing** direct/broadcast admissions; check after receipt-first replay, before new legacy effects. Direct unaddressed group notes keep their existing path.
+D roots can coexist in one room. The legacy unique room hold keeps its `review_id IS NULL` predicate and excludes marked turns. The separate unique D hold covers each marked task in accepted/dispatching/prepared/uncertain status regardless of `review_id`. A continuation review must never admit a second active D slice.
+Before allowing legacy work after a root stop, include all marked accepted/dispatching/prepared/uncertain turns in the D hold read, including review-linked rows. Stop is not proof of cleanup. Pending queued rows under stopped roots are inert.
+Count pending nonlocal/unknown D transfer pins in the old policy→deny barrier even after a user rebinds that bot local. A mismatched binding cannot silently repin a D task. Inspect older-schema transactions without querying D tables.
+
+#### Acceptance, compatibility and limits of this leaf
+
+- [ ] File-backed SQLite, two handles, identical start race/reopen: one owner root, N sibling tasks, one user message/receipt and N queued deliveries. Changed valid payload conflicts. Swap A/B order under separate root IDs and prove recipient authority is identical.
+- [ ] From real persisted A attempt send twice with different call IDs to B. Two peer messages, A author/B target/actual source turn, one subsequent ordinary final reply; reject second final and unbacked cross-author SQL insert. Peer text stays attributed in SQL/application history/context. Marker-like text round-trips as text without asset I/O. Old wire frames for old histories remain unchanged.
+- [ ] Lost peer receipt after wait/stop/revoke/member removal returns original IDs and seq with no new row. Same ID altered target/kind/text conflicts. Preoccupy the bot key with an owner start and try the converse: both cross-kind reuses return `request_conflict` with no writes or authority changes. Inject trigger failure at final receipt write, reopen and compare counters/sequence/links before retry. Race independent processes or worker threads, bounded busy timeout.
+- [ ] Reject forged sender, wrong run/attempt/ordinal, absent or unknown settlement, legacy turn, wrong room/parent, reviewed/stopped source and removed current membership. Empty refs allow communication. Keep both refs after one revokes; replacement grant/revision absent in stored child. Reject stale initial grant. Accept a workspace-scoped grant whose projectId equals the hash of the stored workspace root for a null/null mandate; reject a different project hash.
+- [ ] Prove old holds both ways, independent D roots, duplicate active D slice rejected even with a non-null continuation review, group note, legacy finite broadcast and `taskId=coding` unchanged. After A’s tool round settles, rotate A’s key/model or bot profile while B stays pinned. A→B succeeds with A’s persisted identity. Rotate B before a distinct fresh send and assert refusal, zero writes and intact pins. Privacy denies before writes. Check allow→deny barrier with a queued cloud pin after member rebind. Restore-origin blocks fresh rows while identical archived receipts remain readable.
+- [ ] Migrate a genuine disposable v26 snapshot with bot reply, reviewed/uncertain turn, batch, receipt, grants and attachment metadata. Compare logical row bytes before/after, `foreign_key_check`, old lookup/once-final index/trigger behavior. Interrupt v27 publication and prove original v26 intact.
+- [ ] Advance `SCHEMA_VERSION` and profile manifest cap to 27. In `maintenance.ts:35` explicitly retain 26 in historical maintainable schemas. For v27 `heldRooms` counts distinct rooms with legacy holds OR D holds; keep old-schema summary exact. No pending receipt counted as model run/effect. Inspect/backup/reopen/restore a disposable archive and reject unsupported future 28.
+- [ ] Adjust current-version asserts/publication-failure triggers in store-sqlite `{broadcast,provider-connection,model-binding,model-pending,service-authority,desktop-capability,tool-admission,plugin-operation}-migration.test.ts`, `room-model-policy.test.ts`, `service-owner-receipts.test.ts`, `plugin-schema.test.ts`, `model-qualification-storage.test.ts`, domain `profile-backup.test.ts` and CLI `local-runtime/desktop-binding-migration.test.ts` as applicable. Simulated downgrade fixtures must recreate their actual predecessor DDL/remove v27 objects explicitly; genuine older-schema bytes remain fixtures.
+      Run `pnpm check`, `pnpm build`, `pnpm format:check` for the eventual implementation. Tests assert no provider/secret/service factory is available; no model dispatch, root execution, transport contract or scheduling is qualified here.
+
+- [ ] Record meaningful behavioral RED→GREEN for start/send and migration guards, focused strict typing, final root check/build/format and exact proof/source pins. Update `docs/ocean/platform-stage-d.md` with implemented versus planned behavior; self-review and commit exact owned paths. Independent task review is required before the next leaf.
+
+Keep this change limited to persistence and existing admission compatibility. Do not add engine scheduling, a transport endpoint, UI, a generic workflow/policy registry or another event journal. Additional focused files are allowed only when needed for the300-line limit; report the concrete split before introducing it.
+
 ### Task 19.3: Qualify independent managed service workspaces
 
 Reuse actual enrollment, verified sandbox bind descriptors, session supervision and
