@@ -88,3 +88,5 @@ export * from './service-owner-operations.js';
 
 export * from './room-delivery.js';
 export * from './room-task.js';
+
+export { validRoomAgentRequest, roomAgentRequestKey, roomAgentBinding } from './room-delivery.js';

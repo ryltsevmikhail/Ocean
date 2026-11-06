@@ -1,3 +1,4 @@
+import { roomTaskHeldRooms } from './room-task-maintenance.js';
 import { upgradeDesktopBinding, type DesktopBindingUpgrade } from './desktop-binding-upgrade.js';
 import { desktopInventory, readDesktopBackupInventory } from './desktop-inventory.js';
 import type { DesktopAssetInventory } from '@runnets/domain';
@@ -33,7 +34,7 @@ import { SCHEMA_VERSION } from './schema.js';
  * development artifacts can exist on a disposable profile; they are not
  * supported releases and may be dropped once no artifact ever produced them.
  */
-const historicalSchemas = [5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24];
+const historicalSchemas = [5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 26];
 const MAINTAINABLE_SCHEMAS = [...historicalSchemas, SCHEMA_VERSION];
 
 export interface DatabaseSummary {
@@ -113,11 +114,7 @@ function summary(db: DatabaseSync): DatabaseSummary {
       WHERE e.aggregate_type='task_run' AND e.sequence=(SELECT max(sequence) FROM events WHERE aggregate_id=e.aggregate_id)
       AND e.type NOT IN ('task_run.succeeded','task_run.failed','task_run.cancelled')`,
     ),
-    heldRooms: count(
-      db,
-      `SELECT count(*) AS n FROM ocean_chat_turns
-      WHERE status IN ('accepted','dispatching','prepared','uncertain') AND review_id IS NULL`,
-    ),
+    heldRooms: roomTaskHeldRooms(db, schema(db)),
   };
 }
 /** Never migrates, reconciles, dispatches or steals a live owner's profile. */

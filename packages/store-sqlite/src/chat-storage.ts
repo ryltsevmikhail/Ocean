@@ -26,6 +26,8 @@ export function decodeChatTurn(row: Record<string, unknown>): ChatTurn {
 }
 /** Chat phase updates share the surrounding conversation transaction and SQLite constraints. */
 export function chatStorage(db: DatabaseSync): ChatStorage {
+  const marked =
+    Number(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']) >= 27;
   return {
     chatTurn(id) {
       const row = db.prepare('SELECT * FROM ocean_chat_turns WHERE id=?').get(id);
@@ -43,7 +45,8 @@ export function chatStorage(db: DatabaseSync): ChatStorage {
     activeChatTurn(roomId) {
       const row = db
         .prepare(
-          "SELECT * FROM ocean_chat_turns WHERE room_id=? AND status IN ('accepted','dispatching','prepared','uncertain') AND review_id IS NULL",
+          "SELECT * FROM ocean_chat_turns WHERE room_id=? AND status IN ('accepted','dispatching','prepared','uncertain') AND review_id IS NULL" +
+            (marked ? " AND json_extract(payload,'$.roomDelivery') IS NULL" : ''),
         )
         .get(roomId);
       return row === undefined ? null : decodeChatTurn(row);

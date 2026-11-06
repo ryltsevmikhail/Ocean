@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
 import { afterEach, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -58,6 +59,7 @@ it('migrates schema21 existing rooms to allow once and refuses missing policy th
   const store = new SqliteConversationStore(db);
   const connections = { read: () => null };
   // Seed through SQL to keep this migration fixture independent of provider metadata.
+  omitRoomTaskSchema(db);
   db.exec(
     "INSERT INTO ocean_workspace VALUES(1,'w','/project'); INSERT INTO ocean_bots VALUES('b','w','dev','Dev','role','deepseek','one',1); INSERT INTO ocean_rooms VALUES('r','w','direct','b',NULL); INSERT INTO ocean_members VALUES('w','r','b'); DROP TABLE ocean_room_model_policies; UPDATE meta SET value='21' WHERE key='schema_version'",
   );
@@ -89,6 +91,7 @@ it('preserves schema21 doctor/backup without migrating the original or copy', as
   current.close();
   const raw = new DatabaseSync(path);
   close.push(() => raw.close());
+  omitRoomTaskSchema(raw);
   raw.exec(
     "DROP TABLE ocean_room_model_policies; UPDATE meta SET value='21' WHERE key='schema_version'",
   );
@@ -111,8 +114,9 @@ it('rolls back schema22 table, backfill and version when publication fails', () 
   const db = new DatabaseSync(':memory:');
   close.push(() => db.close());
   initializeSchema(db);
+  omitRoomTaskSchema(db);
   db.exec(
-    "DROP TABLE ocean_room_model_policies; UPDATE meta SET value='21' WHERE key='schema_version'; CREATE TRIGGER stop_policy BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='26' BEGIN SELECT RAISE(ABORT,'publication failed'); END",
+    "DROP TABLE ocean_room_model_policies; UPDATE meta SET value='21' WHERE key='schema_version'; CREATE TRIGGER stop_policy BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='27' BEGIN SELECT RAISE(ABORT,'publication failed'); END",
   );
   expect(() => initializeSchema(db)).toThrow('publication failed');
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
@@ -124,7 +128,7 @@ it('rolls back schema22 table, backfill and version when publication fails', () 
   db.exec('DROP TRIGGER stop_policy');
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '26',
+    '27',
   );
 });
 it('rejects malformed JSON policy receipts and invalid persisted policy scalars without coercion', () => {

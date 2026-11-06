@@ -1,3 +1,4 @@
+import { ROOM_TASK_TABLES, migrateRoomTasks } from './room-task-schema.js';
 import { migrateServiceOwnerReceipts } from './service-owner-receipts.js';
 import { migrateToolAdmission } from './tool-admission-schema.js';
 import { SERVICE_AUTHORITY_TABLES, migrateServiceAuthority } from './service-authority-schema.js';
@@ -129,5 +130,9 @@ export function applyMigrations(
   if (previousVersion < 26) migrateServiceOwnerReceipts(db);
   else if (!existing.has('ocean_service_owner_receipts'))
     throw Error('database schema is missing table ocean_service_owner_receipts');
+  if (previousVersion < 27) migrateRoomTasks(db);
+  else
+    for (const table of ROOM_TASK_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
   if (existing.has('tool_invocations_v2')) migrateToolAdmission(db, previousVersion);
 }

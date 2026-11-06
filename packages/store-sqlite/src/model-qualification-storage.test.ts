@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -55,11 +56,12 @@ it('migrates previous payloads to explicit null without changing frozen receipt 
     'binding',
     receipt,
   );
+  omitRoomTaskSchema(db);
   db.exec(
     "DROP TABLE ocean_room_model_policies; UPDATE meta SET value='20' WHERE key='schema_version'",
   );
   initializeSchema(db);
-  expect(SCHEMA_VERSION).toBe(26);
+  expect(SCHEMA_VERSION).toBe(27);
   expect(store.read('local')?.localQualification).toBeNull();
   expect(
     JSON.parse(

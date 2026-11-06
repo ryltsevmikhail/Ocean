@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
 import { omitModelConnectionSchema } from '../test-fixtures/model-schema.js';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
@@ -64,7 +65,7 @@ const status = {
 describe('provider connection migration 15', () => {
   it('creates the metadata and receipt tables at the current schema version', () => {
     const db = memory();
-    expect(SCHEMA_VERSION).toBe(26);
+    expect(SCHEMA_VERSION).toBe(27);
     expect(tables(db)).toEqual(expect.arrayContaining([...PROVIDER_CONNECTION_TABLES]));
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
       String(SCHEMA_VERSION),
@@ -77,6 +78,7 @@ describe('provider connection migration 15', () => {
     connections.put(row, null);
     // Recreate the accepted schema-14 shape: no provider tables, older version marker.
     omitModelConnectionSchema(db);
+    omitRoomTaskSchema(db);
     db.exec(`DROP TABLE ocean_provider_receipts; DROP TABLE ocean_provider_connections;
       UPDATE meta SET value='14' WHERE key='schema_version';
       INSERT INTO meta (key, value) VALUES ('legacy-marker', 'kept');`);

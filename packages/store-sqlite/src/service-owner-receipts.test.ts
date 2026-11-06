@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, rmSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,8 +28,9 @@ it('schema25 gains only one bounded empty table; publication failure rolls it ba
     });
     const before = db.prepare('SELECT * FROM ocean_service_connections').all();
     const grants = db.prepare('SELECT * FROM ocean_owner_scope_grants').all();
+    omitRoomTaskSchema(db);
     db.exec(
-      "DROP TABLE ocean_service_owner_receipts; UPDATE meta SET value='25' WHERE key='schema_version'; CREATE TRIGGER fail_26 BEFORE UPDATE ON meta WHEN NEW.value='26' BEGIN SELECT RAISE(ABORT,'receipt migration interrupted'); END",
+      "DROP TABLE ocean_service_owner_receipts; UPDATE meta SET value='25' WHERE key='schema_version'; CREATE TRIGGER fail_26 BEFORE UPDATE ON meta WHEN NEW.value='27' BEGIN SELECT RAISE(ABORT,'receipt migration interrupted'); END",
     );
     expect(() => initializeSchema(db)).toThrow('receipt migration interrupted');
     expect(

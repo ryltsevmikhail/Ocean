@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../../../../packages/store-sqlite/test-fixtures/room-task-v26.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -36,6 +37,7 @@ async function call(profile: string, args: string[], options: OceanCommandOption
 function downgradeToSchema14(profile: string): void {
   const db = new DatabaseSync(join(profile, 'runtime.sqlite'));
   try {
+    omitRoomTaskSchema(db);
     db.exec(`DROP TABLE IF EXISTS ocean_room_model_policies;
     DROP TABLE IF EXISTS ocean_bot_model_bindings;
     DROP TABLE IF EXISTS ocean_model_connection_receipts;

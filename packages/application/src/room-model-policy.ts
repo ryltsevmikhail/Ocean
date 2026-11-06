@@ -152,7 +152,8 @@ export class RoomModelPolicyService {
             activationTransferIdentity(turn.activation?.identity) !== 'local'
           );
         });
-        if (held) return conversationFailure('model_policy_work_conflict');
+        if (held || tx.roomTasks?.pendingTransfer(room.id))
+          return conversationFailure('model_policy_work_conflict');
       }
       const policy: RoomModelPolicy = {
         roomId: room.id,

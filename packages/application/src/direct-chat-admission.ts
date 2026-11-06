@@ -132,6 +132,7 @@ export function admitChat(
     }
     // A durable batch holds the room between its children; only Notes stay available.
     if (tx.broadcastBatchForRoom(room.id) !== null) return conversationFailure('batch_open');
+    if (tx.roomTasks?.roomHold(room.id)) return conversationFailure('room_busy');
     const active = tx.activeChatTurn(room.id);
     if (active !== null)
       return conversationFailure(active.status === 'uncertain' ? 'recovery_required' : 'room_busy');

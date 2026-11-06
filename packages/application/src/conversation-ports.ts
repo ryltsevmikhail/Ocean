@@ -1,3 +1,4 @@
+import type { RoomTaskTransaction } from './room-task-records.js';
 import type {
   BroadcastBatch,
   ChatTurn,
@@ -57,6 +58,7 @@ export interface ConversationReceipt {
 }
 /** Synchronous transaction surface; implementations must roll back writes on exceptions. */
 export interface ConversationTransaction {
+  readonly roomTasks?: RoomTaskTransaction;
   /**
    * Optional fail-closed publication evidence. Head and complete unresolved effects
    * (this run plus unscoped legacy) MUST share this authoritative transaction/write

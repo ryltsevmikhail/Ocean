@@ -1,3 +1,4 @@
+import { roomTaskStorage } from './room-task-storage.js';
 import { taskRunId } from '@runnets/domain';
 import { committedTaskVersion } from './event-log.js';
 import { inspectPendingEffects } from './tool-journal-reads.js';
@@ -67,6 +68,7 @@ export class SqliteConversationStore implements ConversationStore {
     return withImmediateTransaction(db, () =>
       work({
         ...chatStorage(db),
+        ...(current ? { roomTasks: roomTaskStorage(db) } : {}),
         ...(current
           ? {
               chatFailureEvidence: (id: string) => {

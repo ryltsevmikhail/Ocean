@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, it } from 'vitest';
 import type { Bot } from '@runnets/domain';
@@ -20,6 +21,7 @@ function previous() {
   const db = new DatabaseSync(':memory:', { enableForeignKeyConstraints: true });
   opened.push(db);
   initializeSchema(db);
+  omitRoomTaskSchema(db);
   db.exec(`DROP TABLE IF EXISTS ocean_room_model_policies;
     DROP TABLE IF EXISTS ocean_bot_model_bindings;
     DROP TABLE IF EXISTS ocean_model_connection_receipts;
@@ -213,7 +215,7 @@ it('rolls back migration rows and version publication together, then reruns safe
   const db = previous();
   legacy(db, 'deepseek', 'pending', 2);
   db.exec(
-    "CREATE TRIGGER stop_model BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='26' BEGIN SELECT RAISE(ABORT,'synthetic interruption'); END",
+    "CREATE TRIGGER stop_model BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='27' BEGIN SELECT RAISE(ABORT,'synthetic interruption'); END",
   );
   expect(() => initializeSchema(db)).toThrow('synthetic interruption');
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(

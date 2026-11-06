@@ -120,3 +120,5 @@ export { combineChatTools } from './chat-turn-tools.js';
 
 export * from './service-owner-receipt.js';
 export * from './service-owner-settings.js';
+export * from './room-task-records.js';
+export { RoomTaskPersistence, type RoomTaskPersistenceDeps } from './room-task-persistence.js';

@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../../../../packages/store-sqlite/test-fixtures/room-task-v26.js';
 /**
  * Installed-tree rehearsals on disposable prefixes.
  *
@@ -98,6 +99,7 @@ it('migrates a schema-14 RC1-shaped profile and restores an RC1-era format-2 bac
     `INSERT INTO ocean_messages (id, workspace_id, room_id, seq, author, target_bot_id, body, created_at, author_bot_id, turn_id)
      VALUES ('rc1-message','ws_ocean',?,1,'user',?,'RC1-era message','2026-11-01T00:00:00.000Z',NULL,NULL)`,
   ).run(roomId, botId);
+  omitRoomTaskSchema(db);
   db.exec(`DROP TABLE IF EXISTS ocean_room_model_policies;
     DROP TABLE IF EXISTS ocean_bot_model_bindings;
     DROP TABLE IF EXISTS ocean_model_connection_receipts;

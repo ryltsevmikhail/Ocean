@@ -16,8 +16,8 @@ import { applyMigrations } from './schema-migrations.js';
 
 import { ownerBusy } from './maintenance-owner.js';
 import { userTables } from './schema-inspection.js';
-/** Schema 26 adds bounded durable owner service mutation receipts. */
-export const SCHEMA_VERSION = 26;
+/** Schema 27 adds inert durable room tasks and addressed deliveries. */
+export const SCHEMA_VERSION = 27;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 

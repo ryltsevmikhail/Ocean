@@ -82,6 +82,7 @@ export class RoomBroadcastService {
       if (tx.broadcastBatchForRoom(room.id) !== null) return conversationFailure('batch_open');
       // Any non-batch hold keeps its pre-existing recovery meaning: only doubts about a
       // started turn are `recovery_required`, an ordinary in-flight turn is `room_busy`.
+      if (tx.roomTasks?.roomHold(room.id)) return conversationFailure('room_busy');
       const active = tx.activeChatTurn(room.id);
       if (active !== null)
         return conversationFailure(

@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
 import { omitModelConnectionSchema } from '../test-fixtures/model-schema.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -54,6 +55,7 @@ function downgradeTo16(path: string): void {
   try {
     for (const table of PLUGIN_TABLES) db.exec('DROP TABLE IF EXISTS ' + table);
     omitModelConnectionSchema(db);
+    omitRoomTaskSchema(db);
     db.exec("UPDATE meta SET value='16' WHERE key='schema_version'");
   } finally {
     db.close();
@@ -79,7 +81,7 @@ function snapshot(path: string): {
 describe('plugin migration 17', () => {
   it('creates every authoritative plugin table at the current schema version', () => {
     const db = memory();
-    expect(SCHEMA_VERSION).toBe(26);
+    expect(SCHEMA_VERSION).toBe(27);
     expect(tables(db)).toEqual(expect.arrayContaining([...PLUGIN_TABLES]));
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
       String(SCHEMA_VERSION),
@@ -137,6 +139,7 @@ describe('plugin migration 17', () => {
     try {
       for (const table of PLUGIN_TABLES) tamper.exec('DROP TABLE IF EXISTS ' + table);
       omitModelConnectionSchema(tamper);
+      omitRoomTaskSchema(tamper);
       tamper.exec("UPDATE meta SET value='16' WHERE key='schema_version'");
       // A view with a plugin table's name makes the migration DDL fail inside its transaction.
       tamper.exec('CREATE VIEW ocean_plugin_grants AS SELECT 1 AS x');

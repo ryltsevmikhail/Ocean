@@ -74,7 +74,7 @@ function validTask(value: unknown): value is RoomTaskAddress {
     Number(value['lastDeliverySeq']) >= 0
   );
 }
-function validRequest(value: unknown): value is RoomAgentRequest {
+export function validRoomAgentRequest(value: unknown): value is RoomAgentRequest {
   return (
     authorityObject(value) &&
     Reflect.ownKeys(value).length === 3 &&
@@ -96,7 +96,7 @@ export function decideRoomAddress(
     !validTask(origin.task) ||
     !['botId', 'turnId', 'deliveryId', 'attemptId'].every((key) => text(origin[key])) ||
     !text(origin.callId, 512) ||
-    !validRequest(request) ||
+    !validRoomAgentRequest(request) ||
     !Array.isArray(currentMemberIds) ||
     currentMemberIds.length > 32 ||
     !authorityDenseArray(currentMemberIds) ||
@@ -104,7 +104,7 @@ export function decideRoomAddress(
     new Set(currentMemberIds).size !== currentMemberIds.length
   )
     return err(DomainError.invalidArgument('malformed room addressing input'));
-  const { task, botId, turnId, attemptId, callId, deliveryId } = origin;
+  const { task, botId, turnId, attemptId, callId } = origin;
   const { kind, toBotId, text: body } = request;
   if (
     task.status !== 'ready' ||
@@ -118,17 +118,26 @@ export function decideRoomAddress(
     recipientBotId: toBotId,
     text: body,
     kind,
-    requestKey: canonicalJson(['room-agent/v1', turnId, attemptId, callId]),
-    binding: canonicalJson([
-      task.workspaceId,
-      task.roomId,
-      task.rootId,
-      task.id,
-      deliveryId,
-      botId,
-      kind,
-      toBotId,
-      body,
-    ]),
+    requestKey: roomAgentRequestKey(turnId, attemptId, callId),
+    binding: roomAgentBinding(origin, request),
   });
+}
+
+/** Immutable request identity and binding are reusable without ready-only admission. */
+export function roomAgentRequestKey(turnId: string, attemptId: string, callId: string): string {
+  return canonicalJson(['room-agent/v1', turnId, attemptId, callId]);
+}
+export function roomAgentBinding(origin: RoomDeliveryOrigin, request: RoomAgentRequest): string {
+  const { task, deliveryId, botId } = origin;
+  return canonicalJson([
+    task.workspaceId,
+    task.roomId,
+    task.rootId,
+    task.id,
+    deliveryId,
+    botId,
+    request.kind,
+    request.toBotId,
+    request.text,
+  ]);
 }

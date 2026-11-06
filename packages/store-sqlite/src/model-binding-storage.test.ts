@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { InMemoryConversationStore } from '@runnets/store';
@@ -145,6 +146,7 @@ it('requires migrated schema by default and makes pre-current fixture behavior e
   const db = new DatabaseSync(':memory:');
   databases.push(db);
   initializeSchema(db);
+  omitRoomTaskSchema(db);
   db.exec("UPDATE meta SET value='19' WHERE key='schema_version'");
   expect(() => new SqliteConversationStore(db).atomic((tx) => tx.bots())).toThrow(
     'unsupported_schema',

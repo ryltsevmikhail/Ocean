@@ -20,6 +20,11 @@ export interface ChatTurnBroadcastLink {
 }
 /** Durable admission and publication facts; a retry never creates new execution authority. */
 export interface ChatTurn {
+  readonly roomDelivery?: {
+    readonly version: 1;
+    readonly taskId: string;
+    readonly deliveryId: string;
+  };
   readonly codingTaskId?: string;
   readonly continuationReviewId?: string;
   readonly id: string;

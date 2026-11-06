@@ -40,6 +40,7 @@ it('admits the unreleased intermediate schemas 15 and 16 to doctor and backup', 
   const { root, path } = setup();
   const db = new DatabaseSync(path);
   try {
+    omitModelConnectionSchema(db);
     for (const version of ['15', '16']) {
       db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(version);
       expect(inspectDatabase(path), version).toMatchObject({ status: 'ok' });

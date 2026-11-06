@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,6 +19,7 @@ it('upgrades existing journal rows transactionally, retains spent identities, re
     original.resolveUncertainNow('resolved', ctx, 'tool', 'owner acknowledgement');
     expect(original.claimNow('pending', 'tool', ctx, 'next')).toBe(true);
     original.settleNow('pending', 'uncertain', ctx);
+    omitRoomTaskSchema(db);
     db.exec(
       "INSERT INTO tool_invocations_v1 VALUES('v1','tool','uncertain'); ALTER TABLE tool_invocations_v2 DROP COLUMN admission; UPDATE meta SET value='24' WHERE key='schema_version';",
     );
@@ -30,7 +32,7 @@ it('upgrades existing journal rows transactionally, retains spent identities, re
     const before = history(),
       resolutions = db.prepare('SELECT * FROM tool_effect_resolutions_v1').all();
     db.exec(
-      "CREATE TRIGGER stop_25 BEFORE UPDATE ON meta WHEN NEW.value='26' BEGIN SELECT RAISE(ABORT,'rollback25'); END",
+      "CREATE TRIGGER stop_25 BEFORE UPDATE ON meta WHEN NEW.value='27' BEGIN SELECT RAISE(ABORT,'rollback25'); END",
     );
     expect(() => initializeSchema(db)).toThrow('rollback25');
     expect(
@@ -61,6 +63,7 @@ it('opens schema24 with no journal and initializes the column exactly once on fi
   const db = new DatabaseSync(':memory:');
   try {
     initializeSchema(db);
+    omitRoomTaskSchema(db);
     db.exec("UPDATE meta SET value='24' WHERE key='schema_version'");
     initializeSchema(db);
     expect(db.prepare('PRAGMA table_info(tool_invocations_v2)').all()).toEqual([]);

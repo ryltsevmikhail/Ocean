@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, it } from 'vitest';
 import { unconfiguredModelConnection } from '@runnets/application';
@@ -23,9 +24,10 @@ it('migrates missing envelopes to null while preserving every frozen receipt byt
     'binding',
     receipt,
   );
+  omitRoomTaskSchema(db);
   db.exec("UPDATE meta SET value='22' WHERE key='schema_version'");
   initializeSchema(db);
-  expect(SCHEMA_VERSION).toBe(26);
+  expect(SCHEMA_VERSION).toBe(27);
   expect(
     JSON.parse(
       db
@@ -47,6 +49,7 @@ it('refuses an unknown envelope version and rolls back migration publication', (
     row.connectionId,
     JSON.stringify(row),
   );
+  omitRoomTaskSchema(db);
   db.exec("UPDATE meta SET value='22' WHERE key='schema_version'");
   expect(() => initializeSchema(db)).toThrow('connection_unverified');
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
@@ -69,6 +72,7 @@ it.each([22, 23])(
       'binding',
       receipt,
     );
+    omitRoomTaskSchema(db);
     db.exec('DROP TABLE ocean_room_model_policies');
     db.prepare("UPDATE meta SET value=? WHERE key='schema_version'").run(String(version));
     const snapshot = () => ({
