@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest';
-import { isLocalRuntimeIdentity, LOCAL_PLUGIN_SESSION_AUTHORITY } from '@runnets/contracts';
+import {
+  isLocalRuntimeIdentity,
+  LOCAL_PLUGIN_SESSION_AUTHORITY,
+  LOCAL_ADDRESSED_HISTORY,
+} from '@runnets/contracts';
 import { isLocalRuntimeIdentity as rc2Accepts } from '../../test-fixtures/rc2-runtime-contract.js';
 import { clientIdentity } from './client-compatibility.js';
 import { runtimeCapabilities } from './capabilities.js';
@@ -17,5 +21,9 @@ it('keeps full current identity distinct from the negotiated RC2 identity', () =
   const legacy = clientIdentity(identity, false);
   expect(rc2Accepts(legacy)).toBe(true);
   expect(legacy.capabilities.some((c) => c.startsWith('plugin.'))).toBe(false);
-  expect(clientIdentity(identity, true, true, true, true)).toEqual(identity);
+  expect(legacy.capabilities).not.toContain(LOCAL_ADDRESSED_HISTORY);
+  expect(clientIdentity(identity, true, true, true, true).capabilities).not.toContain(
+    LOCAL_ADDRESSED_HISTORY,
+  );
+  expect(clientIdentity(identity, true, true, true, true, true)).toEqual(identity);
 });

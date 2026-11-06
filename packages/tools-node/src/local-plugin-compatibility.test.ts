@@ -35,14 +35,40 @@ it.each([
     const server = createServer((socket) => {
       const frames = new LocalRuntimeFrames((raw) => {
         const request = raw as { id: string; method: string; params: unknown };
-        hellos.push(request.params);
+        if (request.method === 'hello') hellos.push(request.params);
         methods.push(request.method);
         writeLocalRuntimeFrame(socket, {
           id: request.id,
-          result: {
-            ...descriptor,
-            capabilities: ['status', 'stop', ...capabilities],
-          },
+          result:
+            request.method === 'history.list'
+              ? [
+                  {
+                    workspaceId: 'ws',
+                    roomId: 'room',
+                    id: 'old',
+                    seq: 1,
+                    author: 'user',
+                    targetBotId: null,
+                    createdAt: '2026-11-06T00:00:00Z',
+                    bodyBase64: 'b2xk',
+                  },
+                  {
+                    workspaceId: 'ws',
+                    roomId: 'room',
+                    id: 'reply_old',
+                    seq: 2,
+                    author: 'bot',
+                    authorBotId: 'a',
+                    targetBotId: 'a',
+                    turnId: 'old',
+                    createdAt: '2026-11-06T00:00:00Z',
+                    bodyBase64: 'cmVwbHk=',
+                  },
+                ]
+              : {
+                  ...descriptor,
+                  capabilities: ['status', 'stop', ...capabilities],
+                },
         });
       });
       socket.on('data', (bytes) => frames.push(bytes));
@@ -53,19 +79,45 @@ it.each([
     try {
       const connected = connectPublishedRuntime(profile);
       // Close the old implementation's unexpected successful peer so RED never hangs.
-      void connected?.then(
-        (peer) => peer.close(),
-        () => {},
-      );
+      if (!accepted)
+        void connected?.then(
+          (peer) => peer.close(),
+          () => {},
+        );
       if (accepted) {
         const peer = await connected;
         expect(peer).not.toBeNull();
         await expect(peer?.listModelConnections()).rejects.toThrow(
           'model_runtime_upgrade_required',
         );
+        if (capabilities.length === 0)
+          expect(await peer?.history({ workspaceId: 'ws', roomId: 'room' })).toEqual([
+            {
+              workspaceId: 'ws',
+              roomId: 'room',
+              id: 'old',
+              seq: 1,
+              author: 'user',
+              targetBotId: null,
+              createdAt: '2026-11-06T00:00:00Z',
+              body: 'old',
+            },
+            {
+              workspaceId: 'ws',
+              roomId: 'room',
+              id: 'reply_old',
+              seq: 2,
+              author: 'bot',
+              authorBotId: 'a',
+              targetBotId: 'a',
+              turnId: 'old',
+              createdAt: '2026-11-06T00:00:00Z',
+              body: 'reply',
+            },
+          ]);
         peer?.close();
       } else await expect(connected).rejects.toThrow('plugin_runtime_upgrade_required');
-      expect(methods).toEqual(['hello']);
+      expect(methods).toEqual(capabilities.length === 0 ? ['hello', 'history.list'] : ['hello']);
       expect(hellos).toEqual([
         {
           ...descriptor,
@@ -74,6 +126,7 @@ it.each([
             'model.connections-v1',
             'decisions.service-v1',
             'service.authority-v2',
+            'room.addressed-history-v1',
           ],
         },
       ]);

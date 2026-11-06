@@ -14,6 +14,7 @@ import {
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
   LOCAL_SERVICE_CONFIRMATIONS,
+  LOCAL_ADDRESSED_HISTORY,
   type LocalRuntimeDescriptor,
   type LocalRuntimeIdentity,
   type LocalRuntimeStatus,
@@ -87,6 +88,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
         context = Object.freeze({
           models: features.includes(LOCAL_MODEL_CONNECTIONS),
           serviceConfirmations: features.includes(LOCAL_SERVICE_CONFIRMATIONS),
+          addressedHistory: features.includes(LOCAL_ADDRESSED_HISTORY),
         });
         authenticated = true;
         clearTimeout(handshakeTimeout);
@@ -98,6 +100,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             context.models,
             services,
             context.serviceConfirmations,
+            context.addressedHistory,
           ),
         });
         return;
@@ -121,6 +124,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             context.models,
             services,
             context.serviceConfirmations,
+            context.addressedHistory,
           ),
         });
         return;

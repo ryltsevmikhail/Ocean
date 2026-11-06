@@ -2,6 +2,7 @@ import {
   LOCAL_MODEL_CONNECTIONS,
   LOCAL_SERVICE_CONFIRMATIONS,
   LOCAL_PLUGIN_SESSION_AUTHORITY,
+  LOCAL_ADDRESSED_HISTORY,
   type LocalRuntimeIdentity,
 } from '@runnets/contracts';
 
@@ -20,6 +21,7 @@ export function clientFeatures(params: Record<string, unknown>): readonly string
 export interface RuntimeWireContext {
   readonly models: boolean;
   readonly serviceConfirmations?: boolean;
+  readonly addressedHistory?: boolean;
 }
 export const LEGACY_WIRE_CONTEXT: RuntimeWireContext = Object.freeze({ models: false });
 export function clientIdentity<T extends LocalRuntimeIdentity>(
@@ -28,12 +30,14 @@ export function clientIdentity<T extends LocalRuntimeIdentity>(
   models = false,
   services = false,
   serviceConfirmations = false,
+  addressedHistory = false,
 ): T {
   return {
     ...identity,
     capabilities: identity.capabilities.filter(
       (c) =>
         (serviceConfirmations || c !== LOCAL_SERVICE_CONFIRMATIONS) &&
+        (addressedHistory || c !== LOCAL_ADDRESSED_HISTORY) &&
         (plugins || !c.startsWith('plugin.')) &&
         (models || c !== LOCAL_MODEL_CONNECTIONS) &&
         (services || !c.startsWith('service.')),

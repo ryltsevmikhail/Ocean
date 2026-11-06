@@ -78,8 +78,30 @@ Stored message facts are immutable on update, including on reopened v27 snapshot
 `pnpm build` и `pnpm format:check` завершились с кодом0. Архив с обеими квитанциями
 восстановлен после удаления исходного тестового профиля; повтор читается,
 новая работа остаётся запрещена восстановлением. Два minor-пункта учтены для F.
-Общий D не завершён. Следующий шаг19.2.2 — согласование адресованной истории
-в существующем общем клиентском контракте, затем подключение исполнения.
+Общий D не завершён; подключение исполнения остаётся следующим этапом.
+
+## Implemented: D19.2.2 negotiated addressed history
+
+The existing protocol-1 hello requests `room.addressed-history-v1` after the
+client's four existing features. Hello and status advertise it only to clients
+requesting it, independently of plugin, model and service support. This is wire
+support and grants no bot, owner or tool authority. An older runtime can ignore
+the feature while continuing to serve ordinary history.
+
+History decoding accepts distinct bot author/target IDs only when the returned
+identity includes the feature. Both IDs and the source turn remain required;
+scope, consecutive positions, strict base64/UTF-8 and byte bounds still apply.
+`runs.result` remains an ordinary final bot reply. Before serializing history,
+the runtime inspects the requested candidate page: a peer row without negotiated
+support returns `client_upgrade_required` for the whole page. It never drops,
+rewrites or advances past that row. Ordinary pages retain their wire format;
+modern pages retain the existing continuous-prefix frame budget.
+
+Synthetic accepted persistence is qualified through the normal built runtime,
+real shared socket and independent current/frozen RC2 client processes. This
+qualifies reading and compatibility only; it introduces no execution endpoint
+and does not qualify provider, service or native behavior. Independent acceptance
+review for this leaf remains separate from implementation verification.
 
 ## Planned: execution and host integration
 
@@ -89,12 +111,9 @@ is introduced. New admissions create no ChatTurn or Core TaskRun. Test-only setu
 attaches a marked turn to a real queued delivery and commits Core lifecycle/model
 settlement commands without calling a provider.
 
-Before any host can produce addressed history, the next wire gate must negotiate
-truthful addressed-history support or refuse an old client with an upgrade
-requirement. The tools-node client and frozen RC2 fixture currently reject distinct
-bot author/target IDs. Ordinary old histories and sequence pages retain their wire
-behavior; peer rows must never be dropped, rewritten or sent to an incapable client.
-The later engine must explicitly label peer input rather than passing it as the
+The addressed-history wire gate is implemented; the frozen RC2 decoder remains
+unchanged and receives an upgrade error for peer-containing pages. The later
+engine must explicitly label peer input rather than passing it as the
 current user input to `roomContext`.
 
 Execution accounting, scheduling, stop/cleanup and parent result publication remain

@@ -36,6 +36,7 @@ export async function oldHosts() {
         'model.connections-v1',
         'decisions.service-v1',
         'service.authority-v2',
+        'room.addressed-history-v1',
       ]);
       assert.deepEqual(
         observed.methods,

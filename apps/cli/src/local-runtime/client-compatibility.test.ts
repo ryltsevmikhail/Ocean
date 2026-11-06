@@ -74,6 +74,9 @@ it('current client advertises authority support and keeps plugin transport', asy
   try {
     expect(client.identity.capabilities).toContain(LOCAL_PLUGIN_SESSION_AUTHORITY);
     expect(client.identity.capabilities).toContain(LOCAL_SERVICE_CONFIRMATIONS);
+    expect(client.identity.capabilities).toContain('room.addressed-history-v1');
+    expect(client.identity.capabilities.slice(0, 2)).toEqual(['status', 'stop']);
+    expect(client.identity.capabilities.length).toBeLessThanOrEqual(80);
     expect((await client.status()).capabilities).toEqual(client.identity.capabilities);
     const dispatch = vi.spyOn(RuntimePlugins.prototype, 'dispatch');
     await client.pluginCatalog({});
@@ -97,6 +100,9 @@ it('unknown bounded features do not enable plugin operations', async () => {
     'plugin.catalog',
   ]);
   expect(rc2Accepts(hello?.result)).toBe(true);
+  expect((hello?.result as { capabilities: string[] }).capabilities).not.toContain(
+    'room.addressed-history-v1',
+  );
   expect(plugin?.error?.code).toBe('plugin_runtime_upgrade_required');
 });
 it('negotiates service confirmations independently of plugin, model and service settings support', async () => {
@@ -110,6 +116,27 @@ it('negotiates service confirmations independently of plugin, model and service 
   expect(
     capabilities.some(
       (c) => c.startsWith('plugin.') || c.startsWith('service.') || c === 'model.connections-v1',
+    ),
+  ).toBe(false);
+  expect(status?.result).toMatchObject({ ...(hello?.result as object), state: 'ready' });
+});
+it('negotiates addressed history without enabling independent plugin, model or service support', async () => {
+  const { descriptor, raw } = await fixture();
+  const [hello, status] = await raw({
+    ...descriptor,
+    clientFeatures: ['room.addressed-history-v1'],
+  });
+  const capabilities = (hello?.result as { capabilities: string[] }).capabilities;
+  expect(capabilities).toContain('room.addressed-history-v1');
+  expect(capabilities.slice(0, 2)).toEqual(['status', 'stop']);
+  expect(capabilities.length).toBeLessThanOrEqual(80);
+  expect(
+    capabilities.some(
+      (c) =>
+        c.startsWith('plugin.') ||
+        c.startsWith('service.') ||
+        c === 'model.connections-v1' ||
+        c === 'decisions.service-v1',
     ),
   ).toBe(false);
   expect(status?.result).toMatchObject({ ...(hello?.result as object), state: 'ready' });

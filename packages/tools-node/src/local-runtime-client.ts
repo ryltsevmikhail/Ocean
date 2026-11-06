@@ -19,6 +19,7 @@ import {
   LOCAL_MODEL_CONNECTIONS,
   LOCAL_SERVICE_CONFIRMATIONS,
   LOCAL_SERVICE_AUTHORITY,
+  LOCAL_ADDRESSED_HISTORY,
   isLocalRuntimeIdentity,
   isLocalReceiptQuery,
   isLocalRunQuery,
@@ -160,6 +161,7 @@ async function connectDescriptor(
         LOCAL_MODEL_CONNECTIONS,
         LOCAL_SERVICE_CONFIRMATIONS,
         LOCAL_SERVICE_AUTHORITY,
+        LOCAL_ADDRESSED_HISTORY,
       ],
     });
     if (

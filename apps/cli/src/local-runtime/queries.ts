@@ -49,6 +49,7 @@ const knownErrors = new Set([
   'terminal_state',
   'invalid_transition',
   'observation_closed',
+  'client_upgrade_required',
 ]);
 export class RuntimeQueries {
   readonly #service: RoomRuntimeRuns;
@@ -81,12 +82,15 @@ export class RuntimeQueries {
             return { result: reads.members(params, params.after ?? '', params.limit ?? 50) };
           break;
         case 'history.list':
-          if (isLocalHistoryQuery(params))
-            return {
-              result: wirePage(
-                messages(reads.history(params, params.after ?? 0, params.limit ?? 50)),
-              ),
-            };
+          if (isLocalHistoryQuery(params)) {
+            const rows = Array.from(reads.history(params, params.after ?? 0, params.limit ?? 50));
+            if (
+              !context.addressedHistory &&
+              rows.some((m) => m.author === 'bot' && m.authorBotId !== m.targetBotId)
+            )
+              throw Error('client_upgrade_required');
+            return { result: wirePage(messages(rows)) };
+          }
           break;
         case 'runs.list':
           if (isLocalRoomListQuery(params))
