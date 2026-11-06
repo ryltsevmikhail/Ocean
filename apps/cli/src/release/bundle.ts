@@ -142,13 +142,7 @@ export async function buildAdapterBundle(root: string): Promise<AdapterBundle> {
   for (const required of ['@modelcontextprotocol/client/', '@modelcontextprotocol/core/'])
     if (![...moduleIds].some((id) => id.includes(required)))
       throw new Error('bundled adapter did not include the pinned module ' + required);
-  for (const id of moduleIds)
-    if (
-      /integrations-executor|@executor-js|@modelcontextprotocol\/server\/|node_modules\/rolldown\/|\/(?:qualification|prototype)[^/]*\.js$|\/test-fixtures\/|\/[^/]*fixture[^/]*\.js$/.test(
-        id,
-      )
-    )
-      throw new Error('dev-only module in production bundle');
+  for (const id of moduleIds) assertProductionModule(id);
   const chunkDigests = Object.fromEntries(
     [...files.keys()].sort().map((name) => [name.slice('dist/'.length), filesSha256[name] ?? '']),
   );
@@ -175,4 +169,14 @@ export async function buildAdapterBundle(root: string): Promise<AdapterBundle> {
     chunks: chunks.length,
     bytes,
   };
+}
+
+/** Check module identity; ancestor proof-directory names carry no production policy. */
+export function assertProductionModule(id: string): void {
+  if (
+    /(?:^|\/)(?:packages\/integrations-executor|node_modules\/(?:@runnets\/integrations-executor|@executor-js\/[^/]+|@modelcontextprotocol\/server|rolldown))(?:\/|$)|\/(?:qualification|prototype)[^/]*\.[cm]?[jt]s$|\/test-fixtures\/|\/[^/]*fixture[^/]*\.[cm]?[jt]s$/.test(
+      id,
+    )
+  )
+    throw Error('dev-only module in production bundle');
 }

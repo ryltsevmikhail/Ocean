@@ -6,7 +6,7 @@ import { readFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { buildAdapterBundle } from './bundle.js';
+import { assertProductionModule, buildAdapterBundle } from './bundle.js';
 import { workspace } from '../../test-fixtures/release-repo.js';
 it('bundles only the production public MCP root and imports it in isolation', async () => {
   const bundle = await buildAdapterBundle(workspace);
@@ -88,4 +88,22 @@ it('retains exact supported historical Executor archive validation for rollback'
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+it('checks real dev module paths while allowing ancestor qualification and fixture names', () => {
+  for (const path of [
+    '/proof/qualification-source/packages/integrations-mcp/dist/session.js',
+    '/proof/fixture-source/packages/integrations-mcp/dist/session.js',
+  ])
+    expect(() => assertProductionModule(path)).not.toThrow();
+  for (const path of [
+    '/project/packages/integrations-mcp/dist/qualification.js',
+    '/project/packages/integrations-mcp/dist/prototype.js',
+    '/project/packages/integrations-mcp/test-fixtures/native.ts',
+    '/project/node_modules/@modelcontextprotocol/server/dist/index.mjs',
+    '/project/packages/integrations-executor/dist/index.js',
+    '/project/node_modules/@executor-js/sdk/dist/index.js',
+    '/project/node_modules/rolldown/dist/index.mjs',
+  ])
+    expect(() => assertProductionModule(path), path).toThrow('dev-only module');
 });
