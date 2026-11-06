@@ -35,12 +35,13 @@ RED→GREEN и278 доменных тестов прошли; полные `pnpm
 Это историческое подтверждение19.1 на указанной ревизии; новый persistence-код
 требует отдельного ревью и проверок.
 
-## Implemented candidate: D19.2.1 inert durable persistence
+## Implemented: D19.2.1 inert durable persistence
 
 `RoomTaskPersistence.start` and `.send` commit task rows, addressed deliveries,
 conversation history and the existing message-kind receipt under one SQLite lock.
 Schema 27 adds two tables. Starts persist one owner root, sibling initial bot tasks,
-one user message and ordered queued deliveries. Peer sends persist a new direct
+one user message and ordered queued deliveries. Their causeId is the owner root ID;
+a peer delivery refers to its originating input delivery. Peer sends persist a new direct
 child, one queued delivery and an A-author/B-target message tied to the actual
 source turn. Delegation atomically moves the sender to waiting for that child.
 Failures during publication roll all writes back. Repeated identical requests return
@@ -71,8 +72,14 @@ counting inert deliveries as model runs or effects. Predecessor history, final-r
 uniqueness, direct-room targeting and the ten physical history columns are preserved.
 Stored message facts are immutable on update, including on reopened v27 snapshots.
 
-This candidate requires independent task review before acceptance or the next leaf.
-No canonical D acceptance boxes are marked by this implementation.
+19.2.1 принят на `698c6ba` после полного и повторного независимого ревью:
+шесть важных замечаний и проверка настоящего format-2 backup/restore закрыты.
+`pnpm check`: 3761 source / 165 process прошли (44/36 настроенных пропусков);
+`pnpm build` и `pnpm format:check` завершились с кодом0. Архив с обеими квитанциями
+восстановлен после удаления исходного тестового профиля; повтор читается,
+новая работа остаётся запрещена восстановлением. Два minor-пункта учтены для F.
+Общий D не завершён. Следующий шаг19.2.2 — согласование адресованной истории
+в существующем общем клиентском контракте, затем подключение исполнения.
 
 ## Planned: execution and host integration
 

@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. Этапы D–H остаются запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`; исполнение D и этапы E–H остаются запланированы.
 Долг сохранённых регрессий Executor закрыт в C18.6: чистые root gates прошли
 на квалифицированном `1f31974`; финальные проверки текущего выпуска остаются F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -66,8 +66,9 @@ A–C приняты. Для D–F подробные task-by-task контра�
 Рабочая база — `/home/ryltsevmg/Projects/Ocean-stable`, ветка
 `codex/ocean11-stable`, исходная ревизия `438338b`. В исходном каталоге Ocean
 и design-worktree есть защищённые чужие изменения. Их не stash/reset/clean.
-В stable сохранены незавершённые `github-session-rig.ts` и
-`plugin-catalog-lifetime.test.ts`; они не приняты вместе с новым дизайном.
+Исходные изменения `github-session-rig.ts` и `plugin-catalog-lifetime.test.ts`
+были отдельно сохранены, перенесены на MCP и приняты в C18.6; старый rig удалён
+после приёмки замены. Это закрытая история, а не текущий незакоммиченный долг.
 
 ## A. Runtime/server и существующий локальный движок — приоритет 1
 
@@ -1624,7 +1625,7 @@ Scoped target/source task FKs as above. Verify target bot matches task assignee 
 `message|delegate` targets a new direct child of the originating bot task; non-null source turn/attempt/bot/task and cause ID of originating input delivery are mandatory.
 Limit DDL to these three producible kinds (or explicitly reject unimplemented `result` on insert in this leaf). Reserve the v1 addressing union for later parent result publication.
 Bind to actual message `(room_id,seq)` AND its `id` using unique `(room_id,seq,id)` + composite FK. Use DEFERRABLE INITIALLY DEFERRED FK to message and `ocean_receipts(request_id)`.
-Start permits multiple delivery rows for the one user message. Peer operations require exactly one target/position 0. Restrict duplicate recipient per request. Rows reference existing same-room source ChatTurn.
+Start causeId equals its coordinating rootId, with null bot/source fields. Peer causeId is the originating input delivery ID. Start permits multiple delivery rows for the one user message. Peer operations require exactly one target/position 0. Restrict duplicate recipient per request. Rows reference existing same-room source ChatTurn.
 No ChatTurn or TaskRun is created by fresh start/send. On later execution one marked turn owns one incoming delivery. Use UNIQUE partial expression index on `$.roomDelivery.deliveryId` in chat payload.
 Validate the marked turn against target task, workspace/room, bot, inboundMessageId/seq on insert, and make marker/identity immutable on update (old direct turns cannot acquire the marker).
 This avoids scheduling or creating placeholder model attempts while providing a durable reverse join for bot actors. No third link table.
@@ -1686,19 +1687,83 @@ Count pending nonlocal/unknown D transfer pins in the old policy→deny barrier 
 
 #### Acceptance, compatibility and limits of this leaf
 
-- [ ] File-backed SQLite, two handles, identical start race/reopen: one owner root, N sibling tasks, one user message/receipt and N queued deliveries. Changed valid payload conflicts. Swap A/B order under separate root IDs and prove recipient authority is identical.
-- [ ] From real persisted A attempt send twice with different call IDs to B. Two peer messages, A author/B target/actual source turn, one subsequent ordinary final reply; reject second final and unbacked cross-author SQL insert. Peer text stays attributed in SQL/application history/context. Marker-like text round-trips as text without asset I/O. Old wire frames for old histories remain unchanged.
-- [ ] Lost peer receipt after wait/stop/revoke/member removal returns original IDs and seq with no new row. Same ID altered target/kind/text conflicts. Preoccupy the bot key with an owner start and try the converse: both cross-kind reuses return `request_conflict` with no writes or authority changes. Inject trigger failure at final receipt write, reopen and compare counters/sequence/links before retry. Race independent processes or worker threads, bounded busy timeout.
-- [ ] Reject forged sender, wrong run/attempt/ordinal, absent or unknown settlement, legacy turn, wrong room/parent, reviewed/stopped source and removed current membership. Empty refs allow communication. Keep both refs after one revokes; replacement grant/revision absent in stored child. Reject stale initial grant. Accept a workspace-scoped grant whose projectId equals the hash of the stored workspace root for a null/null mandate; reject a different project hash.
-- [ ] Prove old holds both ways, independent D roots, duplicate active D slice rejected even with a non-null continuation review, group note, legacy finite broadcast and `taskId=coding` unchanged. After A’s tool round settles, rotate A’s key/model or bot profile while B stays pinned. A→B succeeds with A’s persisted identity. Rotate B before a distinct fresh send and assert refusal, zero writes and intact pins. Privacy denies before writes. Check allow→deny barrier with a queued cloud pin after member rebind. Restore-origin blocks fresh rows while identical archived receipts remain readable.
-- [ ] Migrate a genuine disposable v26 snapshot with bot reply, reviewed/uncertain turn, batch, receipt, grants and attachment metadata. Compare logical row bytes before/after, `foreign_key_check`, old lookup/once-final index/trigger behavior. Interrupt v27 publication and prove original v26 intact.
-- [ ] Advance `SCHEMA_VERSION` and profile manifest cap to 27. In `maintenance.ts:35` explicitly retain 26 in historical maintainable schemas. For v27 `heldRooms` counts distinct rooms with legacy holds OR D holds; keep old-schema summary exact. No pending receipt counted as model run/effect. Inspect/backup/reopen/restore a disposable archive and reject unsupported future 28.
-- [ ] Adjust current-version asserts/publication-failure triggers in store-sqlite `{broadcast,provider-connection,model-binding,model-pending,service-authority,desktop-capability,tool-admission,plugin-operation}-migration.test.ts`, `room-model-policy.test.ts`, `service-owner-receipts.test.ts`, `plugin-schema.test.ts`, `model-qualification-storage.test.ts`, domain `profile-backup.test.ts` and CLI `local-runtime/desktop-binding-migration.test.ts` as applicable. Simulated downgrade fixtures must recreate their actual predecessor DDL/remove v27 objects explicitly; genuine older-schema bytes remain fixtures.
+- [x] File-backed SQLite, two handles, identical start race/reopen: one owner root, N sibling tasks, one user message/receipt and N queued deliveries. Changed valid payload conflicts. Swap A/B order under separate root IDs and prove recipient authority is identical.
+- [x] From real persisted A attempt send twice with different call IDs to B. Two peer messages, A author/B target/actual source turn, one subsequent ordinary final reply; reject second final and unbacked cross-author SQL insert. Peer text stays attributed in SQL/application history/context. Marker-like text round-trips as text without asset I/O. Old wire frames for old histories remain unchanged.
+- [x] Lost peer receipt after wait/stop/revoke/member removal returns original IDs and seq with no new row. Same ID altered target/kind/text conflicts. Preoccupy the bot key with an owner start and try the converse: both cross-kind reuses return `request_conflict` with no writes or authority changes. Inject trigger failure at final receipt write, reopen and compare counters/sequence/links before retry. Race independent processes or worker threads, bounded busy timeout.
+- [x] Reject forged sender, wrong run/attempt/ordinal, absent or unknown settlement, legacy turn, wrong room/parent, reviewed/stopped source and removed current membership. Empty refs allow communication. Keep both refs after one revokes; replacement grant/revision absent in stored child. Reject stale initial grant. Accept a workspace-scoped grant whose projectId equals the hash of the stored workspace root for a null/null mandate; reject a different project hash.
+- [x] Prove old holds both ways, independent D roots, duplicate active D slice rejected even with a non-null continuation review, group note, legacy finite broadcast and `taskId=coding` unchanged. After A’s tool round settles, rotate A’s key/model or bot profile while B stays pinned. A→B succeeds with A’s persisted identity. Rotate B before a distinct fresh send and assert refusal, zero writes and intact pins. Privacy denies before writes. Check allow→deny barrier with a queued cloud pin after member rebind. Restore-origin blocks fresh rows while identical archived receipts remain readable.
+- [x] Migrate a genuine disposable v26 snapshot with bot reply, reviewed/uncertain turn, batch, receipt, grants and attachment metadata. Compare logical row bytes before/after, `foreign_key_check`, old lookup/once-final index/trigger behavior. Interrupt v27 publication and prove original v26 intact.
+- [x] Advance `SCHEMA_VERSION` and profile manifest cap to 27. In `maintenance.ts:35` explicitly retain 26 in historical maintainable schemas. For v27 `heldRooms` counts distinct rooms with legacy holds OR D holds; keep old-schema summary exact. No pending receipt counted as model run/effect. Inspect/backup/reopen/restore a disposable archive and reject unsupported future 28.
+- [x] Adjust current-version asserts/publication-failure triggers in store-sqlite `{broadcast,provider-connection,model-binding,model-pending,service-authority,desktop-capability,tool-admission,plugin-operation}-migration.test.ts`, `room-model-policy.test.ts`, `service-owner-receipts.test.ts`, `plugin-schema.test.ts`, `model-qualification-storage.test.ts`, domain `profile-backup.test.ts` and CLI `local-runtime/desktop-binding-migration.test.ts` as applicable. Simulated downgrade fixtures must recreate their actual predecessor DDL/remove v27 objects explicitly; genuine older-schema bytes remain fixtures.
       Run `pnpm check`, `pnpm build`, `pnpm format:check` for the eventual implementation. Tests assert no provider/secret/service factory is available; no model dispatch, root execution, transport contract or scheduling is qualified here.
 
-- [ ] Record meaningful behavioral RED→GREEN for start/send and migration guards, focused strict typing, final root check/build/format and exact proof/source pins. Update `docs/ocean/platform-stage-d.md` with implemented versus planned behavior; self-review and commit exact owned paths. Independent task review is required before the next leaf.
+- [x] Record meaningful behavioral RED→GREEN for start/send and migration guards, focused strict typing, final root check/build/format and exact proof/source pins. Update `docs/ocean/platform-stage-d.md` with implemented versus planned behavior; self-review and commit exact owned paths. Independent task review is required before the next leaf.
 
 Keep this change limited to persistence and existing admission compatibility. Do not add engine scheduling, a transport endpoint, UI, a generic workflow/policy registry or another event journal. Additional focused files are allowed only when needed for the300-line limit; report the concrete split before introducing it.
+
+19.2.1 accepted at `698c6ba` after full review and one scoped correction round:
+I1–I6 and the actual format-2 D archive proof are closed. Root `pnpm check` passed
+3761 source/165 process tests (44/36 configured skips), build/format0; source<=300.
+Two nonblocking review minors remain mandatory F triage: synchronized race release
+and the archived provider-ID predicate. This is inert storage, not autonomous execution.
+
+### Task 19.2.2: Negotiate truthful addressed history before host execution
+
+**Files:** modify `packages/contracts/src/local-runtime-queries.ts` (existing public
+index re-exports it), `packages/tools-node/src/{local-runtime-client,local-room-client}.ts`,
+`apps/cli/src/local-runtime/{client-compatibility,server,capabilities,queries}.ts`;
+update existing `client-compatibility.test.ts` and tools-node
+`local-plugin-compatibility.test.ts`; add tools-node `local-room-client.test.ts` and
+CLI `addressed-history-process.test.ts`; update `docs/ocean/platform-stage-d.md`.
+The new process filename already matches vitest.process-cases.config.ts; no redundant
+registration or extra protocol/client service. Frozen RC2 fixtures remain unchanged.
+
+**Interfaces:** export `LOCAL_ADDRESSED_HISTORY = 'room.addressed-history-v1'` from
+existing query contracts. Keep protocol1/LocalMessage shape and existing room methods.
+Reuse hello clientFeatures and add optional `RuntimeWireContext.addressedHistory`;
+undefined/default means false. Runtime capabilities include the feature, but hello
+and status expose it only to clients requesting it. Extend the current identity
+filter/context; preserve independent plugin/model/service negotiation, the first
+status/stop capability positions and bounds80modern/64frozenRC2. Features grant wire
+support only, never owner/bot/tool authority. Current connectDescriptor appends this
+feature after its existing four features. An old runtime may ignore it: ordinary
+history continues working without the returned feature.
+
+The tools-node history decoder permits authorBotId!=targetBotId only when the returned
+identity advertises the feature. Both IDs must be valid and non-null for any bot row;
+turn ID remains required. Preserve ordinary/user frame rules, scope, contiguous seq,
+strict base64/UTF-8 and byte bounds. A peer frame without negotiation is invalid_frame.
+Keep getResult restricted to an ordinary final bot reply even for a modern client;
+peer history is not a completed run result. No new body/attachment/asset interpretation.
+
+On history.list, inspect returned candidate rows before producing a wire response.
+If a client lacks support and its requested page contains a peer bot message, return
+`client_upgrade_required` through the known query-error mapping. Never serialize that
+peer frame, remove rows, skip sequence positions or rewrite author/target. Ordinary-only
+pages keep their existing bytes. Modern pages use the existing wirePage budget and
+continuous sequence. runs.result continues using the backed ordinary reply selector.
+Inspect any other actual message-bearing read only for this concrete representation
+risk; no general protocol rewrite or new event redaction system.
+
+- [ ] **Behavioral RED→GREEN and decoding.** Exercise current client hello feature,
+      negotiated peer history, ordinary fallback against an older runtime, and explicit
+      legacy refusal. Test no-feature peer rejection; null/missing/invalid bot targets,
+      wrong scope/seq/base64/UTF-8; unchanged user and ordinary frames. A modern
+      getResult must reject a peer row and accept the ordinary final response.
+- [ ] **Actual shared socket and independent client.** Reuse normal built runtime and
+      existing local process fixtures; seed only synthetic accepted persistence/history.
+      Connect current and frozen RC2 clients. Both read ordinary history unchanged;
+      current reads exact A-author/B-target and final rows while RC2 gets an explicit
+      upgrade error at a peer-containing page. Multiple small modern pages recover all
+      consecutive rows; a legacy error creates no dropped-row cursor. Hello/status
+      feature/cap bounds remain valid for modern/legacy/unknown-feature clients.
+      At least one client runs in an independent process against the real socket;
+      no model/provider/service call, task dispatch or fabricated new author schema.
+- [ ] **Verify without expanding delivery.** Owning focused tests/strict test typing,
+      root pnpm check/build/format on frozen source through private runner, source<=300;
+      commit exact paths and obtain independent review. Existing finite broadcasts,
+      taskId=coding, receipt and cancellation semantics remain intact. No task-start
+      endpoint, scheduler, model tools, GUI or native/live qualification in this leaf.
 
 ### Task 19.3: Qualify independent managed service workspaces
 
