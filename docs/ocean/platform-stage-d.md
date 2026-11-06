@@ -124,6 +124,12 @@ Model settlement and required usage still precede tool admission and completion.
 This is qualified with scripted providers and real in-memory TaskRunService only.
 The internal evidence factory has no production caller or public barrel export.
 
+19.2.3 accepted at `dc78dbf` after independent review and one cancellation fix.
+A synchronous abort from the pending tool notification now prevents invocation;
+a separately committed handoff retains its truthful completion behavior. Final
+root checks:3819 source tests and166 process tests passed; build and format passed.
+The approved test-fixture split and existing turn-safety regression stay≤300 lines.
+
 This engine contract introduces no room producer, send endpoint, delivery claim,
 host job or new permission. Durable send/proof persistence and crash repair before
 generic recovery, gated child claims, versioned parent-result delivery, bounded

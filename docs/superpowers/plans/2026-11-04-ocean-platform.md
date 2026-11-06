@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`; исполнение D и этапы E–H остаются запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`; исполнение D и этапы E–H остаются запланированы.
 Долг сохранённых регрессий Executor закрыт в C18.6: чистые root gates прошли
 на квалифицированном `1f31974`; финальные проверки текущего выпуска остаются F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -1863,6 +1863,10 @@ handoff:RoomHandoff}`. Keep the existing TurnOutcome and ACP StopReason.
   public exports and existing hosts' types; no production edits to chat execution,
   domain, SQL, tools broker, provider adapters, CLI, or owner protocol this leaf.
 
+The approved cap split adds `packages/application/test-fixtures/room-slice-handoff.ts`.
+The review fix adds a pending-notification abort regression to the existing
+`packages/application/src/turn-safety.test.ts`, with a post-notification signal fence.
+
 Transactions in the first leaf: existing model-start and settle command transactions;
 the test's trusted producer stands in for the future already-committed send below;
 then a distinct version-bound Complete events+command-receipt transaction. No
@@ -1872,22 +1876,22 @@ and crash repair below _before_ any producer is reachable in the host.
 
 RED -> GREEN behavioral cases (target the common engine, not just type helpers):
 
-- [ ] Provider requests [delegate, physical sentinel]. Return the registered result with
+- [x] Provider requests [delegate, physical sentinel]. Return the registered result with
       the real running attempt/version; never resolve a child result. Assert one
       provider start+settlement, no sentinel, skipped suffix history, no beforeComplete,
       one local Complete receipt/event, no answer text, immediate resolved yield.
-- [ ] Plain tool output containing identical delegate text/JSON, including a forged
+- [x] Plain tool output containing identical delegate text/JSON, including a forged
       disposition and IDs, stays ordinary. Test an ordinary local send too: following
       calls and the normal model answer are allowed. Composition still rejects collisions.
-- [ ] Unknown model settlement -> no tool. First tool unknown/throw -> no delegate,
+- [x] Unknown model settlement -> no tool. First tool unknown/throw -> no delegate,
       no following call, no Complete. Cross-run/call/turn proof or stale pinned
       version -> no success or redispatch. A host without opt-in cannot yield.
-- [ ] Signal before invocation -> no admission. Signal after known commit -> truthful
+- [x] Signal before invocation -> no admission. Signal after known commit -> truthful
       local completion if the version still matches; a committed cancellation wins
       its CAS. Matching lost Complete reply is provable by exact receipt, never by
       re-entering the model loop. Keep existing tool/deadline/usage/overlap tests green.
 
-- [ ] Run focused behavioral RED→GREEN and strict node test typing; literal root
+- [x] Run focused behavioral RED→GREEN and strict node test typing; literal root
       pnpm check/build/format on frozen source through the private runner; source<=300.
       Preserve old overload/ACP/ordinary tool/deadline/usage/overlap behavior. Self-review,
       commit exact paths and obtain independent spec/quality review before the next leaf.
@@ -1900,6 +1904,233 @@ must preserve old clients or explicitly require upgrade before any producer. In
 particular current getResult is ordinary-only and turnStates is closed. No such new
 status, addressed final, schema or host producer is introduced by19.2.3. Full D and
 its native19.3 gate remain incomplete; this engine foundation does not replace them.
+
+19.2.3 accepted on `dc78dbf` after one scoped correction round. Final root gates:3819 source/166 process passed; build/format0. The initial independent review found a synchronous pending-notification cancellation gap; the four-line invocation fence and behavioral regression were independently accepted. This remains an engine foundation, not production autonomous execution.
+
+### Task 19.2.4: Durable room slices, result delivery and local recovery
+
+Detailed next leaf frozen after D19.2.3 acceptance at `dc78dbf`.
+Binding: canonical Task 19.2/19.2.3, plan Global Constraints verbatim, AGENTS.md, spec §§5/6/8/10/11.
+Acceptance is a real SQLite application trace with scripted providers using executeChatTurn → runTurn.
+A committed start addressed to A drives three slices: A delegates, B publishes, A reads B and finishes.
+Each invocation handles at most one delivery; no waiting Promise, polling worker or second model loop.
+No production room producer, job, RPC, startup auto-dispatch, physical tools or native qualification here.
+
+#### Storage and public meaning
+
+Keep the two v27 tables, existing run events, command receipts, messages and conversation receipts.
+Keep ChatTurn.roomDelivery v1 immutable. Add optional sibling roomHandoff: {version:1, ...RoomHandoff}
+and roomSliceDisposition?: 'yielded' only on marked turns. Migrate existing rows byte-for-byte, including
+JSON payloads. Both optional fields stay absent until a new lifecycle write supplies evidence.
+roomHandoff is a saved local intent, not success; disposition is set only on verified completion.
+For yielded slices store status='completed', disposition='yielded', text='', preparedVersion=null;
+stopReason's legacy default is not a model stop for this path. No final message, decision or reply ID.
+Here completed means the slice's local run succeeded; A's bot task still says waiting(child).
+Do not add 'yielded' to the closed ChatTurnStatus / contracts turnStates or overload codingTaskId.
+packages/store-sqlite/src/room-runtime-reads.ts (run) and packages/application/src/chat-receipts.ts
+(readChatRun) currently synthesize reply_<id> from completed alone. Both must return resultMessageId=null
+for completed/yielded and getResult returns null. Reject malformed dispositions before projecting a final.
+Ordinary completed turns still require their exact final, including B's self-targeted reply below.
+Production producers stay disabled until the negotiated task view and observers can expose the waiting
+child/disposition truthfully and old/new run lists, receipts, capabilities and clients pass compatibility.
+
+Bump schema.ts to 28; add v28 step after migrateRoomTasks in schema-migrations.ts (fresh/v26 pass via v27).
+Use the existing owner-absent, transactional rebuild and foreign-key check. Save/drop triggers referring
+to deliveries on OTHER tables (ocean_addressed_message and ocean_room_turn_insert), then rebuild only
+ocean_room_deliveries with the same columns, FKs, bounds, v1 rows, state vocabulary and uniqueness.
+Copy named columns verbatim before new INSERT guards; replace the table and reinstall its indexes,
+target/immutable triggers and both external triggers. Do not regenerate v27 histories, proofs or waits.
+Keep the v27 forward predicate unchanged for start/message/delegate. Add result to both kind CHECKs;
+one result per delegated assignment (unique from_task_id WHERE kind='result'), position=0, nonnull origin.
+Result cause_id = original delegate delivery ID, NOT necessarily B's last input. Join that edge P→B,
+B.parent_id=P.id, P.waiting_child_id=B.id, equal workspace/room/root/assignees; source turn's marker
+must instead join its own claimed input on B. This permits B to finish on a grandchild's result.
+Insert ordinary B final BEFORE result delivery in the same transaction. Result INSERT must find exactly
+that final by reply_<sourceTurn>, seq, room/workspace, author=target=B and producing turn, plus P's
+previously yielded delegate slice. No change to ordinary final unique index or peer-message predicate.
+Extend decodeRoomDelivery/strict marker decode; reject bad state, version, missing keys, contradictory
+status or foreign marker; preserve legal v27 rows. Protect immutable proof, one-way yielded disposition
+and immutable full room activation (not just identity), validation on actual INSERT/UPDATE including
+chatStorage's INSERT ... ON CONFLICT; permit the existing valid old snapshot on an upsert.
+In packages/store-sqlite/src/maintenance.ts add 27 to historicalSchemas when SCHEMA_VERSION becomes 28.
+Doctor/backup/restore must recognize an unmigrated v27 snapshot and preserve its hold and owner checks.
+Historical conversation reads use the existing legacy-schema mode. Only current v28 gets lifecycle writes.
+A v27 wait without an original proof stays inert; migration cannot reconstruct authority from a later head.
+
+#### Claim one committed delivery
+
+Internal claimRoomDelivery(deps, deliveryId) → claimed(turn, provider, messages, parentRunId) | existing | held.
+The delivery ID is a selector only. Resolve target from stored joins, require exact original receipt,
+binding, history, seq, kind, sender/recipient, positions and parent/root; never authorize by request IDs alone.
+In one synchronous store.atomic (BEGIN IMMEDIATE), require root and recipient task ready, exact member
+and owner scope, no review/restore/quarantine, ordinary room/batch hold or active marked turn for this task.
+Do not call roomHold(roomId) as a blanket veto: it includes this ready root. Do check activeChatTurn,
+broadcast and scoped pending effects (including unscoped legacy). Independent marked tasks may progress.
+Start may claim its selected owner edge; message may claim its own allocated child solely from committed send;
+delegate may claim only after its sender's exact yielded repair, consumed input and waiting-child join.
+Result may claim only the named parent after the committed child completion / matching wait release.
+Select the matching queued result first; otherwise earliest eligible queued (seq,position,id). CAS exact
+id/state; never use lastDeliverySeq as a threshold. Advance it monotonically as a summary at consumption.
+Check fixed 2 concurrent / 32 total slices under the claim lock using marked turns joined to root; count
+active uncertain/held work conservatively, never reclaim capacity on process disappearance alone.
+Require current roomTaskIdentity equal immutable root pin, exact current binding and current room transfer
+policy. Use bound activation resolver/clock, freeze a fresh bounded snapshot, providerAdmits, never null
+or fallback; a continuation may start after A's first deadline. Reject altered identity, expired activation.
+Keep this narrow leaf local communication only: fail closed on unsupported physical/coding scope;
+scripted fixture can use empty selected refs/permissions. No legacy codingTools or grantedTools on marked turns.
+Build bounded context from stored history through the claimed seq, no future messages, input exactly once;
+reuse room-context attribution/byte limits. Current peer/result is attributed bot data, never passed through
+finishContext as owner text/attachment authority. Bind user-start attachment resolution to its actual input.
+CAS queued→claimed AND insert one accepted ChatTurn with new IDs, tr_<turn>, exact roomDelivery and input
+message/seq, immutable bot/binding/activation. No new owner message/receipt. After first write throw on
+every failure for rollback. A duplicate returns existing linkage without authority to dispatch.
+Parent run for start=null; message/delegate=sender source turn's run; result=P's prior yielded run on the
+original delegate, not B's final run. Derive from joins; TaskRun.parentTaskRunId is lineage, not authority.
+
+#### Execute and commit the handoff
+
+Inside packages/application/src/chat-turn-execution.ts add one optional third module-internal argument
+to executeChatTurn(deps, input, room?): Promise<ChatTurn>. RoomSliceExecution is a readonly pair
+{parentRunId: TaskRunId | null, tools: GrantedPluginTools | null}. The trusted claim caller supplies both
+from committed joins and its scoped local source. Existing input carries turn/messages/provider/signal/emit.
+Require room and turn.roomDelivery together. Use room.parentRunId in Create and combineChatTools(room.tools)
+for marked preparation. Choose the marked runTurn overload and call concrete room publication/repair functions
+using deps.store/tasks/clock. The ordinary caller keeps its current two arguments. No callback registry.
+Keep one CreateTaskRun → preparation → dispatching → runTurn → publication path. Reuse chat-create-<id>
+with identical expectedVersion=0 and payload on replay, including parent; separate command, no SQLite
+transaction across await. Fresh slice uses ordinary finite activation limits, not a refreshed old run.
+Only the winner of accepted→dispatching CAS may enter runTurn; test contend across two connections.
+Recovery of accepted can reuse the same IDs only with unique ownership and proven absent or exactly-created
+run, no attempt/model start/effects, unchanged activation, authority and budget. No new IDs on restart.
+Revalidate pinned activation/deadline before taking the executor CAS; a missed deadline is not replayable.
+Separate discovery of eligible unstarted claims from execution; legacy recoverChats never starts a model.
+Use combineChatTools with one call-identity map; one internal room delegate source is sufficient here.
+No tools offered to a text-only B. No room tools on legacy turns. execute closure captures stored turnId;
+engine supplies taskRunId/attemptId/fully-qualified call.id. Model may supply only target/text.
+Extend persistRoomTaskSend with an internal result for delegate {receipt, proof}, preserving inert API's
+receipt shape and original start/message/receipt replay. Trusted wrapper requests this variant, not the model.
+Inside the SAME send transaction use origin(...,true)'s dispatching turn, claimed input, ready task/root,
+owned attempt, exact settled terminal tool_calls and ordinal prefix, matched activation/member/privacy.
+Check required usage/zero unresolved scoped effects. Any core tool budget reserve/settle must PRECEDE this
+head capture; never settle or release a core reservation between saving expectedRunVersion and Complete.
+Write child+outbound+wait+message+receipt as already implemented, plus immutable roomHandoff to source turn
+with liveRun.version and outbound delivery ID. On receipt-first replay validate binding AND ORIGINAL saved
+proof joins, actor/call, child and input. Missing proof = inert historical receipt only, no execution carrier.
+Return from atomic before invoking internal committedRoomDelegate(proof); never export factory or synthesize
+a newer expected version. A committed delegate is the last tool of this slice; queued child cannot yet run.
+Use runTurn(input,{turnId}) only for the marked path. Handle yielded BEFORE ordinary answer/failure; use
+saved state, not stale captured dispatching ChatTurn (updateChat currently compares status/review only).
+On any uncertain/exception after admission, re-read marker before cancellation/generic failure handling;
+a stale put must never erase a committed handoff or misclassify it as a normal final/failure.
+
+#### Local completion, result and repair
+
+repairRoomHandoff reads full durable joins and exact command identity; reuse finishRoomHandoff's command
+construction and receipt/head predicate internally. Do not fabricate a TurnInput/provider just for repair.
+If local Complete not recorded, only submit the SAME pinned command on proven matching running head,
+settled model, no unknown effects and authority still valid; optimistic version must match. For a lost reply
+look up the identical command; conflicting/missing evidence or a different head never authorizes a rebase.
+Inside store.atomic reread proof, outbound delegate/receipt, input claim and exact waiting pair. Add one
+synchronous RoomTaskTransaction.completeEvidence(command: Command<'Complete'>): RoomCompleteEvidence | null.
+RoomCompleteEvidence = Readonly<{run: TaskRunState, headEvent: TaskRunEvent, receipt: CommandReceipt | null}>.
+Outer null means inconsistent binding, invalid/missing run or unavailable evidence.
+For unstarted-claim recovery expose a separate locked run-evidence read that distinguishes
+a proven absent aggregate from unavailable/invalid evidence; only proven absent or
+exactly created (zero attempt/model/effect) can re-enter the same accepted execution. Inner null means this
+valid run has no receipt for that command ID. Reuse SQLite command-commit.ts's synchronous request-bound
+lookup by extracting it for both callers. Replay actual contiguous events on this connection, returning
+their decoded last event and created run. Compare receipt event with headEvent in full before release.
+Extract the existing finishRoomHandoff receipt/head predicate as a pure internal helper shared with repair.
+Validate turn/root pinned activation against run.modelExecution, exact attempt and ordinal, terminal tool_calls
+settlement and required usage for delegate (terminal model stop matching prepared final for ordinary reply).
+Reuse the predicates from room-task-origin.ts for shared identity/settlement checks independently of live status.
+tx.chatFailureEvidence(run.id) must match run.version and report zero related/unscoped pending effects.
+Every read and put uses the caller's same write lock. No async service.state as publication authority.
+Consume old input, advance task cursor/revision and mark turn completed/yielded together. Parent remains
+waiting; child becomes eligible by these facts alone. Replaying verifies all immutable facts, no second wake.
+If effects/restoration/contradictory joins or stop prevent repair, retain a scoped hold, original proof and
+truthful core evidence. Failures, cancellations and uncertain model/tool outcomes never create result/wake.
+Recovery routes marked turns to room repair BEFORE publishKnownChatFailure/generic recoverChats logic;
+a room turn must not fall through even if no valid handoff is found. Unstarted claims classified separately;
+a dispatching turn without affirmative local finalization proof stays held, never runs again automatically.
+For a normal marked final keep beforeComplete→prepared with exact version/text/stop, then normal core Complete.
+For a prepared room final use the ordinary executeStep Complete identity cm_<run>_Complete_<preparedVersion+1>
+and lifecycle.completeRun's summary (trim, first 200 characters, empty fallback) in live and repair paths.
+Extract shared command/summary construction as needed. Verify attempt, actor, settlement and exact success
+receipt/head via completeEvidence before publishing. Legacy recoverChats uses a different recovery command.
+Use the common final message builder and one transaction for B's ordinary reply, completed turn, consumed input,
+and advanced cursor. When B's assignment drains, also complete B, insert the inverse result delivery/receipt
+and CAS P waiting(B)→ready, clearing waiting_child_id. Share this path between live publication and restart.
+Result request key e.g. room-result/v1:<sha256(original delegate id)>; binding canonically includes original
+delegate, root/P/B, final producing turn/run/attempt, final id/seq and exact content (or its digest).
+Immutable result receipt reply is that very message. Compare original receipt/final/edge/turn and contents on
+replay even after P advances; no second seq, message, delivery or wake. Mismatch rolls back, never overwrites.
+Only a delegate-created task returns to its original waiting parent. Start/message-created tasks publish
+normal finals without a parent wake. Close root when all assignments are finished and no queued/held/unknown
+work remains. Queue ruling: consume exactly the current input. Earlier queued rows keep their original seq
+and state. Keep B ready and P waiting until B has drained its inputs, then return exactly one assignment
+result referencing its terminal slice's final. Exercise persisted rows through the existing delivery port.
+
+#### Owned changes, evidence and release boundary
+
+packages/domain/src/chat-turn.ts owns optional persisted fields and the structural handoff shape.
+Under packages/application/src: room-task-records.ts, room-task-send.ts, room-delivery-claim.ts and
+room-slice-publication.ts own the lifecycle and transaction ports (delivery/nextInput, claim/consume CAS,
+advanceTask(expectedRevision), completeEvidence). chat-turn-execution.ts, direct-chat-publication.ts,
+room-slice-handoff.ts, lifecycle.ts, commands.ts, room-context.ts and chat-receipts.ts adapt common paths.
+conversation-ports.ts already declares tx.chatFailureEvidence. Its SQLite implementation is conversations.ts.
+Under packages/store-sqlite/src: room-task-slice-schema.ts, schema.ts, schema-migrations.ts, maintenance.ts,
+room-task-storage.ts, room-task-origin.ts, command-commit.ts, chat-storage.ts and room-runtime-reads.ts.
+Group added SQL in room-task-slice-storage.ts to meet the 300-line cap. Add focused regression fixtures
+and document implemented/planned scope in docs/ocean/platform-stage-d.md during implementation.
+Independent acceptance scenarios (temporary on-disk SQLite; assert committed rows/events, not callbacks):
+
+1. One slot, scripted A delegate with suffix, text-only B final, fresh A final after A1 deadline. Exactly
+   three runs/turns, same A task, expected parent IDs, no A1 reply, no B tool definitions, result only once;
+   contexts include attributed B text exactly once; unrelated work progresses while A waits.
+2. Two claimers same delivery; crash after claim and exact Create, before/after committed model start.
+   Only proven unstarted eligible; no duplicate request. History/inputs survive close/reopen.
+3. Crash after delegate transaction, after Complete before yield, after yield before child claim, after
+   child Complete before publication, after result commit before response. Repair twice, assert all joins,
+   one receipt per operation, no new provider/tool calls; failure injected mid-transaction rolls back.
+4. Alter payload, proof/head/receipt, cause, child/parent/task/run/attempt, peer final, member or pin;
+   restore, revoke, stop, unscoped unknown or unrelated scoped effect. Only proven affected work holds.
+5. Nested P→B→C→B→P uses original delegate despite B's different final input; message-only child never
+   wakes sender. Seed an earlier queued row via storage, verify exact consumption, one eventual assignment
+   result only after draining and no extra admission API. Raw SQL rejects inverse forgeries.
+6. Populated v27→28 and older supported chain: byte-compare prior rows, replay inert receipts, FK check,
+   backup/restore hold, direct/broadcast/old-client history and final reads unchanged; no migration wake.
+
+Future production gate: connect send/delegate/state, scoped state reads and existing runtime jobs/controllers;
+recheck pins/privacy/stop/restore at every actual committed start; intersect mandate + every selected current
+C grant under executor and each actual delegating ancestor; no physical widening or reviewer write/command.
+Enforce 64 provider starts/64 tools at actual commit, root concurrency/total across all producers, unknown
+usage never zero, pause once before third identical normalized handoff without verified progress. No host
+enablement until those races, one-slot restart/disconnect/two-client proof, mixed outages/no fallback and
+separate native/live cloud→local→cloud/offline gates pass. This leaf alone does not complete Task 19.2.
+
+**Concrete test and integration map:** new `packages/store-sqlite/src/room-slice-lifecycle.test.ts`,
+`room-slice-recovery.test.ts`, `room-slice-integrity.test.ts`, `room-task-slice-migration.test.ts`;
+shared `packages/store-sqlite/test-fixtures/room-slices.ts`, reusing existing room-tasks construction.
+Preserve existing room-task start/send/replay/context/holds/lineage, direct/broadcast and
+room-runtime-reads regressions. Add only necessary public application service/type exports
+in `packages/application/src/index.ts`; never export the evidence factory.
+`packages/domain/src/profile-backup.ts` must explicitly admit28; current27 historical
+maintenance remains supported. Genuine populated27 fixture must come from committed
+BASE schema, with provenance/pins, not a current-schema downgrade labeled as old.
+Expectation-only current-schema/count changes in existing tests are permitted only
+when inventoried and reported; no frozenRC2 fixture edits, weakened guards or silent scope.
+Split concrete lifecycle SQL/fixtures if physically required for300 lines; no generic framework.
+The single sequential application executor proves no held wait, not runtime scheduler
+fairness or native containment. Those remain the later host/19.3 gates.
+
+- [ ] Implement the coherent claim/handoff/result/repair path with scripted providers
+      and real on-disk SQLite through the common executeChatTurn/runTurn.
+- [ ] Prove the six scenarios above, actual behavioral RED→GREEN, exact durable
+      receipts/events/lineage, transaction rollback and close/reopen recovery.
+- [ ] Preserve old admission, history, read, backup and profile semantics; no host producer.
+- [ ] Run focused/strict tests, final frozen root check/build/format, physical≤300;
+      self-review, exact-path commit and independent spec/quality review.
 
 ### Task 19.3: Qualify independent managed service workspaces
 
