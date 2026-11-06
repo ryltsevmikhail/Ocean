@@ -58,6 +58,9 @@ export class RuntimeQueries {
     this.#service = service;
     this.#observers = new RuntimeObservers(service.reads, instance);
   }
+  get observers(): RuntimeObservers {
+    return this.#observers;
+  }
   close() {
     this.#observers.close();
   }

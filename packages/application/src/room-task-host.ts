@@ -61,6 +61,8 @@ export type RoomTaskRow = { readonly hold: RoomTaskHold } & (
     }
 );
 export interface RoomTaskRootView extends RoomTaskScope {
+  /** Internal same-transaction observation evidence; hosts omit it from wire DTOs. */
+  readonly decisionMark?: string;
   readonly status: RoomTaskStatus;
   readonly revision: number;
   readonly fenceReason: { readonly id: string; readonly code: Exclude<RoomTaskHold, null> } | null;
@@ -141,8 +143,8 @@ export function freezeRoomTask(
   code: Exclude<RoomTaskHold, null>,
   sha256: (s: string) => string,
 ): void {
-  const id = 'room-fence/v1:' + sha256(root.id);
-  if (tx.receipt(id)) return;
+  const id = 'room-fence/v2:' + sha256(root.id),
+    key = '\0' + id;
   if (root.status !== 'ready') return;
   const receipt = {
     workspaceId: root.workspaceId,
@@ -152,11 +154,14 @@ export function freezeRoomTask(
     code,
     revision: root.revision + 1,
   };
-  tx.roomTasks!.advanceTask({ ...root, status: 'paused' }, root.revision);
-  tx.putReceipt(id, {
+  const evidence = {
     binding: canonicalJson(['RoomTaskFence/v1', root.id, code]),
-    reply: { kind: 'room_task_fence', data: receipt },
-  });
+    reply: { kind: 'room_task_fence' as const, data: receipt },
+  };
+  const prior = tx.receipt(key);
+  if (prior && canonicalJson(prior) !== canonicalJson(evidence)) throw Error('request_conflict');
+  tx.roomTasks!.advanceTask({ ...root, status: 'paused' }, root.revision);
+  if (!prior) tx.putReceipt(key, evidence);
 }
 export function roomTaskState(
   d: RoomTaskPersistenceDeps,

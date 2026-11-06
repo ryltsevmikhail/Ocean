@@ -7,6 +7,7 @@ import {
   ChatPreparationRefusal,
   type CodingTaskService,
   type ProjectLeasePort,
+  type PreparedCodingOperation,
   type ToolDispatchGuard,
   selectedCodingBasis,
   type CodingTestEvidenceStore,
@@ -43,6 +44,7 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
     async forTurn(turn: ChatTurn, signal: AbortSignal) {
       if (signal.aborted) throw new CodingTurnRefusal('cancelled before coding preparation');
       if (!turn.codingTaskId) throw new CodingTurnRefusal('explicit task required');
+      const marked = turn.roomDelivery !== undefined;
       const access = {
         taskId: turn.codingTaskId,
         workspaceId: turn.workspaceId,
@@ -51,8 +53,15 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
         policyVersion: 1,
         capability: 'project_read' as const,
       };
-      const authorized = () => deps.tasks.authorize(access).ok;
-      const admission = deps.tasks.authorize(access);
+      const authorized = (
+        capability: 'project_read' | 'propose_write' | 'run_test_preset' = 'project_read',
+      ) => deps.tasks.authorize({ ...access, capability }).ok;
+      const admission =
+        (marked
+          ? (['project_read', 'propose_write', 'run_test_preset'] as const)
+              .map((capability) => deps.tasks.authorize({ ...access, capability }))
+              .find((r) => r.ok)
+          : undefined) ?? deps.tasks.authorize(access);
       if (!admission.ok) {
         if (admission.error.code === 'recovery_required')
           throw new ToolError('coding_denied', 'coding recovery required');
@@ -67,8 +76,11 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
       const task = resolved.task,
         worktree = resolved.worktree;
       const snapshots = new GitCodingSnapshots();
-      const snapshot = async () => (await snapshots.capture(task, worktree)).afterTreeHash;
-      const marked = turn.roomDelivery !== undefined;
+      const snapshot = async (guard?: ToolDispatchGuard) => {
+        if (marked && guard?.inspect?.() !== true)
+          throw new ToolError('coding_denied', 'snapshot scope refused');
+        return (await snapshots.capture(task, worktree, guard)).afterTreeHash;
+      };
       const leasesCurrent = () =>
         deps.store.atomic((tx) => {
           const current = tx.task(task.id),
@@ -136,9 +148,6 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
         return sessionPromise;
       };
       if (!marked) await getSession();
-      const preparationGuard: ToolDispatchGuard = {
-        authorize: () => leasesCurrent() && actions(false, true).includes('project_read'),
-      };
       const owner = deps.owner(turn, signal);
       return Object.assign(
         new CodingTurnTools({
@@ -177,6 +186,7 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
             let entered = false;
             const guard: ToolDispatchGuard = {
               authorize: () => leasesCurrent() && claim.authorize(),
+              inspect: () => leasesCurrent() && claim.authorize(),
             };
             try {
               if (!guard.authorize()) {
@@ -196,6 +206,16 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
             }
           },
           prepare: async (id, call, context) => {
+            const action = call.name === 'run_command' ? 'run_test_preset' : 'propose_write';
+            let prepared: PreparedCodingOperation | undefined = undefined;
+            const inspect = () => {
+              if (signal.aborted || !leasesCurrent()) return false;
+              const approval = deps.approvals.deps.store.atomic((tx) => tx.approval(id));
+              if (approval?.status === 'consumed')
+                return !!prepared && deps.approvals.authorizeDispatch(id, prepared.binding);
+              return authorized(action) && actions().includes(action);
+            };
+            const preparationGuard: ToolDispatchGuard = { authorize: inspect, inspect };
             if (marked && !preparationGuard.authorize())
               throw new ToolError('coding_denied', 'mutation preparation refused');
             const session = await getSession(marked ? preparationGuard : undefined);
@@ -206,6 +226,7 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
               marked ? preparationGuard : undefined,
               signal,
             );
+            prepared = operation;
             return {
               ...operation,
               currentBinding: async () => {

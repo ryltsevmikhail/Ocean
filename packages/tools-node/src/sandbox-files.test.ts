@@ -1,3 +1,4 @@
+import type * as Supervision from './sandbox-supervision.js';
 import {
   chmod,
   stat,
@@ -11,12 +12,59 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { WorkspaceTools } from './executor.js';
 import { createSandboxBackend } from './sandbox-probe.js';
 import { sandboxFile } from './sandbox-files.js';
 import { createNativeBackend } from './native.js';
 import { validateMounts } from './sandbox-mounts.js';
+const scripted = vi.hoisted(() => ({ enabled: false, effects: 0 }));
+vi.mock('./sandbox-supervision.js', async (original) => {
+  const actual = await original<typeof Supervision>();
+  return {
+    ...actual,
+    runSandbox: async (request: Parameters<typeof actual.runSandbox>[0]) => {
+      if (!scripted.enabled) return actual.runSandbox(request);
+      await request.guard?.prepare?.();
+      if (!request.guard?.authorize()) throw Error('physical dispatch denied');
+      scripted.effects++;
+      return {
+        cleanupConfirmed: true,
+        reason: 'exit',
+        exitCode: 0,
+        truncated: false,
+        output: '{"ok":true,"result":[]}',
+      };
+    },
+  };
+});
+it.each(['read', 'list'] as const)(
+  'forwards %s authority through awaited preparation before the worker',
+  async (op) => {
+    scripted.enabled = true;
+    scripted.effects = 0;
+    let allowed = true,
+      checks = 0;
+    try {
+      await expect(
+        sandboxFile({ root: '/synthetic' }, { op, path: 'file' }, new AbortController().signal, {
+          prepare: async () => {
+            await Promise.resolve();
+            allowed = false;
+          },
+          authorize: () => {
+            checks++;
+            return allowed;
+          },
+        }),
+      ).rejects.toThrow('physical dispatch denied');
+      expect(checks).toBe(1);
+      expect(scripted.effects).toBe(0);
+    } finally {
+      scripted.enabled = false;
+    }
+  },
+);
 describe('sandbox mount refusal', () => {
   it('refuses home mounts and dependency symlinks outside explicit roots', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ocean-mount-'));

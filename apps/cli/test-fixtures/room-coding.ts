@@ -24,96 +24,101 @@ const script = vi.hoisted(() => ({
   beforePrepare: async () => {},
   beforeBinding: async () => {},
   beforeDispatch: () => {},
+  realSession: false,
   writes: 0,
   tests: 0,
 }));
 const effects = vi.hoisted(() => ({ qualifications: 0, sessions: 0, reads: 0 }));
-vi.mock('@runnets/tools-node', async (original) => ({
-  ...(await original<typeof Platform>()),
-  createCodingOperationSession: async (
-    input: Parameters<typeof Platform.createCodingOperationSession>[0],
-  ) => {
-    effects.sessions++;
-    return {
-      read: async (_call: ToolInvocation, _signal: AbortSignal, guard?: ToolDispatchGuard) => {
-        await script.beforeRead();
-        if (guard && !guard.authorize()) throw Error('read guard refused');
-        effects.reads++;
-        return { isError: false, output: 'read' };
-      },
-      prepare: async (
-        id: string,
-        call: ToolInvocation,
-        attemptId: string,
-        guard?: ToolDispatchGuard,
-      ): Promise<PreparedCodingOperation> => {
-        await script.beforePrepare();
-        if (guard && !guard.authorize()) throw Error('prepare refused');
-        const operation = call.name === 'run_command' ? 'test' : 'write';
-        const binding = {
-          ...input.scope,
-          workspaceId: input.task.workspaceId,
-          taskId: input.task.id,
-          projectRoot: input.task.projectRoot,
-          worktreeRoot: input.task.worktreeRoot!,
-          attemptId,
-          invocationId: call.id,
-          operation,
-          policyVersion: 1,
-          operationHash: '1'.repeat(64),
-          sourceTreeHash: '2'.repeat(64),
-          limitsHash: '3'.repeat(64),
-          toolchainHash: '4'.repeat(64),
-        } as const;
-        return {
-          approvalId: id,
-          binding,
-          guarded: true,
-          currentBinding: async () => {
-            await script.beforeBinding();
-            return binding;
-          },
-          tool: {
-            title: operation,
-            kind: operation === 'write' ? 'edit' : 'execute',
-            preview: operation === 'test' ? call.arguments + '\nlimits' : 'exact edit',
-            execute: async (_signal, guard) => {
-              script.beforeDispatch();
-              if (!guard?.authorize()) throw Error('dispatch refused');
-              script[operation === 'write' ? 'writes' : 'tests']++;
-              return { isError: false, output: operation };
+vi.mock('@runnets/tools-node', async (original) => {
+  const actual = await original<typeof Platform>();
+  return {
+    ...actual,
+    createCodingOperationSession: async (
+      input: Parameters<typeof Platform.createCodingOperationSession>[0],
+    ) => {
+      if (script.realSession) return actual.createCodingOperationSession(input);
+      effects.sessions++;
+      return {
+        read: async (_call: ToolInvocation, _signal: AbortSignal, guard?: ToolDispatchGuard) => {
+          await script.beforeRead();
+          if (guard && !guard.authorize()) throw Error('read guard refused');
+          effects.reads++;
+          return { isError: false, output: 'read' };
+        },
+        prepare: async (
+          id: string,
+          call: ToolInvocation,
+          attemptId: string,
+          guard?: ToolDispatchGuard,
+        ): Promise<PreparedCodingOperation> => {
+          await script.beforePrepare();
+          if (guard && !guard.authorize()) throw Error('prepare refused');
+          const operation = call.name === 'run_command' ? 'test' : 'write';
+          const binding = {
+            ...input.scope,
+            workspaceId: input.task.workspaceId,
+            taskId: input.task.id,
+            projectRoot: input.task.projectRoot,
+            worktreeRoot: input.task.worktreeRoot!,
+            attemptId,
+            invocationId: call.id,
+            operation,
+            policyVersion: 1,
+            operationHash: '1'.repeat(64),
+            sourceTreeHash: '2'.repeat(64),
+            limitsHash: '3'.repeat(64),
+            toolchainHash: '4'.repeat(64),
+          } as const;
+          return {
+            approvalId: id,
+            binding,
+            guarded: true,
+            currentBinding: async () => {
+              await script.beforeBinding();
+              return binding;
             },
-          },
-          ...(operation === 'test'
-            ? {
-                recordResult: () => {
-                  const body = {
-                    presetId: 'test',
-                    id,
-                    binding,
-                    invocationHash: '5'.repeat(64),
-                    beforeTreeHash: binding.sourceTreeHash,
-                    afterTreeHash: binding.sourceTreeHash,
-                    dependencyHash: '6'.repeat(64),
-                    dependenciesUnchanged: true,
-                    exitCode: 0,
-                    reason: 'exit' as const,
-                    cleanupConfirmed: true,
-                    truncated: false,
-                    output: 'test',
-                  };
-                  input.recordEvidence?.({
-                    ...body,
-                    hash: createHash('sha256').update(JSON.stringify(body)).digest('hex'),
-                  });
-                },
-              }
-            : {}),
-        };
-      },
-    };
-  },
-}));
+            tool: {
+              title: operation,
+              kind: operation === 'write' ? 'edit' : 'execute',
+              preview: operation === 'test' ? call.arguments + '\nlimits' : 'exact edit',
+              execute: async (_signal, guard) => {
+                script.beforeDispatch();
+                if (!guard?.authorize()) throw Error('dispatch refused');
+                script[operation === 'write' ? 'writes' : 'tests']++;
+                return { isError: false, output: operation };
+              },
+            },
+            ...(operation === 'test'
+              ? {
+                  recordResult: () => {
+                    const body = {
+                      presetId: 'test',
+                      id,
+                      binding,
+                      invocationHash: '5'.repeat(64),
+                      beforeTreeHash: binding.sourceTreeHash,
+                      afterTreeHash: binding.sourceTreeHash,
+                      dependencyHash: '6'.repeat(64),
+                      dependenciesUnchanged: true,
+                      exitCode: 0,
+                      reason: 'exit' as const,
+                      cleanupConfirmed: true,
+                      truncated: false,
+                      output: 'test',
+                    };
+                    input.recordEvidence?.({
+                      ...body,
+                      hash: createHash('sha256').update(JSON.stringify(body)).digest('hex'),
+                    });
+                  },
+                }
+              : {}),
+          };
+        },
+      };
+    },
+  };
+});
 afterEach(() => {
   effects.qualifications = 0;
   effects.sessions = 0;
@@ -122,10 +127,20 @@ afterEach(() => {
   script.beforePrepare = async () => {};
   script.beforeBinding = async () => {};
   script.beforeDispatch = () => {};
+  script.realSession = false;
   script.writes = 0;
   script.tests = 0;
 });
-export function setup(mode: 'autonomous' | 'confirm' = 'autonomous', selected = true) {
+export function setup(
+  mode: 'autonomous' | 'confirm' = 'autonomous',
+  selected = true,
+  peer = false,
+  actions: readonly ('project_read' | 'propose_write' | 'run_test_preset')[] = [
+    'project_read',
+    'propose_write',
+    'run_test_preset',
+  ],
+) {
   const f = consumerFixture('ws_room');
   f.store.bindRoomHost({ ownerId: 'owner', epochId: null }, { origin: null, active: null });
   f.db.exec(
@@ -148,14 +163,30 @@ export function setup(mode: 'autonomous' | 'confirm' = 'autonomous', selected = 
     tx.putRoomModelPolicy({ roomId: 'room', revision: 1, cloudTransfer: 'allow' });
   });
   const grant = f.grant();
-  const permissions = grant.permissions.map((p) =>
-    p.kind === 'coding'
-      ? { ...p, actions: ['project_read', 'propose_write', 'run_test_preset'] as const }
-      : p,
-  );
+  const permissions = grant.permissions.map((p) => (p.kind === 'coding' ? { ...p, actions } : p));
   f.store.serviceAuthority.atomic((tx) =>
     tx.putGrant({ ...grant, revision: 2, permissions, mode }, 1),
   );
+  if (peer) {
+    f.store.conversations.atomic((tx) => {
+      tx.putBot({ ...tx.bot('dev')!, id: 'peer', handle: 'peer', name: 'Peer' });
+      tx.putModelBinding('peer', { connectionId: 'cloud', modelId: 'test' });
+    });
+    f.db.prepare('INSERT INTO ocean_members VALUES(?,?,?)').run('ws_room', 'room', 'peer');
+    f.store.serviceAuthority.atomic((tx) =>
+      tx.putGrant(
+        {
+          ...grant,
+          id: 'peer-grant',
+          revision: 1,
+          subject: { ...grant.subject, botId: 'peer', taskId: null },
+          permissions,
+          mode,
+        },
+        null,
+      ),
+    );
+  }
   let id = 0;
   const persistence = new RoomTaskPersistence({
     store: f.store.conversations,
@@ -169,10 +200,13 @@ export function setup(mode: 'autonomous' | 'confirm' = 'autonomous', selected = 
     roomId: 'room',
     requestId: 'start-room',
     text: 'work',
-    initialBotIds: ['dev'],
+    initialBotIds: [peer ? 'peer' : 'dev'],
     participants: [
       { botId: 'dev', grantReferences: selected ? [{ grantId: grant.id, revision: 2 }] : [] },
       { botId: 'review', grantReferences: [] },
+      ...(peer
+        ? [{ botId: 'peer', grantReferences: [{ grantId: 'peer-grant', revision: 1 }] }]
+        : []),
     ],
     mandate: { projectId: projectId(f.b.projectRoot), codingTaskId: f.b.id, permissions },
   });
@@ -238,6 +272,8 @@ export function setup(mode: 'autonomous' | 'confirm' = 'autonomous', selected = 
   return {
     ...f,
     claim,
+    persistence,
+    resolver,
     runs,
     factory,
     setOwner(value: CodingApprovalOwnerPort) {

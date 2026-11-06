@@ -144,6 +144,7 @@ export async function startLocalRuntime(
       identity.instanceId,
       images,
       options.roomTaskCapacity,
+      turns.observers,
     );
     turns.attachControllers(
       (runId) => broadcasts.controllerFor(runId) ?? roomTasks.controllerFor(runId),

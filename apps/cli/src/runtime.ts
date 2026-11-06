@@ -64,15 +64,11 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const release = ownSqliteRuntime(dbPath, options.requireUnpublished);
   try {
     const store = openSqliteStore({ path: dbPath });
-    const active = store.rebind.active();
+    const active = store.rebind.active(),
+      origin = store.restoration.origin();
     let restored: boolean;
     try {
-      restored = restoredRuntimeAdmission(
-        dirname(dbPath),
-        store.restoration.origin(),
-        options.restoredAccess,
-        active,
-      );
+      restored = restoredRuntimeAdmission(dirname(dbPath), origin, options.restoredAccess, active);
     } catch (error) {
       store.close();
       throw error;
@@ -109,6 +105,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       store,
       codingDeps.ownerId,
       !restored && options.pluginMutationsAllowed !== false,
+      { origin, active },
     );
     if (!restored) recoverCodingFinalizations(store.finalization, codingDeps.leases);
     const coding = new CodingTaskService(codingDeps);

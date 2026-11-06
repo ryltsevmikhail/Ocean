@@ -1,3 +1,4 @@
+import { roomTaskOutageHttp } from './room-task-outage.ts';
 /* eslint-disable no-restricted-imports -- CLI fixture imports host module types from its own package. */
 import type { HttpRequest } from '@runnets/provider-core';
 import type * as ModuleType1 from '../src/local-runtime/host.js';
@@ -10,6 +11,11 @@ const { startLocalRuntime } = (await import(
 )) as typeof ModuleType1;
 const { openSqliteStore } = await import('@runnets/store-sqlite');
 const f = await roomTaskHostFixture(true);
+const outage = roomTaskOutageHttp(
+  f.httpClient,
+  process.argv[2] === 'cloud-outage' ? 'cloud' : 'local',
+);
+const transport = process.argv[2]?.endsWith('-outage') ? outage.http : f.httpClient;
 let drop: 'start' | 'stop' | null = null;
 const write = Socket.prototype.write;
 Socket.prototype.write = function (
@@ -54,7 +60,7 @@ const http = {
           });
       });
     }
-    const response = await f.httpClient.send(request);
+    const response = await transport.send(request);
     if (process.argv[2] === 'model-crash' && request.url.endsWith('/chat/completions'))
       return {
         ...response,
@@ -125,6 +131,7 @@ serve(async (method) => {
     return true;
   }
   if (method === 'requests') return f.requests;
+  if (method === 'attempts') return outage.attempts;
   if (method === 'held') {
     await held;
     return true;

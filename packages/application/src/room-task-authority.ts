@@ -1,3 +1,5 @@
+import { roomCodingTask } from './room-task-coding.js';
+export { roomCodingTask } from './room-task-coding.js';
 import type { OwnerScopeGrant } from '@runnets/domain';
 import { canonicalJson, ownerGrantApplies } from '@runnets/domain';
 import type { ConversationTransaction } from './conversation-ports.js';
@@ -6,6 +8,10 @@ import { roomTaskIdentity } from './room-task-identity.js';
 import { admitRoomModelTransfer } from './room-model-policy.js';
 export type RoomAuthorityRead = Pick<
   ConversationTransaction,
+  | 'receipt'
+  | 'history'
+  | 'chatTurn'
+  | 'chatFailureEvidence'
   | 'roomTasks'
   | 'room'
   | 'bot'
@@ -63,11 +69,20 @@ export function roomSliceAuthority(
   publication = false,
 ): boolean {
   return (
-    currentRoomScope(tx, root, task, sha256) &&
+    (publication
+      ? !!tx.roomTasks &&
+        !!root.hostScope &&
+        canonicalJson(tx.roomTasks.hostScope()) === canonicalJson(root.hostScope) &&
+        !(tx.roomTasks.restored() && root.hostScope.epochId === null) &&
+        tx.roomPolicy(root.roomId)?.mode !== 'text_only' &&
+        tx.workspace()?.id === root.workspaceId
+      : currentRoomScope(tx, root, task, sha256)) &&
     (publication
       ? ['ready', 'paused', 'stopped'].includes(root.status)
       : root.status === 'ready') &&
-    roomTaskSubjects(tx, root, task, at, sha256) !== null
+    (publication
+      ? historicalRoomAssignments(tx, root, task)
+      : roomTaskSubjects(tx, root, task, at, sha256) !== null)
   );
 }
 
@@ -157,7 +172,8 @@ export function roomTaskSubjects(
       edge.toTaskId !== current.id ||
       edge.rootId !== root.id ||
       edge.roomId !== root.roomId ||
-      edge.workspaceId !== root.workspaceId
+      edge.workspaceId !== root.workspaceId ||
+      !inputEvidence(tx, edge, current, root, true)
     )
       return null;
     if (current.parentId === root.id)
@@ -190,6 +206,25 @@ export function roomTaskSubjects(
       return null;
     current = parent;
     chargedRunId = origin.turn.taskRunId;
+  }
+}
+
+function historicalRoomAssignments(
+  tx: RoomAuthorityRead,
+  root: RoomTaskRoot,
+  task: RoomTaskBot,
+): boolean {
+  const seen = new Set<string>();
+  let current = task;
+  for (;;) {
+    if (seen.has(current.id)) return false;
+    seen.add(current.id);
+    const edge = tx.roomTasks!.inputs(current.id).find((d) => d.kind !== 'result');
+    if (!edge || !inputEvidence(tx, edge, current, root, true)) return false;
+    if (current.parentId === root.id) return edge.kind === 'start';
+    const parent = tx.roomTasks!.task(current.parentId);
+    if (!parent || parent.kind !== 'bot' || edge.fromTaskId !== parent.id) return false;
+    current = parent;
   }
 }
 
@@ -242,49 +277,11 @@ export function repeatedRoomExchange(
 }
 
 export interface RoomPhysicalScope {
+  readonly codingTaskId: string | null;
   readonly turnId: string;
   readonly attemptId: string | null;
   readonly ordinal: number;
   readonly root: RoomTaskRoot;
   readonly subjects: NonNullable<ReturnType<typeof roomTaskSubjects>>;
   readonly reviewer: boolean;
-}
-
-/** Stored assignment and lease identities only; live lease ports guard actual worktree I/O. */
-export function roomCodingTask(
-  tx: RoomAuthorityRead,
-  root: RoomTaskRoot,
-  sha256?: (s: string) => string,
-) {
-  const id = root.rootPayload.mandate.codingTaskId,
-    rt = tx.roomTasks;
-  const task = id && rt?.codingTask(id),
-    worktree = id && rt?.codingWorktree(id);
-  if (
-    !task ||
-    !worktree ||
-    task.status !== 'reserved' ||
-    task.workspaceId !== root.workspaceId ||
-    task.ownerRoomId !== root.roomId ||
-    !task.worktreeRoot ||
-    worktree.state !== 'ready' ||
-    worktree.taskId !== task.id ||
-    worktree.workspaceId !== task.workspaceId ||
-    worktree.projectRoot !== task.projectRoot ||
-    worktree.root !== task.worktreeRoot ||
-    worktree.baseCommit !== task.baseCommit ||
-    ![task.lease, worktree.lease].every(
-      (lease) =>
-        lease.ownerId === root.rootPayload.ownerId &&
-        lease.kind === 'coding' &&
-        lease.taskId === task.id &&
-        !!lease.token,
-    ) ||
-    task.lease.projectRoot !== task.projectRoot ||
-    worktree.lease.projectRoot !== worktree.root ||
-    (root.rootPayload.mandate.projectId !== null &&
-      root.rootPayload.mandate.projectId !== sha256?.(task.projectRoot))
-  )
-    return null;
-  return { task, worktree };
 }

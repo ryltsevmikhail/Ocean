@@ -6,6 +6,12 @@ it('charges64 actual starts, permits the last completion and freezes only the ne
   const f = roomSlices(rounds, []);
   try {
     const start = f.start();
+    expect(
+      f.service.startHosted({
+        ...f.input,
+        requestId: 'room-fence/v1:' + f.deps.sha256(start.rootId),
+      }).ok,
+    ).toBe(true);
     let delivery = start.deliveries[0]!.deliveryId;
     for (let index = 0; index < 16; index++) {
       const input = f.store.conversations.atomic((tx) => tx.roomTasks!.delivery(delivery))!;

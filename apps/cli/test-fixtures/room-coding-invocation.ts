@@ -2,14 +2,14 @@ import { expect } from 'vitest';
 import { createChatCommand, executeStep } from '@runnets/application';
 import { taskRunId } from '@runnets/domain';
 import type { setup } from './room-coding.js';
-export async function settledRead(f: ReturnType<typeof setup>) {
+export async function settledRead(f: ReturnType<typeof setup>, prepare = true) {
   if (f.claim.kind !== 'claimed') throw Error('coded claim required');
   const turn = f.claim.turn,
     id = taskRunId(turn.taskRunId),
     attemptId = turn.taskRunId + '_at_0001';
   await f.runs.execute(createChatCommand(turn, f.claim.parentRunId));
   const controller = new AbortController();
-  const tools = await f.factory.forTurn(turn, controller.signal);
+  const tools = prepare ? await f.factory.forTurn(turn, controller.signal) : undefined;
   f.store.conversations.atomic((tx) => tx.putChatTurn({ ...turn, status: 'dispatching' }));
   await executeStep(f.runs, id, 'Admit', {}, 1);
   await executeStep(f.runs, id, 'Schedule', {}, 2);
@@ -47,7 +47,7 @@ export async function settledRead(f: ReturnType<typeof setup>) {
     5,
   );
   return {
-    tools,
+    tools: tools!,
     controller,
     context: { taskRunId: turn.taskRunId, attemptId },
     call: { id: attemptId + '_r1_read', name: 'read_file', arguments: '{"path":"README.md"}' },

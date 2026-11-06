@@ -7,7 +7,7 @@ type MessageIntent = Pick<
 >;
 /** Replays immutable joins only; current eligibility never reauthorizes old receipts. */
 export function roomTaskReceipt(
-  tx: ConversationTransaction,
+  tx: Pick<ConversationTransaction, 'roomTasks' | 'history'>,
   key: string,
   receipt: ConversationReceipt,
   binding: string,
@@ -68,7 +68,7 @@ export function roomTaskReceipt(
   };
 }
 function validTarget(
-  tx: ConversationTransaction,
+  tx: Pick<ConversationTransaction, 'roomTasks' | 'history'>,
   d: RoomDeliveryRecord,
   first: RoomDeliveryRecord,
   m: ConversationMessage,

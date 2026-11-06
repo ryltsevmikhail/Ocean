@@ -1,3 +1,5 @@
+import type * as SandboxProbe from './sandbox-probe.js';
+import type { ToolDispatchGuard } from '@runnets/application';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -5,13 +7,45 @@ import { expect, it, vi } from 'vitest';
 import type * as Mounts from './sandbox-mounts.js';
 import type { CodingApprovalBinding, CodingTask } from '@runnets/domain';
 import { createCodingOperationSession, prepareCodingOperation } from './coding-operation.js';
-const mutation = vi.hoisted(() => ({ path: '' }));
+const mutation = vi.hoisted(() => ({ path: '', revoke: () => {} }));
+const scripted = vi.hoisted(() => ({ enabled: false, writes: 0 }));
+vi.mock('./sandbox-probe.js', async (original) => {
+  const actual = await original<typeof SandboxProbe>();
+  return {
+    ...actual,
+    createSandboxBackend: async (...args: Parameters<typeof actual.createSandboxBackend>) =>
+      scripted.enabled
+        ? {
+            capabilities: {
+              filesystemContainment: true,
+              processContainment: true,
+              confirmedTreeStop: true,
+            },
+            read: async () => null,
+            list: async () => [],
+            write: async (
+              _p: string,
+              _c: string,
+              _e: unknown,
+              _s: AbortSignal,
+              guard?: ToolDispatchGuard,
+            ) => {
+              await guard?.prepare?.();
+              if (!guard?.authorize()) throw Error('denied');
+              scripted.writes++;
+            },
+            command: async () => ({ isError: false, output: '' }),
+          }
+        : actual.createSandboxBackend(...args),
+  };
+});
 vi.mock('./sandbox-mounts.js', async (original) => {
   const mounts = await original<typeof Mounts>();
   return {
     ...mounts,
     async fingerprintFile(path: string) {
       const result = await mounts.fingerprintFile(path);
+      mutation.revoke();
       if (mutation.path) {
         const target = mutation.path;
         mutation.path = '';
@@ -169,3 +203,95 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
     }
   },
 );
+
+it('rechecks preparation inspection after asynchronous hashing before any snapshot read', async () => {
+  scripted.enabled = true;
+  let allowed = true,
+    reads = 0;
+  mutation.revoke = () => {
+    allowed = false;
+  };
+  try {
+    await expect(
+      prepareCodingOperation({
+        task,
+        scope: binding,
+        approvalId: 'approval',
+        sandbox: { root: '/wt' },
+        call: { id: 'i', name: 'write_file', arguments: '{"path":"new","content":"after"}' },
+        guard: { authorize: () => true, inspect: () => allowed },
+        snapshot: async () => {
+          reads++;
+          return 'tree';
+        },
+      }),
+    ).rejects.toThrow();
+    expect(reads).toBe(0);
+  } finally {
+    scripted.enabled = false;
+    mutation.revoke = () => {};
+  }
+});
+it('repeats snapshot inspection without consuming the actual mutation dispatch', async () => {
+  scripted.enabled = true;
+  scripted.writes = 0;
+  let inspections = 0,
+    sends = 0;
+  try {
+    const prepared = await prepareCodingOperation({
+      task,
+      scope: binding,
+      approvalId: 'approval',
+      sandbox: { root: '/wt' },
+      call: { id: 'i', name: 'write_file', arguments: '{"path":"new","content":"after"}' },
+      guard: {
+        authorize: () => true,
+        inspect: () => {
+          inspections++;
+          return true;
+        },
+      },
+      snapshot: async () => 'tree',
+    });
+    await prepared.currentBinding();
+    await prepared.tool.execute(new AbortController().signal, { authorize: () => ++sends === 1 });
+    expect(inspections).toBeGreaterThanOrEqual(3);
+    expect(sends).toBe(1);
+    expect(scripted.writes).toBe(1);
+  } finally {
+    scripted.enabled = false;
+  }
+});
+it('refuses a revoked execution snapshot before any subsequent tree read or mutation', async () => {
+  scripted.enabled = true;
+  scripted.writes = 0;
+  let allowed = true,
+    reads = 0;
+  try {
+    const prepared = await prepareCodingOperation({
+      task,
+      scope: binding,
+      approvalId: 'approval',
+      sandbox: { root: '/wt' },
+      call: { id: 'i', name: 'write_file', arguments: '{"path":"new","content":"after"}' },
+      guard: { authorize: () => allowed, inspect: () => allowed },
+      snapshot: async () => {
+        reads++;
+        return 'tree';
+      },
+    });
+    expect(reads).toBe(1);
+    allowed = false;
+    await expect(
+      prepared.tool.execute(new AbortController().signal, {
+        authorize: () => {
+          throw Error('must not dispatch');
+        },
+      }),
+    ).rejects.toThrow();
+    expect(reads).toBe(1);
+    expect(scripted.writes).toBe(0);
+  } finally {
+    scripted.enabled = false;
+  }
+});

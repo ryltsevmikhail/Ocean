@@ -16,6 +16,12 @@ it('serializes two different run claims at64 physical calls and never replays th
       mandate: { projectId: null, codingTaskId: null, permissions: f.grants[0]!.permissions },
     });
     if (!started.ok) throw Error('start');
+    expect(
+      f.service.startHosted({
+        ...f.input,
+        requestId: 'room-fence/v1:' + f.deps.sha256(started.value.rootId),
+      }).ok,
+    ).toBe(true);
     const a = await attachRoomActor(f, started.value, 'a'),
       b = await attachRoomActor(f, started.value, 'b');
     let sends = 0;
@@ -122,4 +128,4 @@ it('serializes remaining slice claims at32 without refunding admitted identities
   } finally {
     f.close();
   }
-});
+}, 15000);

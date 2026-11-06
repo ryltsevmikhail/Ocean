@@ -134,3 +134,35 @@ it('guards the actual pre-read during prepare and the list dispatch after asynch
   await expect(listing.execute(signal, guard)).rejects.toMatchObject({ code: 'coding_denied' });
   expect(lists).toBe(0);
 });
+it('forwards the exact read/list invocation guard and signal to the physical backend', async () => {
+  const seen: unknown[][] = [],
+    controller = new AbortController(),
+    guard = { authorize: () => true, inspect: () => true };
+  const backend: WorkspaceBackend = {
+    read: async (...args) => {
+      seen.push(args);
+      return 'content';
+    },
+    list: async (...args) => {
+      seen.push(args);
+      return [];
+    },
+    write: async () => {},
+    command: async () => ({ isError: false, output: '' }),
+  };
+  const tools = new WorkspaceTools(backend);
+  const read = await tools.prepare(
+    { id: 'r', name: 'read_file', arguments: '{"path":"file"}' },
+    controller.signal,
+    guard,
+  );
+  await read.execute(controller.signal, guard);
+  const list = await tools.prepare(
+    { id: 'l', name: 'list_files', arguments: '{"path":"."}' },
+    controller.signal,
+    guard,
+  );
+  await list.execute(controller.signal, guard);
+  expect(seen.length).toBeGreaterThanOrEqual(2);
+  expect(seen.every((args) => args[1] === controller.signal && args[2] === guard)).toBe(true);
+});

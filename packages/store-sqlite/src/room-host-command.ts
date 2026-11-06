@@ -1,3 +1,4 @@
+import { roomAuthorityEvidence } from './room-authority-evidence.js';
 import { inspectPendingEffects } from './tool-journal-reads.js';
 import { admitRoomCount } from '@runnets/application';
 import type { ToolEffectAdmission } from '@runnets/domain';
@@ -23,6 +24,7 @@ import { broadcastStorage } from './broadcast-storage.js';
 import { eventRecordFromRow, fromEventRecord } from './event-record.js';
 export function roomAuthorityReads(db: DatabaseSync, host: RoomHostBinding): RoomAuthorityRead {
   return {
+    ...roomAuthorityEvidence(db),
     roomTasks: roomTaskStorage(db, host),
     bot(id) {
       const row = db.prepare('SELECT * FROM ocean_bots WHERE id=?').get(id);
@@ -196,6 +198,7 @@ export function roomHostPhysicalScope(
   )
     return false;
   return {
+    codingTaskId: turn.codingTaskId ?? null,
     turnId: turn.id,
     attemptId: active?.liveRun?.activeAttempt?.attemptId ?? null,
     ordinal: active?.liveRun?.modelExecution?.lastRequest.ordinal ?? 0,

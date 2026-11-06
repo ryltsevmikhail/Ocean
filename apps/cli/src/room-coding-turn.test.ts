@@ -107,3 +107,24 @@ it('preserves valid immutable coding assignment with communication-only selected
     f.close();
   }
 });
+it('prepares a preset-only selected action without project_read authority', async () => {
+  const f = setup('autonomous', true, false, ['run_test_preset']);
+  try {
+    const r = await settledRead(f);
+    expect(r.tools.definitions.map((d) => d.name)).toEqual(['run_test']);
+    expect(
+      await r.tools.execute(
+        {
+          id: r.context.attemptId + '_r1_preset',
+          name: 'run_test',
+          arguments: '{"presetId":"test"}',
+        },
+        r.controller.signal,
+        r.context,
+      ),
+    ).toMatchObject({ isError: false });
+    expect(effects.reads).toBe(0);
+  } finally {
+    f.close();
+  }
+});

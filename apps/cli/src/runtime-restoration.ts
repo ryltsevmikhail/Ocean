@@ -108,13 +108,14 @@ export function restoredRuntimeAdmission(
 }
 
 /** Called only after exclusive runtime ownership and verified restore admission. */
-export function bindRuntimeRoomHost(store: SqliteStore, ownerId: string, eligible: boolean): void {
+export function bindRuntimeRoomHost(
+  store: SqliteStore,
+  ownerId: string,
+  eligible: boolean,
+  verified: { readonly origin: RestoreOrigin | null; readonly active: ProfileRebindRecord | null },
+): void {
   if (!eligible) return;
-  const active = store.rebind.active();
-  store.bindRoomHost(
-    { ownerId, epochId: active?.preview.epochId ?? null },
-    { origin: store.restoration.origin(), active },
-  );
+  store.bindRoomHost({ ownerId, epochId: verified.active?.preview.epochId ?? null }, verified);
 }
 
 /** Existing reconciliation authority, kept beside the host's restoration admission. */

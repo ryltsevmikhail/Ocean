@@ -1,20 +1,27 @@
+import type { ToolDispatchGuard } from '@runnets/application';
 import { constants } from 'node:fs';
 import { lstat, open, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CodingArtifactError, type CodingFileMode } from '@runnets/domain';
-import { codingPath } from './coding-git.js';
+import { assertCodingInspection, codingPath } from './coding-git.js';
 import { FILE_BYTES } from './coding-tree.js';
 export interface CodingFile {
   readonly body: Buffer;
   readonly mode: CodingFileMode;
 }
-export async function codingFile(root: string, path: string): Promise<CodingFile | null> {
+export async function codingFile(
+  root: string,
+  path: string,
+  guard?: ToolDispatchGuard,
+): Promise<CodingFile | null> {
+  assertCodingInspection(guard);
   codingPath(path);
   const parts = path.split('/');
   let full = root;
   try {
     for (const [index, part] of parts.entries()) {
       full = join(full, part);
+      assertCodingInspection(guard);
       const s = await lstat(full);
       if (s.isSymbolicLink()) throw new CodingArtifactError('unsupported_file');
       if (index === parts.length - 1 && s.isDirectory()) return null;
@@ -27,6 +34,7 @@ export async function codingFile(root: string, path: string): Promise<CodingFile
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
     throw error;
   }
+  assertCodingInspection(guard);
   const file = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = await file.stat();
@@ -37,6 +45,7 @@ export async function codingFile(root: string, path: string): Promise<CodingFile
     const buffer = Buffer.alloc(Math.min(before.size + 1, FILE_BYTES + 1));
     let length = 0;
     while (length < buffer.length) {
+      assertCodingInspection(guard);
       const read = await file.read(buffer, length, buffer.length - length, length);
       if (read.bytesRead === 0) break;
       length += read.bytesRead;

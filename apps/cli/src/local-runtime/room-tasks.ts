@@ -1,6 +1,7 @@
 import { canonicalJson } from '@runnets/domain';
 import {
   claimRoomDelivery,
+  ChatPreparationRefusal,
   recoverUnstartedRoomClaims,
   executeChatTurn,
   stopRoomTask,
@@ -26,9 +27,16 @@ export class RuntimeRoomTasks {
   readonly #deps: RoomDeliveryClaimDeps;
   readonly #execution: ChatTurnExecutionDeps;
   readonly #observers: RuntimeObservers;
+  readonly #ownsObservers: boolean;
   readonly #jobs = new Map<
     string,
-    { rootId: string; controller: AbortController; settled: Promise<void> }
+    {
+      rootId: string;
+      turnId: string;
+      controller: AbortController;
+      settled: Promise<void>;
+      held?: boolean;
+    }
   >();
   readonly #capacity: number;
   #slots = 0;
@@ -43,12 +51,14 @@ export class RuntimeRoomTasks {
     reads: RoomRunReadPort,
     instance: string,
     capacity = 2,
+    observers?: RuntimeObservers,
   ) {
     if (capacity !== 1 && capacity !== 2) throw Error('invalid_input');
     this.#service = service;
     this.#deps = { ...deps, onCommitted: () => this.wake() };
     this.#execution = execution;
-    this.#observers = new RuntimeObservers(reads, instance);
+    this.#observers = observers ?? new RuntimeObservers(reads, instance);
+    this.#ownsObservers = observers === undefined;
     this.#capacity = capacity;
   }
   dispatch(
@@ -73,7 +83,17 @@ export class RuntimeRoomTasks {
       if (method === 'roomTasks.observe' && isRoomTaskObserve(params))
         return this.#observers
           .observeRoot(params, () => this.#view(params), detached)
-          .then((result) => ({ result }));
+          .then(
+            (result) => ({ result }),
+            (error: unknown) => ({
+              error: {
+                code:
+                  error instanceof Error && /^[a-z_]{1,64}$/.test(error.message)
+                    ? error.message
+                    : 'runtime_failure',
+              },
+            }),
+          );
       if (method === 'roomTasks.stop' && isRoomTaskStop(params)) {
         const result = stopRoomTask(this.#deps.store, this.#deps.ownerId, params);
         const jobs = [...this.#jobs.values()].filter((j) => j.rootId === params.rootId);
@@ -123,7 +143,8 @@ export class RuntimeRoomTasks {
   start(): void {
     this.wake();
   }
-  wake(): void {
+  wake(retryHeld = false): void {
+    if (retryHeld) for (const [id, job] of this.#jobs) if (job.held) this.#jobs.delete(id);
     if (this.#queued || this.#draining) return;
     this.#queued = true;
     queueMicrotask(() => {
@@ -188,6 +209,7 @@ export class RuntimeRoomTasks {
     const rootId = this.#deps.store.atomic(
       (tx) => tx.roomTasks!.task(claim.turn.roomDelivery!.taskId)!.rootId,
     );
+    let held = false;
     const settled = Promise.resolve()
       .then(() =>
         executeChatTurn(
@@ -200,16 +222,20 @@ export class RuntimeRoomTasks {
         (turn) => {
           if (turn.status === 'uncertain') this.#uncertain = true;
         },
-        () => {
-          this.#uncertain = true;
+        (error: unknown) => {
+          held =
+            error instanceof ChatPreparationRefusal &&
+            recoverUnstartedRoomClaims(this.#deps).some((c) => c.turn.id === claim.turn.id);
+          if (!held) this.#uncertain = true;
         },
       )
       .finally(() => {
-        this.#jobs.delete(claim.turn.taskRunId);
+        if (held) this.#jobs.get(claim.turn.taskRunId)!.held = true;
+        else this.#jobs.delete(claim.turn.taskRunId);
         this.#slots--;
         this.wake();
       });
-    this.#jobs.set(claim.turn.taskRunId, { rootId, controller, settled });
+    this.#jobs.set(claim.turn.taskRunId, { rootId, turnId: claim.turn.id, controller, settled });
   }
   controllerFor(runId: string): AbortController | undefined {
     return this.#jobs.get(runId)?.controller;
@@ -218,7 +244,16 @@ export class RuntimeRoomTasks {
     this.#draining = true;
     for (const job of this.#jobs.values()) job.controller.abort();
     await Promise.all([...this.#jobs.values()].map((j) => j.settled));
-    this.#observers.close();
+    for (const job of this.#jobs.values())
+      if (
+        job.held &&
+        !(await releaseUnstartedRoomClaim(
+          { ...this.#deps, tasks: this.#execution.tasks },
+          job.turnId,
+        ))
+      )
+        this.#uncertain = true;
+    if (this.#ownsObservers) this.#observers.close();
     return this.#uncertain ? 'uncertain' : 'settled';
   }
 }

@@ -55,6 +55,11 @@ export async function modelRound(
         dispatch: 'not_sent',
       }),
     };
+  try {
+    if (input.signal.aborted || input.authorizeModelDispatch?.() === false) return notSentRound();
+  } catch {
+    return notSentRound();
+  }
   const bound = boundModelStream(
     input.signal,
     Math.min(remaining, activation.limits.requestTimeoutMs),
@@ -70,7 +75,6 @@ export async function modelRound(
   let framingBroken = false;
   const calls: ToolCall[] = [];
   try {
-    if (input.signal.aborted || input.authorizeModelDispatch?.() === false) return notSentRound();
     const events = input.provider.stream({
       ...(input.authorizeModelDispatch ? { authorizeDispatch: input.authorizeModelDispatch } : {}),
       model: input.model,

@@ -34,6 +34,9 @@ export class RuntimeTurns {
     this.#resolver = resolver;
   }
 
+  get observers() {
+    return this.#queries.observers;
+  }
   attachControllers(resolve: (runId: string) => AbortController | undefined): void {
     this.#external = resolve;
   }

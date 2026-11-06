@@ -14,7 +14,10 @@ import { roomTaskReceipt } from './room-task-receipt.js';
 export { roomSliceAuthority } from './room-task-authority.js';
 /** Stored receipts and joins establish meaning; delivery IDs select, never authorize. */
 export function inputEvidence(
-  tx: ConversationTransaction,
+  tx: Pick<
+    ConversationTransaction,
+    'roomTasks' | 'receipt' | 'history' | 'chatTurn' | 'chatFailureEvidence'
+  >,
   d: RoomDeliveryRecord,
   task: RoomTaskBot,
   root: RoomTaskRoot,
@@ -144,7 +147,8 @@ export function inputEvidence(
   if (receipt.binding !== binding) return null;
   if (
     d.kind === 'delegate' &&
-    (source.roomSliceDisposition !== 'yielded' ||
+    (source.roomHandoff?.attemptId !== d.sourceAttemptId ||
+      source.roomSliceDisposition !== 'yielded' ||
       source.roomHandoff?.deliveryId !== d.id ||
       source.roomHandoff.childTaskId !== task.id ||
       facts.input.state !== 'consumed' ||
@@ -152,7 +156,12 @@ export function inputEvidence(
   )
     return null;
   if (d.kind === 'message') {
-    const origin = rt.origin(source.id, source.taskRunId, d.sourceAttemptId, 'settled');
+    const origin = rt.origin(
+      source.id,
+      source.taskRunId,
+      d.sourceAttemptId,
+      historical ? 'historical' : 'settled',
+    );
     const effects = tx.chatFailureEvidence?.(source.taskRunId);
     if (
       !origin?.liveRun ||

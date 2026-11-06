@@ -8,7 +8,7 @@ import {
   type ToolEffectAdmission,
 } from '@runnets/domain';
 import type { CodingApprovalTransaction } from './coding-approval.js';
-import { selectedCodingBasis } from './coding-grant-admission.js';
+import { codingExecutorMatches, selectedCodingBasis } from './coding-grant-admission.js';
 export interface CodingReadRequest {
   readonly workspaceId: string;
   readonly roomId: string;
@@ -97,7 +97,7 @@ export function codingReadAdmission(
     !scope ||
     scope.attemptId !== r.attemptId ||
     !r.invocationId.startsWith(r.attemptId + '_r' + scope.ordinal + '_') ||
-    scope.reviewer ||
+    !codingExecutorMatches(scope, r, tx.projectId(r.projectRoot)) ||
     !task ||
     !worktree ||
     task.status !== 'reserved' ||

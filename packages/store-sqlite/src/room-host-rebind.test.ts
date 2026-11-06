@@ -90,6 +90,19 @@ it('publishes a fresh epoch and successor atomically while preserving the origin
     ).not.toThrow();
     expect(store.rebind.active()?.preview.ownerId).toBe(ready.preview.ownerId);
     expect(store.conversations.atomic((tx) => tx.roomTasks!.restored())).toBe(true);
+    for (const verified of [
+      { origin: f.origin, active: null },
+      {
+        origin: { ...f.origin, profileId: 'changed-after-verification' },
+        active: store.rebind.active(),
+      },
+    ])
+      expect(() =>
+        store.bindRoomHost(
+          { ownerId: ready.preview.ownerId, epochId: ready.preview.epochId },
+          verified,
+        ),
+      ).toThrow('invalid_room_host');
     store.bindRoomHost(
       { ownerId: ready.preview.ownerId, epochId: ready.preview.epochId },
       { origin: f.origin, active: store.rebind.active() },

@@ -16,7 +16,7 @@ export function roomTaskOrigin(
   turnId: string,
   runId: string,
   attemptId: string,
-  live: boolean | 'settled',
+  live: boolean | 'settled' | 'historical',
 ): RoomTaskOriginFacts | null {
   const row = db
     .prepare('SELECT * FROM ocean_chat_turns WHERE id=? AND task_run_id=?')
@@ -70,7 +70,7 @@ export function roomTaskOrigin(
     !!db
       .prepare('SELECT 1 FROM ocean_members WHERE workspace_id=? AND room_id=? AND bot_id=?')
       .get(turn.workspaceId, turn.roomId, id);
-  if (!member(turn.bot.id)) return null;
+  if (live !== 'historical' && !member(turn.bot.id)) return null;
   try {
     const events = db
       .prepare('SELECT * FROM events WHERE aggregate_id=? ORDER BY sequence')

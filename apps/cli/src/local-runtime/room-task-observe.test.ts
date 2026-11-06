@@ -12,9 +12,36 @@ it('resyncs expired root marks and observes durable decision-only changes', asyn
   const view = () => f.store.conversations.atomic((tx) => tx.roomTasks!.projection(start.rootId)!);
   const signal = new AbortController().signal;
   try {
-    const first = await observers.observeRoot(q, view, signal);
-    vi.spyOn(reads, 'decisionRevision').mockReturnValue(1);
-    expect((await observers.observeRoot({ ...q, cursor: first.cursor }, view, signal)).kind).toBe(
+    await observers.observeRoot(q, view, signal);
+    const claimed = f.claim(start.deliveries[0]!.deliveryId);
+    if (claimed.kind !== 'claimed') throw Error('claim');
+    const insert = (id: string, run: string, revision: number) =>
+      f
+        .db!.prepare(
+          "INSERT INTO ocean_owner_decisions VALUES(?,?,?,?,'project-read','digest',0,9999999999999,1,'pending',0,?,?)",
+        )
+        .run(id, q.workspaceId, q.roomId, run, Buffer.alloc(0), revision);
+    const stable = await observers.observeRoot(q, view, signal);
+    const full = {
+      ...view(),
+      rows: Array.from({ length: 51 }, (_, i) => ({
+        type: 'task' as const,
+        id: 'task-' + i,
+        parentId: null,
+        botId: null,
+        status: 'ready' as const,
+        waitingChildId: null,
+        hold: null,
+      })),
+    };
+    const page = observers.rootPage(full);
+    insert('unrelated', 'other-run', 1);
+    expect((await observers.observeRoot({ ...q, cursor: stable.cursor }, view, signal)).kind).toBe(
+      'timeout',
+    );
+    expect(() => observers.rootPage({ ...view(), rows: full.rows }, page.nextPage!)).not.toThrow();
+    insert('related', claimed.turn.taskRunId, 2);
+    expect((await observers.observeRoot({ ...q, cursor: stable.cursor }, view, signal)).kind).toBe(
       'changed',
     );
     const current = await observers.observeRoot(q, view, signal);

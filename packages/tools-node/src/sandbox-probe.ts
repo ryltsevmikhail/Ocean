@@ -84,10 +84,13 @@ export async function sandboxCommand(
   options: SandboxOptions,
   preset: CodingTestPreset,
   signal: AbortSignal,
-  snapshot: () => Promise<string>,
+  snapshot: (guard?: ToolDispatchGuard) => Promise<string>,
   guard?: ToolDispatchGuard,
 ): Promise<SandboxCommandEvidence> {
-  const beforeTreeHash = await snapshot();
+  const inspection = guard?.inspect
+    ? { authorize: () => false, inspect: () => guard.inspect!() }
+    : undefined;
+  const beforeTreeHash = await snapshot(inspection);
   const dependencyHash = await validateMounts(options.mounts ?? [], options.dependencyProjectRoot);
   const invocationHash = createHash('sha256')
     .update(JSON.stringify({ preset, limits: sandboxLimits, options, dependencyHash }))
@@ -100,7 +103,7 @@ export async function sandboxCommand(
     signal,
     ...(guard ? { guard } : {}),
   });
-  const afterTreeHash = await snapshot();
+  const afterTreeHash = await snapshot(inspection);
   return {
     ...result,
     invocationHash,
@@ -117,7 +120,7 @@ export async function sandboxCommand(
 export async function createSandboxBackend(
   options: SandboxOptions,
   presets: readonly CodingTestPreset[],
-  snapshot: () => Promise<string>,
+  snapshot: (guard?: ToolDispatchGuard) => Promise<string>,
   guard?: ToolDispatchGuard,
   signal?: AbortSignal,
 ): Promise<WorkspaceBackend> {

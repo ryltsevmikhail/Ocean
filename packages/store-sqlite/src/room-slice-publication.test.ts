@@ -1,5 +1,5 @@
 import { taskRunId } from '@runnets/domain';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { DirectChatService, createChatCommand, executeStep } from '@runnets/application';
 import { roomSlices, delegate, answer } from '../test-fixtures/room-slices.js';
 it('returns nested B completion to the original A delegate despite B finishing on a C result', async () => {
@@ -30,6 +30,7 @@ it('returns nested B completion to the original A delegate despite B finishing o
     expect(f.requests).toHaveLength(5);
     expect(f.db!.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   } finally {
+    vi.restoreAllMocks();
     f.close();
   }
 });
@@ -61,6 +62,7 @@ it('protects a prepared room final beyond the Core summary and rejects an A1 fin
       ),
     ).toThrow();
   } finally {
+    vi.restoreAllMocks();
     f.close();
   }
 });
@@ -75,10 +77,27 @@ it('retains nested prepared completion and original parent wait after assignment
     const b = await f.execute(a.roomHandoff!.deliveryId);
     await f.execute(b.roomHandoff!.deliveryId);
     const result = f.deliveries(b.roomDelivery!.taskId).find((v) => v.kind === 'result')!;
-    f.db!.prepare(
-      "UPDATE ocean_receipts SET binding='conflicting assignment' WHERE request_id=(SELECT request_key FROM ocean_room_deliveries WHERE id=?)",
-    ).run(a.roomHandoff!.deliveryId);
+    let injected = 0;
+    const commands = f.store.log.commands!,
+      original = commands.commitWithDisposition!.bind(commands);
+    vi.spyOn(commands, 'commitWithDisposition').mockImplementation(async (...args) => {
+      if (args[0].type === 'Complete') {
+        injected++;
+        f.db!.prepare(
+          "UPDATE ocean_receipts SET binding='conflicting assignment' WHERE request_id=(SELECT request_key FROM ocean_room_deliveries WHERE id=?)",
+        ).run(a.roomHandoff!.deliveryId);
+      }
+      return original(...args);
+    });
     const completed = await f.execute(result.id);
+    expect(injected).toBe(1);
+    expect(
+      f
+        .db!.prepare(
+          'SELECT binding FROM ocean_receipts WHERE request_id=(SELECT request_key FROM ocean_room_deliveries WHERE id=?)',
+        )
+        .get(a.roomHandoff!.deliveryId)?.['binding'],
+    ).toBe('conflicting assignment');
     expect(completed.status).toBe('prepared');
     expect(
       f.store.conversations.atomic((tx) => tx.roomTasks!.task(a.roomDelivery!.taskId)),
@@ -91,6 +110,7 @@ it('retains nested prepared completion and original parent wait after assignment
       'claimed',
     );
   } finally {
+    vi.restoreAllMocks();
     f.close();
   }
 });
@@ -197,6 +217,7 @@ it.each(
     if (reader === 'sqlite-result')
       expect(() => f.store.openRoomReads(Date.now).result(query)).toThrow();
   } finally {
+    vi.restoreAllMocks();
     f.close();
   }
 });
@@ -216,6 +237,7 @@ it('both reads reject a committed success whose head contradicts the prepared ve
     expect(() => f.store.openRoomReads(Date.now).run(query)).toThrow();
     expect(() => f.store.openRoomReads(Date.now).result(query)).toThrow();
   } finally {
+    vi.restoreAllMocks();
     f.close();
   }
 });

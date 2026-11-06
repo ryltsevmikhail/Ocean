@@ -1,3 +1,4 @@
+import { assertCodingInspection } from './coding-git.js';
 import { createHash } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import type { CodingApprovalBinding, CodingTask, CodingTestEvidence } from '@runnets/domain';
@@ -30,7 +31,7 @@ export interface CodingOperationInput {
   readonly approvalId: string;
   readonly call: ToolInvocation;
   readonly sandbox: SandboxOptions;
-  readonly snapshot: () => Promise<string>;
+  readonly snapshot: (guard?: ToolDispatchGuard) => Promise<string>;
   readonly recordEvidence?: (evidence: CodingTestEvidence) => void;
 }
 export async function prepareCodingOperation(
@@ -57,7 +58,10 @@ async function prepareOperation(
     call.id !== scope.invocationId
   )
     throw new ToolError('coding_denied', 'task operation scope mismatch');
-  const snapshot = input.snapshot;
+  const snapshot = async () => {
+    assertCodingInspection(input.guard);
+    return input.snapshot(input.guard);
+  };
   const tools =
     sessionTools ??
     new WorkspaceTools(
@@ -179,6 +183,7 @@ async function prepareOperation(
           throw new ToolError('stale_read', 'approved source tree changed before execution');
         if (!guard) throw new ToolError('coding_denied', 'dispatch authority required');
         return tool.execute(signal, {
+          ...(input.guard ? { inspect: () => input.guard!.inspect?.() === true } : {}),
           authorize: () => guard.authorize(),
           prepare: async () => {
             const current = await currentBinding();

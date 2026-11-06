@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
-import type { ChangesetPort } from '@runnets/application';
+import { assertCodingInspection } from './coding-git.js';
+import type { ToolDispatchGuard, ChangesetPort } from '@runnets/application';
 import {
   CodingArtifactError,
   type CodingTask,
@@ -36,15 +37,23 @@ export class GitCodingSnapshots implements ChangesetPort {
   constructor(options: { readonly betweenScans?: () => void | Promise<void> } = {}) {
     this.#betweenScans = options.betweenScans;
   }
-  async capture(task: CodingTask, binding: WorktreeBinding): Promise<Changeset> {
+  async capture(
+    task: CodingTask,
+    binding: WorktreeBinding,
+    guard?: ToolDispatchGuard,
+  ): Promise<Changeset> {
+    assertCodingInspection(guard);
     const worktrees = new GitCodingWorktrees(dirname(binding.root));
     await worktrees.verify(task, binding);
-    const base = await codingBaseFiles(binding.root, task.baseCommit);
-    const after = await codingWorkingTree(binding.root, base),
+    assertCodingInspection(guard);
+    const base = await codingBaseFiles(binding.root, task.baseCommit, guard);
+    assertCodingInspection(guard);
+    const after = await codingWorkingTree(binding.root, base, guard),
       beforeTreeHash = codingManifest(base),
       afterTreeHash = codingManifest(after);
     await this.#betweenScans?.();
-    const confirm = await codingWorkingTree(binding.root, base);
+    assertCodingInspection(guard);
+    const confirm = await codingWorkingTree(binding.root, base, guard);
     await worktrees.verify(task, binding);
     if (codingManifest(confirm) !== afterTreeHash) throw new CodingArtifactError('stale_capture');
     const paths = [...new Set([...base.keys(), ...after.keys()])].sort(),

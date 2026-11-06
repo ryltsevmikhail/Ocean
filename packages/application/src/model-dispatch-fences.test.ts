@@ -229,3 +229,30 @@ it('does not journal a model request if cancellation arrives before start admiss
     ),
   ).toBe(false);
 });
+
+it('settles a throwing authority inspection as not_sent after the committed start', async () => {
+  const input = await setup();
+  let streams = 0;
+  await runTurn({
+    ...input,
+    authorizeModelDispatch() {
+      throw Error('authority unreadable');
+    },
+    provider: {
+      ...provider([]),
+      stream() {
+        streams++;
+        throw Error('must not enter');
+      },
+    },
+  });
+  expect(streams).toBe(0);
+  expect(await input.service.state(input.taskRunId)).toMatchObject({
+    modelExecution: {
+      startedRequests: 1,
+      lastRequest: {
+        settlement: { completion: { kind: 'not_sent' } },
+      },
+    },
+  });
+});

@@ -135,8 +135,12 @@ import {
 } from '../../../test-fixtures/service-authority.js';
 import type { RoomTaskActor } from '@runnets/application';
 /** Selected per-bot service scope over the same genuine disposable room host. */
-export function roomServiceSlices(maxCalls = 10, mode: 'autonomous' | 'confirm' = 'autonomous') {
-  const f = roomSlices([], []);
+export function roomServiceSlices(
+  maxCalls = 10,
+  mode: 'autonomous' | 'confirm' = 'autonomous',
+  rounds: readonly (readonly ProviderEvent[])[] = [],
+) {
+  const f = roomSlices(rounds, []);
   const grants = ['a', 'b', 'c'].map((botId) => ({
     ...ownerGrant,
     id: 'grant_' + botId,

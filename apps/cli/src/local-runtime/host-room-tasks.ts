@@ -1,3 +1,4 @@
+import type { RuntimeObservers } from './observe.js';
 import type { RuntimeReply } from './queries.js';
 import { createHash } from 'node:crypto';
 import { systemClock } from '@runnets/store';
@@ -11,6 +12,7 @@ export function hostRoomTasks(
   instance: string,
   images?: ImageAssetResolverPort,
   capacity?: 1,
+  observers?: RuntimeObservers,
 ) {
   if (
     !runtime.broadcasts ||
@@ -52,6 +54,7 @@ export function hostRoomTasks(
     runtime.openRoomRuns().reads,
     instance,
     capacity,
+    observers,
   );
   return { broadcasts, roomTasks };
 }
@@ -77,6 +80,6 @@ export async function wakeRoomTasksAfter(
       'rooms.setModelPolicy',
     ].includes(method)
   )
-    rooms.wake();
+    rooms.wake(true);
   return result;
 }

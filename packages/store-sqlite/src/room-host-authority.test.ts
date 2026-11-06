@@ -36,10 +36,11 @@ it('refuses a fresh model start under the SQLite command lock after the root fen
     const commands = f.store.log.commands!;
     const original = commands.commitWithDisposition!.bind(commands);
     vi.spyOn(commands, 'commitWithDisposition').mockImplementation(async (...args) => {
-      if (args[0].type === 'StartModelRequest')
+      if (args[0].type === 'StartModelRequest') {
         f.db!.prepare(
           "UPDATE ocean_room_tasks SET status='stopped',revision=revision+1 WHERE id=?",
         ).run(start.rootId);
+      }
       return original(...args);
     });
     await f.execute(start.deliveries[0]!.deliveryId);
@@ -64,10 +65,14 @@ it('publishes an already prepared child locally after stop and preserves the par
     const commands = f.store.log.commands!,
       original = commands.commitWithDisposition!.bind(commands);
     vi.spyOn(commands, 'commitWithDisposition').mockImplementation(async (...args) => {
-      if (args[0].type === 'Complete' && args[0].taskRunId !== a.taskRunId)
+      if (args[0].type === 'Complete' && args[0].taskRunId !== a.taskRunId) {
+        f.store.conversations.atomic((tx) =>
+          tx.replaceBot({ ...tx.bot('a')!, profileVersion: 2 }, 1),
+        );
         f.db!.prepare(
           "UPDATE ocean_room_tasks SET status='stopped',revision=revision+1 WHERE id=? AND status='ready'",
         ).run(start.rootId);
+      }
       return original(...args);
     });
     const b = await f.execute(a.roomHandoff!.deliveryId);
@@ -111,6 +116,9 @@ it('pauses exactly the third normalized duplicate exchange without a child or me
   );
   try {
     const start = f.start();
+    const collision = 'room-fence/v1:' + f.deps.sha256(start.rootId);
+    const owner = f.service.startHosted({ ...f.input, requestId: collision });
+    expect(owner.ok).toBe(true);
     let delivery = start.deliveries[0]!.deliveryId;
     for (let i = 0; i < 5; i++) {
       const turn = await f.execute(delivery);
@@ -132,7 +140,43 @@ it('pauses exactly the third normalized duplicate exchange without a child or me
         .get()?.['n'],
     ).toBe(1);
     expect(f.requests).toHaveLength(5);
+    expect(f.store.conversations.atomic((tx) => tx.receipt(collision)?.reply.kind)).toBe('message');
   } finally {
     f.close();
   }
 });
+
+it.each(['receipt', 'attempt'] as const)(
+  'rechecks historical assignment %s after child start commits',
+  async (fault) => {
+    const { delegate } = await import('../test-fixtures/room-slices.js');
+    const f = roomSlices([delegate('b', 'work'), answer('must not send')]);
+    try {
+      const start = f.start(),
+        a = await f.execute(start.deliveries[0]!.deliveryId);
+      let injected = 0;
+      const original = f.tasks.executeWithDisposition.bind(f.tasks);
+      vi.spyOn(f.tasks, 'executeWithDisposition').mockImplementation(async (command) => {
+        const result = await original(command);
+        if (command.type === 'StartModelRequest' && result.ok) {
+          f.db!.exec('PRAGMA foreign_keys=OFF; DROP TRIGGER ocean_room_delivery_immutable');
+          if (fault === 'receipt')
+            f.db!.prepare('DELETE FROM ocean_receipts WHERE request_id=?').run(f.input.requestId);
+          else
+            f.db!.prepare(
+              "UPDATE ocean_room_deliveries SET source_attempt_id='contradictory' WHERE id=?",
+            ).run(a.roomHandoff!.deliveryId);
+          injected++;
+          f.db!.exec('PRAGMA foreign_keys=ON');
+        }
+        return result;
+      });
+      await f.execute(a.roomHandoff!.deliveryId);
+      expect(injected).toBe(1);
+      expect(f.requests).toHaveLength(1);
+    } finally {
+      vi.restoreAllMocks();
+      f.close();
+    }
+  },
+);

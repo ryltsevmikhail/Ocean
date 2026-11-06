@@ -205,6 +205,13 @@ export function roomHostProjection(db: DatabaseSync, rootId: string): RoomTaskRo
     'duplicate_exchange',
   ].find((item) => item === code) as Exclude<RoomTaskRow['hold'], null> | undefined;
   return {
+    decisionMark: JSON.stringify(
+      db
+        .prepare(
+          `SELECT d.decisionId,d.runId,d.revision FROM ocean_owner_decisions d JOIN ocean_chat_turns c ON c.task_run_id=d.runId AND c.workspace_id=d.workspaceId AND c.room_id=d.roomId JOIN ocean_room_tasks t ON t.id=json_extract(c.payload,'$.roomDelivery.taskId') WHERE t.root_id=? AND t.workspace_id=c.workspace_id AND t.room_id=c.room_id ORDER BY d.decisionId COLLATE BINARY`,
+        )
+        .all(rootId),
+    ),
     workspaceId: root.workspaceId,
     roomId: root.roomId,
     rootId,
@@ -212,7 +219,12 @@ export function roomHostProjection(db: DatabaseSync, rootId: string): RoomTaskRo
     revision: root.revision,
     fenceReason: fence
       ? {
-          id: savedFence ? String(savedFence['request_id']) : root.id,
+          id:
+            data && typeof data === 'object' && 'id' in data && typeof data.id === 'string'
+              ? data.id
+              : savedFence
+                ? String(savedFence['request_id'])
+                : root.id,
           code: savedCode ?? fence,
         }
       : null,
@@ -230,8 +242,8 @@ export function freezeRoomHost(
 ): void {
   const root = readRoomTask(db, rootId);
   if (!db.isTransaction || !root || root.kind !== 'root' || root.status !== 'ready') return;
-  const id = 'room-fence/v1:' + createHash('sha256').update(rootId).digest('hex');
-  if (db.prepare('SELECT 1 FROM ocean_receipts WHERE request_id=?').get(id)) return;
+  const id = 'room-fence/v2:' + createHash('sha256').update(rootId).digest('hex'),
+    key = '\0' + id;
   const data = {
     workspaceId: root.workspaceId,
     roomId: root.roomId,
@@ -240,6 +252,15 @@ export function freezeRoomHost(
     code,
     revision: root.revision + 1,
   };
+  const binding = canonicalJson(['RoomTaskFence/v1', root.id, code]),
+    reply = JSON.stringify({ kind: 'room_task_fence', data });
+  const prior = db.prepare('SELECT binding,reply FROM ocean_receipts WHERE request_id=?').get(key);
+  if (
+    prior &&
+    (prior['binding'] !== binding ||
+      canonicalJson(JSON.parse(String(prior['reply']))) !== canonicalJson(JSON.parse(reply)))
+  )
+    throw Error('request_conflict');
   if (
     db
       .prepare(
@@ -248,9 +269,5 @@ export function freezeRoomHost(
       .run(root.id, root.revision).changes !== 1
   )
     throw Error('revision_conflict');
-  db.prepare('INSERT INTO ocean_receipts VALUES(?,?,?)').run(
-    id,
-    canonicalJson(['RoomTaskFence/v1', root.id, code]),
-    JSON.stringify({ kind: 'room_task_fence', data }),
-  );
+  if (!prior) db.prepare('INSERT INTO ocean_receipts VALUES(?,?,?)').run(key, binding, reply);
 }

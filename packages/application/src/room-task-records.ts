@@ -109,7 +109,7 @@ export interface RoomTaskTransaction {
     turnId: string,
     runId: string,
     attemptId: string,
-    live: boolean | 'settled',
+    live: boolean | 'settled' | 'historical',
   ): RoomTaskOriginFacts | null;
   grant(id: string): OwnerScopeGrant | null;
   modelConnection(id: string): ModelConnectionRecord | null;

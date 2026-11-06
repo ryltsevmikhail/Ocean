@@ -258,7 +258,7 @@ it.each(['head', 'receipt', 'stop', 'pin', 'unknown', 'unrelated'] as const)(
         );
       const repaired = await repairRoomHandoff(f.deps, turn.id);
       expect(repaired?.roomSliceDisposition ?? null).toBe(
-        mode === 'unrelated' || mode === 'stop' ? 'yielded' : null,
+        mode === 'unrelated' || mode === 'stop' || mode === 'pin' ? 'yielded' : null,
       );
       expect(f.requests).toHaveLength(1);
       expect(f.claim(turn.roomHandoff!.deliveryId).kind).toBe(

@@ -129,6 +129,24 @@ export function codingGrant(
 
 import type { CodingGrantDebit, OwnerScopeGrant, OwnerPermission } from '@runnets/domain';
 import type { RoomPhysicalScope } from './room-task-authority.js';
+/** The executor and its immutable dev assignment must name the requested coding subject. */
+export function codingExecutorMatches(
+  scope: RoomPhysicalScope,
+  request: Pick<CodingApprovalBinding, 'workspaceId' | 'roomId' | 'botId' | 'taskId' | 'runId'>,
+  projectId: string,
+): boolean {
+  const executor = scope.subjects[0];
+  return (
+    !scope.reviewer &&
+    scope.codingTaskId === request.taskId &&
+    executor?.chargedRunId === request.runId &&
+    executor.subject.workspaceId === request.workspaceId &&
+    executor.subject.roomId === request.roomId &&
+    executor.subject.botId === request.botId &&
+    executor.subject.taskId === request.taskId &&
+    executor.subject.projectId === projectId
+  );
+}
 export function roomCodingPermits(
   permissions: readonly OwnerPermission[],
   action: 'project_read' | 'propose_write' | 'run_test_preset',
@@ -203,6 +221,7 @@ export function codingRoomBasis(
     !task ||
     !worktree ||
     !projectId ||
+    !codingExecutorMatches(room, b, projectId) ||
     task.devBotId !== b.botId ||
     room.root.rootPayload.mandate.codingTaskId !== task.id ||
     worktree.root !== b.worktreeRoot ||

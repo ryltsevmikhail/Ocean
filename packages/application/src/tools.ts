@@ -18,6 +18,8 @@ export interface ToolResult {
 }
 export type ToolKind = 'read' | 'search' | 'edit' | 'execute';
 export interface ToolDispatchGuard {
+  /** Repeatable preparation/snapshot check; never consumes dispatch authorization. */
+  inspect?(): boolean;
   prepare?(): Promise<void>;
   authorize(): boolean;
 }

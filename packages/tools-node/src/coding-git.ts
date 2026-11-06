@@ -1,3 +1,4 @@
+import { ToolError, type ToolDispatchGuard } from '@runnets/application';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { CodingArtifactError } from '@runnets/domain';
@@ -7,7 +8,9 @@ export async function codingGit(
   root: string,
   args: readonly string[],
   limit = 33554432,
+  guard?: ToolDispatchGuard,
 ): Promise<Buffer> {
+  assertCodingInspection(guard);
   const result = await execute(
     '/usr/bin/git',
     [
@@ -69,4 +72,9 @@ export function codingText(body: Buffer): string {
   } catch {
     throw new CodingArtifactError('unsupported_file');
   }
+}
+
+export function assertCodingInspection(guard?: ToolDispatchGuard): void {
+  if (guard && guard.inspect?.() !== true)
+    throw new ToolError('coding_denied', 'snapshot inspection refused');
 }

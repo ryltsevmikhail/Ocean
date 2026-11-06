@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { RoomRunReadPort } from '@runnets/application';
+import type { RoomTaskRootView as RootProjection, RoomRunReadPort } from '@runnets/application';
 import {
   LOCAL_RUNTIME_MAX_PAGE,
   LOCAL_RUNTIME_MAX_FRAME,
@@ -103,13 +103,12 @@ export class RuntimeObservers {
       }
     }
   }
-  #rootHash(view: RoomTaskRootView): string {
-    return createHash('sha256')
-      .update(JSON.stringify([view, this.#read.decisionRevision?.(view)]))
-      .digest('base64url');
+  #rootHash(view: RootProjection): string {
+    return createHash('sha256').update(JSON.stringify(view)).digest('base64url');
   }
-  rootPage(view: RoomTaskRootView, page?: string): RoomTaskRootView {
-    const hash = this.#rootHash(view);
+  rootPage(projection: RootProjection, page?: string): RoomTaskRootView {
+    const { decisionMark: _mark, ...view } = projection;
+    const hash = this.#rootHash(projection);
     let expires = Date.now() + 300000;
     const binding = ['root-page', this.#instance, view.workspaceId, view.roomId, view.rootId, hash];
     const sign = (body: string) => createHmac('sha256', this.#key).update(body).digest('base64url');
@@ -163,7 +162,7 @@ export class RuntimeObservers {
   }
   async observeRoot(
     q: RoomTaskObserve,
-    read: () => RoomTaskRootView,
+    read: () => RootProjection,
     detached: AbortSignal,
   ): Promise<RoomTaskObservation> {
     const deadline = performance.now() + (q.waitMs ?? 0);
