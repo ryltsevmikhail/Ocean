@@ -71,8 +71,10 @@ export async function httpFixture(name: string, evidenceDir?: string) {
       if (evidenceDir) appendFileSync(join(evidenceDir, 'effects'), 'effect\n', { flush: true });
       stats.effects++;
       const version = name === 'invalid' ? 'invalid' : req.params.arguments?.['value'];
-      const text = name === 'echo' ? String(req.params.arguments?.['echo']) : 'fixture';
-      return { content: [{ type: 'text', text }], structuredContent: { version } };
+      const echo = name === 'echo' ? req.params.arguments?.['echo'] : undefined;
+      const text = typeof echo === 'string' ? echo : 'fixture';
+      const structuredContent = typeof echo === 'number' ? { version, value: echo } : { version };
+      return { content: [{ type: 'text', text }], structuredContent };
     });
     return protocol;
   };

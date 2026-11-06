@@ -18,12 +18,16 @@ import { InvocationSend } from './send.js';
 import { SessionWriter } from './session-writer.js';
 import { serviceStdio } from './stdio.js';
 
-function containsCredential(value: unknown, credential: string): boolean {
+function containsDecodedCredential(value: unknown, credential: string): boolean {
   if (typeof value === 'string') return value.includes(credential);
   if (!value || typeof value !== 'object') return false;
   return Object.entries(value).some(
-    ([key, child]) => key.includes(credential) || containsCredential(child, credential),
+    ([key, child]) => key.includes(credential) || containsDecodedCredential(child, credential),
   );
+}
+function containsCredential(value: unknown, credential: string): boolean {
+  // Scan the whole serialized literal once, then check keys and strings after JSON unescaping.
+  return JSON.stringify(value).includes(credential) || containsDecodedCredential(value, credential);
 }
 export class Session {
   readonly stop = new AbortController();
