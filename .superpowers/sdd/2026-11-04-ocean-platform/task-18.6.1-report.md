@@ -82,7 +82,7 @@ All changed TypeScript files remain <=300 physical lines; largest292. LICENSE/NO
 - Retained legacy patch SHA256 `e1c1bfa9a41049321f45747f3ae8907d89604fca06872ec0a4871483db1b9fad`.
 - Ready server copied read-only from C4 `c18.4.1-kMU4NF/official/` into the owned native/assets directory. filesystem.mjs SHA256 `9ba03f4982348890774c2eafbd243b1980f71ad0f1d635e1269a58861c798701`; package.json SHA256 `90e044be92ea84ab236fe3d7c5fdd4f940bf8a5d4928cb154e5645d96d5f4fac`.
 
-`Q/pins-final.json` records per-source hash/physical line count, complete bundle identities/integrity hashes and inputs. `Q/archive-manifest.json` is the exact1261-entry installed inventory source. Packaging34 used clean built final source; emitted standalone installer35 created only `Q/prefix-final`. Superseded27b37b archive/prefix and RED evidence remain distinct under package/prefix. Final documentation/report commits do not change that source/artifact pin.
+`Q/pins-final.json` records qualified-source hash/physical line count, complete bundle identities/integrity hashes and inputs. Its separate `currentDocumentation` field pins the final status document at7d44a98; `firstPartySource` continues to describe exact qualified artifact sourceffeb3d3. `Q/archive-manifest.json` is the exact1261-entry installed inventory source. Packaging34 used clean built final source; emitted standalone installer35 created only `Q/prefix-final`. Superseded27b37b archive/prefix and RED evidence remain distinct under package/prefix. Final documentation/report commits do not change that source/artifact pin.
 
 ## Installed production proofs and counters
 
@@ -123,7 +123,7 @@ Offline: actual installed launcher init/bot/room/doctor/history, offline send re
 - `apps/cli/test-fixtures/model-process-negotiation.ts` — 100 physical lines; SHA256 `488a3564dc3f36e052d0f1f48d6e748fb29ccf60efdec563ede48a2fc6efce29`.
 - `apps/cli/test-fixtures/model-process-old.test.ts` — 56 physical lines; SHA256 `ddb79814652004072b80009d291504e31dc5af53a58ba5f80f7c287874c7b3a9`.
 - `apps/cli/test-fixtures/service-catalog-rig.ts` — 194 physical lines; SHA256 `c27ed4a3b1d884830bc316a9649e07cf638444e8ac6093edb18034ce7e1bb0a1`.
-- `docs/ocean/platform-stage-c.md` — 351 physical lines; SHA256 `d765b48fc6b5cd30cbfd89b155f3e8b08634fb65b1be75c0e199aecd3b893426`.
+- `docs/ocean/platform-stage-c.md` — current documentation at `7d44a9837bdf9829f6b9d09d100561bc2fd844f8`: 363 physical lines; SHA256 `9a16c7e828f6f3a7e5b0f20603729b7a48c4df2d261a0c2f401698250abac666`. The qualified artifact source `ffeb3d3` contains the earlier351-line version, SHA256 `d765b48fc6b5cd30cbfd89b155f3e8b08634fb65b1be75c0e199aecd3b893426`.
 - `docs/superpowers/plans/2026-11-04-ocean-platform.md` — 1377 physical lines; SHA256 `1785964166981252bf5cd7656c1d4d0bf921a9db0c1a5da1cce3153412ddc0a1`.
 - `packages/application/src/service-turn-tools.ts` — 202 physical lines; SHA256 `5398de7d5faff57ef7b368b34ad13244b592f44a4ebd9bd33b6cddf38e15e9ba`.
 - `packages/integrations-mcp/src/route-refresh.test.ts` — 136 physical lines; SHA256 `9f51e2f0977c9636648bb15f905bc7551a9b3b3a6755b1d13354529ab47e79ba`.
