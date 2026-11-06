@@ -38,12 +38,13 @@ export function ownerConnectionRecord(
     old &&
     (credentialReference !== old.credentialReference ||
       credentialBinding !== old.credentialBinding);
+  const state = request.removeKey === true && old ? old.state : 'active';
   const changedTrust =
     old &&
     (canonicalJson(old.configuration) !== canonicalJson(request.configuration) ||
       old.trust.metadataPermission !== request.metadataPermission ||
       changedCredential ||
-      old.state !== 'active');
+      old.state !== state);
   return {
     id: request.connectionId,
     name: request.name,
@@ -62,7 +63,7 @@ export function ownerConnectionRecord(
             identity: { status: 'unverified', label: null },
             resourceEnforcement: [],
           },
-    state: 'active',
+    state,
     currentCatalogId: old?.currentCatalogId ?? null,
     createdAt: old?.createdAt ?? at,
     updatedAt: at,

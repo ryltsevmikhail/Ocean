@@ -86,7 +86,8 @@ export async function serviceSettingsFlow({ root, ready, peer, first, independen
   assert.equal(await connection('publication'), undefined);
   await page.screenshot({ path: join(root, '03-prepared-reopened.png') });
   chmodSync(join(root, 'profile.credentials'), 0o700);
-  await page.getByTestId('service-key').fill('synthetic-publication-key');
+  await page.getByTestId('service-recovery-select').click();
+  await page.getByTestId('service-recovery-key').fill('synthetic-publication-key');
   await page.getByTestId('service-recover').click();
   await wait(async () => !!(await connection('publication')));
   assert.equal((await peer.serviceReceipt({ requestId: prepared.requestId })).state, 'prepared');

@@ -1,6 +1,8 @@
 // Disposable current-source owner: real runtime persistence and MCP, deterministic provider.
 import { appendFileSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { URL } from 'node:url';
+import { createRequire } from 'node:module';
 import { Socket } from 'node:net';
 import { Buffer } from 'node:buffer';
 import process from 'node:process';
@@ -12,6 +14,19 @@ import { httpFixture } from '../../../packages/integrations-mcp/dist/prototype-h
 const [root, profile, workspace] = process.argv.slice(2);
 const record = (value) =>
   appendFileSync(join(root, 'peer-facts.jsonl'), JSON.stringify(value) + '\n');
+// Observe actual owner calls, preserving the public class implementation and never logging keys.
+const requireCli = createRequire(new URL('../../cli/package.json', import.meta.url));
+const { ServiceOwnerSettings } = await import(requireCli.resolve('@runnets/application'));
+const setConnection = ServiceOwnerSettings.prototype.setConnection;
+ServiceOwnerSettings.prototype.setConnection = function (input) {
+  record({
+    kind: 'settings-set-input',
+    requestId: input.requestId,
+    connectionId: input.connectionId,
+    requiresKey: input.key !== undefined,
+  });
+  return setConnection.call(this, input);
+};
 const mcp = await httpFixture('defer-response', root);
 const runtime = openOceanProfile(profile, true);
 await runtime.ready;

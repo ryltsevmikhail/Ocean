@@ -7,6 +7,7 @@ import type {
   LocalServiceConnectionSetRequest,
 } from '@runnets/contracts';
 import { call } from './bridge.js';
+import { createServiceRecovery } from './service-recovery.js';
 import type { ServiceCommand } from '../service-protocol.js';
 export const serviceVersions = (c: LocalServiceConnectionView) => ({
   configRevision: c.configRevision,
@@ -22,7 +23,7 @@ const empty = () => ({
   } as LocalServiceConnectionSetRequest['configuration'],
   metadataPermission: 'none' as 'none' | 'allow',
 });
-type Mutation = Extract<
+export type ServiceMutation = Extract<
   ServiceCommand,
   {
     op:
@@ -47,9 +48,14 @@ export function createServiceSettings(request: typeof call = call) {
     pending = ref<{ requestId: string; targetId: string } | null>(null);
   const draft = reactive(empty());
   const current = computed(() => connections.value.find((x) => x.id === selected.value));
-  let epoch = 0;
+  let epoch = 0,
+    lookupVersion = 0;
+  const lookupRequestId = ref<string | null>(null);
   function invalidate() {
     ++epoch;
+    ++lookupVersion;
+    lookupRequestId.value = null;
+    recovery.clear();
     key.value = '';
     message.value = '';
     receipt.value = null;
@@ -82,6 +88,7 @@ export function createServiceSettings(request: typeof call = call) {
   async function load() {
     const token = epoch;
     stale.value = true;
+    recovery.clear();
     key.value = '';
     try {
       const [cs, gs] = await Promise.all([
@@ -125,22 +132,31 @@ export function createServiceSettings(request: typeof call = call) {
     }
   }
   async function lookup(requestId: string, token = epoch) {
+    if (token !== epoch) return false;
+    recovery.clear();
+    const version = ++lookupVersion;
+    receipt.value = null;
+    lookupRequestId.value = requestId;
+    message.value = '';
     key.value = '';
     try {
       const r = await request({ op: 'service-receipt', input: { requestId } });
       if (r && r.requestId !== requestId) throw Error('invalid_frame');
-      if (token !== epoch) return;
+      if (token !== epoch || version !== lookupVersion) return false;
       receipt.value = r;
       message.value = r
         ? `Исходная квитанция: ${r.state}. ${r.state === 'completed' ? 'Снимок исходного результата; текущие метаданные показаны отдельно.' : 'Успех не подтверждён; требуется новое явное восстановление.'}`
         : 'Квитанция отсутствует; успех неизвестен. Запрос не повторён.';
+      return true;
     } catch (e) {
-      if (token === epoch)
+      if (token === epoch && version === lookupVersion)
         message.value =
           'Исходная квитанция неизвестна: ' + String(e instanceof Error ? e.message : e);
     }
+    return false;
   }
-  async function mutate(command: Mutation) {
+  async function mutate(command: ServiceMutation) {
+    recovery.clear();
     key.value = '';
     if (busy.value || stale.value) return;
     const token = epoch,
@@ -151,17 +167,20 @@ export function createServiceSettings(request: typeof call = call) {
         : 'grantId' in command.input
           ? command.input.grantId
           : command.input.intent.id;
+    const version = ++lookupVersion;
+    receipt.value = null;
+    lookupRequestId.value = requestId;
     pending.value = { requestId, targetId };
     busy.value = true;
     try {
       const r = await request(command);
       if (r.requestId !== requestId) throw Error('invalid_frame');
-      if (token !== epoch) return;
+      if (token !== epoch || version !== lookupVersion) return;
       receipt.value = r;
       message.value = `Исходная квитанция: ${r.state}. Разрешение не доказывает исполнение.`;
     } catch (e) {
-      await lookup(requestId, token);
-      if (token === epoch)
+      if (version !== lookupVersion || token !== epoch) return;
+      if (await lookup(requestId, token))
         message.value =
           String(e instanceof Error ? e.message : 'outcome_unknown') + ' · ' + message.value;
     } finally {
@@ -172,6 +191,23 @@ export function createServiceSettings(request: typeof call = call) {
   async function save(removeKey = false) {
     const secret = key.value;
     key.value = '';
+    const c = current.value;
+    if (removeKey) {
+      if (c?.configuration.kind !== 'http') return;
+      await mutate({
+        op: 'service-set',
+        input: {
+          requestId: crypto.randomUUID(),
+          connectionId: c.id,
+          name: c.name,
+          configuration: configuration(c.configuration),
+          metadataPermission: c.trust.metadataPermission,
+          expectedVersions: serviceVersions(c),
+          removeKey: true,
+        },
+      });
+      return;
+    }
     const input: LocalServiceConnectionSetRequest = {
       connectionId: draft.connectionId,
       name: draft.name,
@@ -179,13 +215,7 @@ export function createServiceSettings(request: typeof call = call) {
       metadataPermission: draft.metadataPermission,
       requestId: crypto.randomUUID(),
       expectedVersions: current.value ? serviceVersions(current.value) : null,
-      ...(draft.configuration.kind === 'http'
-        ? removeKey
-          ? { removeKey: true }
-          : secret
-            ? { key: secret }
-            : {}
-        : {}),
+      ...(draft.configuration.kind === 'http' ? (secret ? { key: secret } : {}) : {}),
     };
     await mutate({ op: 'service-set', input });
   }
@@ -202,35 +232,7 @@ export function createServiceSettings(request: typeof call = call) {
       },
     });
   }
-  async function recover(item: LocalServiceOwnerOperationItem) {
-    const secret = key.value;
-    key.value = '';
-    const op = item.operation;
-    if (item.state !== 'prepared' || !op) {
-      message.value = 'Старый неизвестный intent доступен только для чтения; настройте вручную.';
-      return;
-    }
-    if (op.requiresKey && !secret) {
-      message.value = 'Введите ключ заново для нового явного восстановления.';
-      return;
-    }
-    const c = connections.value.find((x) => x.id === op.input.connectionId);
-    const expectedVersions = c ? serviceVersions(c) : null;
-    const requestId = crypto.randomUUID();
-    if (op.method === 'service.connection-set')
-      await mutate({
-        op: 'service-set',
-        input: {
-          ...op.input,
-          requestId,
-          expectedVersions,
-          ...(op.requiresKey ? { key: secret } : {}),
-        },
-      });
-    else if (expectedVersions)
-      await mutate({ op: 'service-refresh', input: { ...op.input, requestId, expectedVersions } });
-    else message.value = 'Подключение отсутствует; обновление невозможно.';
-  }
+  const recovery = createServiceRecovery({ key, connections, message, mutate });
   return {
     get contextEpoch() {
       return epoch;
@@ -246,6 +248,10 @@ export function createServiceSettings(request: typeof call = call) {
     roomId,
     botId,
     receipt,
+    lookupRequestId,
+    recoverySelection: recovery.selected,
+    recoveryKey: recovery.key,
+    selectRecovery: recovery.select,
     pending,
     draft,
     current,
@@ -255,7 +261,7 @@ export function createServiceSettings(request: typeof call = call) {
     load,
     save,
     action,
-    recover,
+    recover: recovery.recover,
     lookup,
     mutate,
   };

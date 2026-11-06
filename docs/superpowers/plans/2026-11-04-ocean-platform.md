@@ -1069,6 +1069,11 @@ entry/peer helpers may reuse existing native launcher/window/session utilities.
 Keep Desktop.vue<=300, preserve external design checkout. No new server/table,
 permission engine, secret store, model loop, generic UI/lifecycle/QA framework.
 
+Corrective scope includes the existing application `service-owner-connections.ts`
+plus its owning SQLite/runtime tests when needed to preserve disconnected state
+on isolated key removal. Ordinary config save still explicitly activates a
+connection; no new endpoint, schema or permission component is introduced.
+
 **Interfaces:** delegate settings IPC to the accepted nine LocalRuntimeClient
 methods from18.5.3.1. Reuse public request/output validators and legacy readiness
 normalization; never duplicate backend permission policy. Add thin owner-decision

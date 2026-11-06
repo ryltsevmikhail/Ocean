@@ -5,7 +5,7 @@ import { turnText } from './runtime-text.js';
 import type { Run } from '../protocol.js';
 const props = defineProps<{ roomId: string; botId: string; runs: readonly Run[] }>();
 const state = createServiceDecisions();
-const { cards, current, preview, message, busy, canResolve } = state;
+const { cards, current, preview, message, busy, canResolve, cursor, exhausted, reading } = state;
 const run = computed(() =>
   props.runs.find((r) => r.roomId === props.roomId && r.runId === current.value?.runId),
 );
@@ -25,9 +25,24 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <h2>Решения владельца: вызовы сервисов</h2>
-  <button data-testid="service-decisions-reload" :disabled="busy" @click="state.load">
+  <button data-testid="service-decisions-reload" :disabled="busy || reading" @click="state.load">
     Перечитать решения
   </button>
+  <p v-if="cursor" role="status">
+    Прочитана ограниченная часть списка; отсутствие карточек здесь не означает, что решений больше
+    нет.
+  </p>
+  <button
+    v-if="cursor"
+    data-testid="service-decisions-more"
+    :disabled="busy || reading"
+    @click="state.loadMore"
+  >
+    Показать следующую часть решений
+  </button>
+  <p v-if="exhausted && !cards.length" role="status">
+    Список прочитан полностью; вызовов сервисов нет.
+  </p>
   <p v-if="!roomId">Выберите комнату.</p>
   <ul>
     <li v-for="card in cards" :key="card.decisionId">

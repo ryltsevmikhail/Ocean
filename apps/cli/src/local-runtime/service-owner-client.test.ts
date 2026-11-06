@@ -195,3 +195,80 @@ it('typed refresh and grant methods use the existing owner policy; readiness alo
   expect(http.rows.filter((m) => m === 'tools/list')).toHaveLength(lists);
   expect(http.stats.calls).toBe(0);
 });
+it('removes a real saved key while disconnected without reactivation or unrelated edits, and preserves original receipts', async () => {
+  const { httpFixture } =
+    await import('../../../../packages/integrations-mcp/src/prototype-http-fixture.js');
+  const { createProviderSecretStore } = await import('@runnets/tools-node');
+  const f = await privateRoot();
+  cleanup.push(() => f.dispose());
+  const http = await httpFixture('normal');
+  cleanup.push(() => http.close());
+  const host = await startLocalRuntime({ profile: f.profile, provider: null });
+  cleanup.push(() => host.stop());
+  const client = await connectLocalRuntime({ profile: f.profile });
+  cleanup.push(() => client.close());
+  const input = {
+    requestId: 'real-save',
+    connectionId: 'remove-test',
+    name: 'Persisted',
+    configuration: { kind: 'http' as const, url: http.url.href },
+    metadataPermission: 'allow' as const,
+    expectedVersions: null,
+    key: 'synthetic-saved-removal',
+  };
+  const original = await client.setServiceConnection(input);
+  const versions = (c: {
+    configRevision: number;
+    trustRevision: number;
+    credentialRevision: number;
+  }) => ({
+    configRevision: c.configRevision,
+    trustRevision: c.trustRevision,
+    credentialRevision: c.credentialRevision,
+  });
+  const [active] = await client.serviceConnections();
+  const ref = active!.credentialReference!.slice(6),
+    secrets = createProviderSecretStore(f.credentialDir);
+  expect(secrets.read(ref)).toMatchObject({ status: 'ok', key: input.key });
+  await client.disconnectServiceConnection({
+    requestId: 'real-off',
+    connectionId: active!.id,
+    expectedVersions: versions(active!),
+  });
+  const [off] = await client.serviceConnections();
+  const removal = {
+    requestId: 'real-remove',
+    connectionId: off!.id,
+    name: off!.name,
+    configuration: off!.configuration,
+    metadataPermission: off!.trust.metadataPermission,
+    expectedVersions: versions(off!),
+    removeKey: true,
+  };
+  const removed = await client.setServiceConnection(removal);
+  const [current] = await client.serviceConnections();
+  expect(current).toMatchObject({
+    state: 'disconnected',
+    name: 'Persisted',
+    configuration: input.configuration,
+    trust: { metadataPermission: 'allow' },
+    credentialReference: null,
+    readiness: 'disconnected',
+  });
+  expect(secrets.read(ref)).toEqual({ status: 'absent' });
+  expect(http.rows).toEqual([]);
+  expect(http.stats.calls).toBe(0);
+  expect(await client.setServiceConnection(input)).toEqual(original);
+  expect((await client.serviceConnections())[0]?.state).toBe('disconnected');
+  expect(current!.trustRevision).toBe(off!.trustRevision + 1);
+  expect(current!.credentialRevision).toBe(off!.credentialRevision + 1);
+  const { removeKey: _remove, ...metadata } = removal;
+  await client.setServiceConnection({
+    ...metadata,
+    requestId: 'real-reconnect',
+    expectedVersions: versions(current!),
+  });
+  expect((await client.serviceConnections())[0]?.state).toBe('active');
+  expect(await client.setServiceConnection(removal)).toEqual(removed);
+  expect((await client.serviceConnections())[0]?.state).toBe('active');
+});

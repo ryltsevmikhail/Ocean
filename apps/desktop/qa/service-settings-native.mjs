@@ -17,6 +17,7 @@ import { connectLocalRuntime } from '@runnets/tools-node/local-runtime-client';
 import { currentWindow, wait } from './current-window.mjs';
 import { launchDesktopGroup, processIdentity } from './desktop-launcher.mjs';
 import { fresh, defaultQualificationParent, saveProof } from './model-native-paths.mjs';
+import { serviceSettingsCredentials } from './service-settings-credentials.mjs';
 import { serviceSettingsDelta } from './service-settings-delta.mjs';
 import { serviceSettingsFlow } from './service-settings-flow.mjs';
 const [root, wayland, electron, mode] = process.argv.slice(2);
@@ -150,7 +151,12 @@ try {
       ),
     );
   };
-  const flow = mode === 'delta' ? serviceSettingsDelta : serviceSettingsFlow;
+  const flow =
+    mode === 'fix1'
+      ? serviceSettingsCredentials
+      : mode === 'delta'
+        ? serviceSettingsDelta
+        : serviceSettingsFlow;
   const result = await flow({
     root,
     ready,

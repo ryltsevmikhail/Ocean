@@ -66,7 +66,8 @@ it('discovers prepared intent on reopen; explicit recovery uses new ID/current v
   expect(s.operations.value).toEqual([prepared]);
   await s.recover(prepared);
   expect(request.mock.calls.filter(([c]) => c.op === 'service-set')).toHaveLength(0);
-  s.key.value = 'synthetic-resupplied';
+  s.selectRecovery(prepared);
+  s.recoveryKey.value = 'synthetic-resupplied';
   await s.recover(prepared);
   const sent = request.mock.calls.find(([c]) => c.op === 'service-set')![0].input;
   expect(sent.requestId).not.toBe('old');
@@ -147,4 +148,128 @@ it('refreshes selected declarative fields together with versions before a new ow
   expect(s.current.value?.configRevision).toBe(2);
   expect(s.draft.name).toBe('Changed in another owner');
   expect(s.draft.configuration).toEqual(current.configuration);
+});
+it('key removal uses persisted HTTP metadata and versions, ignoring dirty name URL permission and transport', async () => {
+  const { serviceConnection } = await import('../../../../test-fixtures/service-authority.js');
+  const c = { ...serviceConnection, state: 'disconnected', tools: [], readiness: 'disconnected' };
+  const request = vi.fn(async (cmd) =>
+    cmd.op === 'service-connections'
+      ? [c]
+      : cmd.op === 'service-operations'
+        ? { items: [], next: null }
+        : { ...receipt, requestId: cmd.input?.requestId },
+  );
+  const s = createServiceSettings(request as never);
+  await s.load();
+  s.select(c.id);
+  Object.assign(s.draft, {
+    name: 'Unsaved',
+    metadataPermission: 'none',
+    configuration: { kind: 'stdio', executable: '/dirty.js', sha256: 'a'.repeat(64), args: [] },
+  });
+  s.key.value = 'unrelated';
+  await s.save(true);
+  expect(request.mock.calls.find(([cmd]) => cmd.op === 'service-set')?.[0].input).toMatchObject({
+    name: c.name,
+    configuration: c.configuration,
+    metadataPermission: c.trust.metadataPermission,
+    removeKey: true,
+    expectedVersions: { configRevision: 1, trustRevision: 1, credentialRevision: 1 },
+  });
+  expect(
+    request.mock.calls.find(([cmd]) => cmd.op === 'service-set')?.[0].input,
+  ).not.toHaveProperty('key');
+});
+it('refuses recovery A using a normal password entered for B when A has no current record', async () => {
+  const request = vi.fn(async (c) =>
+    c.op === 'service-operations'
+      ? { items: [prepared], next: null }
+      : c.op === 'service-set'
+        ? { ...receipt, requestId: c.input.requestId }
+        : [],
+  );
+  const s = createServiceSettings(request as never);
+  await s.load();
+  s.select('B');
+  s.key.value = 'B-private';
+  await s.recover(prepared);
+  expect(request.mock.calls.filter(([c]) => c.op === 'service-set')).toHaveLength(0);
+  expect(s.key.value).toBe('');
+});
+it('binds receipt feedback to the latest lookup even when completion order reverses', async () => {
+  const finish = new Map<string, (v: unknown) => void>();
+  const s = createServiceSettings(
+    vi.fn(
+      async (c) =>
+        new Promise((resolve) => {
+          finish.set(c.input.requestId, resolve);
+        }),
+    ) as never,
+  );
+  const a = s.lookup('A'),
+    b = s.lookup('B');
+  finish.get('B')!({ ...receipt, requestId: 'B' });
+  await b;
+  finish.get('A')!({ ...receipt, requestId: 'A' });
+  await a;
+  expect(s.receipt.value?.requestId).toBe('B');
+});
+it('clears the previous receipt immediately and on failure of a different lookup', async () => {
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce({ ...receipt, requestId: 'A' })
+    .mockRejectedValueOnce(Error('runtime_disconnected'));
+  const s = createServiceSettings(request);
+  await s.lookup('A');
+  const b = s.lookup('B');
+  expect(s.receipt.value).toBeNull();
+  await b;
+  expect(s.receipt.value).toBeNull();
+  expect(s.message.value).toContain('runtime_disconnected');
+});
+it('fresh recovery selection clears both passwords and only its exact absent destination receives fresh resupply', async () => {
+  const request = vi.fn(async (c) =>
+    c.op === 'service-operations'
+      ? { items: [prepared], next: null }
+      : c.op === 'service-set'
+        ? { ...receipt, requestId: c.input.requestId }
+        : [],
+  );
+  const s = createServiceSettings(request as never);
+  await s.load();
+  s.select('B');
+  s.key.value = 'B-key';
+  s.selectRecovery(prepared);
+  expect(s.key.value).toBe('');
+  expect(s.recoveryKey.value).toBe('');
+  await s.recover(prepared);
+  expect(request.mock.calls.filter(([c]) => c.op === 'service-set')).toHaveLength(0);
+  s.recoveryKey.value = 'A-fresh';
+  const b = {
+    ...prepared,
+    requestId: 'B-op',
+    targetId: 'B',
+    operation: { ...prepared.operation, input: { ...input, requestId: 'B-op', connectionId: 'B' } },
+  };
+  await s.recover(b);
+  expect(request.mock.calls.filter(([c]) => c.op === 'service-set')).toHaveLength(0);
+  expect(s.recoveryKey.value).toBe('');
+  s.selectRecovery(prepared);
+  s.recoveryKey.value = 'A-fresh';
+  const work = s.recover(prepared);
+  expect(s.recoveryKey.value).toBe('');
+  await work;
+  const sent = request.mock.calls.find(([c]) => c.op === 'service-set')![0].input;
+  expect(sent).toMatchObject({
+    connectionId: 'service',
+    key: 'A-fresh',
+    expectedVersions: null,
+    configuration: input.configuration,
+  });
+  expect(sent.requestId).not.toBe('old');
+  s.selectRecovery(prepared);
+  s.recoveryKey.value = 'cleared';
+  s.context('other', 'bot');
+  expect(s.recoveryKey.value).toBe('');
+  expect(s.recoverySelection.value).toBeNull();
 });

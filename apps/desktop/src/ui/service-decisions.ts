@@ -34,9 +34,15 @@ export function createServiceDecisions(request: typeof call = call) {
   const tick = () => {
     now.value = Date.now();
   };
-  let epoch = 0;
+  const cursor = ref<string | null>(null),
+    exhausted = ref(false),
+    reading = ref(false);
+  let epoch = 0,
+    listVersion = 0;
   function close() {
     ++epoch;
+    ++listVersion;
+    reading.value = false;
     current.value = null;
     preview.value = '';
     verified.value = false;
@@ -46,6 +52,8 @@ export function createServiceDecisions(request: typeof call = call) {
     close();
     room.value = id;
     cards.value = [];
+    cursor.value = null;
+    exhausted.value = false;
   }
   const canResolve = computed(
     () =>
@@ -55,29 +63,41 @@ export function createServiceDecisions(request: typeof call = call) {
       current.value.roomId === room.value &&
       current.value.expiresAt > now.value,
   );
-  async function load() {
-    const token = epoch;
-    if (!room.value) return;
+  const load = () => read(true);
+  const loadMore = () => read(false);
+  async function read(reset: boolean) {
+    const token = epoch,
+      owningRoom = room.value,
+      version = ++listVersion;
+    if (!owningRoom || (!reset && exhausted.value)) return;
+    reading.value = true;
     try {
-      const rows: LocalDecision[] = [];
-      let after: string | undefined;
+      const rows: LocalDecision[] = reset ? [] : [...cards.value];
+      let after = reset ? undefined : (cursor.value ?? undefined),
+        ended = false;
       for (let page = 0; page < 20; ++page) {
+        if (token !== epoch || version !== listVersion) return;
         const items = await request({
           op: 'service-decisions',
           input: {
             workspaceId: 'ws_ocean',
-            roomId: room.value,
+            roomId: owningRoom,
             limit: 50,
             ...(after ? { after } : {}),
           },
         });
         rows.push(...items.filter((x) => x.kind === 'service-call'));
-        if (items.length < 50) break;
+        if (items.length < 50) {
+          ended = true;
+          break;
+        }
         const next = items.at(-1)!.decisionId;
         if (next === after) throw Error('invalid_frame');
         after = next;
       }
-      if (token !== epoch) return;
+      if (token !== epoch || version !== listVersion) return;
+      cursor.value = ended ? null : (after ?? null);
+      exhausted.value = ended;
       cards.value = rows;
       const updated = rows.find((c) => c.decisionId === current.value?.decisionId);
       if (current.value && (!updated || !same(current.value, updated))) {
@@ -86,7 +106,10 @@ export function createServiceDecisions(request: typeof call = call) {
         preview.value = '';
       }
     } catch (e) {
-      if (token === epoch) message.value = String(e instanceof Error ? e.message : e);
+      if (token === epoch && version === listVersion)
+        message.value = String(e instanceof Error ? e.message : e);
+    } finally {
+      if (version === listVersion) reading.value = false;
     }
   }
   async function inspect(card: LocalDecision) {
@@ -156,6 +179,10 @@ export function createServiceDecisions(request: typeof call = call) {
     context,
     close,
     load,
+    loadMore,
+    cursor,
+    exhausted,
+    reading,
     inspect,
     resolve,
   };

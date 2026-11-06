@@ -6,13 +6,16 @@ import {
 } from '@runnets/contracts';
 import type { LocalRuntimeClient } from '@runnets/tools-node/local-runtime-client';
 import type { ServiceCommand } from '../service-protocol.js';
+export const historicalServiceWriter = (caps: readonly string[]) =>
+  !caps.some((c) => c.startsWith('service.') || c === LOCAL_SERVICE_CONFIRMATIONS) &&
+  LOCAL_PLUGIN_METHODS.every((c) => caps.includes(c));
 export function dispatchServiceSettings(client: LocalRuntimeClient, c: ServiceCommand) {
   const caps = client.identity.capabilities;
   const has = (items: readonly string[]) => items.every((x) => caps.includes(x));
   if (c.op === 'service-support')
     return {
       current: has([LOCAL_SERVICE_AUTHORITY, ...LOCAL_SERVICE_METHODS]),
-      historicalOnly: !caps.includes(LOCAL_SERVICE_AUTHORITY) && has(LOCAL_PLUGIN_METHODS),
+      historicalOnly: historicalServiceWriter(caps),
       historical: has([
         'plugin.catalog',
         'plugin.connections',

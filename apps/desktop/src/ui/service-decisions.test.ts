@@ -83,3 +83,50 @@ it('rejects corrupt preview and stale room/window feedback', async () => {
   expect(bad.canResolve.value).toBe(false);
   expect(bad.message.value).toContain('invalid_frame');
 });
+it('retains bounded continuation after 1000 mixed cards so the next pending service call is reachable', async () => {
+  const all = Array.from({ length: 1001 }, (_, i) => ({
+    ...card,
+    decisionId: 'd' + String(i).padStart(4, '0'),
+    kind: i === 1000 ? 'service-call' : 'write',
+  }));
+  const request = vi.fn(async (c) => {
+    const after = c.input.after ? Number(c.input.after.slice(1)) + 1 : 0;
+    return all.slice(after, after + 50);
+  });
+  const s = createServiceDecisions(request as never);
+  s.context('r');
+  await s.load();
+  expect(request).toHaveBeenCalledTimes(20);
+  expect(s.cards.value).toHaveLength(0);
+  expect(s.cursor.value).toBe('d0999');
+  expect(s.exhausted.value).toBe(false);
+  await s.loadMore();
+  expect(s.cards.value[0]?.decisionId).toBe('d1000');
+  expect(request.mock.calls.at(-1)?.[0].input.after).toBe('d0999');
+});
+it('does not publish an old room continuation after context changes, or reuse its cursor in the new room', async () => {
+  let finish!: (v: unknown[]) => void;
+  const requests: { input: { roomId: string; after?: string } }[] = [];
+  const request = vi.fn(async (c) => {
+    requests.push(c);
+    if (c.input.roomId === 'old')
+      return new Promise<unknown[]>((resolve) => {
+        finish = resolve;
+      });
+    return [];
+  });
+  const s = createServiceDecisions(request as never);
+  s.context('old');
+  const old = s.load();
+  s.context('new');
+  await s.load();
+  finish([{ ...card, roomId: 'old' }]);
+  await old;
+  expect(s.cards.value).toEqual([]);
+  expect(s.cursor.value).toBeNull();
+  expect(s.exhausted.value).toBe(true);
+  expect(requests.map((r) => r.input)).toEqual([
+    { workspaceId: 'ws_ocean', roomId: 'old', limit: 50 },
+    { workspaceId: 'ws_ocean', roomId: 'new', limit: 50 },
+  ]);
+});

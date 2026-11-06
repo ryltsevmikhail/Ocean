@@ -1,11 +1,26 @@
 import { LOCAL_MODEL_CONNECTIONS } from '@runnets/contracts';
 import type { LocalRuntimeClient } from '@runnets/tools-node/local-runtime-client';
-import { dispatchServiceSettings } from './service-settings-client.js';
+import { dispatchServiceSettings, historicalServiceWriter } from './service-settings-client.js';
 import { pageSize, type Command } from '../protocol.js';
 import { dispatchModelSettings } from './model-settings-client.js';
 
 // Only the native host selects the authenticated client and workspace.
 export async function dispatch(client: LocalRuntimeClient, c: Command) {
+  if (
+    c.op.startsWith('plugin-') &&
+    ![
+      'plugin-catalog',
+      'plugin-inspect',
+      'plugin-connections',
+      'plugin-connection-preview',
+      'plugin-access-list',
+      'plugin-access-preview',
+      'plugin-operations-list',
+      'plugin-operation-show',
+    ].includes(c.op) &&
+    !historicalServiceWriter(client.identity.capabilities)
+  )
+    throw Error('service_support_changed');
   const workspaceId = 'ws_ocean';
   const page = {
     workspaceId,

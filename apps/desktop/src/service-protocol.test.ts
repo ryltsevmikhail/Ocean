@@ -146,3 +146,48 @@ it('routes all nine accepted settings methods and four exact decision methods', 
     else expect(delegated).toHaveBeenCalledExactlyOnceWith(input);
   }
 });
+it('guards every historical mutation against each fresh current or partial service owner while preserving reads', async () => {
+  const { LOCAL_PLUGIN_METHODS } = await import('@runnets/contracts');
+  const writes = [
+    ['plugin-install', 'pluginInstall'],
+    ['plugin-repair', 'pluginRepair'],
+    ['plugin-enable', 'pluginEnable'],
+    ['plugin-disable', 'pluginDisable'],
+    ['plugin-connection-add', 'pluginConnectionAdd'],
+    ['plugin-connection-consent', 'pluginConnectionConsent'],
+    ['plugin-connection-discover', 'pluginConnectionDiscover'],
+    ['plugin-connection-disconnect', 'pluginConnectionDisconnect'],
+    ['plugin-access-grant', 'pluginAccessGrant'],
+    ['plugin-access-revoke', 'pluginAccessRevoke'],
+    ['plugin-operation-acknowledge', 'pluginOperationAcknowledge'],
+  ];
+  for (const [op, method] of writes) {
+    const send = vi.fn().mockResolvedValue('legacy');
+    const old = {
+      identity: { capabilities: [...LOCAL_PLUGIN_METHODS] },
+      [method!]: send,
+    } as unknown as LocalRuntimeClient;
+    await dispatch(old, { op, tools: [] } as never);
+    expect(send).toHaveBeenCalledTimes(1);
+    for (const marker of ['service.authority-v2', 'service.connections']) {
+      const fresh = {
+        identity: { capabilities: [...LOCAL_PLUGIN_METHODS, marker] },
+        [method!]: send,
+      } as unknown as LocalRuntimeClient;
+      await expect(dispatch(fresh, { op, tools: [] } as never)).rejects.toThrow(
+        'service_support_changed',
+      );
+    }
+    expect(send).toHaveBeenCalledTimes(1);
+  }
+  const pluginConnections = vi.fn().mockResolvedValue([]);
+  await expect(
+    dispatch(
+      {
+        identity: { capabilities: ['service.authority-v2'] },
+        pluginConnections,
+      } as unknown as LocalRuntimeClient,
+      { op: 'plugin-connections' },
+    ),
+  ).resolves.toEqual([]);
+});

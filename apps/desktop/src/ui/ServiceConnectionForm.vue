@@ -12,6 +12,9 @@ const {
   current,
   draft,
   receipt,
+  lookupRequestId,
+  recoverySelection,
+  recoveryKey,
   pending,
   operations,
 } = props.state;
@@ -195,19 +198,56 @@ function transport(kind: string) {
       </p>
       <p v-else>
         Новое явное восстановление использует новый requestId и текущие версии; старый prepared факт
-        сохраняется. {{ item.operation.requiresKey ? 'Введите ключ заново в поле выше.' : '' }}
+        сохраняется.
+        {{
+          item.operation.requiresKey
+            ? 'После выбора запроса введите свежий ключ для его адреса.'
+            : ''
+        }}
       </p>
       <button :disabled="busy" @click="state.lookup(item.requestId)">Исходная квитанция</button>
       <button
         v-if="item.operation"
-        data-testid="service-recover"
+        data-testid="service-recovery-select"
         :disabled="locked"
-        @click="state.recover(item)"
+        @click="state.selectRecovery(item)"
       >
-        Новое явное восстановление
+        Выбрать точный запрос для восстановления
       </button>
     </section>
   </section>
+  <section
+    v-if="recoverySelection?.operation"
+    class="info-card"
+    data-testid="service-recovery-destination"
+  >
+    <strong>Восстановление {{ recoverySelection.requestId }}</strong>
+    <p>
+      Подключение {{ recoverySelection.targetId }} ·
+      {{ recoverySelection.operation.input.connectionId }}
+    </p>
+    <pre class="service-exact">{{
+      JSON.stringify(recoverySelection.operation.input, null, 2)
+    }}</pre>
+    <label v-if="recoverySelection.operation.requiresKey"
+      >Свежий ключ только для этого запроса и адреса<input
+        data-testid="service-recovery-key"
+        v-model="recoveryKey"
+        type="password"
+        autocomplete="off"
+        spellcheck="false"
+    /></label>
+    <button
+      data-testid="service-recover"
+      :disabled="locked"
+      @click="state.recover(recoverySelection)"
+    >
+      Новое явное восстановление выбранного запроса
+    </button>
+  </section>
+  <p v-if="lookupRequestId" data-testid="service-lookup-identity">
+    Квитанция выбранного запроса: {{ lookupRequestId }}
+  </p>
   <label>Исходный requestId<input data-testid="service-receipt-id" v-model="receiptId" /></label
   ><button
     data-testid="service-receipt-lookup"
