@@ -1,9 +1,10 @@
 # Ocean Platform: прогресс этапа C
 
-Дата: 2026-11-06. **Приняты C18.1** на `79bbce9`, **C18.2** на `7bbb502`
-и **C18.3** с normal coding consumers на `b868d32` после независимых ревью
-и исправлений. Сервисный production transport пока использует Executor;
-прямой MCP-host, owner RPC/UI и установленная миграция ещё запланированы.
+Дата: 2026-11-06. Приняты C18.1 (`79bbce9`), C18.2 (`7bbb502`),
+C18.3 с normal coding consumers (`b868d32`) и C18.4.1 (`165e1c0`)
+после независимых ревью и исправлений. Прямой MCP transport и managed stdio
+квалифицированы; штатный runtime пока использует Executor. Его переключение,
+owner RPC/UI, миграция и установленная замена ещё запланированы.
 
 ## Что квалифицировано
 
@@ -108,9 +109,56 @@ Normal-consumerdcb1982:206 covering passes; root3584 passed/те же3 failures/
 допуска до project inspection и wiring верхних consumers. Minor о повторном
 чтении SQLite оставлен финальному whole-branch review.
 
+## Production MCP transport и managed stdio C18.4.1
+
+`@runnets/integrations-mcp` экспортирует production transport отдельно от
+`/qualification`. Используется тот же публичный SDK2.4.0: полный frozen tool,
+явный каталог и однократный текущий допуск перед fetch/write. Адаптер не владеет
+SQLite или правами. Кандидат активируется после точной долговечной публикации;
+смена каталога не меняет уже допущенное определение. TTL/list-changed дают hint,
+а отдельную metadata-работу будет выполнять runtime в18.4.2.
+
+Trusted SDK остаётся у владельца runtime, stdio-сервер — в namespace/cgroup.
+Квалифицированы pinned Node bundle и необязательный pinned sibling package.json,
+только argv `[]` или `['/workspace']`, отдельный рабочий каталог и private env.
+На сессию:512MiB RAM,64 процессов/потоков,60s,4MiB frame и64KiB stderr без
+сохранения содержимого; восемь сессий на экземпляр. Это пределы данного
+stdio-профиля, а не всей автономной задачи или coding presets. Неизвестная
+очистка запрещает и новые, и уже ожидающие отправки. Прерванный preflight
+сохраняет слот до завершения фонового I/O; закрытие его дожидается.
+
+Готовый `@modelcontextprotocol/server-filesystem@2.2.0` проверен без собственного
+плагина: список, запись, чтение и отказ выхода за каталог. Проверены фактические
+cgroup limits, EAGAIN при64 задачах, inherited pipes, SIGKILL владельца,
+restart и неопределённая очистка. Отдельный fault server независимо записывает
+полученные запросы и эффекты: revoke/cancel/deadline дают0/0; sent/drop —1/1 и
+uncertain; отказ сервера —1/0. Прежний owner-counter остаётся свидетельством
+разрешения, не выдаётся за wire receipt. Точные raw header pairs проверены.
+Этим закрыты два Minor прототипа C18.1, без обещания exactly-once внешнего сервиса.
+
+Точный tarball, frozen dependency closure и permissive-лицензии сохранены в
+инвентаре. В tarball filesystem2.2.0 отсутствует LICENSE, несмотря на manifest;
+сохранена лицензия точного upstream commit с Apache/MIT transition, без заявления
+MIT-only или независимого аудита подписи. Сервер и qualification fixtures не
+поставляются пользователю как установленный backend.
+
+Единственный production-adapter GitHub read вернул issue5/open:1 SDK attempt,
+MCP2025-11-25, account unverified, без сохранения ключа или тела issue. Ready/live
+относятся к18013a3. Исправления ревью8bb0d38:34 covering passes,12 affected coding
+native passes и независимые native receipt/effect counters. Числовой literal
+credential фиксf6be7d9:28 covering passes; quote/backslash cases сохранены.
+Strict main/Node/Desktop и scoped lint/format прошли. Новых реальных запросов
+ради повторного общего флага не делали.
+
+Последний полный root наe744fd7:3624 passed/3 protected catalog failures/44 skipped,
+process-фаза не достигнута; build0, format1 только protected2. Исправления проверены
+отдельно, полного зелёного gate пока нет. Два новых Minor — проверка нулевого
+числа credential lookups и повторный JSON freezer — остаются финальному ревью.
+
 ## Дальше по плану
 
-18.4 — production adapter/host;18.5 — консервативная миграция и настройки;
+18.4.2 — штатный runtime/tool source, lifecycle и bundle inventory;
+18.5 — консервативная миграция и настройки;
 18.6 — установленная/live/package-приёмка и удаление Executor. Затем D —
 сохраняемые поручения и свободное взаимодействие команды, E/F — клиент и выпуск.
 [Канонический план](../superpowers/plans/2026-11-04-ocean-platform.md).
