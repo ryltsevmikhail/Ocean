@@ -144,7 +144,7 @@ export async function buildAdapterBundle(root: string): Promise<AdapterBundle> {
       throw new Error('bundled adapter did not include the pinned module ' + required);
   for (const id of moduleIds)
     if (
-      /integrations-executor|@executor-js|@modelcontextprotocol\/server\/|node_modules\/rolldown\/|qualification|fixture/.test(
+      /integrations-executor|@executor-js|@modelcontextprotocol\/server\/|node_modules\/rolldown\/|\/(?:qualification|prototype)[^/]*\.js$|\/test-fixtures\/|\/[^/]*fixture[^/]*\.js$/.test(
         id,
       )
     )
