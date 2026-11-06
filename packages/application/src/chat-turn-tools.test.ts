@@ -1,5 +1,6 @@
+import type { ChatTurn } from '@runnets/domain';
 import { expect, it, vi } from 'vitest';
-import { combineChatTools } from './chat-turn-tools.js';
+import { combineChatTools, prepareChatTools } from './chat-turn-tools.js';
 import type { GrantedPluginTools } from './plugin-turn-tools.js';
 const source = (name: string): GrantedPluginTools => ({
   cleanupConfirmed: true,
@@ -30,4 +31,24 @@ it('refuses duplicate visible names before a provider or executor can run', () =
   expect(() => combineChatTools(a, b)).toThrow('duplicate_tool_name');
   expect(a.execute).not.toHaveBeenCalled();
   expect(b.execute).not.toHaveBeenCalled();
+});
+
+it('a coding refusal prevents service-only fallback before the existing loop', async () => {
+  const turn = { codingTaskId: 'task' } as ChatTurn;
+  const grantedTools = { forTurn: vi.fn(async () => source('mcp_alias')) };
+  await expect(
+    prepareChatTools(
+      {
+        codingTools: {
+          forTurn: async () => {
+            throw Error('coding refused');
+          },
+        },
+        grantedTools,
+      },
+      turn,
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow('coding refused');
+  expect(grantedTools.forTurn).not.toHaveBeenCalled();
 });

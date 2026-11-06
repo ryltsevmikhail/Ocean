@@ -1,26 +1,9 @@
 /** Standalone Node-only installer; this compiled file is also shipped beside the archive. */
 import { createHash, randomUUID } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
-import {
-  chmodSync,
-  closeSync,
-  fsyncSync,
-  openSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  readlinkSync,
-  renameSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import * as fs from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-/** Build-recorded bundle inventory for the one pre-bundled runtime adapter. */
 export interface ReleaseBundleRecord {
   readonly adapter: string;
   readonly entry: string;
@@ -147,17 +130,35 @@ function validateBundle(
     !files.has(base + 'LICENSE')
   )
     throw new Error('invalid_manifest');
+  if (modern) {
+    const record = JSON.parse(integrity.body.toString()) as { files: Record<string, string> };
+    const shipped = [...files.keys()].filter((name) => name.startsWith(base + 'dist/'));
+    if (
+      shipped.length !== Object.keys(b.files).length ||
+      Object.keys(record.files).length + 1 !== shipped.length
+    )
+      throw Error('invalid_manifest');
+    for (const name of shipped) {
+      const relative = name.slice(base.length),
+        digest = sha256(files.get(name)!.body);
+      if (
+        b.files[relative] !== digest ||
+        (relative !== b.integrity && record.files[relative.slice(5)] !== digest)
+      )
+        throw Error('invalid_manifest');
+    }
+  }
 }
 function durable(path: string): void {
-  const fd = openSync(path, 'r');
+  const fd = fs.openSync(path, 'r');
   try {
-    fsyncSync(fd);
+    fs.fsyncSync(fd);
   } finally {
-    closeSync(fd);
+    fs.closeSync(fd);
   }
 }
 function syncTree(path: string): void {
-  for (const e of readdirSync(path, { withFileTypes: true }))
+  for (const e of fs.readdirSync(path, { withFileTypes: true }))
     if (e.isDirectory()) syncTree(join(path, e.name));
     else durable(join(path, e.name));
   durable(path);
@@ -165,28 +166,28 @@ function syncTree(path: string): void {
 function safeParent(path: string): void {
   if (!isAbsolute(path) || resolve(path) !== path) throw new Error('invalid_prefix');
   for (let at = path; at !== '/'; at = dirname(at))
-    if (existsSync(at) && lstatSync(at).isSymbolicLink()) throw new Error('invalid_prefix');
+    if (fs.existsSync(at) && fs.lstatSync(at).isSymbolicLink()) throw new Error('invalid_prefix');
 }
 function switchCurrent(base: string, version: string): void {
   const current = join(base, 'current');
-  let currentStat: ReturnType<typeof lstatSync> | null = null;
+  let currentStat: ReturnType<typeof fs.lstatSync> | null = null;
   try {
-    currentStat = lstatSync(current);
+    currentStat = fs.lstatSync(current);
   } catch {
     currentStat = null;
   }
   if (
     currentStat !== null &&
-    (!currentStat.isSymbolicLink() || !/^releases\/[a-zA-Z0-9.-]+$/.test(readlinkSync(current)))
+    (!currentStat.isSymbolicLink() || !/^releases\/[a-zA-Z0-9.-]+$/.test(fs.readlinkSync(current)))
   )
     throw new Error('unmanaged_current');
   const temp = join(base, '.current-' + randomUUID());
-  symlinkSync('releases/' + version, temp);
+  fs.symlinkSync('releases/' + version, temp);
   try {
-    renameSync(temp, current);
+    fs.renameSync(temp, current);
     durable(base);
   } finally {
-    rmSync(temp, { force: true });
+    fs.rmSync(temp, { force: true });
   }
 }
 /** Trusted archive checksum is required BEFORE decompression or filesystem writes. */
@@ -198,7 +199,7 @@ export function installArchive(archive: string, checksum: string, prefix: string
     process.versions.node.split('.')[0] !== '26'
   )
     throw new Error('unsupported_runtime');
-  const bytes = readFileSync(archive);
+  const bytes = fs.readFileSync(archive);
   if (!/^[a-f0-9]{64}$/.test(checksum) || sha256(bytes) !== checksum)
     throw new Error('checksum_mismatch');
   const files = archiveFiles(bytes),
@@ -209,21 +210,20 @@ export function installArchive(archive: string, checksum: string, prefix: string
     launcher = join(prefix, 'bin', 'ocean');
   safeParent(destination);
   safeParent(dirname(launcher));
-  // Refuse an unrelated launcher before installing or switching anything.
   try {
-    const s = lstatSync(launcher);
-    if (!s.isSymbolicLink() || readlinkSync(launcher) !== '../lib/ocean/current/bin/ocean')
+    const s = fs.lstatSync(launcher);
+    if (!s.isSymbolicLink() || fs.readlinkSync(launcher) !== '../lib/ocean/current/bin/ocean')
       throw new Error('unmanaged_launcher');
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
   }
-  mkdirSync(releases, { recursive: true, mode: 0o700 });
-  if (existsSync(destination)) {
-    const old = readFileSync(join(destination, 'manifest.json'));
+  fs.mkdirSync(releases, { recursive: true, mode: 0o700 });
+  if (fs.existsSync(destination)) {
+    const old = fs.readFileSync(join(destination, 'manifest.json'));
     if (!old.equals(files.get('manifest.json')!.body)) throw new Error('version_conflict');
     const actual: string[] = [];
     const visit = (path: string, relative: string) => {
-      for (const e of readdirSync(path, { withFileTypes: true })) {
+      for (const e of fs.readdirSync(path, { withFileTypes: true })) {
         const name = relative + e.name;
         if (e.isDirectory()) visit(join(path, e.name), name + '/');
         else if (e.isFile()) actual.push(name);
@@ -234,38 +234,38 @@ export function installArchive(archive: string, checksum: string, prefix: string
     if (actual.length !== files.size) throw new Error('version_conflict');
     for (const [name, e] of files) {
       const path = join(destination, name);
-      const mode = lstatSync(path).mode & 0o777;
+      const mode = fs.lstatSync(path).mode & 0o777;
       // Earlier installers applied the caller's private umask to public program files.
-      if (!readFileSync(path).equals(e.body) || ![e.mode, e.mode & 0o700].includes(mode))
+      if (!fs.readFileSync(path).equals(e.body) || ![e.mode, e.mode & 0o700].includes(mode))
         throw new Error('version_conflict');
     }
     // Only normalize fully verified public program files, before switching current.
     for (const [name, entry] of files) {
       const path = join(destination, name);
-      chmodSync(path, entry.mode);
+      fs.chmodSync(path, entry.mode);
       durable(path);
     }
   } else {
     const stage = join(releases, '.install-' + randomUUID());
-    mkdirSync(stage, { mode: 0o700 });
+    fs.mkdirSync(stage, { mode: 0o700 });
     try {
       for (const [name, e] of files) {
         const path = join(stage, name);
-        mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-        writeFileSync(path, e.body, { flag: 'wx', mode: e.mode });
-        chmodSync(path, e.mode);
+        fs.mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+        fs.writeFileSync(path, e.body, { flag: 'wx', mode: e.mode });
+        fs.chmodSync(path, e.mode);
       }
       syncTree(stage);
-      renameSync(stage, destination);
+      fs.renameSync(stage, destination);
       durable(releases);
     } finally {
-      rmSync(stage, { recursive: true, force: true });
+      fs.rmSync(stage, { recursive: true, force: true });
     }
   }
-  mkdirSync(dirname(launcher), { recursive: true, mode: 0o700 });
+  fs.mkdirSync(dirname(launcher), { recursive: true, mode: 0o700 });
   switchCurrent(base, manifest.version);
   try {
-    symlinkSync('../lib/ocean/current/bin/ocean', launcher);
+    fs.symlinkSync('../lib/ocean/current/bin/ocean', launcher);
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
   }

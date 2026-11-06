@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, appendFileSync, realpathSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { setTimeout as delay } from 'node:timers/promises';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import { OwnerScopeService, ConversationService, type ProviderPort } from '@runnets/application';
 import type { ServiceConnection } from '@runnets/domain';
@@ -25,10 +26,15 @@ let calls = 0,
   claims = 0;
 const http = createServer(async (req, res) => {
   try {
+    if (req.method === 'GET') {
+      res.writeHead(405).end();
+      return;
+    }
     let body = '';
     for await (const data of req) body += String(data);
     const message = JSON.parse(body) as { id?: string; method: string };
-    if (!message.id) {
+    appendFileSync(join(proof, 'metadata'), message.method + '\n');
+    if (message.id === undefined) {
       res.writeHead(202).end();
       return;
     }
@@ -41,6 +47,7 @@ const http = createServer(async (req, res) => {
       };
     else if (message.method === 'tools/list')
       result = {
+        ...(mode === 'refresh' ? { ttlMs: 1000 } : {}),
         tools: [
           {
             name: 'write',
@@ -89,11 +96,11 @@ function execute(command: Parameters<ConversationService['execute']>[0]) {
   if (!result.ok) throw Error('seed failed');
   return result.value;
 }
-execute({ type: 'BindWorkspace', requestId: 'workspace', workspaceId: 'ws', root: proof });
+execute({ type: 'BindWorkspace', requestId: 'workspace', workspaceId: 'ws_ocean', root: proof });
 const bot = execute({
   type: 'CreateBot',
   requestId: 'bot',
-  workspaceId: 'ws',
+  workspaceId: 'ws_ocean',
   handle: 'dev',
   name: 'Dev',
   role: 'dev',
@@ -104,7 +111,7 @@ if (bot.kind !== 'bot') throw Error('bot');
 const room = execute({
   type: 'OpenDirectRoom',
   requestId: 'room',
-  workspaceId: 'ws',
+  workspaceId: 'ws_ocean',
   botId: bot.data.id,
 });
 if (room.kind !== 'room') throw Error('room');
@@ -164,7 +171,7 @@ if (!current.tools.some((t) => t.name === tool)) throw Error('missing tool');
 new OwnerScopeService(ownerStore.serviceAuthority, ownerId, Date.now).issue({
   id: 'grant',
   subject: {
-    workspaceId: 'ws',
+    workspaceId: 'ws_ocean',
     roomId: room.data.id,
     botId: bot.data.id,
     projectId: null,
@@ -213,10 +220,28 @@ const provider: ProviderPort = {
     };
   },
 };
-const host = await startLocalRuntime({ profile, provider });
+let preparedClaims = 0;
+const host = await startLocalRuntime({
+  profile,
+  provider,
+  serviceTransportOptions: {
+    prepareDispatch: async () => {
+      if (!['revoke', 'refresh', 'stdio'].includes(mode)) return;
+      const owned = openSqliteStore({ path });
+      preparedClaims = (await owned.tools.pending()).length;
+      if (mode === 'revoke')
+        new OwnerScopeService(owned.serviceAuthority, ownerId, Date.now).revoke({
+          grantId: 'grant',
+          revision: 1,
+        });
+      owned.close();
+      await delay(mode === 'refresh' ? 1200 : 20);
+    },
+  },
+});
 const script = `import {connectLocalRuntime} from '@runnets/tools-node';
 const c = await connectLocalRuntime({profile:process.argv[1]});
-const q=JSON.parse(process.argv[2]);const r=await c.submit({...q,requestId:'independent',text:'call granted service'});
+const input=JSON.parse(process.argv[2]);const q={workspaceId:input.workspaceId,roomId:input.roomId};const r=await c.submit({...input,requestId:'independent',text:'call granted service'});
 c.close();
 const peer=await connectLocalRuntime({profile:process.argv[1]});
 let view;for(let i=0;i<500;i++){view=await peer.getRun({...q,runId:r.runId});if(!['queued','running','preparing'].includes(view?.taskStatus))break;await new Promise(r=>setTimeout(r,10));}
@@ -228,7 +253,7 @@ const child = spawn(
     '-e',
     script,
     profile,
-    JSON.stringify({ workspaceId: 'ws', roomId: room.data.id, to: bot.data.id }),
+    JSON.stringify({ workspaceId: 'ws_ocean', roomId: room.data.id, to: bot.data.id }),
   ],
   { cwd: resolve('.'), stdio: ['ignore', 'pipe', 'pipe'] },
 );
@@ -246,7 +271,7 @@ http.closeAllConnections();
 await new Promise<void>((r) => http.close(() => r()));
 if (code !== 0) throw Error('client failed ' + stderr);
 const client = JSON.parse(stdout) as { answers: string[]; view: { taskStatus: string } };
-const result = { mode, calls, effects, claims, model, client, stopped };
+const result = { mode, calls, effects, claims, preparedClaims, model, client, stopped };
 writeFileSync(join(proof, 'result.json'), JSON.stringify(result, null, 2) + '\n');
 if (
   mode === 'http' &&
@@ -258,6 +283,12 @@ if (
   (calls !== 1 || effects !== 1 || claims !== 1 || model !== 1 || client.answers.length !== 0)
 )
   throw Error('uncertainty replayed');
-if (mode === 'stdio' && (model !== 2 || client.answers.length !== 1))
+if (mode === 'stdio' && (preparedClaims !== 1 || model !== 2 || client.answers.length !== 1))
   throw Error('native normal path failed');
+if (
+  ['revoke', 'refresh'].includes(mode) &&
+  (calls !== 0 || effects !== 0 || preparedClaims !== 1 || model !== 2)
+)
+  throw Error('held authority failed');
 console.log(JSON.stringify(result));
+if (mode === 'drop') process.exit(0);

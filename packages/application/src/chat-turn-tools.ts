@@ -1,3 +1,5 @@
+import type { ChatTurn } from '@runnets/domain';
+import type { GrantedToolSource } from './plugin-turn-tools.js';
 import type { GrantedPluginTools } from './plugin-turn-tools.js';
 import type { ToolResult } from './tools.js';
 /** One namespace and invocation identity map inside the existing tool loop. */
@@ -35,4 +37,21 @@ export function combineChatTools(
       return result;
     },
   };
+}
+
+/** Coding preparation must succeed before resolving any additional service authority. */
+export async function prepareChatTools(
+  sources: {
+    readonly codingTools?: {
+      forTurn(turn: ChatTurn, signal: AbortSignal): Promise<GrantedPluginTools>;
+    };
+    readonly grantedTools?: GrantedToolSource;
+  },
+  turn: ChatTurn,
+  signal: AbortSignal,
+): Promise<GrantedPluginTools | undefined> {
+  const coding =
+    turn.codingTaskId === undefined ? undefined : await sources.codingTools!.forTurn(turn, signal);
+  if (coding && coding.cleanupConfirmed !== true) throw Error('preparation cleanup unknown');
+  return combineChatTools(coding, await sources.grantedTools?.forTurn(turn, signal));
 }

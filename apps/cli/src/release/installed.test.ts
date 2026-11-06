@@ -66,7 +66,7 @@ it('installs into a private disposable prefix and passes the installed offline s
   };
   expect(manifest.version).toBe('1.1.0-rc.2');
   expect(manifest.revision).toMatch(/^[a-f0-9]{40}$/);
-  expect(manifest.bundle.identities['@executor-js/sdk']).toBe('1.6.11');
+  expect(manifest.bundle.identities['@modelcontextprotocol/client']).toBe('2.4.0');
   expect(cli(target, ['--version']).stdout.trim()).toBe('ocean 1.1.0-rc.2');
   const doctor = call(target, ['doctor']);
   expect(doctor.code).toBe(0);
