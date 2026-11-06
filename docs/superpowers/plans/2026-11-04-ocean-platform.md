@@ -1058,31 +1058,107 @@ installed/native/live/current-release acceptance remains18.6/F.
 
 ##### Task 18.5.3.2: Desktop settings, service decisions and legacy configuration import
 
-Pending detailed expansion from accepted18.5.3.1. Thin Desktop IPC/state/components
-consume that client and the existing verified full decision preview, with key
-clearing before await, explicit original receipt reads and new-request recovery,
-context guards across room/bot/profile/window changes. Do not automatically replay
-prepared or unknown work. Backend owns all authority; current UI must show recorded
-permission/actual readiness/unknown outcome as distinct facts. Existing legacy
-plugin UI can remain a clearly separate historical fallback; no external design
-checkout changes or UI redesign.
+**Files:** Desktop `service-protocol.ts`, `host/service-settings-client.ts`,
+existing protocol/host dispatch; `ui/PluginSettings.vue` as the existing toolbar
+wrapper with cohesive service form/grant/operation/decision components and state;
+existing legacy plugin/history views with explicit read-only mode. Reuse model
+settings IPC detachment/context patterns, existing bridge and shared client.
+Update `provider-text.ts`, `dom.ts`, model hint callers/tests using existing
+status.code. Relevant Desktop tests and minimal `qa/service-settings-*.mjs`
+entry/peer helpers may reuse existing native launcher/window/session utilities.
+Keep Desktop.vue<=300, preserve external design checkout. No new server/table,
+permission engine, secret store, model loop, generic UI/lifecycle/QA framework.
 
-Legacy data has no durable material continuity proof. Import only known declarative
-HTTP/pinned Node stdio configuration, with no key/metadata permission or grant
-silently inherited. Preserve old tool/repository/visibility bounds and unknown
-history read-only. Qualify which evidence, if any, permits active conversion;
-otherwise show inert/unverified configuration and explicit new owner setup.
-Never call copied rows a migrated active grant. No all-future/team/autonomous
-widening or automatic npm/git/OAuth install. A new explicit broader scope is a
-new grant, not migration. Include corrupt shared-store-specific provider/model
-hints (C1 compatibility), not destructive reset advice.
+**Interfaces:** delegate settings IPC to the accepted nine LocalRuntimeClient
+methods from18.5.3.1. Reuse public request/output validators and legacy readiness
+normalization; never duplicate backend permission policy. Add thin owner-decision
+IPC for existing listDecisions/getDecision/decisionPreview/resolveDecision only,
+using existing guards and full SHA-verified preview. Native host chooses the
+profile/client/workspace, never renderer-supplied authority. Both current service
+features and historical supported fallback use explicit capability negotiation;
+unsupported or failed negotiation is visible, never silently treated as no data.
 
-Qualify actual isolated Desktop entry with synthetic provider/MCP, two owner clients,
-settings lost reply/reopen/prepared intent, same exact service card/one effect,
-close/reconnect, accurate legacy import and1024 composer/focus reachability. Use
-owned profiles/retained qualified inputs; no real credential/model/service access,
-released install changes or unchanged whole native/asset matrix. Current installed/
-live replacement and Executor/protected semantic port remain18.6/F.
+- [ ] **RED consumer behavior.** Add regressions for typed service IPC/host delegation,
+      secret clearing before await, lost response with original receipt lookup,
+      close/reopen discovery of prepared intent, late feedback after context change,
+      grant version conflicts, and exact decision preview/second-owner resolution.
+      Cover malformed IPC/output and historical support/refusal. Keep tests about
+      actual observable behavior, not implementation snapshots or fake ready DTOs.
+- [ ] **Service settings and scope.** Use the existing Plugins toolbar entry/dialog
+      for current service connections, actual readiness, published tools and owner
+      scopes. HTTP URL and optional private key; pinned Node stdio uses only the
+      existing executable/hash/optional packageJsonSha256/workspaceRoot/args fields,
+      with no key/env/command installer or arbitrary npm/git/OAuth setup. Give
+      explicit owner actions for save, metadata permission/refresh, disconnect and
+      key removal; pass exact current version triples/request IDs. Selecting a view
+      never performs discovery. Display recorded permission and actual readiness
+      separately, including unknown/unavailable/metadata-required/disconnected.
+      New service scopes bind current room/bot (project/task null), exact tool
+      selections/current-set/all-future via existing policies. Default autonomous;
+      confirm and future-tools are explicit owner choices. Proposed editable limits
+      maxCalls1000/maxEffectBytes1048576/expiresAtnull, validated by public guards.
+      Show group visibility and the actual resource breadth before saving; connection
+      scope means all resources of that connection. Account/repository text is not
+      verified enforcement. Preserve actual tool names (no CSV splitting). Revoke
+      uses current grant revision; backend handles current catalog/trust/scope policy.
+      Advanced coding/project scope editing remainsG, no new client policy engine.
+- [ ] **Recover settings without retry.** Clear key fields before awaiting IPC and
+      on close/Escape/selection; pending UI metadata stays keyless. After lost reply,
+      query the ORIGINAL request receipt; show its original result separately from
+      current metadata. Absent/prepared/unknown is never success or automatic resend.
+      Discover prepared operations through bounded runtime pages after reopen or in
+      another client. Recovery is explicit owner action with a NEW request ID,
+      current versions and required resupplied material; retain the old prepared fact.
+      Old rows without intent remain read-only unknown, not invented prefill. Guard
+      late room/bot/connection/window/profile feedback with existing context epochs;
+      don't write a new client database or persist credentials in browser storage.
+- [ ] **Exact owner decisions.** Show current pending service-call cards with owning
+      room/run, executor/status/result facts and full plain-text verified operation.
+      Enable allow/deny only for the complete current version/digest/context; never
+      truncate the operation or render it as HTML. Use existing backend decision
+      IDs/version/CAS/lifetime. Two clients resolving one card see the same fact;
+      stale resolution cannot mint another permission. Allowed is a decision fact,
+      not proof the effect completed. Reload after reconnect; disconnect/closing a
+      window never cancels a run or resolves a card. No new decision table/waiter.
+- [ ] **Conservative legacy import and accurate hints.** Current-runtime historical
+      connections/grants/unknown operations remain clearly read-only, including no
+      acknowledge/install/enable/grant mutations presented as current execution.
+      A supported older runtime may keep its explicitly historical UI fallback.
+      Prefill only available known declarative HTTP or pinned Node configuration,
+      with key blank, metadataPermissionnone, no inherited grant. Stable legacy
+      identity/generation prevents silent duplicate overwrite. Existing legacy rows
+      lack durable material continuity: label/schema/identityBool do not prove
+      current account/resource enforcement. Preserve old tool/repository/visibility
+      facts in the archive; unsupported or missing data requires manual setup.
+      Explain that a newly approved wider connection scope is a NEW grant, not an
+      active migration. Do not call inert import migrated permission. No universal
+      account/OAuth probe solely to make unqualified legacy rows active. Existing
+      ProviderStatus/ModelConnectionStatus.code already carries corrupt/insecure
+      key-store reasons: correct providerKeyHint/dom/model hints accordingly. A
+      missing valid reference may need explicit resupply; corrupt contents are
+      preserved and require separate safe repair, never delete-all/reset advice.
+- [ ] **Actual Desktop qualification.** Use one owned current-source Desktop entry
+      (one provisional package if necessary), matching current public client/runtime
+      pins and synthetic provider/MCP peer; retain real launcher/process ownership.
+      Drive actual UI for connection/metadata/scope, prepared publication failure,
+      lost committed reply/reopen plus second independent client process, original
+      receipt/new explicit recovery, one full service card visible to two clients
+      and exactly one accepted effect, stale reply rejection, close/reconnect during
+      a held run and accurate inert legacy import. Require counted metadata/business/
+      model calls and actual persisted facts, not renderer-seeded DTOs. Check1024
+      width composer/focus reachability. Use existing native helpers; no real key,
+      vendor service/model, released profile/install/launcher/user-unit changes or
+      repeated unrelated model/asset/native matrix. Preserve failed proofs and
+      unknown cleanup honestly; process exit alone doesn't prove descendants gone.
+- [ ] **Verify, document and commit.** Run owning RED→GREEN, strict production and
+      Node/Desktop tests/scoped lint, then one root check/build/format on frozen final
+      source. Keep protectedcatalog3/format2 until18.6; no skips or weakened assertions.
+      Run affected process/native cases separately if root stops at protected source.
+      Every source<=300. Report exact API/UI/import limitations, commands/exits/pins,
+      actual GUI evidence, secret/context guards and cleanup. Update implemented/
+      planned docs; commit owned paths/report, get independent review before18.6.
+      This is current settings/decision GUI qualification, not installed/live/F release
+      acceptance. C5 parent stays incomplete until its child requirements reconcile.
 
 ## Task 19: D. Автономные задачи и общение ботов — приоритет 1
 
