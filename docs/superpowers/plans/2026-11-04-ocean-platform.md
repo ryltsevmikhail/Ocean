@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная приёмка/удаление Executor C18.6 и этапы D–H остаются запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d` без блокирующих замечаний. Удаление Executor C18.6.2 и этапы D–H остаются запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -1200,7 +1200,7 @@ business invocation: current persisted metadata permission and a new durable
 refresh generation precede discovery. Settings/client contracts from18.5 remain
 unchanged. No raw secrets in logs, argv, model context, SQLite or Git.
 
-- [ ] **Preserve and port the unfinished regressions.** Take ownership of the two
+- [x] **Preserve and port the unfinished regressions.** Take ownership of the two
       previously protected catalog files only here. First save their exact raw
       diff/bytes, SHA256 and index state in this plan's private proof directory.
       Port all three semantic cases to the production MCP adapter with actual
@@ -1213,7 +1213,7 @@ unchanged. No raw secrets in logs, argv, model context, SQLite or Git.
       a false blanket prohibition on metadata. Use a small cohesive new fixture
       if needed, never a permanent dual-backend abstraction. Register, format and
       commit the port; do not skip/delete these behaviors or claim the old SDK fixed.
-- [ ] **Exercise the normal waiting-model route.** Hold an actual normal provider
+- [x] **Exercise the normal waiting-model route.** Hold an actual normal provider
       after its tool snapshot, perform owned metadata refresh and then return its
       selected tool call. Prove whether unchanged full selected definition survives
       the catalog generation change. If RED shows a stale-route defect, make the
@@ -1222,11 +1222,11 @@ unchanged. No raw secrets in logs, argv, model context, SQLite or Git.
       configuration/trust/credential/grant facts; refuse changed selected definition,
       endpoint/account/key/grant and ungranted new tools. The final request/claim
       tuple must be coherent. No hidden discovery, relaxed final guards or new API.
-- [ ] **Reach actual root GREEN.** Run owning RED→GREEN and strict relevant test
+- [x] **Reach actual root GREEN.** Run owning RED→GREEN and strict relevant test
       compilers, then root pnpm check/build/format:check on final source. Reach the
       process phase and fix newly exposed failures without exclusions/skip changes.
       Every source file<=300 physical lines. Save exact commands, exits and pins.
-- [ ] **Qualify one clean exact-source installed candidate.** Commit the qualified
+- [x] **Qualify one clean exact-source installed candidate.** Commit the qualified
       source, create a clean isolated checkout and run actual pinned pnpm frozen
       install/check/build/format (a direct tsc or linked-source fallback is not
       successful installation). Package a private prerelease archive, record source
@@ -1237,7 +1237,7 @@ unchanged. No raw secrets in logs, argv, model context, SQLite or Git.
       the archive advertises them, retaining product exclusions and the bundled MCP
       adapter's explicit JS-only contract. Reuse existing packaging/tamper checks;
       no change to released installs, real profiles, launchers or user units.
-- [ ] **Qualify production MCP through that installation.** Use the installed sole
+- [x] **Qualify production MCP through that installation.** Use the installed sole
       host, saved owner settings and public client. A scripted ProviderPort is fine
       and avoids unrelated model API calls. Run one autonomous exact-granted business
       call with no decision card, one accepted/drop or SIGKILL unknown recovery with
@@ -1250,23 +1250,72 @@ unchanged. No raw secrets in logs, argv, model context, SQLite or Git.
       private; no DeepSeek/OpenAI/Anthropic key reads. Close the technical issue only
       after successful qualification. If a live/native gate fails, retain evidence
       and fix the demonstrated issue; never relabel prototype evidence as installed.
-- [ ] **Report and review.** Update implemented/planned documentation and report
+- [x] **Report and review.** Update implemented/planned documentation and report
       exact artifacts, commands, counters, source/dependency pins and honest cleanup
       limits. Get independent task review before18.6.2. Keep Executor/patch present
       until this replacement/package gate is actually accepted. Final current native
       shards, whole-branch review, full install/rollback and release remain F.
 
+C18.6.1 accepted at5450b4d after independent spec/quality review0Critical/
+0Important; two Minors remain F (exact named binding assertions and optional
+connection-fact copy simplification). Controller audited retained original hashes,
+actual clean root3819+158/build/format0, installed artifact sourceffeb3d3/SHA256,
+public bare-import declarations, independent peer counters and native retirement.
+SDK invocation/final claim guards remain unchanged and were checked at their
+existing boundaries. The SIGKILL effect remains uncertain. This accepts replacement
+qualification only; SDK removal, parent C and the full release remain incomplete.
+
 #### Task 18.6.2: Remove the retired SDK after replacement acceptance
 
-Expand against accepted18.6.1 evidence before implementation. Remove Executor
-workspace/dependencies, vendor patch and obsolete development composition; remove
-shared overrides only when unused. Map every retired SDK-specific test family to
-qualified MCP semantics or explicit nonproduct retirement. Preserve historical
-archive/rollback validation, history and unknown-effect handling without vendored
-SDK blobs or an inactive fallback. Run actual frozen install and root gates plus
-current archive inventory/standalone/tamper and historical installer controls on
-the removal revision. Reconcile parent18 requirements and obtain independent
-review before D. No schedules, marketplace, Sources, universal OAuth or CLI agents.
+**Files:** retired packages/integrations-executor and patches SDK artifact;
+CLI explicit development plugin-transport and SDK-only fixtures/tests;
+root/CLI package, TypeScript and Vitest graph, pnpm workspace/lock configuration;
+existing release historical fixture/tests and implementation-status docs. Keep the
+current MCP adapter, admission, owner settings and clients intact unless a concrete
+removal regression requires a small compatible correction. No new API/table/engine.
+
+**Interfaces:** accepted18.6.1 sourceffeb3d3 and installed candidate prove the direct
+MCP replacement. Modern package already omits Executor; remove its unshipped source
+and dependency graph now, not the historical records or neutral ports still read
+by old profiles. Existing supported historical archive validation must not weaken.
+
+- [ ] **Inventory before deleting.** Map every retired SDK-specific test family to
+      current qualified MCP behavior or explicit nonproduct retirement. Preserve
+      semantic coverage for dispatch/claims/401/no retry/drop/deadline/denial/bounds/
+      credentials/catalog and frozen selected definitions. Old SDK pins/internal
+      policy hooks and OpenAPI producer qualification are retired mechanisms, not
+      claimed migrated features. The three protected catalog behaviors were already
+      ported/accepted; keep them. Do not silently delete or skip product regressions.
+- [ ] **Remove only the retired graph.** Delete Executor workspace/code, its vendor
+      patch, CLI development composition and obsolete SDK-only producer fixtures;
+      update package/tsconfig/Vitest references and lockfile. Remove Effect overrides
+      and msgpackr build settings only after verifying no remaining consumers. Keep
+      public MCP SDK2.4.0 and current bundler pinned. Preserve LICENSE/NOTICE and
+      required third-party notices. No inactive fallback or vendored old SDK blobs;
+      do not delete shared caches or retained external qualification inputs.
+- [ ] **Keep historical operations honest.** Preserve legacy history, inert import,
+      needed owner reconciliation/unknown holds and existing installer validation.
+      Replace obsolete SDK-built historical test inputs with small structural archive
+      fixtures exercising the same existing manifest/hash/tamper rules without SDK
+      dependencies. Label these as installer structural tests, not a real historical
+      runtime boot qualification. Do not relax validation to accommodate the fixture.
+      Current MCP inventory/tamper/standalone controls remain active.
+- [ ] **Verify the removal revision.** Actual pinned pnpm install --frozen-lockfile,
+      strict relevant tests, root pnpm check/build/format:check exit0; no source>300
+      lines or exclusions to hide failures. Produce one clean exact-source private
+      archive/disposable install: inventory and dependency closure contain no Executor
+      or patch/dev code, current public-client imports/types and CLI/offline lifecycle
+      work; existing installer controls cover modern and supported historical formats.
+      Compare unchanged MCP/runtime code inputs with accepted18.6.1 proof; rerun native/
+      live only if changed behavior or new evidence justifies it. No repeated unchanged
+      positive full matrix, real install/profile/key change or credential read here.
+- [ ] **Document and review C.** Record removed dependencies, coverage map, exact
+      commands/exits/source/archive hashes and qualification limits. Reconcile all
+      five parent18 requirements against accepted children and retained evidence;
+      obtain independent task review before marking C complete and expanding D.
+      All deferred Minors/Rulings remain mandatory F; SDK deletion/docs do not close
+      unrelated typing/native/device/restore/release gates. No schedules, marketplace,
+      Sources, universal OAuth or CLI agents.
 
 ## Task 19: D. Автономные задачи и общение ботов — приоритет 1
 
