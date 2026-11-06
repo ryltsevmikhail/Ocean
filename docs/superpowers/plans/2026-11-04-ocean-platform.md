@@ -1177,6 +1177,92 @@ N1 diagnostic retention remain F. Parent18.5 is complete within owner settings,
 exact decisions, thin clients and conservative inert import; parent18/C remain
 open until18.6 installed/live/package replacement and Executor removal.
 
+### Task 18.6: Installed MCP replacement and retirement of Executor
+
+Two dependency-ordered deliverables finish C: first port the unfinished regressions
+and qualify the installed replacement; then remove the unused SDK and patch.
+Reuse existing admission, owner settings, receipts, packaging and native helpers.
+Do not create another backend, agent loop, policy/identity layer or QA framework.
+D–H remain ordered after C; this checkpoint does not complete the release.
+
+#### Task 18.6.1: Port catalog regressions and qualify the installed replacement
+
+**Files:** existing CLI catalog-lifetime test and fixtures; current service-turn
+projection/admission tests only if an actual failing regression requires a fix;
+existing release/native fixtures and implementation-status docs. No SDK removal
+in this task. Preserve historical tests and migration/archive handling until18.6.2.
+
+**Interfaces:** production public MCP SDK2.4.0 uses cacheTTL0 and the exact frozen
+public callTool.toolDefinition. Runtime-owned metadata refresh is distinct from
+business invocation: current persisted metadata permission and a new durable
+refresh generation precede discovery. Settings/client contracts from18.5 remain
+unchanged. No raw secrets in logs, argv, model context, SQLite or Git.
+
+- [ ] **Preserve and port the unfinished regressions.** Take ownership of the two
+      previously protected catalog files only here. First save their exact raw
+      diff/bytes, SHA256 and index state in this plan's private proof directory.
+      Port all three semantic cases to the production MCP adapter with actual
+      SQLite admission and independently counted peer traffic: expired SDK cache,
+      tools-changed notification, and delayed stale initialization must not cause
+      hidden SDK discovery or a late background initialization/list outside owned
+      work. The published selected definition remains frozen and the business call
+      count stays exact. Distinguish legitimately authorized owner refresh from
+      hidden discovery: preserve permission/generation-before-I/O assertions, not
+      a false blanket prohibition on metadata. Use a small cohesive new fixture
+      if needed, never a permanent dual-backend abstraction. Register, format and
+      commit the port; do not skip/delete these behaviors or claim the old SDK fixed.
+- [ ] **Exercise the normal waiting-model route.** Hold an actual normal provider
+      after its tool snapshot, perform owned metadata refresh and then return its
+      selected tool call. Prove whether unchanged full selected definition survives
+      the catalog generation change. If RED shows a stale-route defect, make the
+      smallest bounded projection correction before existing C3 admission. Require
+      the original full selected definition including provenance and current
+      configuration/trust/credential/grant facts; refuse changed selected definition,
+      endpoint/account/key/grant and ungranted new tools. The final request/claim
+      tuple must be coherent. No hidden discovery, relaxed final guards or new API.
+- [ ] **Reach actual root GREEN.** Run owning RED→GREEN and strict relevant test
+      compilers, then root pnpm check/build/format:check on final source. Reach the
+      process phase and fix newly exposed failures without exclusions/skip changes.
+      Every source file<=300 physical lines. Save exact commands, exits and pins.
+- [ ] **Qualify one clean exact-source installed candidate.** Commit the qualified
+      source, create a clean isolated checkout and run actual pinned pnpm frozen
+      install/check/build/format (a direct tsc or linked-source fallback is not
+      successful installation). Package a private prerelease archive, record source
+      revision, SHA256/inventory and install into a disposable prefix. Check actual
+      installed CLI runtime start/status/stop, offline CLI/TUI/ACP and current public
+      client connection/history/owner reads. Reuse existing packaging/tamper checks;
+      no change to released installs, real profiles, launchers or user units.
+- [ ] **Qualify production MCP through that installation.** Use the installed sole
+      host, saved owner settings and public client. A scripted ProviderPort is fine
+      and avoids unrelated model API calls. Run one autonomous exact-granted business
+      call with no decision card, one accepted/drop or SIGKILL unknown recovery with
+      a separate surviving peer and exact model/business/effect/claim/receipt counts,
+      and a pinned ready filesystem stdio server with native isolation/cleanup facts.
+      Reuse current helpers and readonly ready-server inputs; do not repeat the old
+      full fault matrix. A bounded actual GitHub issue_read uses the already approved
+      restricted private PAT for ryltsevmikhail/Ocean issue5 through ordinary saved
+      HTTP configuration, not a test-only GitHub transport override. Keep material
+      private; no DeepSeek/OpenAI/Anthropic key reads. Close the technical issue only
+      after successful qualification. If a live/native gate fails, retain evidence
+      and fix the demonstrated issue; never relabel prototype evidence as installed.
+- [ ] **Report and review.** Update implemented/planned documentation and report
+      exact artifacts, commands, counters, source/dependency pins and honest cleanup
+      limits. Get independent task review before18.6.2. Keep Executor/patch present
+      until this replacement/package gate is actually accepted. Final current native
+      shards, whole-branch review, full install/rollback and release remain F.
+
+#### Task 18.6.2: Remove the retired SDK after replacement acceptance
+
+Expand against accepted18.6.1 evidence before implementation. Remove Executor
+workspace/dependencies, vendor patch and obsolete development composition; remove
+shared overrides only when unused. Map every retired SDK-specific test family to
+qualified MCP semantics or explicit nonproduct retirement. Preserve historical
+archive/rollback validation, history and unknown-effect handling without vendored
+SDK blobs or an inactive fallback. Run actual frozen install and root gates plus
+current archive inventory/standalone/tamper and historical installer controls on
+the removal revision. Reconcile parent18 requirements and obtain independent
+review before D. No schedules, marketplace, Sources, universal OAuth or CLI agents.
+
 ## Task 19: D. Автономные задачи и общение ботов — приоритет 1
 
 **Files:** `packages/application/src/{direct-chat-admission,chat-turn-execution,room-broadcast}.ts`,
