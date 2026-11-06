@@ -1775,6 +1775,132 @@ runtime and independent clients prove the shared-socket history contract; no aut
 execution or native/live acceptance is implied. Inherited fixture stdout noise is
 recorded for F. Next19.2.3 engine details follow the accepted storage/wire interfaces.
 
+### Task 19.2.3: Finalize a proven delegated execution slice
+
+#### One run per execution slice
+
+The room bot task owns the assignment and its wait. Each claimed delivery owns one
+ChatTurn and one TaskRun. A model response can request several tools. A successfully
+committed local delegation is the last action of that slice, even in mid-batch.
+A's TaskRun succeeds at that local step; its assignment is still waiting for B.
+There is no final assistant answer from A at this point.
+
+Do not issue core Wait/Resume, retry or checkpoint. Wait keeps activeAttempt;
+Resume returns to running, which beginAttempt rejects. The first model start also
+pins the activation and deadline to that run. Neither changing the deadline in
+place nor pretending the child result is a retry preserves those facts.
+A verified result delivers new input to the _same_ A task, with a new ChatTurn,
+TaskRun, attempt and bounded activation window. Keep the root member identity pin;
+recheck current binding/privacy. Never reselect a replacement model on resumption.
+The delivery records distinguish B's result from A's original assignment. Build
+the continuation context from bounded committed room/task history through its input,
+not an old in-memory messages array or a saved half-executed assistant tool batch.
+
+#### First leaf: stop and finalize the local slice inside runTurn
+
+Observable: feed the common engine a scripted, settled tool-call round and an
+in-process tool returning evidence of a committed delegation. It skips the suffix,
+commits exactly one TaskRun success for the local step, and resolves as yielded
+without another provider request, answer preparation or a child-completion promise.
+This is an engine contract exercised with test doubles. No production room source,
+send endpoint, runnable host job, or permission to claim deliveries in this leaf.
+
+**Files:** production and focused tests below are under `packages/application/src`; also update `docs/ocean/platform-stage-d.md` with the narrow implemented/planned boundary. No gratuitous index edit.
+
+Implementation map:
+
+- New `room-slice-handoff.ts`. Define a readonly `RoomHandoff` with string
+  turnId, taskRunId, attemptId, childTaskId, deliveryId (outbound) and callId
+  (fully qualified engine invocation). Check each with validConversationText,
+  capped at 128 UTF-8 bytes for IDs and 512 for callId. expectedRunVersion is a
+  positive safe integer whose successor must also be safe for Complete.
+  Internal `committedRoomDelegate(proof: RoomHandoff): ToolResult` validates and
+  freezes a copy of just those fields. Create a fresh frozen ToolResult with
+  isError=false and fixed output "Room delegation committed". A module-private
+  WeakMap<ToolResult, RoomHandoff> associates that exact object with the proof.
+  Internal `roomHandoffOf(result: ToolResult): RoomHandoff | undefined` reads it.
+  A clone, ordinary field or identical text cannot create the association. Keep
+  the factory out of the barrel. The future local delegate source calls it only
+  after durable admission. The first leaf uses it only in tests.
+- Same file: `finishRoomHandoff(input: TurnInput, proof: RoomHandoff):
+Promise<YieldedRoomSlice>`. Submit Complete once via executeWithDisposition:
+  commandId = 'room-handoff-complete/v1:' + proof.turnId, taskRunId = input.taskRunId,
+  actor = RUNTIME_ACTOR, expectedVersion = proof.expectedRunVersion, payload =
+  {attemptId:proof.attemptId, summary:'Room delegation committed'}. Reuse domain
+  guardModelDispatch for unresolved requests and missing required provider usage.
+  A lost/throwing commit response permits one lookupCommand of that unchanged
+  command. Require committed or replayed receipt (or exact lookup) with matching
+  commandId, taskRunId, version = expectedVersion+1, exactly one task_run.succeeded
+  at that sequence, same aggregate type/id, causationId, actor and exact payload.
+  Read actual state: same run, head version, succeeded terminal summary and active
+  attempt. A missing/conflicting receipt or mismatch yields uncertainty. Never
+  issue a new-head Complete, call beforeComplete or re-enter the model loop.
+- `types.ts`: add `YieldedRoomSlice = {readonly kind:'yielded'; readonly
+handoff:RoomHandoff}`. Keep the existing TurnOutcome and ACP StopReason.
+  In `turn.ts` declare the room overload first: runTurn(input, room:{readonly
+  turnId:string}) -> Promise<TurnOutcome | YieldedRoomSlice>. Declare the ordinary
+  overload last: runTurn(input) -> Promise<TurnOutcome>. Use one implementation,
+  exclusion set, finally and private loop. Static tests must assert ordinary calls
+  AND Awaited<ReturnType<typeof runTurn>> are exactly TurnOutcome, and the opt-in
+  call includes YieldedRoomSlice. Check ACP can still access outcome.stopReason.
+- `tool-round.ts`: change executeTools' result to a union with dispositions
+  continue / uncertain / delegated(proof). For a WeakMap match check exact
+  context.run, attempt and generated call id at the invocation site. Before any
+  later call, append tool history entries for skipped calls with the existing
+  provider call IDs ("Not executed: delegated"); ordinary calls still run serially.
+  Uncertain/rejection wins, even if accompanied by handoff-like fields. A genuine
+  carrier with contradictory identity/error stops uncertain rather than continuing.
+- `turn.ts`: preserve settlement-before-tools, admission limits, normal failure and
+  cancellation-before-invocation behavior. On delegated, require the opt-in turnId
+  to match before calling finishRoomHandoff. A misplaced genuine carrier stops
+  uncertain, never executes another tool. Process the recorded delegation before
+  acting on a later signal; it cannot be undone by cancellation. A conflicting
+  committed cancellation/version prevents success. Any unproven exit after a
+  possible effect uses existing uncertain handling; no model/tool retry. Existing
+  history sink gets the bounded completed/skipped batch, never a synthetic final.
+- New `room-slice-handoff.test.ts` using test-fixtures/model-turn and real in-memory
+  TaskRunService. Reuse combineChatTools for test routing. Preserve existing
+  public exports and existing hosts' types; no production edits to chat execution,
+  domain, SQL, tools broker, provider adapters, CLI, or owner protocol this leaf.
+
+Transactions in the first leaf: existing model-start and settle command transactions;
+the test's trusted producer stands in for the future already-committed send below;
+then a distinct version-bound Complete events+command-receipt transaction. No
+nested store.atomic/tasks.execute, cross-store transaction promise, or child wake.
+The downstream source/storage integration must provide the postcommit evidence
+and crash repair below _before_ any producer is reachable in the host.
+
+RED -> GREEN behavioral cases (target the common engine, not just type helpers):
+
+- [ ] Provider requests [delegate, physical sentinel]. Return the registered result with
+      the real running attempt/version; never resolve a child result. Assert one
+      provider start+settlement, no sentinel, skipped suffix history, no beforeComplete,
+      one local Complete receipt/event, no answer text, immediate resolved yield.
+- [ ] Plain tool output containing identical delegate text/JSON, including a forged
+      disposition and IDs, stays ordinary. Test an ordinary local send too: following
+      calls and the normal model answer are allowed. Composition still rejects collisions.
+- [ ] Unknown model settlement -> no tool. First tool unknown/throw -> no delegate,
+      no following call, no Complete. Cross-run/call/turn proof or stale pinned
+      version -> no success or redispatch. A host without opt-in cannot yield.
+- [ ] Signal before invocation -> no admission. Signal after known commit -> truthful
+      local completion if the version still matches; a committed cancellation wins
+      its CAS. Matching lost Complete reply is provable by exact receipt, never by
+      re-entering the model loop. Keep existing tool/deadline/usage/overlap tests green.
+
+- [ ] Run focused behavioral RED→GREEN and strict node test typing; literal root
+      pnpm check/build/format on frozen source through the private runner; source<=300.
+      Preserve old overload/ACP/ordinary tool/deadline/usage/overlap behavior. Self-review,
+      commit exact paths and obtain independent spec/quality review before the next leaf.
+
+Later leaves, expanded only against accepted interfaces, add durable claim/handoff
+repair before generic chat recovery; versioned parent-result lineage and once-only
+publication; guarded runtime tools/host/current physical C ancestry/root limits and
+actual mixed qualification. The wire representation of yielded slices/final results
+must preserve old clients or explicitly require upgrade before any producer. In
+particular current getResult is ordinary-only and turnStates is closed. No such new
+status, addressed final, schema or host producer is introduced by19.2.3. Full D and
+its native19.3 gate remain incomplete; this engine foundation does not replace them.
+
 ### Task 19.3: Qualify independent managed service workspaces
 
 Reuse actual enrollment, verified sandbox bind descriptors, session supervision and
