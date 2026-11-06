@@ -229,9 +229,42 @@ M1 стоимости list, M2 точного момента потери generi
 подтверждает исходную квитанцию после reconnect/restart; точный drop после commit
 для этой generic mutation ещё требует усиления наблюдения.
 
+## Точное подтверждение service-call C18.5.2
+
+Принято на `cea61a4`, source`7b95d58`: независимое ревью без Critical/Important.
+Режим confirm использует прежние durable owner decisions, те же list/get/preview/
+resolve и текущий C3 claim/dispatch. Новый вид карточки `service-call` и capability
+`decisions.service-v1` согласуются отдельно; исторический клиент получает явный
+`service_confirmation_upgrade_required`. Автономный режим не создаёт карточек.
+
+Полный descriptor/preview привязан к комнате, запуску, attempt/invocation,
+разрешению, конфигурации, полному tool definition и фактической области эффекта.
+Приватные credential facts сравниваются отдельно. Immutable снимок не следует
+за изменяемой map адаптера. Обычный metadata refresh с неизменными фактами может
+выбрать текущий каталог до claim; реальный journal содержит согласованный tuple.
+После claim сохраняется прежний финальный guard. Время owner-карточки5минут,
+SDK-вызова30секунд — после разрешения, не во время ожидания владельца.
+
+Два клиента читают одинаковый полный preview >32КиБ и SHA256; конкурентное решение
+даёт один claim и один эффект. Старый allowed record — только факт, не новый
+пропуск. Процессный тест держит peer живым через SIGKILL: один started claim до
+одного принятого эффекта, после restart те же decision/run/journal и uncertain;
+model requests1, business/effect1/1, metadata2. Первый владелец завершён SIGKILL,
+подтверждённого stop нет; второй завершает local stop complete. Это не отмена
+первого внешнего эффекта. Прежняя карточка и original receipt его не повторяют.
+
+Root на фиксированных байтах:3740passed/3protectedfail/44skip, process-фаза не
+достигнута; build0/format1 только protected2. Две affected process проверки прошли
+отдельно. Первый mixed-test-WIP root не выдаётся за uniform source pin. Initial
+admission RED был до реализации; hosted unwiring — поздний negative control.
+Minor cleanup при startup-timeout и финальные assertions всего journal/counters
+после child exit остаются F. Current TUI использует прежний full-preview panel;
+Desktop пока показывает pending IDs, его полноценный decision view идёт18.5.3.
+Новых native/live/GUI/installed acceptance claims этот подэтап не добавляет.
+
 ## Дальше по плану
 
-18.5.1 принят;18.5.2 — точные подтверждения;18.5.3 — тонкие клиенты
+18.5.1/18.5.2 приняты;18.5.3 — тонкие клиенты, настройки/решения
 и консервативная миграция;
 18.6 — установленная/live/package-приёмка и удаление Executor. Затем D —
 сохраняемые поручения и свободное взаимодействие команды, E/F — клиент и выпуск.

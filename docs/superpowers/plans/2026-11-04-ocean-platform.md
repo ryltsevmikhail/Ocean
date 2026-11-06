@@ -863,14 +863,14 @@ reuse its existing owner instance and preview/digest helpers. Add decision kind
 `service-call`, feature `LOCAL_SERVICE_CONFIRMATIONS='decisions.service-v1'`.
 Existing decision list/get/preview/resolve methods remain the sole wire path.
 
-- [ ] **RED exact confirmation.** Actual SQLite/admission and normal host with
+- [x] **RED exact confirmation.** Actual SQLite/admission and normal host with
       mode=confirm must initially refuse confirmation_required. Then show pending
       owner decision before any business claim/send; two authenticated clients read
       identical operation/preview/digest and concurrently resolve once. Require one
       claim before responder receipt, one business request/effect, one final answer;
       scripted provider must verify the actual returned result, not emit fixed
       success on a tool error. Autonomous mode still gives0 cards and the same flow.
-- [ ] **Implement the live exact-operation port.** Keep C3 validation, membership,
+- [x] **Implement the live exact-operation port.** Keep C3 validation, membership,
       run/attempt, grant limits, scoped conflicts and claim/settlement policy. No
       SQLite transaction spans owner await. Absent port retains confirmation_required
       with0 claims/sends. Freeze the semantic descriptor above and require current
@@ -879,7 +879,7 @@ Existing decision list/get/preview/resolve methods remain the sole wire path.
       to this one live call, never a new autonomous grant or a caller-supplied boolean.
       Deny/expiry/invalidated/abort do not create authority; reuse unknown/claim-refused
       handling and do not report a possibly earlier effect as not_started.
-- [ ] **Separate metadata lifetime from permission.** An unchanged-definition TTL
+- [x] **Separate metadata lifetime from permission.** An unchanged-definition TTL
       refresh during the owner wait may select the current published catalog for
       the eventual claim only after every semantic descriptor fact still matches.
       Build the final request/admission coherently from that current tuple; journal
@@ -889,7 +889,7 @@ Existing decision list/get/preview/resolve methods remain the sole wire path.
       Preserve the existing post-claim/pre-send refresh guards and autonomous behavior.
       The300000ms owner card lifetime is independent of the30000ms business deadline;
       start the latter after approval/claim, not while waiting for the owner.
-- [ ] **Reuse durable owner decisions.** Stable decision ID is a trusted digest of
+- [x] **Reuse durable owner decisions.** Stable decision ID is a trusted digest of
       workspace/room/run/attempt/invocation identity, never a truncated model ID.
       ownerPreview contains the full exact operation with reversible controls;
       bindingDigest is SHA256 of that full preview. createdAt/expiresAt use the
@@ -898,7 +898,7 @@ Existing decision list/get/preview/resolve methods remain the sole wire path.
       mint another waiter; stored allowed/interrupted rows after restart are only
       facts and cannot authorize another call. Join existing stop/drain/abort paths;
       client detach never cancels a waiting operation. No new receipt or decision DB.
-- [ ] **Version the new kind safely.** Current shared LocalRuntimeClient advertises
+- [x] **Version the new kind safely.** Current shared LocalRuntimeClient advertises
       decisions.service-v1 and validates the new kind/full chunked preview. Identity
       projection independently masks it for historical clients. Pass the negotiated
       support through the existing runtime context to decision dispatch. A legacy
@@ -907,7 +907,7 @@ Existing decision list/get/preview/resolve methods remain the sole wire path.
       or silently hide it as an empty list. Old kinds/ordinary rooms/ACP keep their
       existing behavior. Current TUI uses its generic complete-preview panel; Desktop
       IPC/view remains18.5.3 (it currently exposes pending IDs, not a decision UI).
-- [ ] **GREEN failure and recovery controls.** Test exact-repeat/changed-ID payload,
+- [x] **GREEN failure and recovery controls.** Test exact-repeat/changed-ID payload,
       concurrent owner replies, stale version/digest/wrong room/run, deny and clocked
       expiry, revoke/limits/definition/credential changes while waiting, same-definition
       refresh success, abort/stop and allow-then-revoke during SDK preparation. Require
@@ -923,7 +923,7 @@ Existing decision list/get/preview/resolve methods remain the sole wire path.
       SIGKILL exit/signal and absence of a confirmed stop; second records its observed
       stop response. No real service/model/key use
       or unchanged native/ready-server/GUI matrix is needed.
-- [ ] **Verify and commit.** Run meaningful RED→GREEN, owning/affected source and
+- [x] **Verify and commit.** Run meaningful RED→GREEN, owning/affected source and
       process checks, strict/scoped checks, then root pnpm check/build/format once on
       final implementation. Keep protectedcatalog3/format2 debt explicit until18.6;
       no skips/exclusions, fix new errors and record process reachability. Source<=300,
@@ -931,6 +931,17 @@ Existing decision list/get/preview/resolve methods remain the sole wire path.
       evidence with exact files/commands/exits/pins. Commit owned source/report and
       get fresh independent review before18.5.3. Installed/live/current full release
       gates remain18.6/F; shared-runtime qualification is not a GUI acceptance claim.
+
+C18.5.2 accepted on `cea61a4` (source`7b95d58`), full independent review approved,
+0Critical/0Important/2Minor. Trusted live confirmation reuses the existing owner,
+exact semantic/private snapshots, current preclaim tuple and final SDK guard;
+stored decisions never become reusable permits. Final frozen source root:
+3740pass/3protectedfail/44skip/process-unreached/build0/format-protected2;
+affected process2pass. Initial admission RED preceded implementation; normal-host
+unwiring was a later negative control, not an observed BASE host RED. Two recovery
+proof Minors (readiness-timeout child cleanup; whole journal/counters after exit)
+remain F. Current shared client/TUI contract supports service-call; Desktop
+view/IPC and owner-settings typed client are next18.5.3, not GUI-qualified here.
 
 #### Task 18.5.3: Thin client settings and conservative legacy migration
 
