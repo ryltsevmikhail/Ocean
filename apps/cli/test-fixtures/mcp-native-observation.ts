@@ -1,6 +1,7 @@
+import { retiredGroup } from '../../../packages/tools-node/src/sandbox-cgroup.ts';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
+import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   ctl,
@@ -26,29 +27,30 @@ export function observeNative(proof: string, profile: string): void {
     JSON.stringify({ unit, ...inspect(group) }, null, 2) + '\n',
   );
 }
-export function retiredNative(proof: string): void {
+export async function retiredNative(proof: string): Promise<void> {
   const before = JSON.parse(readFileSync(join(proof, 'native-before.json'), 'utf8')) as {
     cg: string;
     pids: { pid: number; start: string }[];
   };
-  const path = '/sys/fs/cgroup' + before.cg;
-  const empty =
-    !existsSync(path) || /populated 0/.test(readFileSync(path + '/cgroup.events', 'utf8'));
+  const empty = await retiredGroup(before.cg);
   assert.equal(empty, true);
-  for (const { pid, start } of before.pids) {
-    let current: string | undefined;
-    try {
-      current = readFileSync('/proc/' + pid + '/stat', 'utf8')
-        .split(') ')
-        .at(-1)!
-        .split(' ')[19];
-    } catch {
-      /* Absence is retirement evidence for this recorded PID/start. */
-    }
-    assert.notEqual(current, start);
-  }
+  for (const { pid, start } of before.pids) assert.equal(recordedPidRetired(pid, start), true);
   writeFileSync(
     join(proof, 'native-retired.json'),
     JSON.stringify({ group: before.cg, empty, recordedPidsAbsent: true }) + '\n',
   );
+}
+
+export function recordedPidRetired(pid: number, start: string): boolean {
+  try {
+    const current = readFileSync('/proc/' + pid + '/stat', 'utf8')
+      .split(') ')
+      .at(-1)!
+      .split(' ')[19];
+    assert.ok(current);
+    return current !== start;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return true;
+    throw error;
+  }
 }

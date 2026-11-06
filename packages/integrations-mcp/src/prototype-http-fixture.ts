@@ -30,7 +30,7 @@ export function definition(version: string): Tool {
     },
   };
 }
-export async function httpFixture(name: string, evidenceDir?: string) {
+export async function httpFixture(name: string, evidenceDir?: string, catalogTtlMs = 0) {
   const rows: string[] = [];
   const headers: string[] = [];
   const pairs: string[][] = [];
@@ -53,7 +53,7 @@ export async function httpFixture(name: string, evidenceDir?: string) {
     );
     protocol.setRequestHandler('tools/list', () => ({
       tools: [definition(stats.version), ...extra],
-      ttlMs: 0,
+      ttlMs: catalogTtlMs,
       cacheScope: 'private',
     }));
     protocol.setRequestHandler('tools/call', async (req) => {

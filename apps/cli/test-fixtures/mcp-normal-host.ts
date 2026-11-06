@@ -1,3 +1,4 @@
+import { verifyNormalResult, verifyNormalJournal } from './mcp-result-proof.ts';
 import { observeNative, retiredNative } from './mcp-native-observation.ts';
 /** Owned synthetic normal-runtime proof. No real model/account or production profile. */
 import { createHash } from 'node:crypto';
@@ -158,7 +159,6 @@ store.serviceAuthority.atomic((tx) =>
 store.close();
 const runtime = createRuntime({ dbPath: path });
 await runtime.ready;
-// Merely opening a generic reader does not discover.
 const before = new DatabaseSync(path);
 if (before.prepare('SELECT COUNT(*) AS n FROM ocean_service_catalogs').get()?.['n'] !== 0)
   throw Error('reader discovered');
@@ -198,9 +198,10 @@ const provider: ProviderPort = {
   capabilities: { streaming: true, reasoning: false, usage: false, toolCalls: true },
   async *stream(request) {
     model++;
-    if (request.messages.at(-1)?.role === 'tool')
+    if (request.messages.at(-1)?.role === 'tool') {
+      verifyNormalResult(mode, request.messages.at(-1)?.content);
       yield { type: 'text_delta', text: 'one final answer' };
-    else {
+    } else {
       if (request.tools?.length !== 1) throw Error('neutral tool missing');
       yield {
         type: 'tool_call',
@@ -269,7 +270,8 @@ child.stderr.on('data', (b: Buffer) => {
 });
 const [code] = await once(child, 'exit');
 const stopped = await host.stop();
-if (mode === 'stdio') retiredNative(proof);
+if (mode === 'stdio') await retiredNative(proof);
+verifyNormalJournal(mode, path);
 http.closeAllConnections();
 await new Promise<void>((r) => http.close(() => r()));
 if (code !== 0) throw Error('client failed ' + stderr);
