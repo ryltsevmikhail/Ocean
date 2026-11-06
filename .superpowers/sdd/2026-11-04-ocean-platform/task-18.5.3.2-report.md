@@ -186,3 +186,29 @@ Fresh input in A's dedicated field then succeeds through a new UUID, while B rem
 Self-review checked every legacy mutation path and preserved archive reads, persisted-vs-draft removal inputs, actual state/trust derivation and immutable replay, separate exact recovery material lifetime, bounded continuation cursor/room binding, and lookup identity/order/context/error clearing. The only backend edit is the authorized existing owner-record state comparison/result. Domain/application boundaries, public package entry use, private-before-SQL ordering and authoritative-before-effects behavior remain intact. There is no new API/schema/table/manager/framework and no production-source change after the targeted proof. P/final-audit.json rechecks all frozen source hashes plus protected bytes/index and unchanged runner.
 
 Only the five Important findings and correction-induced issues were addressed. Minor hint wording, shell-quote generalization and old pre-implementation chronology limitations remain deferred to F. Next action is the controller's independent SCOPED re-review of FIX_BASE through the report commit; acceptance/round-count advancement belongs to that verdict, not this worker submission.
+
+## Correction round 2 submission — I6 local feedback only
+
+Status: I6 fix submitted for fresh scoped review; no acceptance verdict or round-count advancement is claimed. FIX_BASE is `6d74c6538139e248f4d7bdd3c0010671d5540e6e`; source commit is `47b691da54dc6f29de60bee35db413a54d52acd6`. The complete scoped review1 and narrow fix2 brief were read. I1–I5 remain closed and their production paths are unchanged. New Minor N1 (loss of the known mutation refusal when receipt read also fails) and all original Minors remain deferred to F.
+
+The sole production change is one synchronous `message.value = ''` beside assigning mutation B's lookup identity and clearing its snapshot. It executes before setting busy and awaiting IPC. Thus the form cannot label B with A's completed status while B is pending. No credential construction, I/O, context/lookup ticket, error-handling, API or backend logic changed; no status manager/store was added.
+
+The named regression in `apps/desktop/src/ui/service-settings-state.test.ts` first reads A's completed receipt, begins a held B mutation without changing context, and checks B's ID, null snapshot, busy=true and exactly empty visible message. After B resolves prepared it checks B's own snapshot/prepared feedback, absence of completed feedback and busy=false. Existing reverse lookup/context and credential regressions remain. Pure shared test-fixture imports were consolidated to keep this file at exactly 300 physical lines; production state is 270 lines. No assertion was removed or relaxed.
+
+Fresh evidence Q = `/home/ryltsevmg/Projects/Ocean-artifacts/c18-5-3-2-fix2`. Q/red.log/.exit1 preserves the meaningful failure: 10 existing tests pass and the new held-B assertion receives A's `Исходная квитанция: completed...` instead of empty feedback. The first RED uses a held revoke; the final test uses a held connection-set so its prepared response matches that method's contract. The pending-message invariant is identical. Q/green.log/.exit0 records all four named affected files passing: **25 tests**. No missing-module run is called behavioral RED.
+
+All commands used the unchanged supplied private runner with default short private TMP/XDG roots. Exact arrays, outputs and exits are retained in Q:
+
+| Check                                                               | Exit | Result                                                              |
+| ------------------------------------------------------------------- | ---- | ------------------------------------------------------------------- |
+| state test file before fix                                          | 1    | one new failure / 10 passes, stale completed-A message while B held |
+| state + service-protocol + service-decisions + service-legacy tests | 0    | 4 files / 25 tests pass                                             |
+| scoped eslint on the two changed TS files                           | 0    | lint.*                                                              |
+| strict production Vue/TypeScript                                    | 0    | strict.*                                                            |
+| Desktop test compiler                                               | 0    | desktop-types.*                                                     |
+| pnpm build                                                          | 0    | build.*: tsc -b                                                     |
+| scoped Prettier check on the two changed files                      | 0    | format-check.*                                                      |
+
+There is no public or Node type/API change, so the unchanged Node test compiler was not repeated. Per the narrow correction brief, no old full-root, native07/delta, credential GUI, process, vendor or package matrix was repeated. Exact native credential N1 remains pinned to de9cccf; this later local feedback clear is unit/strict/build qualified and is not claimed as exact-source native N1 acceptance.
+
+Q/frozen-source.json pins both changed source files and line counts, and Q/final-audit.json preserves the unchanged protected SHA256/index and runner hash. Only these two source files and this report are explicitly committed. Self-review confirms B acquires an empty status synchronously, settled feedback remains bound through the existing version/context guards, and I1–I5 are unaffected. No cleanup, profile, launcher, unit, installed asset or external-service work occurred. Next action is controller I6-only/new-breakage review; broader acceptance and round count await that verdict.
