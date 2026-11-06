@@ -55,12 +55,12 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d` без блокирующих замечаний. Удаление Executor C18.6.2 и этапы D–H остаются запланированы.
-Полные root gates остаются красными на сохранённых регрессиях Executor;
-приёмка A не заменяет их исправление в C и выпускные проверки F.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. Этапы D–H остаются запланированы.
+Долг сохранённых регрессий Executor закрыт в C18.6: чистые root gates прошли
+на квалифицированном `1f31974`; финальные проверки текущего выпуска остаются F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
-A принят. B детализирован ниже; C–F — отдельные подсистемы, для которых
-подробные task-by-task контракты будут добавлены перед изменением кода. G/H имеют более низкий приоритет.
+A–C приняты. Для D–F подробные task-by-task контракты уточняются перед
+изменением кода. G/H имеют более низкий приоритет.
 Не превращать этот документ в разрешение одновременно переписать все слои.
 
 Рабочая база — `/home/ryltsevmg/Projects/Ocean-stable`, ветка
@@ -584,13 +584,13 @@ Observed notebook: i5-13420H, ~15GiB RAM, Intel UHD; no ollama/llama-server in P
 
 - [x] Сначала квалификационный прототип public MCP SDK: HTTP/stdio,
       dropped response, refresh каталога и отсутствие скрытого повторного эффекта.
-- [ ] Постоянная доверенная область разрешает работу без каждого approval;
+- [x] Постоянная доверенная область разрешает работу без каждого approval;
       внешняя операция всё равно проходит актуальный допуск и durable claim.
-- [ ] Проверки restart/revoke/delayed dispatch; новые tools не получают
+- [x] Проверки restart/revoke/delayed dispatch; новые tools не получают
       неоговорённый доступ, смена endpoint/account не маскируется под token rotation.
-- [ ] Готовый сервер подключается конфигурацией; нет собственного плагина на
+- [x] Готовый сервер подключается конфигурацией; нет собственного плагина на
       каждый сервис. Реальный GitHub read + stdio server + synthetic write failure.
-- [ ] Мигрировать GitHub pilot без расширения прав; удалить Executor SDK/patch
+- [x] Мигрировать GitHub pilot без расширения прав; удалить Executor SDK/patch
       только после проверки замены и упаковки. Перенести смысл незавершённых
       catalog-lifetime регрессий, не объявлять старый фикс принятым.
 
@@ -1281,28 +1281,28 @@ MCP replacement. Modern package already omits Executor; remove its unshipped sou
 and dependency graph now, not the historical records or neutral ports still read
 by old profiles. Existing supported historical archive validation must not weaken.
 
-- [ ] **Inventory before deleting.** Map every retired SDK-specific test family to
+- [x] **Inventory before deleting.** Map every retired SDK-specific test family to
       current qualified MCP behavior or explicit nonproduct retirement. Preserve
       semantic coverage for dispatch/claims/401/no retry/drop/deadline/denial/bounds/
       credentials/catalog and frozen selected definitions. Old SDK pins/internal
       policy hooks and OpenAPI producer qualification are retired mechanisms, not
       claimed migrated features. The three protected catalog behaviors were already
       ported/accepted; keep them. Do not silently delete or skip product regressions.
-- [ ] **Remove only the retired graph.** Delete Executor workspace/code, its vendor
+- [x] **Remove only the retired graph.** Delete Executor workspace/code, its vendor
       patch, CLI development composition and obsolete SDK-only producer fixtures;
       update package/tsconfig/Vitest references and lockfile. Remove Effect overrides
       and msgpackr build settings only after verifying no remaining consumers. Keep
       public MCP SDK2.4.0 and current bundler pinned. Preserve LICENSE/NOTICE and
       required third-party notices. No inactive fallback or vendored old SDK blobs;
       do not delete shared caches or retained external qualification inputs.
-- [ ] **Keep historical operations honest.** Preserve legacy history, inert import,
+- [x] **Keep historical operations honest.** Preserve legacy history, inert import,
       needed owner reconciliation/unknown holds and existing installer validation.
       Replace obsolete SDK-built historical test inputs with small structural archive
       fixtures exercising the same existing manifest/hash/tamper rules without SDK
       dependencies. Label these as installer structural tests, not a real historical
       runtime boot qualification. Do not relax validation to accommodate the fixture.
       Current MCP inventory/tamper/standalone controls remain active.
-- [ ] **Verify the removal revision.** Actual pinned pnpm install --frozen-lockfile,
+- [x] **Verify the removal revision.** Actual pinned pnpm install --frozen-lockfile,
       strict relevant tests, root pnpm check/build/format:check exit0; no source>300
       lines or exclusions to hide failures. Produce one clean exact-source private
       archive/disposable install: inventory and dependency closure contain no Executor
@@ -1311,13 +1311,24 @@ by old profiles. Existing supported historical archive validation must not weake
       Compare unchanged MCP/runtime code inputs with accepted18.6.1 proof; rerun native/
       live only if changed behavior or new evidence justifies it. No repeated unchanged
       positive full matrix, real install/profile/key change or credential read here.
-- [ ] **Document and review C.** Record removed dependencies, coverage map, exact
+- [x] **Document and review C.** Record removed dependencies, coverage map, exact
       commands/exits/source/archive hashes and qualification limits. Reconcile all
       five parent18 requirements against accepted children and retained evidence;
       obtain independent task review before marking C complete and expanding D.
       All deferred Minors/Rulings remain mandatory F; SDK deletion/docs do not close
       unrelated typing/native/device/restore/release gates. No schedules, marketplace,
       Sources, universal OAuth or CLI agents.
+
+C18.6.2 accepted atfa91907 after full independent review and one scoped
+correction round: response/catalog bounds now have valid padded under/over controls
+and guard-loss negatives. No blocking findings remain. Qualified source1f31974 has
+clean frozen install/root3691+165/build/format0 and standalone archive SHA256
+`5fdcd2b6eba91554cc0dd78bb856fabd3873c0dd5630f244a619b23a2d017d2c`.
+Correctionfa91907 has62 covering passes/strict/scoped checks and changes only tests/
+report; it is not a new root/native/artifact aggregate. Parent C is complete within
+its five requirements. Historical installer structure is qualified, not historical
+runtime boot. Generic service-workspace independence is still D; F retains all
+Minors/Rulings, current native/restore/device/release gates. Full A–H goal remains.
 
 ## Task 19: D. Автономные задачи и общение ботов — приоритет 1
 
