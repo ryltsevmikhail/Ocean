@@ -180,3 +180,72 @@ Source commit: `bfe198af8db819a5400c7c3cb625dbe23402835e` — `feat: expose reco
 Post-source-commit worktree contains only the original protected tracked modification and protected untracked test; the index is empty, the tracked protected index blob remains `b3ff4f26b9f1fd0a66ce72776474eccd81867b34`, and both protected byte hashes match. Source pins remain unchanged after all gates. Nothing was pushed or merged.
 
 Controller handoff: independently review `2029106c76b704740ffdcf46ac5df338da23fe5d..HEAD`, with the29-path final source manifest and complete report. Acceptance is pending that fresh review. Desktop18.5.3.2 remains unstarted/provisional until acceptance. Residual concerns are only protected catalog3/format2 through18.6, installed TS/package debtF, and separately deferred GUI/native/live qualification; the initial custom-TMP failures are fully preserved and superseded by the final source gates, not suppressed.
+
+
+## Correction submission — three public-reader findings
+
+**Status: DONE_WITH_CONCERNS; scoped re-review pending, not task acceptance.** FIX_BASE `d1f2497114b9ba31349e93d50e0a16f6baed7c37`. Read the full independent review and task-18.5.3.1-fix1.md. Work remained in the stable checkout/branch. Only the three verified findings and their covering tests changed; no agent/helper/reviewer, push/merge, real profile/key or external live call was used. The earlier full-root record above remains historical evidence for its original source, not a fresh full-root qualification of this correction.
+
+### Exact corrections and accepted rules
+
+1. Public contracts distinguish request IDs/cursors from record fields. Tool names and completed historical targets with no captured operation use the existing public `validConversationText(value,128)` domain rule: UTF-8 bytes, nonblank, NUL and malformed surrogates refused; legal embedded tabs and other non-NUL controls remain legal. Request IDs/cursors still use `validServiceReceiptQuery`. A captured operation target is checked by `validServiceOwnerOperation` plus exact method/request/target correlation, so its original request connectionId rules are preserved rather than blanket-replaced by record byte rules. Domain/input/record guards themselves did not change.
+2. Legacy prepared items with operation:null now require targetId:null; completed legacy items require a known valid record target. Completed disconnect receipts require their historical result snapshot to be disconnected. Explicit disconnected readiness must match a disconnected record; disconnected records accept explicit disconnected or unknown evidence, rejecting explicit ready/other contradictory facts. Missing readiness still normalizes to unknown, including disconnected legacy records, and that normalized unknown record revalidates. This checks wire facts only; it adds no permission/execution checks. The previous positive client fixture now uses a real disconnected result, and its independent refresh fixture explicitly remains active.
+3. Metadata readers accept the original authority-v2 SUM(canonical item characters)<=400000 rule, still capped at100 entries. At the exact boundary,100 individually valid4000-character records have item sum400000 and array length400101; both connections and grants are accepted through their actual client wrappers. One additional item character or101 entries is refused. Existing framing still enforces2MiB. New owner output and history envelopes remain strictly bounded by the unchanged producer/history code; only legacy metadata input accounting changed. No schema, authority policy, SDK, persistence or mutation behavior changed.
+
+The sole production edit is `packages/contracts/src/local-service-views.ts` (167 lines). Required covering tests are in `packages/contracts/src/local-service-views.test.ts` and `packages/tools-node/src/local-service-client.test.ts`. The48-line test-only `test-fixtures/service-owner-views.ts` supplies legal field cases and individually valid exact-boundary connection/grant records; no fixture or framework enters production.
+
+The field witnesses use `validServiceToolDefinition`, `validOwnerScopeGrant`, `validServiceGrantSetRequest`, `validServiceConnectionSetRequest` and `validServiceConnection`. They exercise legal tab/U+0001 controls,128-byte `é` repetitions, invalid130-byte values, NUL and malformed surrogates. The captured-input witness uses128 `é` characters (256 UTF-8 bytes): accepted by the existing request guard, refused as a persisted record ID, and correctly consumed as captured keyless intent by the client. Request/cursor tabs remain refused. Client regressions actually consume connection/grant lists, history and receipts through the shared wrapper; the existing owning socket tests exercise the actual authenticated host unchanged.
+
+### RED/GREEN chronology, including fixture error
+
+Proof directory: `/home/ryltsevmg/Projects/Ocean-artifacts/c18531-fix1`, fresh direct child of the artifacts root. Every test/compiler/build/formatter/linter invocation used the UNCHANGED supplied runner with default short `/tmp` roots and no custom TMPDIR prefix:
+
+```sh
+python .superpowers/sdd/2026-11-04-ocean-platform/run-private.py COMMAND
+```
+
+The runner supplied fresh private HOME/all XDG/TMP/minimal environment. No environment/key dump was made. Log/exit names below are relative to this correction proof directory.
+
+- Before production reader edits, `red.log` then `red-covering.log`/`red-boundaries.log` each exited1 with12 failing/14 passing tests across the two named files. I1 failures include rejection of legal tabs/U+0001 and acceptance of over-byte/malformed-surrogate tool names. Soft assertions expose all I2 target, historical disconnect and readiness contradictions rather than stopping at the first one. These are genuine pre-production-change I1/I2 REDs. The positive disconnect test fixture was corrected before these runs; it is not an assertion relaxation.
+- The initial exact-budget connection fixture was wrong: the first padding loop could overshoot4000→4003 characters per connection, giving400300 total. Thus the early I3 connection failures are NOT claimed as proof of a formerly legal exact400000 page. The first reader implementation run (`green-covering.log`, exit1) yielded24 passing/2 failing tests and exposed this fixture error; it is not a GREEN claim or a production-policy fix.
+- The fixture padding was corrected and independently checked for item sum400000/array length400101 and accepted domain records. After reader implementation had already begun, ONLY the metadata budget helper was temporarily restored to `return bounded(items)`, the old full-array check. The targeted command below then failed both exact-budget tests, with separate soft failures for connection AND grant acceptance. This is explicitly a **post-implementation negative check**, not an original FIX_BASE RED. Its24 other tests were unselected by the test-name filter, not configured skips or excluded final coverage.
+- Restored the per-item metadata helper, added explicit strict-history-envelope and captured-request client regressions, formatted the four owned paths, then ran all covering tests unfiltered:28/28 pass across2files (`green-covering-final.log`, exit0,478ms). No source changed during subsequent final checks; the hashes below were measured after those checks.
+
+Budget negative/restore source state evidence (`reader-states.json`; negative bytes preserved outside Git as post-implementation-budget-negative.ts):
+
+```text
+FIX_BASE reader SHA256: 2b0ea930df101b9f3ce03d4e1d2db2c20238a6a06a4d2fbcb5b920a0f7657fd5
+Temporary post-implementation negative reader SHA256: a0f6f2db47b9582c4087e75152be1b5b30cee30f792728ff52a9e1d29d1b83af
+Restored final reader SHA256: ccac308affec6f45e20336652c5f92150c717c49f803b1d6d219c8140ff712a1
+```
+
+The temporary negative bytes/hash were reconstructed after the run using the exact documented helper-body replacement in the otherwise unchanged final reader; they were not recorded as an independent pre-implementation source pin. The restore/hash labels preserve that distinction. No rerun was made merely to reconstruct a chronology.
+
+| Exact command after runner prefix | Exit / actual outcome | Evidence |
+| --- | --- | --- |
+| `pnpm exec vitest run --config vitest.source.config.ts packages/contracts/src/local-service-views.test.ts packages/tools-node/src/local-service-client.test.ts` | Initial1:12 failed/14 passed; initial reader attempt1:24 passed/2 fixture failures; final0:28 passed/2files, no skips | red.log,red-covering.log,red-boundaries.log,green-covering.log,green-covering-final.log and matching.exit files |
+| Same two-file command with `-t 'legacy400000|exact legacy connections'` | **1**,2 failed/24 unselected; both metadata exact-boundary checks fail under temporarily restored old array budget; post-implementation negative only | red-exact-boundary.log/red-exact-boundary.exit |
+| `pnpm exec vitest run --config vitest.source.config.ts packages/contracts/src/local-service-views.test.ts packages/tools-node/src/local-service-client.test.ts packages/store-sqlite/src/service-owner-views.test.ts apps/cli/src/local-runtime/service-owner-client.test.ts apps/cli/src/runtime-service-views.test.ts` | **0**,37 passed/5files, no skips;3.02s | owning-final.log/owning-final.exit |
+| `pnpm typecheck` | **0**, production strict compiler | strict-production.log/strict-production.exit |
+| `pnpm typecheck:tests` | **0**, both node and desktop strict test compilers | strict-tests.log/strict-tests.exit |
+| `pnpm exec eslint packages/contracts/src/local-service-views.ts packages/contracts/src/local-service-views.test.ts packages/tools-node/src/local-service-client.test.ts test-fixtures/service-owner-views.ts` | **0** | lint-final.log/lint-final.exit |
+| `pnpm exec prettier --check packages/contracts/src/local-service-views.ts packages/contracts/src/local-service-views.test.ts packages/tools-node/src/local-service-client.test.ts test-fixtures/service-owner-views.ts` | **0**, all matched files use Prettier style | format-check-final.log/format-check-final.exit |
+| `pnpm build` | **0**, public dist updated before process controls | build-final.log/build-final.exit |
+| `pnpm exec vitest run --config vitest.process.config.ts apps/cli/src/local-runtime/service-owner-process.test.ts apps/cli/src/local-runtime/service-confirmation-process.test.ts packages/tools-node/src/local-runtime-types.test.ts` | **0**,3 passed/3files, no skips;3.21s | process-final.log/process-final.exit |
+
+Owned-only prettier writes also exited0 (format-tests.log/format-source.log/format-final.log and matching.exit files); each used the explicit paths above. No compatibility test source was touched, so no unrelated compatibility repeat was needed. The five owning files cover actual SQLite/host recovery, producer bounds/readiness and the new consumer guards. Process controls preserve public-client detach/restart behavior and one uncertain effect across SIGKILL without replay; public framing callbacks still compile strictly. No unchanged full-root/native/live/GUI/package matrix was rerun, per the correction brief. Protected catalog3/format2 and deferred installed/native/live qualification remain as recorded above, with no new global pass claim.
+
+### Correction self-review, pins and protected state
+
+Self-review compared the full correction diff to the three findings, traced the originating field guards, checked nullable target/state relationships, verified absent-readiness normalization and revalidation, retained100-entry bounds and strict history/producer bounds, and checked that only public reader logic changed. The test-only fixture witnesses are validated independently by domain record guards and literal400000/400101 assertions. `git diff --check` passed. The final four owned source paths are at most275 physical lines:
+
+```text
+ccac308affec6f45e20336652c5f92150c717c49f803b1d6d219c8140ff712a1 167 packages/contracts/src/local-service-views.ts
+f83cd09e90372aa482c1f31d3a01907b09733f4bb09334429bb80bdfb3080372 260 packages/contracts/src/local-service-views.test.ts
+4e277ee4935e2555b03d068cfd5f7617acf9668b78ba8ab2ff80b73dacccd81b 275 packages/tools-node/src/local-service-client.test.ts
+f140fbdb70c0b1ee8d80432ed3ee7fcc44424ad9c56d9c9b02436f3a30aab382 48 test-fixtures/service-owner-views.ts
+```
+
+Both protected byte hashes remain exact: github-session-rig.ts `d6ea013e8333688abb36e51c7a09922a077f5a1726f203258bc06f49e642c031`, index blob `b3ff4f26b9f1fd0a66ce72776474eccd81867b34`, modified/unstaged; plugin-catalog-lifetime.test.ts `68f28f549e0713f5c21d47950b6db96babdb27a7b9264684268c571b7cde62a3`, untracked/no index entry. No protected file was formatted, staged or committed. Index was empty before explicit owned staging. Only normal private fixture/runner cleanup occurred; no unknown cleanup was inferred. No lockfile, default/design checkout, real profile or credential store was edited.
+
+Correction source commit: `ce00760a67ebbb8874eea6ced2462596323a9bfa` — `fix: preserve service owner view facts and legacy bounds`. The same report is committed separately by exact path. Controller handoff is a fresh SCOPED review of FIX_BASE..newHEAD for these three findings and correction-induced breakage only. This submission does not declare acceptance or start Desktop18.5.3.2.
