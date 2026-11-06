@@ -836,11 +836,101 @@ rather than reset unrelated credentials; no automatic private-state repair.
 
 #### Task 18.5.2: Service confirm mode in existing durable owner decisions
 
-Pending detailed expansion after18.5.1. Reuse RuntimeOwnerDecisions, existing
-room/run/ID/version/digest/expiry CAS, one exact admitted operation and C3 claim.
-Two clients may answer once; stale/expired/revoked/changed operation gives0send;
-restart cannot recreate authority from an allowed row. Autonomous grants still
-need no per-operation prompt. No boolean permit from model text or second broker.
+**Files:** application `service-admission{,-types}.ts`, cohesive internal
+`service-admission-prepare.ts`/`service-confirmation.ts` and owning tests as
+needed for300 lines; `owner-decisions.ts`; CLI `runtime-types.ts`,
+`runtime-services.ts`, `local-runtime/{host,decisions,settings-hosts}.ts` and
+owning socket/process fixtures; contracts `local-runtime-decisions.ts`,
+capability/compatibility, tools-node local decision client/hello tests. Reuse
+C3 claim/dispatch guards and RuntimeOwnerDecisions; no second approval table,
+permit engine, SDK wrapper, lifecycle manager or UI in this child. If host.ts
+needs room, extract cohesive routing into existing settings-hosts, not minify.
+
+**Interfaces:** add optional trusted `confirmation:ServiceCallConfirmationPort`
+to `ServiceCallAdmissionOptions` and `RuntimeServicesInput`; expose it as
+`RuntimeOptions.serviceConfirmation` for the trusted host composition.
+`confirm(operation:ServiceCallConfirmation,signal:AbortSignal,
+current:()=>Promise<boolean>):Promise<DecisionOutcome>` is runtime-only.
+Operation carries `request:Omit<ServiceCallRequest,'catalogId'>`, full frozen
+`configuration:ServiceConnection['configuration']`, full frozen
+`definition:ServiceToolDefinition` and `effect:ToolEffectAdmission` with only
+`catalogId` and `configRevision` removed from its JSON binding. This effect is
+an exact semantic preview/comparison fact, never the admission passed to claim.
+All other scope, effectKind, grant reference, resolved IDs and binding facts
+remain. No credential bytes/references or model-provided permit flags enter it.
+The host adapter is `RuntimeDecisions.service(operation,signal,current)`;
+reuse its existing owner instance and preview/digest helpers. Add decision kind
+`service-call`, feature `LOCAL_SERVICE_CONFIRMATIONS='decisions.service-v1'`.
+Existing decision list/get/preview/resolve methods remain the sole wire path.
+
+- [ ] **RED exact confirmation.** Actual SQLite/admission and normal host with
+      mode=confirm must initially refuse confirmation_required. Then show pending
+      owner decision before any business claim/send; two authenticated clients read
+      identical operation/preview/digest and concurrently resolve once. Require one
+      claim before responder receipt, one business request/effect, one final answer;
+      scripted provider must verify the actual returned result, not emit fixed
+      success on a tool error. Autonomous mode still gives0 cards and the same flow.
+- [ ] **Implement the live exact-operation port.** Keep C3 validation, membership,
+      run/attempt, grant limits, scoped conflicts and claim/settlement policy. No
+      SQLite transaction spans owner await. Absent port retains confirmation_required
+      with0 claims/sends. Freeze the semantic descriptor above and require current
+      equality before owner allow, after await in the actual claim transaction and
+      at the existing final SDK dispatch guard. Owner response is a fact delivered
+      to this one live call, never a new autonomous grant or a caller-supplied boolean.
+      Deny/expiry/invalidated/abort do not create authority; reuse unknown/claim-refused
+      handling and do not report a possibly earlier effect as not_started.
+- [ ] **Separate metadata lifetime from permission.** An unchanged-definition TTL
+      refresh during the owner wait may select the current published catalog for
+      the eventual claim only after every semantic descriptor fact still matches.
+      Build the final request/admission coherently from that current tuple; journal
+      catalog/config fields must match the actual snapshot. Route/trust/credential,
+      definition, scope, grant revision or actual request changes invalidate with0send.
+      No discovery inside confirmation or business invoke, no definition/account swap.
+      Preserve the existing post-claim/pre-send refresh guards and autonomous behavior.
+      The300000ms owner card lifetime is independent of the30000ms business deadline;
+      start the latter after approval/claim, not while waiting for the owner.
+- [ ] **Reuse durable owner decisions.** Stable decision ID is a trusted digest of
+      workspace/room/run/attempt/invocation identity, never a truncated model ID.
+      ownerPreview contains the full exact operation with reversible controls;
+      bindingDigest is SHA256 of that full preview. createdAt/expiresAt use the
+      existing owner clock and fixed300000ms expiry. Existing version/CAS/current
+      checks and live waiter decide once. Duplicate ID cannot replace preview or
+      mint another waiter; stored allowed/interrupted rows after restart are only
+      facts and cannot authorize another call. Join existing stop/drain/abort paths;
+      client detach never cancels a waiting operation. No new receipt or decision DB.
+- [ ] **Version the new kind safely.** Current shared LocalRuntimeClient advertises
+      decisions.service-v1 and validates the new kind/full chunked preview. Identity
+      projection independently masks it for historical clients. Pass the negotiated
+      support through the existing runtime context to decision dispatch. A legacy
+      list/get/preview/resolve that would expose or operate service-call must explicitly
+      refuse service_confirmation_upgrade_required, never coerce it into write/test
+      or silently hide it as an empty list. Old kinds/ordinary rooms/ACP keep their
+      existing behavior. Current TUI uses its generic complete-preview panel; Desktop
+      IPC/view remains18.5.3 (it currently exposes pending IDs, not a decision UI).
+- [ ] **GREEN failure and recovery controls.** Test exact-repeat/changed-ID payload,
+      concurrent owner replies, stale version/digest/wrong room/run, deny and clocked
+      expiry, revoke/limits/definition/credential changes while waiting, same-definition
+      refresh success, abort/stop and allow-then-revoke during SDK preparation. Require
+      0send when denied, and no model self-approval. Use actual socket/SQLite for owner
+      races, existing injected clocks and bounded seams for narrow fault boundaries.
+      One affected interprocess control keeps its observing HTTP peer alive across
+      both owners: after approval and durable claim, observe one accepted effect,
+      SIGKILL owner before result commit, restart and have independent clients see
+      original decision/run/journal identity and unknown outcome. Re-resolving the
+      old allowed card gives no new permit/effect/model request or confirmed cancel.
+      Record metadata separately from actual receipts/effects, both stop outcomes,
+      and exactly when the peer sees the durable claim. First owner records its actual
+      SIGKILL exit/signal and absence of a confirmed stop; second records its observed
+      stop response. No real service/model/key use
+      or unchanged native/ready-server/GUI matrix is needed.
+- [ ] **Verify and commit.** Run meaningful RED→GREEN, owning/affected source and
+      process checks, strict/scoped checks, then root pnpm check/build/format once on
+      final implementation. Keep protectedcatalog3/format2 debt explicit until18.6;
+      no skips/exclusions, fix new errors and record process reachability. Source<=300,
+      report API/semantic binding/claim boundary/decision lifetime/recovery/capability
+      evidence with exact files/commands/exits/pins. Commit owned source/report and
+      get fresh independent review before18.5.3. Installed/live/current full release
+      gates remain18.6/F; shared-runtime qualification is not a GUI acceptance claim.
 
 #### Task 18.5.3: Thin client settings and conservative legacy migration
 
