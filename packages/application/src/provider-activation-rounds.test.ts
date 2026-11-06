@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { taskRunId } from '@runnets/domain';
 import { DirectChatService } from './direct-chat.js';
@@ -70,6 +71,7 @@ it('retains the persisted snapshot through two tool rounds, source mutation and 
         expect(Object.isFrozen(turn.activation?.capabilities.inputModalities)).toBe(true);
         capabilities.tools = false;
         return {
+          callDigest: (text: string) => createHash('sha256').update(text).digest('hex'),
           cleanupConfirmed: true,
           definitions: [{ name: 'read', description: 'read', parameters: {} }],
           execute: async () => {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { BotModelBindingService } from './bot-model-binding.js';
 import { DirectChatService } from './direct-chat.js';
@@ -94,6 +95,7 @@ function fixture(twoRounds: boolean) {
           return null;
         }
         return {
+          callDigest: (text: string) => createHash('sha256').update(text).digest('hex'),
           cleanupConfirmed: true,
           definitions: [{ name: 'read', description: 'read', parameters: {} }],
           execute: async () => {

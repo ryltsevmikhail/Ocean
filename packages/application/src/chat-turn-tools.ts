@@ -18,8 +18,7 @@ export function combineChatTools(
       routes.set(definition.name, source);
     }
   }
-  if (active.length === 1 && (active[0]?.ownCallIdentity || !active[0]?.callDigest))
-    return active[0];
+  if (active.length === 1 && active[0]?.ownCallIdentity) return active[0];
   const digest = active.find((source) => source.callDigest)?.callDigest;
   if (!digest) throw Error('tool_digest_required');
   const results = new Map<string, { fingerprint: string; result: Promise<ToolResult> }>();

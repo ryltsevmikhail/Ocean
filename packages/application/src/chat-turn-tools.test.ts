@@ -112,14 +112,36 @@ it('keeps coding/dev single-source payload refusal guards when the source has no
     (await tools.execute({ ...call, id: 'oversize', arguments: 'x'.repeat(1048577) }, signal))
       .output,
   ).toBe('tool arguments too large');
+  expect((await tools.execute({ ...call, id: 'unlisted', name: 'unlisted' }, signal)).output).toBe(
+    'tool unavailable',
+  );
   expect(dev.execute).toHaveBeenCalledTimes(1);
 });
 
-it('leaves a lone host source without a digest unchanged rather than adding an unbounded cache', () => {
+it('refuses an unmarked source without a trusted digest before any counted dispatch', async () => {
+  const calls: string[] = [];
   const plain: GrantedPluginTools = {
     cleanupConfirmed: true,
-    definitions: [],
-    execute: async () => ({ isError: true, output: 'refused' }),
+    definitions: [{ name: 'allowed', description: 'counted', parameters: { type: 'object' } }],
+    execute: async (call) => {
+      calls.push(call.name);
+      return { isError: false, output: 'counted effect' };
+    },
   };
-  expect(combineChatTools(plain)).toBe(plain);
+  let tools: GrantedPluginTools | undefined, failure: string | undefined;
+  try {
+    tools = combineChatTools(plain);
+  } catch (error) {
+    failure = (error as Error).message;
+  }
+  if (tools) {
+    const call = { id: 'same', name: 'allowed', arguments: '{}' },
+      signal = new AbortController().signal;
+    await tools.execute(call, signal);
+    await tools.execute(call, signal);
+    await tools.execute({ ...call, arguments: '{"changed":true}' }, signal);
+    await tools.execute({ ...call, id: 'unlisted', name: 'unlisted' }, signal);
+  }
+  expect(calls).toEqual([]);
+  expect(failure).toBe('tool_digest_required');
 });

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { DirectChatService } from '@runnets/application';
 import { fixture as localHttp } from '../../test-fixtures/local-model.js';
@@ -186,6 +187,7 @@ it('holds a later local not_sent request after an earlier real tool round', asyn
       reviews: f.reviews,
       grantedTools: {
         forTurn: async () => ({
+          callDigest: (text: string) => createHash('sha256').update(text).digest('hex'),
           cleanupConfirmed: true,
           instructions: 'fixture',
           definitions: [

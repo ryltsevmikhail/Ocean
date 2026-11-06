@@ -1,5 +1,5 @@
 import { injectedProviderActivation } from '@runnets/application';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import {
   ConversationService,
@@ -44,6 +44,7 @@ it.each(['success', 'refusal', 'unknown'] as const)(
           return {
             definitions: [],
             execute: async () => ({ isError: false, output: '' }),
+            callDigest: (text: string) => createHash('sha256').update(text).digest('hex'),
             cleanupConfirmed: true as const,
           };
         },
