@@ -123,3 +123,44 @@ The patch is deletion-led: no new API/table/engine, unchanged installer policy a
 
 
 Final documentation-only follow-up:32/33 used P with `pnpm exec prettier --write` on the report and status doc (exit0).34 ran literal `pnpm format:check` from S after the status update (exit0). These do not relabel the archive source; required compiler/test/build/install/package gates remain pinned to1f31974. Controller-owned brief/ruling remains an ignored handoff input; canonical tracked plan Files changes are included in the source commit. Independent review is still pending.
+
+
+## Correction round1 — Important1 discriminating response/catalog byte coverage
+
+FIX_BASE `40f03c6bcafb3bc689cbbdec358306fb421bed05`; status DONE_WITH_CONCERNS, ready for fresh scoped controller review. Full independent review found one Important coverage defect, not a demonstrated product-cap failure: the old response/catalog cases replaced the genuine reply with only whitespace, so malformed protocol data could cause the asserted refusal even without a byte guard. The original green gates remain historical results; those two original cases alone are not credited with byte-cap discrimination.
+
+Only `packages/integrations-mcp/src/http-guards.test.ts` and this correction report change. No fixture, production cap/SDK/API, installer, layer or framework changes. The existing successful peer JSON is retained, then trailing JSON whitespace pads its actual wire bytes; each case asserts HTTP200/application-json, exact UTF-8 size and `JSON.parse(padded) === JSON.parse(original)` by deep equality. Thus the same successful catalog/result remains usable if the bound is absent.
+
+- `response-under` / `response-over`: genuine successful tools/call JSON padded to4,190,208bytes (4MiB−4096) /4,194,305bytes (4MiB+1). Under returns observed/ok, over uncertain; both assert exactly1 preparation, actual business fetch, peer call and effect. Neither repeats the operation.
+- `catalog-under` / `catalog-over`: genuine tools/list JSON at the same under/over sizes. Both assert exactly1 tools/list fetch and peer request. Under publishes/activates, aggregate received metadata stays below4MiB, then a normal call gives observed/ok with1fetch/call/effect. Over refuses catalog_incomplete with0business fetch/call/effect. Padding leaves space for preceding metadata on the positive control; the test observes the actual countMetadata arguments rather than assuming only the catalog counts.
+- `catalog-aggregate`: valid server/discover JSON padded to2048bytes plus valid tools/list JSON padded to4,193,280bytes (4MiB−1024). Every individual frame is below4MiB, while their combined bytes exceed it. It refuses catalog_incomplete with exactly1 tools/list fetch/peer request and0business sends/effects. This independently exercises the aggregate metadata bound instead of relying only on the per-response guard.
+- The unchanged outgoing argument/wire-envelope denial cases and endpoint credential checks remain active. No public/internal test seam was added; existing global fetch/prototype spies observe actual production callbacks and are restored in finally.
+
+### Bounded negative controls and final scoped checks
+
+New private proof root `R=/home/ryltsevmg/Projects/Ocean-artifacts/c18.6.2-fix1-g44cg2js`, mode0700. All test/compiler/lint/format commands run through the same unchanged absolute `P` runner named above, SHA256 `adc3adf372fa77a694f4a4272a5f13e615646886356e1db0045767dad0d228a3`, from the stable workspace. `R/commands.jsonl` records exact argv/workdir/exits; the short existing gate logger was reused. The private one-off `R/unwire.py` temporarily removes only the selected existing guard, runs the owning tests through inherited private HOME/XDG/TMP, and restores exact saved production bytes in finally. These are deliberately failing guard-loss discrimination controls, **not preimplementation TDD** or passing product qualifications.
+
+| Gate/log | Exact command after P (R expands to the root above) | Actual exit/output |
+| --- | --- | --- |
+| 01-test-format | `pnpm exec prettier --write packages/integrations-mcp/src/http-guards.test.ts` |0 |
+| 02-owning-tests | `pnpm exec vitest run --config vitest.source.config.ts packages/integrations-mcp/src/http-guards.test.ts` |1;7pass/1fail. Initial aggregate fixture padded initialize, but pinned modern protocol uses server/discover, so the catalog correctly resolved. Test input corrected; no production failure or policy change |
+| 03-owning-tests | same owning Vitest command |0;8pass |
+| 04-negative-response | `python3 R/unwire.py response`, invoking the same owning Vitest command |expected1;7pass/1fail, response-over became observed instead of uncertain; exact HTTP source restoration logged |
+| 05-negative-metadata | `python3 R/unwire.py metadata`, same owning Vitest command |expected1;7pass/1fail, catalog-aggregate resolved a complete candidate instead of refusing; exact writer restoration logged |
+| 06-test-format | same explicit Prettier command as01 |0; final test adds explicit matching peer/fetch tools/list counters and simplifies padding selection |
+| 07-negative-response-final | `python3 R/unwire.py response`, same owning Vitest command |expected1;7pass/1fail, only response-over fails with `expected observed to be uncertain`; under control remains successful |
+| 08-negative-metadata-final | `python3 R/unwire.py metadata`, same owning Vitest command |expected1;7pass/1fail, only catalog-aggregate resolves rather than rejecting; individual frame guard remains active |
+| 09-covering-green | `pnpm exec vitest run --config vitest.source.config.ts packages/integrations-mcp/src/http-guards.test.ts packages/integrations-mcp/src/transport.test.ts packages/integrations-mcp/src/prototype-http.test.ts packages/integrations-mcp/src/normal-turn.test.ts packages/integrations-mcp/src/retirement-race.test.ts` |0;5files/62tests passed,0skips |
+| 10-strict-node-tests | `pnpm typecheck:tests:node` (`tsc -p tsconfig.tests.node.json --pretty false`) |0; strict Node test typing |
+| 11-scoped-lint | `pnpm exec eslint packages/integrations-mcp/src/http-guards.test.ts` |0; no diagnostics |
+
+The negative controls on final assertions isolate both guards: removing just HTTP's per-response check exposes response-over, and removing just writer's aggregate check exposes catalog-aggregate. Neither depends on an invalid JSON-RPC/SSE response. JSON semantics and actual peer/business counters stay fixed across the response under/over pair and across catalog metadata attempts. Final checks ran only after both product files were restored byte-for-byte; `R/response-negative.json`, `R/metadata-negative.json` and final logs record the original/unwired/restored digests and actual failing exits. All earlier failed/negative logs are retained.
+
+### Exact inputs, retained artifact attribution and limits
+
+`R/correction-pins.json` and `R/source-line-counts.json` record final source inputs and physical lines. Final changed test SHA256 `8609524197ea7f5f933dab4e1b32e7fc771520f5609ee4b82b313604ff990858`,155physical lines. Every tracked TypeScript source remains≤300physical lines, maximum300. Product HTTP SHA256 `4db05177dcb909d086bb677fa32bdd2fcb9fbf591e447b2cbc4738f42387f1ea`; session-writer SHA256 `e06e19356785a3b93262bc30042129c53f927997cd6343e4a7c09d1d1143e762`. These, release bundler source and lockfile match qualified1f31974 exactly after restoration. The final diff contains no production or build input change, only the test and report.
+
+No unchanged root/build/native/live/archive/install matrix was repeated. Original clean root3691source+165process and existing44/36skips remain results for1f31974; they are not relabeled as a new aggregate including these3additional test cases. Original archive SHA256 `5fdcd2b6eba91554cc0dd78bb856fabd3873c0dd5630f244a619b23a2d017d2c` and installed MCP entry SHA256 `23cbe2e8e7f4a0819d6e22d929adfc0e735621cf1b20e2faee9f06877bc9c60b` retain their original source qualification. This test-only correction supplies new focused proof for Important1. No real credentials/profile/service or native unit was used; private temporary homes were cleaned by P and loopback fixtures closed in finally. Parent C remains unaccepted until the controller's fresh scoped review closes I1; all F Minors/Rulings and later gates remain open.
+
+
+Correction format outputs:12-report-format ran P `pnpm exec prettier --write .superpowers/sdd/2026-11-04-ocean-platform/task-18.6.2-report.md`, exit0.13-scoped-format ran P `pnpm exec prettier --check packages/integrations-mcp/src/http-guards.test.ts .superpowers/sdd/2026-11-04-ocean-platform/task-18.6.2-report.md`, exit0 with “All matched files use Prettier code style!”. The private command ledger retains final editorial format/check outputs too. Source and product restoration pins are unchanged by this prose.

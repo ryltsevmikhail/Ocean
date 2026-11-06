@@ -6,9 +6,22 @@ import { createMcpServiceTransport } from './index.js';
 import { serviceHttp } from './http.js';
 import { SessionWriter } from './session-writer.js';
 
-it.each(['request', 'wire', 'response', 'catalog'] as const)(
+it.each([
+  'request',
+  'wire',
+  'response-under',
+  'response-over',
+  'catalog-under',
+  'catalog-over',
+  'catalog-aggregate',
+] as const)(
   'enforces the current %s byte bound without a second business send',
-  async (mode) => {
+  async (scenario) => {
+    const mode = scenario.split('-')[0]!;
+    const over = scenario.endsWith('over') || scenario === 'catalog-aggregate';
+    const limit = 4 * 1024 * 1024;
+    const paddedSizes: number[] = [];
+    const metadata = vi.spyOn(SessionWriter.prototype, 'countMetadata');
     const f = await httpFixture('normal');
     const t = createMcpServiceTransport({ protocol: '2026-07-28' });
     const c = connection({ kind: 'http', url: f.url.href });
@@ -18,14 +31,26 @@ it.each(['request', 'wire', 'response', 'catalog'] as const)(
       expect(init?.redirect).toBe('error');
       const response = await original(target, init);
       const method = JSON.parse(String(init?.body ?? '{}')).method as string | undefined;
+      let size: number | null = null;
       if (
         (mode === 'response' && method === 'tools/call') ||
         (mode === 'catalog' && method === 'tools/list')
       )
-        return new Response(' '.repeat(4 * 1024 * 1024 + 1), {
-          headers: response.headers,
-          status: response.status,
-        });
+        size = over ? limit + 1 : limit - 4096;
+      if (scenario === 'catalog-aggregate') {
+        if (method === 'server/discover') size = 2048;
+        if (method === 'tools/list') size = limit - 1024;
+      }
+      if (size !== null) {
+        const body = await response.text();
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('application/json');
+        const padded = body + ' '.repeat(size - Buffer.byteLength(body));
+        expect(JSON.parse(padded)).toEqual(JSON.parse(body));
+        expect(Buffer.byteLength(padded)).toBe(size);
+        paddedSizes.push(size);
+        return new Response(padded, { headers: response.headers, status: response.status });
+      }
       return response;
     });
     try {
@@ -34,13 +59,21 @@ it.each(['request', 'wire', 'response', 'catalog'] as const)(
         deadlineMs: 2000,
         authorizeMetadata: () => true,
       });
-      if (mode === 'catalog') {
+      if (mode === 'catalog' && over) {
         await expect(discovering).rejects.toMatchObject({ code: 'catalog_incomplete' });
-        expect(f.stats.calls).toBe(0);
+        expect([f.stats.calls, f.stats.effects]).toEqual([0, 0]);
+        expect(
+          fetches.mock.calls.filter(
+            ([, init]) => JSON.parse(String(init?.body ?? '{}')).method === 'tools/call',
+          ),
+        ).toHaveLength(0);
+        expect(metadata.mock.calls.reduce((sum, [bytes]) => sum + bytes, 0)).toBeGreaterThan(limit);
       } else {
         const candidate = await discovering,
           snapshot = { ...candidate, id: 'published' };
         expect(t.activate(candidate, snapshot, () => true)).toBe(true);
+        if (mode === 'catalog')
+          expect(metadata.mock.calls.reduce((sum, [bytes]) => sum + bytes, 0)).toBeLessThan(limit);
         const args = {
           value:
             mode === 'request'
@@ -71,14 +104,36 @@ it.each(['request', 'wire', 'response', 'catalog'] as const)(
         );
         expect(wireCalls).toHaveLength(['request', 'wire'].includes(mode) ? 0 : 1);
         expect(preparations).toBe(['request', 'wire'].includes(mode) ? 0 : 1);
-        expect(outcome.kind).toBe(['request', 'wire'].includes(mode) ? 'not_started' : 'uncertain');
+        expect(outcome.kind).toBe(
+          ['request', 'wire'].includes(mode)
+            ? 'not_started'
+            : mode === 'response' && over
+              ? 'uncertain'
+              : 'observed',
+        );
+        if (outcome.kind === 'observed') expect(outcome.code).toBe('ok');
         expect([f.stats.calls, f.stats.effects]).toEqual(
           ['request', 'wire'].includes(mode) ? [0, 0] : [1, 1],
         );
       }
+      if (mode === 'catalog') {
+        expect(f.rows.filter((method) => method === 'tools/list')).toHaveLength(1);
+        expect(
+          fetches.mock.calls.filter(
+            ([, init]) => JSON.parse(String(init?.body ?? '{}')).method === 'tools/list',
+          ),
+        ).toHaveLength(1);
+      }
+      if (mode === 'response' || mode === 'catalog')
+        expect(paddedSizes).toEqual(
+          scenario === 'catalog-aggregate'
+            ? [2048, limit - 1024]
+            : [over ? limit + 1 : limit - 4096],
+        );
     } finally {
       await t.close();
       fetches.mockRestore();
+      metadata.mockRestore();
       await f.close();
     }
   },
