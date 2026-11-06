@@ -170,6 +170,7 @@ export function createServiceSettings(request: typeof call = call) {
     const version = ++lookupVersion;
     receipt.value = null;
     lookupRequestId.value = requestId;
+    message.value = '';
     pending.value = { requestId, targetId };
     busy.value = true;
     try {

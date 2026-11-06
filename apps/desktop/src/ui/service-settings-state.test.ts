@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { createServiceSettings } from './service-settings-state.js';
+import { ownerGrant, serviceConnection } from '../../../../test-fixtures/service-authority.js';
 const input = {
   requestId: 'old',
   connectionId: 'service',
@@ -105,7 +106,6 @@ it('keeps grant version conflict visible and refreshes current facts without ret
   });
   const s = createServiceSettings(request as never);
   await s.load();
-  const { ownerGrant } = await import('../../../../test-fixtures/service-authority.js');
   const { id, permissions, mode, limits } = ownerGrant;
   await s.mutate({
     op: 'service-grant',
@@ -126,7 +126,6 @@ it('keeps grant version conflict visible and refreshes current facts without ret
   expect(request.mock.calls.filter(([c]) => c.op === 'service-grant')).toHaveLength(1);
 });
 it('refreshes selected declarative fields together with versions before a new owner save', async () => {
-  const { serviceConnection } = await import('../../../../test-fixtures/service-authority.js');
   let current = { ...serviceConnection, tools: [], readiness: 'unknown' };
   const request = vi.fn(async (c) =>
     c.op === 'service-connections'
@@ -150,7 +149,6 @@ it('refreshes selected declarative fields together with versions before a new ow
   expect(s.draft.configuration).toEqual(current.configuration);
 });
 it('key removal uses persisted HTTP metadata and versions, ignoring dirty name URL permission and transport', async () => {
-  const { serviceConnection } = await import('../../../../test-fixtures/service-authority.js');
   const c = { ...serviceConnection, state: 'disconnected', tools: [], readiness: 'disconnected' };
   const request = vi.fn(async (cmd) =>
     cmd.op === 'service-connections'
@@ -272,4 +270,31 @@ it('fresh recovery selection clears both passwords and only its exact absent des
   s.context('other', 'bot');
   expect(s.recoveryKey.value).toBe('');
   expect(s.recoverySelection.value).toBeNull();
+});
+it('clears completed A feedback synchronously while mutation B is held and then shows only B outcome', async () => {
+  const completed = { ...receipt, state: 'completed', recovery: null, result: serviceConnection };
+  let finish!: (v: unknown) => void;
+  const request = vi.fn(async (c) => {
+    if (c.op === 'service-receipt') return { ...completed, requestId: 'A' };
+    if (c.op === 'service-set') return new Promise((resolve) => (finish = resolve));
+    return c.op === 'service-operations' ? { items: [], next: null } : [];
+  });
+  const s = createServiceSettings(request as never);
+  await s.load();
+  await s.lookup('A');
+  expect(s.message.value).toContain('completed');
+  const work = s.mutate({
+    op: 'service-set',
+    input: { ...input, requestId: 'B', key: 'synthetic-B' },
+  });
+  expect(s.lookupRequestId.value).toBe('B');
+  expect(s.receipt.value).toBeNull();
+  expect(s.busy.value).toBe(true);
+  expect(s.message.value).toBe('');
+  finish({ ...receipt, requestId: 'B' });
+  await work;
+  expect(s.receipt.value).toMatchObject({ requestId: 'B', state: 'prepared' });
+  expect(s.message.value).toContain('prepared');
+  expect(s.message.value).not.toContain('completed');
+  expect(s.busy.value).toBe(false);
 });
