@@ -79,7 +79,7 @@ export async function startLocalRuntime(
   let publication: ReturnType<typeof publishEndpoint> | undefined;
   try {
     const recovery = await runtime.ready;
-    await runtime.services?.start();
+    if (!options.restore && !runtime.restored) await runtime.services?.start();
     checkRestoration();
     const proof = runtime.openEndpointProof?.();
     if (!proof) throw Error('durable_runtime_required');

@@ -1,11 +1,12 @@
+import { httpFixture } from '../../../../packages/integrations-mcp/src/prototype-http-fixture.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, it } from 'vitest';
 const exec = promisify(execFile);
-it.each(['http', 'revoke', 'refresh', 'drop'])(
+it.each(['http', 'revoke', 'refresh'])(
   'qualifies normal owner/socket and independent client: %s',
   async (mode) => {
     const dir = await mkdtemp(join(tmpdir(), 'mcp-process-'));
@@ -26,25 +27,69 @@ it.each(['http', 'revoke', 'refresh', 'drop'])(
       expect(result.calls).toBe(['http', 'drop'].includes(mode) ? 1 : 0);
       expect(result.effects).toBe(result.calls);
       if (mode === 'revoke' || mode === 'refresh') expect(result.preparedClaims).toBe(1);
-      if (mode === 'drop') {
-        const script = `import {startLocalRuntime} from './apps/cli/dist/local-runtime/host.js';import {DatabaseSync} from 'node:sqlite';
-      const profile=process.argv[1];const host=await startLocalRuntime({profile,provider:null});
-      const db=new DatabaseSync(profile+'/runtime.sqlite');const rows=db.prepare("SELECT outcome FROM tool_invocations_v2 WHERE outcome='uncertain'").all();db.close();
-      console.log(JSON.stringify({rows,stop:await host.stop()}));`;
-        const restart = await exec(
-          process.execPath,
-          ['--input-type=module', '-e', script, join(dir, 'profile')],
-          { timeout: 20000 },
-        );
-        expect(JSON.parse(restart.stdout)).toMatchObject({
-          rows: [{ outcome: 'uncertain' }],
-          stop: { outcome: 'complete' },
-        });
-        expect(await readFile(join(dir, 'received'), 'utf8')).toBe('tools/call\n');
-      }
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   },
   60000,
 );
+
+it('observes no replay against a reachable peer across both owner lifetimes and asserts both stop verdicts', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcp-reachable-restart-'));
+  const peer = await httpFixture('drop', dir, 60000);
+  try {
+    const first = await exec(
+      process.execPath,
+      [resolve('apps/cli/test-fixtures/mcp-normal-host.ts'), dir, 'drop', peer.url.href],
+      { timeout: 30000 },
+    );
+    const a = JSON.parse(first.stdout) as {
+      model: number;
+      journal: unknown[];
+      stopped: { outcome: string; state: string };
+    };
+    expect([peer.stats.calls, peer.stats.effects]).toEqual([1, 1]);
+    expect(a.model).toBe(1);
+    expect(a.stopped).toMatchObject({ outcome: 'uncertain', state: 'stop_incomplete' });
+    expect(a.journal).toEqual([
+      expect.objectContaining({
+        id: expect.any(String) as unknown,
+        tool: 'write',
+        task_run_id: expect.any(String) as unknown,
+        attempt_id: expect.any(String) as unknown,
+        outcome: 'uncertain',
+      }),
+    ]);
+    const lists = peer.rows.filter((m) => m === 'tools/list').length;
+    const second = await exec(
+      process.execPath,
+      [resolve('apps/cli/test-fixtures/mcp-restart-owner.ts'), join(dir, 'profile')],
+      { timeout: 20000 },
+    );
+    const b = JSON.parse(second.stdout) as {
+      model: number;
+      journal: unknown[];
+      stopped: { outcome: string; state: string };
+    };
+    expect(peer.rows.filter((m) => m === 'tools/list').length).toBeGreaterThan(lists);
+    expect([peer.stats.calls, peer.stats.effects, b.model]).toEqual([1, 1, 0]);
+    expect(b.journal).toEqual(a.journal);
+    expect(b.stopped).toMatchObject({ outcome: 'complete', state: 'stopped' });
+    console.log(
+      JSON.stringify({
+        scenario: 'reachable-restart',
+        firstStop: a.stopped,
+        secondStop: b.stopped,
+        beforeLists: lists,
+        afterLists: peer.rows.filter((m) => m === 'tools/list').length,
+        received: peer.stats.calls,
+        effects: peer.stats.effects,
+        model: [a.model, b.model],
+        journalUnchanged: true,
+      }),
+    );
+  } finally {
+    await peer.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+}, 60000);

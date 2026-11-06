@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { ServiceTurnTools } from '@runnets/application';
 import type { ChatTurn, ServiceConnection } from '@runnets/domain';
 import { createMcpServiceTransport } from './index.js';
@@ -71,6 +71,20 @@ it('projects accepted SQLite grants before dispatch and binds exact call identit
       true,
     );
     expect(f.stats.calls).toBe(0);
+    const oversized = { ...call, id: 'oversized', arguments: 'x'.repeat(1048577) };
+    const writes = vi.spyOn(Map.prototype, 'set');
+    const refused = tools!.execute(oversized, signal(), context);
+    expect(tools!.execute(oversized, signal(), context)).toBe(refused);
+    expect((await tools!.execute({ ...call, id: oversized.id }, signal(), context)).isError).toBe(
+      true,
+    );
+    const retained = writes.mock.calls.filter(
+      ([, value]) => value && typeof value === 'object' && 'fingerprint' in value,
+    );
+    writes.mockRestore();
+    expect(retained).toHaveLength(1);
+    expect(String(retained[0]![0])).toHaveLength(64);
+    expect((retained[0]![1] as { fingerprint: string }).fingerprint).toHaveLength(64);
     const result = await tools!.execute(call, signal(), context);
     expect(result.isError).toBe(false);
     expect(await tools!.execute(call, signal(), context)).toEqual(result);

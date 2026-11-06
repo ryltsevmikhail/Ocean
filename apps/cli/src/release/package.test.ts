@@ -1,3 +1,4 @@
+import { malformed } from '../../test-fixtures/mcp-malformed-archive.js';
 /**
  * Release packaging regressions for the pre-bundled Executor adapter.
  *
@@ -160,23 +161,34 @@ it('still refuses every other unpackaged runtime dependency, producing no archiv
   expect(existsSync(out)).toBe(false);
 });
 
-it('refuses to bundle when a pinned identity is deliberately drifted', async () => {
-  const root = temporary('package-identity');
-  const repo = releaseRepo(join(root, 'repo'));
-  writeFileSync(
-    join(repo, 'pnpm-lock.yaml'),
-    readFileSync(join(repo, 'pnpm-lock.yaml'), 'utf8').replaceAll(
-      "'@modelcontextprotocol/client':",
-      "'@modelcontextprotocol/drifted':",
-    ),
-  );
-  commitReleaseRepo(repo, 'drift the pinned patch');
-  const out = join(root, 'artifact');
-  await expect(packageRelease(repo, '1.1.0-rc.2', out)).rejects.toThrow(
-    'lockfile MCP identity mismatch',
-  );
-  expect(existsSync(out)).toBe(false);
-});
+it.each(['resolution', 'integrity'])(
+  'refuses actual lock %s drift with importer and stale installed SDK intact',
+  async (mode) => {
+    const root = temporary('package-identity');
+    const repo = releaseRepo(join(root, 'repo'));
+    const original = readFileSync(join(repo, 'pnpm-lock.yaml'), 'utf8');
+    const drifted =
+      mode === 'resolution'
+        ? original.replace(
+            "'@modelcontextprotocol/client@2.4.0':",
+            "'@modelcontextprotocol/client@2.4.1':",
+          )
+        : original.replace(
+            /('@modelcontextprotocol\/core@2\.4\.0':\n {4}resolution: \{integrity: sha512-)([^}]+)/,
+            (_match, prefix: string, value: string) =>
+              prefix + (value[0] === 'A' ? 'B' : 'A') + value.slice(1),
+          );
+    expect(drifted).not.toBe(original);
+    expect(drifted).toContain("'@modelcontextprotocol/client':");
+    writeFileSync(join(repo, 'pnpm-lock.yaml'), drifted);
+    commitReleaseRepo(repo, 'drift actual locked identity');
+    const out = join(root, 'artifact');
+    await expect(packageRelease(repo, '1.1.0-rc.2', out)).rejects.toThrow(
+      'lockfile MCP identity mismatch',
+    );
+    expect(existsSync(out)).toBe(false);
+  },
+);
 
 it('installer refuses a manifest whose recorded bundle integrity disagrees with the shipped bytes', async () => {
   const root = temporary('package-manifest');
@@ -219,4 +231,36 @@ it('records the release revision and lockfile identity from the committed tree',
   ) as { revision: string; lockfileSha256: string };
   expect(manifest.revision).toBe(revision);
   expect(manifest.lockfileSha256).toBe(sha256(readFileSync(join(workspace, 'pnpm-lock.yaml'))));
+});
+
+it('the emitted standalone rejects self-consistent modern policy omissions/drift before writes', async () => {
+  const root = temporary('standalone-policy');
+  const release = await packageRelease(
+    releaseRepo(join(root, 'repo')),
+    '1.1.0-policy',
+    join(root, 'artifact'),
+  );
+  expect(existsSync(release.archive)).toBe(true);
+  for (const mode of ['absent', 'format', 'pins', 'identities', 'bundler']) {
+    const artifact = malformed(root, mode),
+      prefix = join(root, 'prefix-' + mode);
+    expect(
+      () =>
+        execFileSync(
+          process.execPath,
+          [
+            join(root, 'artifact/ocean-install.mjs'),
+            '--archive',
+            artifact.archive,
+            '--sha256',
+            artifact.checksum,
+            '--prefix',
+            prefix,
+          ],
+          { stdio: 'pipe' },
+        ),
+      mode,
+    ).toThrow();
+    expect(existsSync(prefix), mode).toBe(false);
+  }
 });

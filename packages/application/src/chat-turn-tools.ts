@@ -1,3 +1,5 @@
+import { utf8Bytes } from '@runnets/domain';
+import { SERVICE_PLUGIN_MAX_REQUEST_BYTES } from './service-plugin-transport.js';
 import type { ChatTurn } from '@runnets/domain';
 import type { GrantedToolSource } from './plugin-turn-tools.js';
 import type { GrantedPluginTools } from './plugin-turn-tools.js';
@@ -16,14 +18,22 @@ export function combineChatTools(
       routes.set(definition.name, source);
     }
   }
+  if (active.length === 1 && (active[0]?.ownCallIdentity || !active[0]?.callDigest))
+    return active[0];
+  const digest = active.find((source) => source.callDigest)?.callDigest;
+  if (!digest) throw Error('tool_digest_required');
   const results = new Map<string, { fingerprint: string; result: Promise<ToolResult> }>();
   return {
     cleanupConfirmed: true,
+    callDigest: digest,
+    ownCallIdentity: true,
     definitions: Object.freeze(active.flatMap((s) => s.definitions)),
     instructions: active.map((s) => s.instructions ?? '').join('\n'),
     execute(call, signal, context) {
-      const key = JSON.stringify([context?.taskRunId, context?.attemptId, call.id]);
-      const fingerprint = JSON.stringify([call.name, call.arguments]);
+      const key = digest(JSON.stringify([context?.taskRunId, context?.attemptId, call.id]));
+      const fingerprint = digest(JSON.stringify([call.name, call.arguments]));
+      if (![key, fingerprint].every((value) => /^[a-f0-9]{64}$/.test(value)))
+        throw Error('invalid_tool_digest');
       const previous = results.get(key);
       if (previous)
         return previous.fingerprint === fingerprint
@@ -32,9 +42,12 @@ export function combineChatTools(
       if (results.size >= 1024)
         return Promise.resolve({ isError: true, output: 'turn tool limit reached' });
       const source = routes.get(call.name);
-      const result = source
-        ? source.execute(call, signal, context)
-        : Promise.resolve({ isError: true, output: 'tool unavailable' });
+      const result =
+        utf8Bytes(call.arguments) > SERVICE_PLUGIN_MAX_REQUEST_BYTES
+          ? Promise.resolve({ isError: true, output: 'tool arguments too large' })
+          : source
+            ? source.execute(call, signal, context)
+            : Promise.resolve({ isError: true, output: 'tool unavailable' });
       results.set(key, { fingerprint, result });
       return result;
     },

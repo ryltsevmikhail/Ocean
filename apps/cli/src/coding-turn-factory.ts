@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { ChatTurn, CodingTask } from '@runnets/domain';
 import {
   CodingTurnTools,
@@ -104,7 +104,10 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
             };
           },
         }),
-        { cleanupConfirmed: true as const },
+        {
+          cleanupConfirmed: true as const,
+          callDigest: (text: string) => createHash('sha256').update(text).digest('hex'),
+        },
       );
     },
   };

@@ -1,11 +1,11 @@
+import { normalHttpPeer } from './mcp-http-peer.ts';
 import { verifyNormalResult, verifyNormalJournal } from './mcp-result-proof.ts';
 import { observeNative, retiredNative } from './mcp-native-observation.ts';
 /** Owned synthetic normal-runtime proof. No real model/account or production profile. */
 import { createHash } from 'node:crypto';
-import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, appendFileSync, realpathSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, realpathSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -14,7 +14,7 @@ import { OwnerScopeService, ConversationService, type ProviderPort } from '@runn
 import type { ServiceConnection } from '@runnets/domain';
 import { startLocalRuntime } from '../dist/local-runtime/host.js';
 import { createRuntime } from '../dist/runtime.js';
-const [proofArg, mode = 'http'] = process.argv.slice(2);
+const [proofArg, mode = 'http', remoteUrl] = process.argv.slice(2);
 if (!proofArg) throw Error('proof directory required');
 const proof = resolve(proofArg),
   profile = join(proof, 'profile');
@@ -22,70 +22,8 @@ mkdirSync(profile, { recursive: true, mode: 0o700 });
 const path = join(profile, 'runtime.sqlite');
 writeFileSync(path, '', { flag: 'wx', mode: 0o600 });
 const hash = (v: string) => createHash('sha256').update(v).digest('hex');
-let calls = 0,
-  effects = 0,
-  model = 0,
-  claims = 0;
-const http = createServer(async (req, res) => {
-  try {
-    if (req.method === 'GET') {
-      res.writeHead(405).end();
-      return;
-    }
-    let body = '';
-    for await (const data of req) body += String(data);
-    const message = JSON.parse(body) as { id?: string; method: string };
-    appendFileSync(join(proof, 'metadata'), message.method + '\n');
-    if (message.id === undefined) {
-      res.writeHead(202).end();
-      return;
-    }
-    let result: unknown;
-    if (message.method === 'initialize')
-      result = {
-        protocolVersion: '2025-11-25',
-        capabilities: { tools: {} },
-        serverInfo: { name: 'owned', version: '1' },
-      };
-    else if (message.method === 'tools/list')
-      result = {
-        ...(mode === 'refresh' ? { ttlMs: 1000 } : {}),
-        tools: [
-          {
-            name: 'write',
-            description: 'Synthetic operation',
-            inputSchema: { type: 'object', properties: { value: { type: 'string' } } },
-          },
-        ],
-      };
-    else if (message.method === 'tools/call') {
-      calls++;
-      const db = new DatabaseSync(path);
-      const rows = db
-        .prepare("SELECT COUNT(*) AS n FROM tool_invocations_v2 WHERE outcome='started'")
-        .get();
-      db.close();
-      claims += Number(rows?.['n']);
-      appendFileSync(join(proof, 'received'), 'tools/call\n');
-      effects++;
-      appendFileSync(join(proof, 'effects'), 'effect\n');
-      if (mode === 'drop') {
-        res.destroy();
-        return;
-      }
-      result = { content: [{ type: 'text', text: 'synthetic result' }] };
-    } else throw Error('unexpected method');
-    res
-      .writeHead(200, { 'content-type': 'application/json' })
-      .end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }));
-  } catch {
-    res.writeHead(500).end();
-  }
-});
-http.listen(0, '127.0.0.1');
-await once(http, 'listening');
-const address = http.address();
-if (!address || typeof address === 'string') throw Error('address');
+let model = 0;
+const { http, url, stats } = await normalHttpPeer(proof, path, mode);
 const store = openSqliteStore({ path });
 let ids = 0;
 const conversations = new ConversationService({
@@ -121,7 +59,7 @@ const ownerId = hash(realpathSync(path));
 const at = new Date().toISOString();
 let configuration: ServiceConnection['configuration'] = {
   kind: 'http',
-  url: `http://127.0.0.1:${address.port}/mcp`,
+  url: remoteUrl ?? url,
 };
 if (mode === 'stdio') {
   const input = JSON.parse(readFileSync(join(proof, 'stdio.json'), 'utf8')) as {
@@ -276,7 +214,13 @@ http.closeAllConnections();
 await new Promise<void>((r) => http.close(() => r()));
 if (code !== 0) throw Error('client failed ' + stderr);
 const client = JSON.parse(stdout) as { answers: string[]; view: { taskStatus: string } };
-const result = { mode, calls, effects, claims, preparedClaims, model, client, stopped };
+const { calls, effects, claims } = stats;
+const db = new DatabaseSync(path);
+const journal = db
+  .prepare('SELECT id,tool,task_run_id,attempt_id,outcome FROM tool_invocations_v2')
+  .all();
+db.close();
+const result = { mode, calls, effects, claims, preparedClaims, model, client, stopped, journal };
 writeFileSync(join(proof, 'result.json'), JSON.stringify(result, null, 2) + '\n');
 if (
   mode === 'http' &&
@@ -285,6 +229,7 @@ if (
   throw Error('normal path failed');
 if (
   mode === 'drop' &&
+  !remoteUrl &&
   (calls !== 1 || effects !== 1 || claims !== 1 || model !== 1 || client.answers.length !== 0)
 )
   throw Error('uncertainty replayed');
@@ -295,5 +240,7 @@ if (
   (calls !== 0 || effects !== 0 || preparedClaims !== 1 || model !== 2)
 )
   throw Error('held authority failed');
+if (mode === 'drop' && (stopped.outcome !== 'uncertain' || stopped.state !== 'stop_incomplete'))
+  throw Error('drop stop misreported');
 console.log(JSON.stringify(result));
 if (mode === 'drop') process.exit(0);

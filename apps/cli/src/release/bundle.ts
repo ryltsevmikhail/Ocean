@@ -16,6 +16,8 @@ export const ADAPTER_DEPENDENCIES: Readonly<Record<string, string>> = {
   '@runnets/domain': 'workspace:*',
   '@runnets/tools-node': 'workspace:*',
 };
+export const PINNED_LOCKFILE_SHA256 =
+  '503cf1fadb723dd6c131540cae5d8ad9fdc01fdcb1a844c56aa64c8a77b31ec0';
 export const PINNED_VERSIONS = { client: '2.4.0', core: '2.4.0' } as const;
 export interface AdapterBundle {
   readonly files: ReadonlyMap<string, Buffer>;
@@ -30,9 +32,7 @@ function json(path: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
 }
 export function assertPinnedBuildIdentities(root: string) {
-  if (
-    !readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8').includes("'@modelcontextprotocol/client':")
-  )
+  if (sha256(readFileSync(join(root, 'pnpm-lock.yaml'))) !== PINNED_LOCKFILE_SHA256)
     throw Error('lockfile MCP identity mismatch');
   const modules = join(root, ADAPTER_SOURCE_DIR, 'node_modules');
   const client = realpathSync(join(modules, '@modelcontextprotocol/client'));

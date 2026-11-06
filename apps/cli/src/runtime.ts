@@ -124,19 +124,29 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       store,
       clock: deps.clock,
       ownerId: codingDeps.ownerId,
-      restored,
+      restored: restored || options.pluginMutationsAllowed === false,
       env: options.pluginEnv,
       transportOptions: options.serviceTransportOptions,
     });
-    const grantedTools = {
-      forTurn: async (turn: ChatTurn, signal: AbortSignal) =>
-        combineChatTools(
-          await services.tools.forTurn(turn, signal),
-          options.pluginTransport === undefined
-            ? null
-            : await pluginRuntime.tools?.forTurn(turn, signal),
-        ) ?? null,
-    };
+    const grantedTools =
+      options.pluginTransport === undefined
+        ? services.tools
+        : {
+            forTurn: async (turn: ChatTurn, signal: AbortSignal) => {
+              const legacy = await pluginRuntime.tools?.forTurn(turn, signal);
+              return (
+                combineChatTools(
+                  await services.tools.forTurn(turn, signal),
+                  legacy
+                    ? Object.assign(legacy, {
+                        callDigest: (text: string) =>
+                          createHash('sha256').update(text).digest('hex'),
+                      })
+                    : null,
+                ) ?? null
+              );
+            },
+          };
     const reviews = new ChatReviewService({ ...deps, tasks: service, journal: store.tools });
     const chat = new DirectChatService({
       reviews,

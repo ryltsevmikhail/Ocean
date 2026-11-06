@@ -1,29 +1,11 @@
-/** Standalone Node-only installer; this compiled file is also shipped beside the archive. */
 import { createHash, randomUUID } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import * as fs from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-export interface ReleaseBundleRecord {
-  readonly adapter: string;
-  readonly entry: string;
-  readonly integrity: string;
-  readonly integritySha256: string;
-  readonly files: Readonly<Record<string, string>>;
-  readonly identities: Readonly<Record<string, string>>;
-}
-export interface ReleaseManifest {
-  readonly format: 1;
-  readonly version: string;
-  readonly revision: string;
-  readonly node: string;
-  readonly platform: 'linux';
-  readonly arch: 'x64';
-  readonly lockfileSha256: string;
-  readonly files: Readonly<Record<string, { sha256: string; mode: number }>>;
-  /** Present when the archive ships the pre-bundled Executor adapter. */
-  readonly bundle?: ReleaseBundleRecord;
-}
+import type { ReleaseManifest } from './installer-types.js';
+export type { ReleaseBundleRecord, ReleaseManifest } from './installer-types.js';
+const MCP_ROOT = 'node_modules/@runnets/integrations-mcp/';
 export function sha256(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -99,7 +81,11 @@ function manifestOf(files: Map<string, { body: Buffer; mode: number }>): Release
   }
   for (const name of ['bin/ocean', 'apps/cli/dist/main.js', 'LICENSE', 'NOTICE', 'package.json'])
     if (!files.has(name)) throw new Error('invalid_manifest');
-  validateBundle(m, files);
+  try {
+    validateBundle(m, files);
+  } catch {
+    throw Error('invalid_manifest');
+  }
   return m;
 }
 function validateBundle(
@@ -107,14 +93,16 @@ function validateBundle(
   files: Map<string, { body: Buffer; mode: number }>,
 ): void {
   const b = m.bundle;
-  if (b === undefined) return;
+  const present = [...files.keys()].some((name) => name.startsWith(MCP_ROOT));
+  if (b === undefined) {
+    if (present) throw Error('invalid_manifest');
+    return;
+  }
   const modern = b.adapter === '@runnets/integrations-mcp';
-  const base =
-      'node_modules/' +
-      (modern ? '@runnets/integrations-mcp' : '@runnets/integrations-executor') +
-      '/',
+  const base = 'node_modules/' + b.adapter + '/',
     integrity = files.get(base + 'dist/bundle-integrity.json');
   if (
+    present !== modern ||
     (!modern && b.adapter !== '@runnets/integrations-executor') ||
     b.entry !== 'dist/index.js' ||
     b.integrity !== 'dist/bundle-integrity.json' ||
@@ -131,7 +119,22 @@ function validateBundle(
   )
     throw new Error('invalid_manifest');
   if (modern) {
-    const record = JSON.parse(integrity.body.toString()) as { files: Record<string, string> };
+    const record = JSON.parse(integrity.body.toString()) as {
+      format: number;
+      files: Record<string, string>;
+      pinnedVersions: object;
+      identities: object;
+      bundler: object;
+    };
+    const same = (a: object, b: object) =>
+      JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+    if (
+      record.format !== 1 ||
+      !same(record.pinnedVersions, { client: '2.4.0', core: '2.4.0' }) ||
+      !same(record.identities, b.identities) ||
+      !same(record.bundler, { name: 'rolldown', version: '1.2.16' })
+    )
+      throw Error('invalid_manifest');
     const shipped = [...files.keys()].filter((name) => name.startsWith(base + 'dist/'));
     if (
       shipped.length !== Object.keys(b.files).length ||
@@ -190,7 +193,6 @@ function switchCurrent(base: string, version: string): void {
     fs.rmSync(temp, { force: true });
   }
 }
-/** Trusted archive checksum is required BEFORE decompression or filesystem writes. */
 export function installArchive(archive: string, checksum: string, prefix: string): ReleaseManifest {
   safeParent(prefix);
   if (
@@ -235,11 +237,9 @@ export function installArchive(archive: string, checksum: string, prefix: string
     for (const [name, e] of files) {
       const path = join(destination, name);
       const mode = fs.lstatSync(path).mode & 0o777;
-      // Earlier installers applied the caller's private umask to public program files.
       if (!fs.readFileSync(path).equals(e.body) || ![e.mode, e.mode & 0o700].includes(mode))
         throw new Error('version_conflict');
     }
-    // Only normalize fully verified public program files, before switching current.
     for (const [name, entry] of files) {
       const path = join(destination, name);
       fs.chmodSync(path, entry.mode);

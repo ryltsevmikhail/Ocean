@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import type { ChatTurn } from '@runnets/domain';
 import { expect, it, vi } from 'vitest';
 import { combineChatTools, prepareChatTools } from './chat-turn-tools.js';
 import type { GrantedPluginTools } from './plugin-turn-tools.js';
-const source = (name: string): GrantedPluginTools => ({
+const source = (name: string): GrantedPluginTools & { callDigest(text: string): string } => ({
+  callDigest: (text: string) => createHash('sha256').update(text).digest('hex'),
   cleanupConfirmed: true,
   definitions: [{ name, description: name, parameters: { type: 'object' } }],
   execute: vi.fn(async () => ({ isError: false, output: name })),
@@ -55,7 +57,7 @@ it('a coding refusal prevents service-only fallback before the existing loop', a
 
 it('bounds the shared invocation identity cache while keeping previous outcomes', async () => {
   const coding = source('read'),
-    tools = combineChatTools(coding)!;
+    tools = combineChatTools(coding, source('mcp_alias'))!;
   const signal = new AbortController().signal;
   for (let i = 0; i < 1024; i++)
     await tools.execute({ id: String(i), name: 'missing', arguments: '{}' }, signal);
@@ -66,4 +68,58 @@ it('bounds the shared invocation identity cache while keeping previous outcomes'
     'tool unavailable',
   );
   expect(coding.execute).not.toHaveBeenCalled();
+});
+
+it('keeps lone source contracts and stores fixed-size identities for oversized unknown calls', async () => {
+  const a = source('read'),
+    b = source('mcp_alias');
+  const tools = combineChatTools(a, b)!;
+  const call = { id: 'huge', name: 'unknown', arguments: 'x'.repeat(1048577) },
+    signal = new AbortController().signal;
+  const writes = vi.spyOn(Map.prototype, 'set');
+  const refused = tools.execute(call, signal);
+  expect(tools.execute(call, signal)).toBe(refused);
+  expect(
+    (await tools.execute({ ...call, name: 'read', arguments: '{}' }, signal)).output,
+  ).toContain('identity conflict');
+  const retained = writes.mock.calls.filter(
+    ([, value]) => value && typeof value === 'object' && 'fingerprint' in value,
+  );
+  writes.mockRestore();
+  expect(retained).toHaveLength(1);
+  expect(String(retained[0]![0])).toHaveLength(64);
+  expect((retained[0]![1] as { fingerprint: string }).fingerprint).toHaveLength(64);
+  expect(a.execute).not.toHaveBeenCalled();
+});
+
+it('returns a lone source without replacing its own identity and refusal contract', () => {
+  const single = Object.assign(source('read'), { ownCallIdentity: true as const });
+  expect(combineChatTools(single)).toBe(single);
+});
+
+it('keeps coding/dev single-source payload refusal guards when the source has no own identity contract', async () => {
+  const dev = source('read'),
+    tools = combineChatTools(dev)!;
+  const call = { id: 'same', name: 'read', arguments: '{}' },
+    signal = new AbortController().signal;
+  expect(tools).not.toBe(dev);
+  const first = tools.execute(call, signal);
+  expect(tools.execute(call, signal)).toBe(first);
+  expect((await tools.execute({ ...call, arguments: '{"changed":true}' }, signal)).isError).toBe(
+    true,
+  );
+  expect(
+    (await tools.execute({ ...call, id: 'oversize', arguments: 'x'.repeat(1048577) }, signal))
+      .output,
+  ).toBe('tool arguments too large');
+  expect(dev.execute).toHaveBeenCalledTimes(1);
+});
+
+it('leaves a lone host source without a digest unchanged rather than adding an unbounded cache', () => {
+  const plain: GrantedPluginTools = {
+    cleanupConfirmed: true,
+    definitions: [],
+    execute: async () => ({ isError: true, output: 'refused' }),
+  };
+  expect(combineChatTools(plain)).toBe(plain);
 });

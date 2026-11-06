@@ -41,6 +41,10 @@ import type { TurnInput } from './types.js';
 /** Shape the shared turn executor passes to `runTurn`; cleanup is synchronous. */
 export type GrantedPluginTools = NonNullable<TurnInput['tools']> & {
   readonly cleanupConfirmed: true;
+  /** Trusted in-process digest; never supplied by a model or serialized as authority. */
+  readonly callDigest?: (text: string) => string;
+  /** Source already enforces identity/payload and bounded retention itself. */
+  readonly ownCallIdentity?: true;
 };
 
 /** Resolver used by the shared chat executor for non-coding room turns. */
