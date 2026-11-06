@@ -1,3 +1,4 @@
+import { observeNative, retiredNative } from './mcp-native-observation.ts';
 /** Owned synthetic normal-runtime proof. No real model/account or production profile. */
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -229,6 +230,7 @@ const host = await startLocalRuntime({
       if (!['revoke', 'refresh', 'stdio'].includes(mode)) return;
       const owned = openSqliteStore({ path });
       preparedClaims = (await owned.tools.pending()).length;
+      if (mode === 'stdio') observeNative(proof, profile);
       if (mode === 'revoke')
         new OwnerScopeService(owned.serviceAuthority, ownerId, Date.now).revoke({
           grantId: 'grant',
@@ -267,6 +269,7 @@ child.stderr.on('data', (b: Buffer) => {
 });
 const [code] = await once(child, 'exit');
 const stopped = await host.stop();
+if (mode === 'stdio') retiredNative(proof);
 http.closeAllConnections();
 await new Promise<void>((r) => http.close(() => r()));
 if (code !== 0) throw Error('client failed ' + stderr);
