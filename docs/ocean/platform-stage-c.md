@@ -155,10 +155,43 @@ process-фаза не достигнута; build0, format1 только protect
 отдельно, полного зелёного gate пока нет. Два новых Minor — проверка нулевого
 числа credential lookups и повторный JSON freezer — остаются финальному ревью.
 
+## Штатный runtime и MCP-поставка C18.4.2
+
+Принято на `d35e28a` после полного ревью и двух проверок исправлений.
+Один runtime выдаёт нейтральные service tools в существующий цикл вместе с coding
+и владеет metadata refresh. Generic CLI/ACP не запускают discovery от открытия
+профиля; maintenance даёт0 credential reads/HTTP/native preflights. Реальный failed
+startup с удержанным TTL refresh сохраняет SQLite owner_busy до drainage;
+независимый процесс подтверждает освобождение после завершения работы.
+
+Доступный MCP peer наблюдал два владельца: metadata lists2→3, business receipt/
+effect1/1, model requests1→0; прежний run/attempt/journal и uncertain сохранены.
+Первый stop incomplete, второй complete — это не отмена неизвестного эффекта.
+Проверены revoke/TTL до отправки и один ход с реальным worktree и service tool
+без лишнего approval. Нативный готовый filesystem server вернул точный canary,
+completed journal и подтверждённое завершение cgroup/PID на `f604249`.
+Его HTTP-only counters не выдаются за wire-наблюдение внутри ready server.
+
+В архив входит один production adapter с SDKclient/core2.4.0 и Rolldown1.2.16.
+Проверяются reviewed lock SHA-256, SDK inputs, лицензии, внутренний/внешний
+инвентарь и файлы. Emitted standalone отклонил шесть самосогласованных повреждённых
+архивов до создания prefix; корректный установлен. Исторический Executor archive
+поддерживается только для rollback parsing. Архив на `a060c24`: SHA-256
+`53e1500796920333c52dcaf880a51f66b797bc062071e3b7538f55c584de04b9`.
+Последующее source-only исправление `b17bf8a` в него не входит.
+
+Исправления:82/82 covering,19/19 process/release,15/15 final release; последняя
+helper-правка59/59, strict main/Node/Desktop и scoped lint/format0. Это отдельные
+пересекающиеся измерения. Root остаётся3654passed/3protectedfail/44skipped,
+process-фаза не достигнута, build0, format1 только protected2 на прежнем pin.
+Полного зелёного gate и installed/live replacement пока нет. M1–M4 сохранены
+для F: combined-tool wording, изолированная changed-definition проверка,
+obsolete legacy binding и drop-specific ordering/zero-answer assertions.
+
 ## Дальше по плану
 
-18.4.2 — штатный runtime/tool source, lifecycle и bundle inventory;
-18.5 — консервативная миграция и настройки;
+18.4.2 принят;18.5 — owner/client настройки, точные подтверждения
+и консервативная миграция;
 18.6 — установленная/live/package-приёмка и удаление Executor. Затем D —
 сохраняемые поручения и свободное взаимодействие команды, E/F — клиент и выпуск.
 [Канонический план](../superpowers/plans/2026-11-04-ocean-platform.md).
