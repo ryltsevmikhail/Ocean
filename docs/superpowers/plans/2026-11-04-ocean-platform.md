@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`; исполнение D и этапы E–H остаются запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`, локальное долговечное исполнение D19.2.4 — на `c3d7c21`; подключение host, оставшаяся приёмка D и этапы E–H запланированы.
 Долг сохранённых регрессий Executor закрыт в C18.6: чистые root gates прошли
 на квалифицированном `1f31974`; финальные проверки текущего выпуска остаются F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -2124,13 +2124,50 @@ Split concrete lifecycle SQL/fixtures if physically required for300 lines; no ge
 The single sequential application executor proves no held wait, not runtime scheduler
 fairness or native containment. Those remain the later host/19.3 gates.
 
-- [ ] Implement the coherent claim/handoff/result/repair path with scripted providers
+- [x] Implement the coherent claim/handoff/result/repair path with scripted providers
       and real on-disk SQLite through the common executeChatTurn/runTurn.
-- [ ] Prove the six scenarios above, actual behavioral RED→GREEN, exact durable
+- [x] Prove the six scenarios above, actual behavioral RED→GREEN, exact durable
       receipts/events/lineage, transaction rollback and close/reopen recovery.
-- [ ] Preserve old admission, history, read, backup and profile semantics; no host producer.
-- [ ] Run focused/strict tests, final frozen root check/build/format, physical≤300;
+- [x] Preserve old admission, history, read, backup and profile semantics; no host producer.
+- [x] Run focused/strict tests, final frozen root check/build/format, physical≤300;
       self-review, exact-path commit and independent spec/quality review.
+
+19.2.4 accepted at `c3d7c21` after one scoped correction round: all six Important
+findings and the genuine27 archive/replay evidence gap were independently closed.
+Final frozen root gates:3899 source/166 process passed,44/36 configured skips,
+build/format0. The scope is the local SQLite/application lifecycle; Task19.2/D and
+host/native/live qualification remain open.
+
+**Accepted additions to the file map:** concrete application helpers
+`room-delivery-evidence.ts` and `room-slice-result.ts`; narrow existing
+`direct-chat-admission.ts`, `turn.ts` and `tool-round.ts` evidence/observer handling.
+The cap splits add `packages/store-sqlite/src/room-slice-claims.test.ts` and
+`room-slice-publication.test.ts`, moving existing cases without duplicate registration.
+`packages/store-sqlite/test-fixtures/room-slices-v27.json` is normally formatted
+synthetic BASE schema/row data; `room-slices-v27.ts` shares its read/seed helper.
+`apps/cli/src/ocean/room-task-backup.test.ts` proves source-deleted genuine27 restore
+and exact inert receipt replay. The nonfrozen
+`apps/cli/src/local-runtime/addressed-history-process.test.ts` constructs an exact
+prepared/Core-confirmed synthetic final; its client/history/result assertions are
+unchanged, and it remains wire evidence rather than autonomous engine qualification.
+`room-task-holds.test.ts` and `room-task-transfer.test.ts` reject an unproved
+completion before using a synthetic terminal phase for their unchanged hold/privacy
+assertions. This does not qualify Core cancellation or cleanup.
+
+Current-schema expectation maintenance also covers domain `profile-backup.test.ts`;
+store `broadcast-migration`, `plugin-operation-migration`, `plugin-schema`,
+`provider-connection-migration`, `room-task-migration`, `desktop-capability-migration`,
+`model-binding-migration`, `model-pending-migration`, `model-qualification-storage`,
+`room-model-policy`, `service-authority-migration`, `service-owner-receipts`,
+`tool-admission-migration` tests; CLI `desktop-binding-migration.test.ts` and the
+backup test above. Only current schema/publication/future expectations changed.
+`test-fixtures/room-task-v26.ts` removes the three new trigger dependencies before
+its existing reconstruction. Genuine26/27 and all eight frozen RC2 fixtures remain
+unchanged. The full accepted range has59 paths; modified code/test helpers stay≤300.
+
+Deferred: configured generic recovery digest forwarding belongs to the next host
+integration; inherited test stdout and the marked-run prior-history scan belong to
+F triage. These minor items do not qualify the remaining production gates.
 
 ### Task 19.3: Qualify independent managed service workspaces
 

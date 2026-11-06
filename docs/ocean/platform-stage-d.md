@@ -164,6 +164,16 @@ SQLite, including contention, nested/drained queues, crash repair, rollback and 
 genuine populated BASE v27 migration fixture. This is application/local persistence
 qualification only; no native, provider network or external service claim is made.
 
+19.2.4 accepted at `c3d7c21` after one scoped correction round. Independent review
+closed six evidence/observer/owner/write-read defects and verified genuine27
+source-deleted restore with exact inert receipt replay. Final frozen root gates:
+3899 source tests and166 process tests passed; build/format passed. The44/36
+configured skips remain separate native/live gates.
+
+Configured generic recovery still needs its digest forwarded by the next host
+integration. Inherited fixture stdout and a marked-run history-prefix scan are
+recorded for F triage. Neither changes the local acceptance boundary.
+
 ## Planned: execution and host integration
 
 D and Task 19.2 are not complete. The local application surface remains unwired
