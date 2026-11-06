@@ -7,10 +7,12 @@ import { lstat } from 'node:fs/promises';
 export async function sandboxLauncher(
   argv: readonly string[],
   expectedInputs: Readonly<Record<string, string>> = {},
+  stdioSignal?: AbortSignal,
 ): Promise<string> {
   const trees: Record<string, string> = {};
   const identities: Record<string, string[]> = {};
   for (let i = 0; i < argv.length; i++) {
+    stdioSignal?.throwIfAborted();
     if (argv[i] !== '--bind' && argv[i] !== '--ro-bind') continue;
     const source = argv[i + 1]!;
     if (source === '/dev/null') continue;
@@ -18,9 +20,12 @@ export async function sandboxLauncher(
     identities[source] = [stat.dev, stat.ino, stat.mode, stat.size, stat.mtimeNs, stat.ctimeNs].map(
       String,
     );
-    if (stat.isFile()) identities[source].push(await fingerprintFile(source));
-    if (stat.isDirectory() && source !== '/usr' && argv[i] === '--ro-bind')
+    if (stat.isFile()) identities[source].push(await fingerprintFile(source, stdioSignal));
+    if (stat.isDirectory() && source !== '/usr' && argv[i] === '--ro-bind') {
+      // Managed servers admit only regular-file inputs beyond the system tree.
+      if (stdioSignal) throw Error('unexpected stdio directory mount');
       trees[source] = fingerprintTree(source);
+    }
     const digest = stat.isFile() ? identities[source].at(-1) : trees[source];
     if (expectedInputs[source] !== undefined && digest !== expectedInputs[source])
       throw new Error('qualified sandbox input changed');

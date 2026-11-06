@@ -30,7 +30,10 @@ export function createMcpServiceTransport(
     started = false;
   const retire = async (s: Session) => {
     const result = await s.retire().catch(() => ({ status: 'unknown' }) as const);
-    if (result.status === 'unknown') unknown = true;
+    if (result.status === 'unknown' && !unknown) {
+      unknown = true;
+      for (const session of sessions) session.stop.abort();
+    }
     if (result.status !== 'never_started') started = true;
     sessions.delete(s);
     if (active.get(s.connection.id) === s) active.delete(s.connection.id);
@@ -59,29 +62,43 @@ export function createMcpServiceTransport(
     s.onLoss = () => {
       void retire(s);
     };
-    try {
-      const candidate = await s.discover();
-      if (closed || unknown) throw Error('closed');
-      candidates.set(candidate, s);
-      return candidate;
-    } catch {
-      await retire(s);
-      throw new ServicePluginDiscoveryRefusedError(
-        'catalog_incomplete',
-        'no qualified complete catalog',
-      );
-    }
+    const work = (async () => {
+      try {
+        const candidate = await s.discover();
+        if (closed || unknown) throw Error('closed');
+        candidates.set(candidate, s);
+        return candidate;
+      } catch {
+        await retire(s);
+        throw new ServicePluginDiscoveryRefusedError(
+          'catalog_incomplete',
+          'no qualified complete catalog',
+        );
+      }
+    })();
+    pending.add(work);
+    const joined = work.finally(() => pending.delete(work));
+    if (connection.configuration.kind !== 'stdio') return joined;
+
+    // A kernel file operation may not be interruptible. Release the caller at expiry,
+    // but keep the session slot and close() join until that preflight actually unwinds.
+    return new Promise<McpCatalogCandidate>((resolve, reject) => {
+      const abort = () => {
+        if (s.preparingStdio)
+          reject(
+            new ServicePluginDiscoveryRefusedError(
+              'catalog_incomplete',
+              'native preflight interrupted',
+            ),
+          );
+      };
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
+      void joined.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+    });
   }
   return {
-    discover(c, d) {
-      const p = discover(c, d);
-      pending.add(p);
-      void p.then(
-        () => pending.delete(p),
-        () => pending.delete(p),
-      );
-      return p;
-    },
+    discover,
     activate(candidate, snapshot, confirmPublished) {
       const s = candidates.get(candidate);
       if (

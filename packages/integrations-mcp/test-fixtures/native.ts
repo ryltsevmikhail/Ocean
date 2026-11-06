@@ -1,6 +1,6 @@
 // Run with the private environment runner and a fresh owned proof directory.
 import assert from 'node:assert/strict';
-import { ctl, read, inspect, serverObservation } from './native-observation.ts';
+import { ctl, read, inspect, serverObservation, faultCounts } from './native-observation.ts';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -69,7 +69,7 @@ const options = {
   },
 };
 const t = createMcpServiceTransport(options);
-const dispatches = join(run, 'dispatches');
+const authorizations = join(run, 'authorizations');
 const a = admission(
   join(profile, 'db'),
   cfg,
@@ -79,7 +79,7 @@ const a = admission(
         ...input,
         authorizeDispatch() {
           if (!input.authorizeDispatch()) return false;
-          appendFileSync(dispatches, 'send\n', { flush: true });
+          appendFileSync(authorizations, 'allow\n', { flush: true });
           return true;
         },
       }),
@@ -192,6 +192,9 @@ try {
       assert.ok(existsSync(join(workspace, 'descendant.json')));
       evidence['during'] = inspect(cg);
       if (mode === 'kill') {
+        const counts = faultCounts(run, workspace);
+        assert.deepEqual(counts, { authorizations: 1, received: 1, effects: 1 });
+        Object.assign(evidence, { attempts, ...counts });
         writeFileSync(join(run, 'before-kill.json'), JSON.stringify(evidence));
         while (!existsSync(join(run, 'kill-now'))) await delay(20);
         process.kill(process.pid, 'SIGKILL');
@@ -205,18 +208,19 @@ try {
     await delay(25);
     assert.equal(
       r.outcome?.kind,
-      withheld ? 'not_started' : ['limit', 'observer'].includes(mode) ? 'observed' : 'uncertain',
+      withheld
+        ? 'not_started'
+        : ['limit', 'observer', 'refusal'].includes(mode)
+          ? 'observed'
+          : 'uncertain',
     );
     assert.equal(attempts, 1);
-    const records = existsSync(join(workspace, 'effects'))
-      ? readFileSync(join(workspace, 'effects'), 'utf8')
-      : '';
-    assert.equal(records, withheld ? '' : 'effect\n');
-    assert.equal(
-      existsSync(dispatches) ? readFileSync(dispatches, 'utf8') : '',
-      withheld ? '' : 'send\n',
-    );
-    if (!withheld) {
+    const sent = Number(!withheld),
+      effect = Number(!withheld && mode !== 'refusal');
+    const counts = faultCounts(run, workspace);
+    assert.deepEqual(counts, { authorizations: sent, received: sent, effects: effect });
+    Object.assign(evidence, counts);
+    if (effect) {
       const child = JSON.parse(read(join(workspace, 'descendant.json'))) as {
         stdout: string;
         childStdout: string;
@@ -231,7 +235,6 @@ try {
       evidence['during'] = inspect(cg);
     }
     evidence['outcome'] = r.outcome?.kind;
-    evidence['effects'] = Number(!withheld);
   }
   evidence['attempts'] = attempts;
 } finally {

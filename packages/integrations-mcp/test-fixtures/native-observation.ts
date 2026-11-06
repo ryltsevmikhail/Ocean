@@ -1,6 +1,7 @@
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 const env = { PATH: '/usr/bin:/bin', XDG_RUNTIME_DIR: '/run/user/' + process.getuid!() };
 export const ctl = (...args: string[]) =>
   execFileSync('/usr/bin/systemctl', ['--user', ...args], { env, encoding: 'utf8' }).trim();
@@ -62,4 +63,18 @@ export function serverObservation(path: string) {
     ].sort(),
   );
   return obs;
+}
+
+export function faultCounts(run: string, workspace: string) {
+  const count = (path: string, line: string) => {
+    const log = existsSync(path) ? readFileSync(path, 'utf8') : '';
+    const records = log.split('\n').length - 1;
+    assert.equal(log, line.repeat(records));
+    return records;
+  };
+  return {
+    authorizations: count(join(run, 'authorizations'), 'allow\n'),
+    received: count(join(workspace, 'received'), 'tools/call\n'),
+    effects: count(join(workspace, 'effects'), 'effect\n'),
+  };
 }

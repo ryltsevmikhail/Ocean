@@ -18,6 +18,13 @@ import { InvocationSend } from './send.js';
 import { SessionWriter } from './session-writer.js';
 import { serviceStdio } from './stdio.js';
 
+function containsCredential(value: unknown, credential: string): boolean {
+  if (typeof value === 'string') return value.includes(credential);
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(
+    ([key, child]) => key.includes(credential) || containsCredential(child, credential),
+  );
+}
 export class Session {
   readonly stop = new AbortController();
   readonly writer: SessionWriter;
@@ -27,6 +34,9 @@ export class Session {
   wasPublished = false;
   onLoss: (() => void) | undefined;
   private stdio: Awaited<ReturnType<typeof serviceStdio>> | undefined;
+  get preparingStdio() {
+    return this.connection.configuration.kind === 'stdio' && !this.stdio;
+  }
   private secret: string | null = null;
   private retiring: Promise<McpCleanupEvidence> | undefined;
   private timer: NodeJS.Timeout | undefined;
@@ -108,7 +118,7 @@ export class Session {
     if (!d.authorizeMetadata()) throw Error('metadata denied');
     await this.client.connect(transport, { signal, timeout: d.deadlineMs });
     this.catalog = await listCatalog(this.client, c, signal, d.deadlineMs);
-    if (this.secret && JSON.stringify(this.catalog.candidate).includes(this.secret))
+    if (this.secret && containsCredential(this.catalog.candidate, this.secret))
       throw Error('unsafe response');
     signal.throwIfAborted();
     if (!this.writer.usable || !d.authorizeMetadata()) throw Error('metadata denied');
@@ -165,7 +175,7 @@ export class Session {
         ),
       );
       if (!send.sent) return refused;
-      if (!validServiceJson(reply) || (this.secret && JSON.stringify(reply).includes(this.secret)))
+      if (!validServiceJson(reply) || (this.secret && containsCredential(reply, this.secret)))
         throw Error('unsafe response');
       return {
         kind: 'observed',

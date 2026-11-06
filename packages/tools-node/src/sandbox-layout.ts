@@ -42,7 +42,9 @@ export async function sandboxRoot(
   mounts: readonly SandboxMount[] = [],
   projectRoot?: string,
   serviceWorkspace = false,
+  signal?: AbortSignal,
 ): Promise<void> {
+  signal?.throwIfAborted();
   if ((await realpath(root)) !== root || !(await lstat(root)).isDirectory())
     throw new ToolError('containment_unavailable', 'canonical task root required');
   await validateMounts(mounts, projectRoot);
@@ -52,7 +54,9 @@ export async function sandboxRoot(
   if (!serviceWorkspace) pending.add('/workspace/.git');
   let count = 0;
   async function walk(directory: string): Promise<void> {
+    signal?.throwIfAborted();
     for (const entry of await readdir(directory, { withFileTypes: true })) {
+      signal?.throwIfAborted();
       if (++count > 50000) throw new ToolError('containment_unavailable', 'mount inventory limit');
       if (/^\.ocean-(?:recovery-|.*\.tmp$)/.test(entry.name))
         throw new ToolError('effect_uncertain', 'unreconciled filesystem worker artifacts');
@@ -83,6 +87,7 @@ export async function sandboxRoot(
     }
   }
   await walk(root);
+  signal?.throwIfAborted();
   if (pending.size) throw new ToolError('containment_unavailable', 'missing worker mountpoint');
 }
 export function sandboxArgv(

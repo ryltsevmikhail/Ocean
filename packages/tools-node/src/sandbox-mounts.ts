@@ -74,14 +74,18 @@ export async function validateMounts(
   return hash.digest('hex');
 }
 
-export async function fingerprintFile(path: string): Promise<string> {
+export async function fingerprintFile(path: string, signal?: AbortSignal): Promise<string> {
   const hash = createHash('sha256');
+  signal?.throwIfAborted();
   const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = await file.stat({ bigint: true });
     if (!before.isFile()) throw new Error('dependency file changed');
     hash.update(JSON.stringify([String(before.mode), String(before.size)]));
-    for await (const chunk of file.createReadStream({ autoClose: false }))
+    for await (const chunk of file.createReadStream({
+      autoClose: false,
+      ...(signal ? { signal } : {}),
+    }))
       hash.update(chunk as Buffer);
     const after = await file.stat({ bigint: true });
     if (

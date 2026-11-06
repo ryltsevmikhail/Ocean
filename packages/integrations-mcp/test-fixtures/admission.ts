@@ -4,9 +4,15 @@ import {
   OwnerScopeService,
   ServiceCallAdmissionService,
   publishServiceCatalogRefresh,
+  currentServiceCatalog,
   type ServiceCallTransportPort,
 } from '@runnets/application';
-import type { ServiceConnection, ServiceCatalogSnapshot, ServiceJson } from '@runnets/domain';
+import {
+  canonicalJson,
+  type ServiceConnection,
+  type ServiceCatalogSnapshot,
+  type ServiceJson,
+} from '@runnets/domain';
 export const subject = {
   workspaceId: 'ws',
   roomId: 'room',
@@ -98,10 +104,12 @@ export function admission(
     publish: (s: ServiceCatalogSnapshot) =>
       authority.atomic((tx) => publishServiceCatalogRefresh(tx, s)),
     current: (s: ServiceCatalogSnapshot) =>
-      authority.atomic(
-        (tx) =>
-          tx.connection(c.id)?.currentCatalogId === s.id && tx.catalog(s.id)?.connectionId === c.id,
-      ),
+      authority.atomic((tx) => {
+        const row = tx.connection(c.id);
+        if (!row || row.trust.metadataPermission !== 'allow') return false;
+        const current = currentServiceCatalog(tx, row);
+        return !!current && current.id === s.id && canonicalJson(current) === canonicalJson(s);
+      }),
     grant: (names: string[]) =>
       owner.issue({
         id: 'grant',

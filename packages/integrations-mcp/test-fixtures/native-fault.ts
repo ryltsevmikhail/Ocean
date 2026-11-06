@@ -34,6 +34,8 @@ server.setRequestHandler('tools/list', () => ({
   tools: [{ name: 'write', inputSchema: { type: 'object' } }],
 }));
 server.setRequestHandler('tools/call', async () => {
+  if (config.mode === 'refusal')
+    return { isError: true, content: [{ type: 'text', text: 'fixture refusal' }] };
   appendFileSync('/workspace/effects', 'effect\n', { flush: true });
   const child = spawn('/usr/bin/sleep', ['45'], {
     stdio: ['ignore', 'inherit', 'inherit'],
@@ -76,4 +78,9 @@ server.setRequestHandler('tools/call', async () => {
   }
   return { content: [{ type: 'text', text: 'ok' }] };
 });
-await server.connect(new StdioServerTransport());
+const transport = new StdioServerTransport();
+transport.onmessage = (message) => {
+  if ('method' in message && message.method === 'tools/call')
+    appendFileSync('/workspace/received', 'tools/call\n', { flush: true });
+};
+await server.connect(transport);

@@ -21,27 +21,38 @@ export interface ManagedStdioRequest {
   readonly args: readonly string[];
   readonly signal: AbortSignal;
 }
-async function pin(artifact: string, digest: string, limit: number) {
-  const f = await open(artifact, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-
+async function pin(artifact: string, digest: string, limit: number, signal: AbortSignal) {
+  signal.throwIfAborted();
+  const file = await open(
+    artifact,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
   try {
-    const st = await f.stat();
+    const st = await file.stat();
     if (!st.isFile() || st.size > limit || st.nlink !== 1) throw Error('invalid artifact');
-    const bytes = Buffer.alloc(st.size);
-    let offset = 0;
-    while (offset < bytes.length) {
-      const { bytesRead } = await f.read(bytes, offset, bytes.length - offset, offset);
+    const raw = createHash('sha256');
+    const fingerprint = createHash('sha256').update(
+      JSON.stringify([String(st.mode), String(st.size)]),
+    );
+    const bytes = Buffer.alloc(65536);
+    for (let offset = 0; offset < st.size;) {
+      signal.throwIfAborted();
+      const { bytesRead } = await file.read(
+        bytes,
+        0,
+        Math.min(bytes.length, st.size - offset),
+        offset,
+      );
       if (!bytesRead) throw Error('short artifact');
+      raw.update(bytes.subarray(0, bytesRead));
+      fingerprint.update(bytes.subarray(0, bytesRead));
       offset += bytesRead;
     }
-    if (createHash('sha256').update(bytes).digest('hex') !== digest)
-      throw Error('artifact changed');
-    return createHash('sha256')
-      .update(JSON.stringify([String(st.mode), String(st.size)]))
-      .update(bytes)
-      .digest('hex');
+    signal.throwIfAborted();
+    if (raw.digest('hex') !== digest) throw Error('artifact changed');
+    return fingerprint.digest('hex');
   } finally {
-    await f.close();
+    await file.close();
   }
 }
 /** One isolated, pinned JS bundle. The parent is the authority holder; only this server enters the unit. */
@@ -63,26 +74,26 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
     (r.args.length && !(r.args.length === 1 && r.args[0] === '/workspace'))
   )
     throw Error('invalid stdio enrollment');
-  await sandboxRoot(root, [], undefined, true);
+  await sandboxRoot(root, [], undefined, true, r.signal);
   const expected: Record<string, string> = {
-    [r.artifact]: await pin(r.artifact, r.sha256, 32 * 1024 * 1024),
+    [r.artifact]: await pin(r.artifact, r.sha256, 32 * 1024 * 1024, r.signal),
   };
   const metadata = join(dirname(r.artifact), 'package.json');
-  if (r.packageJsonSha256) expected[metadata] = await pin(metadata, r.packageJsonSha256, 65536);
+  if (r.packageJsonSha256)
+    expected[metadata] = await pin(metadata, r.packageJsonSha256, 65536, r.signal);
   const prefix = 'ocean-mcp-' + sha(JSON.stringify([profile, r.connectionId])).slice(0, 32) + '-';
   const unit = prefix + randomUUID() + '.service';
-  const slice = (await control(['show', 'app.slice', '--property=ControlGroup', '--value'])).trim();
+  const slice = (
+    await control(['show', 'app.slice', '--property=ControlGroup', '--value'], r.signal)
+  ).trim();
   if (!/^\/user\.slice\/user-\d+\.slice\/user@\d+\.service\/app\.slice$/.test(slice))
     throw Error('unsupported user slice');
+  r.signal.throwIfAborted();
   const groups = await readdir('/sys/fs/cgroup' + slice);
-  const units = await control([
-    'list-units',
-    '--all',
-    '--plain',
-    '--no-legend',
-    '--full',
-    prefix + '*.service',
-  ]);
+  const units = await control(
+    ['list-units', '--all', '--plain', '--no-legend', '--full', prefix + '*.service'],
+    r.signal,
+  );
   const old = [
     ...groups,
     ...units
@@ -112,7 +123,10 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
       XDG_RUNTIME_DIR: '/home/worker/run',
     }).flatMap(([key, value]) => ['--dir', value, '--setenv', key, value]),
   );
-  const start = (await readFile('/proc/self/stat', 'utf8')).split(') ').at(-1)!.split(' ')[19];
+  const start = (await readFile('/proc/self/stat', { encoding: 'utf8', signal: r.signal }))
+    .split(') ')
+    .at(-1)!
+    .split(' ')[19];
   const path = slice + '/' + unit;
   const guardian = `
     const read=require('node:fs').readFileSync;
@@ -122,7 +136,7 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
     if(!ownerAlive() || !read('/proc/self/cgroup','utf8').split('\\n').includes(${JSON.stringify('0::' + path)}))process.exit(75);
     setInterval(()=>{if(!ownerAlive())process.exit(75);},100).unref();
   `;
-  const launcher = guardian + (await sandboxLauncher(argv, expected));
+  const launcher = guardian + (await sandboxLauncher(argv, expected, r.signal));
   const args = [
     '--user',
     '--quiet',
@@ -168,11 +182,11 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
     async observe() {
       for (let i = 0; i < 80; i++) {
         r.signal.throwIfAborted();
-        if ((await observedGroup(unit).catch(() => null)) === path) {
+        if ((await observedGroup(unit, r.signal).catch(() => null)) === path) {
           observed = true;
           return;
         }
-        await delay(25);
+        await delay(25, undefined, { signal: r.signal });
       }
       throw Error('server unit not observed');
     },

@@ -106,3 +106,37 @@ it.each(['revoke', 'cancel', 'deadline', 'drop', 'invalid', 'growth', 'rotation'
     }
   },
 );
+
+it('requires the exact durable snapshot and current metadata authority for activation', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcp-publication-')),
+    f = await httpFixture('json');
+  const t = createMcpServiceTransport({ protocol: '2026-07-28' }),
+    c = connection({ kind: 'http', url: f.url.href });
+  const a = admission(join(dir, 'db'), c, t);
+  const discover = () =>
+    t.discover(c, {
+      authorizeMetadata: () => a.metadata(c),
+      signal: new AbortController().signal,
+      deadlineMs: 2000,
+    });
+  try {
+    const first = await discover(),
+      s = { ...first, id: 'same' };
+    expect(a.publish(s) && t.activate(first, s, () => a.current(s))).toBe(true);
+    f.extra.push({ ...definition('more'), name: 'extra' });
+    const second = await discover(),
+      unpublished = { ...second, id: s.id };
+    expect(t.activate(second, unpublished, () => a.current(unpublished))).toBe(false);
+    expect(a.current(s)).toBe(true);
+    a.authority.atomic((tx) => {
+      const row = tx.connection(c.id)!;
+      expect(tx.putConnection({ ...row, credentialRevision: 2 }, row)).toBe(true);
+    });
+    expect(a.current(s)).toBe(false);
+  } finally {
+    await t.close();
+    a.store.close();
+    await f.close();
+    await rm(dir, { recursive: true });
+  }
+});

@@ -71,7 +71,8 @@ export async function httpFixture(name: string, evidenceDir?: string) {
       if (evidenceDir) appendFileSync(join(evidenceDir, 'effects'), 'effect\n', { flush: true });
       stats.effects++;
       const version = name === 'invalid' ? 'invalid' : req.params.arguments?.['value'];
-      return { content: [{ type: 'text', text: 'fixture' }], structuredContent: { version } };
+      const text = name === 'echo' ? String(req.params.arguments?.['echo']) : 'fixture';
+      return { content: [{ type: 'text', text }], structuredContent: { version } };
     });
     return protocol;
   };
@@ -141,7 +142,7 @@ export async function httpFixture(name: string, evidenceDir?: string) {
             return;
           }
           if (name === 'timeout' || name === 'abort') await delay(230);
-          if (name === 'status-race') await responseGate;
+          if (name === 'status-race' || name === 'defer-response') await responseGate;
         }
         res.writeHead(response.status, Object.fromEntries(response.headers));
         res.flushHeaders();
