@@ -4,6 +4,7 @@ const providerRequestId = z
   .string()
   .max(128)
   .refine((value) => value.trim() !== '');
+import { serviceCommands, serviceOutputs } from './service-protocol.js';
 import { modelCommands, modelOutputs } from './model-protocol.js';
 import { pluginCommands, pluginOutputs } from './plugin-protocol.js';
 import { bot, message, pageSize, roomDto, run } from './protocol-room.js';
@@ -119,6 +120,7 @@ export const commands = z.discriminatedUnion('op', [
   ...baseCommands,
   ...pluginCommands,
   ...modelCommands,
+  ...serviceCommands,
 ]);
 export type Command = z.infer<typeof commands>;
 const receipt = z.object({
@@ -261,6 +263,7 @@ export const outputs = {
   }),
   ...pluginOutputs,
   ...modelOutputs,
+  ...serviceOutputs,
 };
 export type ProfileReport = z.infer<typeof outputs.status>;
 export type ProviderStatus = z.infer<typeof providerStatus>;

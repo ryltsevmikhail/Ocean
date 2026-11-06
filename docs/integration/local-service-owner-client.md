@@ -10,8 +10,8 @@ Import `connectLocalRuntime` from the public
 `service.authority-v2`; each call checks the host's advertised method support.
 A host without `service.owner-operations` produces
 `service_operations_upgrade_required` locally. Existing decisions.service-v1,
-old clients and ACP retain their existing behavior. Desktop consumption remains
-planned separately.
+old clients and ACP retain their existing behavior. Current-source Desktop consumes these APIs through its existing Plugins toolbar;
+see [Desktop service settings](desktop-service-settings.md) for scope and limits.
 
 Build and initialize a **new synthetic profile** from the checkout, then run the
 owner in one terminal and the independent read-only example in another:

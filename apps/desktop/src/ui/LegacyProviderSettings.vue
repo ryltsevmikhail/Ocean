@@ -65,7 +65,12 @@ function capabilities(model: string): string {
       "
       aria-describedby="provider-key-tip" /></label
   ><small id="provider-key-tip" class="muted">{{
-    providerKeyHint(providerKey, providerStatus?.savedKey ?? false, providerStatus?.state)
+    providerKeyHint(
+      providerKey,
+      providerStatus?.savedKey ?? false,
+      providerStatus?.state,
+      providerStatus?.code,
+    )
   }}</small>
   <p v-if="providerStatus?.savedKey" class="muted">
     Ocean хранит собственный ключ. Внешний ключ окружения Ocean не изменяет и не удаляет. Удаление

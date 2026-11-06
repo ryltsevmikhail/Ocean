@@ -1,5 +1,6 @@
 import { LOCAL_MODEL_CONNECTIONS } from '@runnets/contracts';
 import type { LocalRuntimeClient } from '@runnets/tools-node/local-runtime-client';
+import { dispatchServiceSettings } from './service-settings-client.js';
 import { pageSize, type Command } from '../protocol.js';
 import { dispatchModelSettings } from './model-settings-client.js';
 
@@ -12,6 +13,21 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
     ...('after' in c && typeof c.after === 'string' ? { after: c.after } : {}),
   };
   switch (c.op) {
+    case 'service-support':
+    case 'service-connections':
+    case 'service-grants':
+    case 'service-receipt':
+    case 'service-set':
+    case 'service-disconnect':
+    case 'service-refresh':
+    case 'service-grant':
+    case 'service-revoke':
+    case 'service-operations':
+    case 'service-decisions':
+    case 'service-decision':
+    case 'service-preview':
+    case 'service-resolve':
+      return dispatchServiceSettings(client, c);
     case 'model-support':
     case 'model-presets':
     case 'model-connections':

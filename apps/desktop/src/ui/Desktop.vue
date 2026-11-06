@@ -148,6 +148,7 @@ function startTeam() {
             :busy="busy || !runtimeReady"
             :room="room"
             :bots="bots"
+            :runs="runs"
           />
           <button
             class="round"

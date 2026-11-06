@@ -23,23 +23,7 @@ export type {
   LocalBoundBot,
   LocalRunModelExecution,
 } from '@runnets/contracts';
-// Reuse the public closed validators, then detach validated values at both IPC boundaries.
-const dto = <T>(guard: (v: unknown) => v is T) =>
-  z.custom<T>(guard).transform((value, ctx) => {
-    // Validated JSON DTOs may originate in Vue proxies. Revalidate after detaching;
-    // serialization never grants additional fields or substitutes primitive evidence.
-    let copy: unknown;
-    try {
-      copy = JSON.parse(JSON.stringify(value));
-    } catch {
-      copy = undefined;
-    }
-    if (!guard(copy)) {
-      ctx.addIssue({ code: 'custom', message: 'invalid DTO' });
-      return z.NEVER;
-    }
-    return copy;
-  });
+import { dto } from './protocol-dto.js';
 const scope = <T extends { workspaceId?: string }>(guard: (v: unknown) => v is T) =>
   dto((v: unknown): v is T => guard(v) && v.workspaceId === 'ws_ocean');
 export const modelCommands = [

@@ -33,6 +33,10 @@ export function settingsError(error: unknown): string {
     connection_unverified: 'Подключение не подтверждено. Проверьте состояние и исходную операцию.',
     provider_unverified:
       'Сохранённая ссылка не подтверждена. Проверьте восстановление исходной операции.',
+    provider_secret_corrupt:
+      'Приватное хранилище повреждено; данные сохранены. Требуется отдельное безопасное исправление.',
+    provider_secret_insecure:
+      'Права приватного хранилища небезопасны. Требуется отдельное безопасное исправление прав.',
     provider_write_failed: 'Операция не завершена. Обновите метаданные для точного восстановления.',
     local_model_unqualified: 'Локальная модель не квалифицирована. Выполните явную проверку.',
     model_tools_unsupported: 'Модель не поддерживает инструменты. Выберите совместимую модель.',
@@ -48,5 +52,9 @@ export function connectionCheckLine(
 ): string {
   const { check, status } = reply;
   const stale = observedRevision !== undefined && check.revision !== observedRevision;
-  return `${check.outcome} · ${check.checkedAt} · проверена версия ${check.revision} · ${check.source} · ${check.persisted ? 'сохранено' : 'не сохранено'}${stale ? ' · устарела' : ''}; состояние в ответе проверки: ${status.state}, версия ${status.revision}`;
+  const repair =
+    status.code === 'provider_secret_corrupt' || status.code === 'provider_secret_insecure'
+      ? '; ' + settingsError(Error(status.code))
+      : '';
+  return `${check.outcome} · ${check.checkedAt} · проверена версия ${check.revision} · ${check.source} · ${check.persisted ? 'сохранено' : 'не сохранено'}${stale ? ' · устарела' : ''}; состояние в ответе проверки: ${status.state}, версия ${status.revision}${repair}`;
 }
