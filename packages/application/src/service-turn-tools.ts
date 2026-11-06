@@ -124,19 +124,23 @@ export class ServiceTurnTools implements GrantedToolSource {
           return previous.fingerprint === fingerprint
             ? previous.result
             : Promise.resolve(serviceRefusal('identity_conflict'));
+        if (results.size >= 1024) return Promise.resolve(serviceRefusal('turn_tool_limit'));
+        const refuse = (value: ToolResult) => {
+          const result = Promise.resolve(value);
+          results.set(key, { fingerprint, result });
+          return result;
+        };
         const route = routes.get(call.name);
         if (!route || !context || context.taskRunId !== turn.taskRunId)
-          return Promise.resolve(serviceRefusal('tool_ungranted'));
-        if (unknown) return Promise.resolve(serviceUncertain());
-        if (signal.aborted || callSignal.aborted)
-          return Promise.resolve(serviceRefusal('cancelled'));
-        if (calls >= PLUGIN_MAX_CALLS_PER_TURN)
-          return Promise.resolve(serviceRefusal('call_limit'));
+          return refuse(serviceRefusal('tool_ungranted'));
+        if (unknown) return refuse(serviceUncertain());
+        if (signal.aborted || callSignal.aborted) return refuse(serviceRefusal('cancelled'));
+        if (calls >= PLUGIN_MAX_CALLS_PER_TURN) return refuse(serviceRefusal('call_limit'));
         let args;
         try {
           args = serviceArguments(call.arguments);
         } catch {
-          return Promise.resolve(serviceRefusal('invalid_arguments'));
+          return refuse(serviceRefusal('invalid_arguments'));
         }
         const identity = this.options.sha256(key);
         if (!/^[a-f0-9]{64}$/.test(identity)) throw Error('invalid_service_hash');

@@ -29,6 +29,8 @@ export function combineChatTools(
         return previous.fingerprint === fingerprint
           ? previous.result
           : Promise.resolve({ isError: true, output: 'invocation identity conflict' });
+      if (results.size >= 1024)
+        return Promise.resolve({ isError: true, output: 'turn tool limit reached' });
       const source = routes.get(call.name);
       const result = source
         ? source.execute(call, signal, context)

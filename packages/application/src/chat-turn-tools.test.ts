@@ -52,3 +52,18 @@ it('a coding refusal prevents service-only fallback before the existing loop', a
   ).rejects.toThrow('coding refused');
   expect(grantedTools.forTurn).not.toHaveBeenCalled();
 });
+
+it('bounds the shared invocation identity cache while keeping previous outcomes', async () => {
+  const coding = source('read'),
+    tools = combineChatTools(coding)!;
+  const signal = new AbortController().signal;
+  for (let i = 0; i < 1024; i++)
+    await tools.execute({ id: String(i), name: 'missing', arguments: '{}' }, signal);
+  expect((await tools.execute({ id: 'over', name: 'read', arguments: '{}' }, signal)).output).toBe(
+    'turn tool limit reached',
+  );
+  expect((await tools.execute({ id: '0', name: 'missing', arguments: '{}' }, signal)).output).toBe(
+    'tool unavailable',
+  );
+  expect(coding.execute).not.toHaveBeenCalled();
+});

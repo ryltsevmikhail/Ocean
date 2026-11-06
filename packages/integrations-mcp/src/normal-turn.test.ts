@@ -65,6 +65,12 @@ it('projects accepted SQLite grants before dispatch and binds exact call identit
       arguments: '{"value":"alpha"}',
     };
     const context = { taskRunId: 'run', attemptId: 'attempt' };
+    const malformed = { ...call, id: 'malformed', arguments: '[]' };
+    expect((await tools!.execute(malformed, signal(), context)).isError).toBe(true);
+    expect((await tools!.execute({ ...call, id: malformed.id }, signal(), context)).isError).toBe(
+      true,
+    );
+    expect(f.stats.calls).toBe(0);
     const result = await tools!.execute(call, signal(), context);
     expect(result.isError).toBe(false);
     expect(await tools!.execute(call, signal(), context)).toEqual(result);
