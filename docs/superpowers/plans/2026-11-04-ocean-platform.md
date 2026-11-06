@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop/миграция C18.5.3.2, установленная приёмка C18.6 и этапы D–H остаются запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная приёмка/удаление Executor C18.6 и этапы D–H остаются запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -1083,13 +1083,13 @@ profile/client/workspace, never renderer-supplied authority. Both current servic
 features and historical supported fallback use explicit capability negotiation;
 unsupported or failed negotiation is visible, never silently treated as no data.
 
-- [ ] **RED consumer behavior.** Add regressions for typed service IPC/host delegation,
+- [x] **RED consumer behavior.** Add regressions for typed service IPC/host delegation,
       secret clearing before await, lost response with original receipt lookup,
       close/reopen discovery of prepared intent, late feedback after context change,
       grant version conflicts, and exact decision preview/second-owner resolution.
       Cover malformed IPC/output and historical support/refusal. Keep tests about
       actual observable behavior, not implementation snapshots or fake ready DTOs.
-- [ ] **Service settings and scope.** Use the existing Plugins toolbar entry/dialog
+- [x] **Service settings and scope.** Use the existing Plugins toolbar entry/dialog
       for current service connections, actual readiness, published tools and owner
       scopes. HTTP URL and optional private key; pinned Node stdio uses only the
       existing executable/hash/optional packageJsonSha256/workspaceRoot/args fields,
@@ -1107,7 +1107,7 @@ unsupported or failed negotiation is visible, never silently treated as no data.
       verified enforcement. Preserve actual tool names (no CSV splitting). Revoke
       uses current grant revision; backend handles current catalog/trust/scope policy.
       Advanced coding/project scope editing remainsG, no new client policy engine.
-- [ ] **Recover settings without retry.** Clear key fields before awaiting IPC and
+- [x] **Recover settings without retry.** Clear key fields before awaiting IPC and
       on close/Escape/selection; pending UI metadata stays keyless. After lost reply,
       query the ORIGINAL request receipt; show its original result separately from
       current metadata. Absent/prepared/unknown is never success or automatic resend.
@@ -1117,7 +1117,7 @@ unsupported or failed negotiation is visible, never silently treated as no data.
       Old rows without intent remain read-only unknown, not invented prefill. Guard
       late room/bot/connection/window/profile feedback with existing context epochs;
       don't write a new client database or persist credentials in browser storage.
-- [ ] **Exact owner decisions.** Show current pending service-call cards with owning
+- [x] **Exact owner decisions.** Show current pending service-call cards with owning
       room/run, executor/status/result facts and full plain-text verified operation.
       Enable allow/deny only for the complete current version/digest/context; never
       truncate the operation or render it as HTML. Use existing backend decision
@@ -1125,7 +1125,7 @@ unsupported or failed negotiation is visible, never silently treated as no data.
       stale resolution cannot mint another permission. Allowed is a decision fact,
       not proof the effect completed. Reload after reconnect; disconnect/closing a
       window never cancels a run or resolves a card. No new decision table/waiter.
-- [ ] **Conservative legacy import and accurate hints.** Current-runtime historical
+- [x] **Conservative legacy import and accurate hints.** Current-runtime historical
       connections/grants/unknown operations remain clearly read-only, including no
       acknowledge/install/enable/grant mutations presented as current execution.
       A supported older runtime may keep its explicitly historical UI fallback.
@@ -1142,7 +1142,7 @@ unsupported or failed negotiation is visible, never silently treated as no data.
       key-store reasons: correct providerKeyHint/dom/model hints accordingly. A
       missing valid reference may need explicit resupply; corrupt contents are
       preserved and require separate safe repair, never delete-all/reset advice.
-- [ ] **Actual Desktop qualification.** Use one owned current-source Desktop entry
+- [x] **Actual Desktop qualification.** Use one owned current-source Desktop entry
       (one provisional package if necessary), matching current public client/runtime
       pins and synthetic provider/MCP peer; retain real launcher/process ownership.
       Drive actual UI for connection/metadata/scope, prepared publication failure,
@@ -1155,7 +1155,7 @@ unsupported or failed negotiation is visible, never silently treated as no data.
       vendor service/model, released profile/install/launcher/user-unit changes or
       repeated unrelated model/asset/native matrix. Preserve failed proofs and
       unknown cleanup honestly; process exit alone doesn't prove descendants gone.
-- [ ] **Verify, document and commit.** Run owning RED→GREEN, strict production and
+- [x] **Verify, document and commit.** Run owning RED→GREEN, strict production and
       Node/Desktop tests/scoped lint, then one root check/build/format on frozen final
       source. Keep protectedcatalog3/format2 until18.6; no skips or weakened assertions.
       Run affected process/native cases separately if root stops at protected source.
@@ -1164,6 +1164,18 @@ unsupported or failed negotiation is visible, never silently treated as no data.
       planned docs; commit owned paths/report, get independent review before18.6.
       This is current settings/decision GUI qualification, not installed/live/F release
       acceptance. C5 parent stays incomplete until its child requirements reconcile.
+
+C18.5.3.2 accepted at83c0719 after full independent review and two scoped
+correction rounds: five original findings plus I6 are closed. Source905e1e9
+has original root3793pass/3protectedfail/44skip/process-unreached/build0/
+formatprotected2. Correctionde9cccf has302 owning/2 process passes and an
+exact-source targeted real GUI credential proof; correction47b691d adds25
+scoped passes/strict/build0 for one local feedback clear. These are separate
+proofs, not a new final full-root/native aggregate. Bulk GUI and1024 delta
+retain their original working-source/bundle pins. Three original Minors and
+N1 diagnostic retention remain F. Parent18.5 is complete within owner settings,
+exact decisions, thin clients and conservative inert import; parent18/C remain
+open until18.6 installed/live/package replacement and Executor removal.
 
 ## Task 19: D. Автономные задачи и общение ботов — приоритет 1
 
