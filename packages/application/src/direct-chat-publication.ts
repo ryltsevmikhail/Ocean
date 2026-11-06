@@ -1,4 +1,5 @@
-import { taskRunId, type ChatTurn } from '@runnets/domain';
+import { repairRoomHandoff } from './room-slice-publication.js';
+import { taskRunId, type ConversationMessage, type ChatTurn } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
 import type { TaskRunService } from './service.js';
 import { publishKnownChatFailure } from './chat-known-failure.js';
@@ -21,18 +22,9 @@ export async function publishChat(
     if (current.continuationReviewId !== undefined)
       throw new Error('Reviewed turns cannot publish late output');
     if (current.status !== 'prepared') throw new Error('chat answer is not prepared');
-    tx.putMessage({
-      id: 'reply_' + turn.id,
-      workspaceId: turn.workspaceId,
-      roomId: turn.roomId,
-      seq: tx.nextSequence(turn.roomId),
-      author: 'bot',
-      authorBotId: turn.bot.id,
-      turnId: turn.id,
-      targetBotId: turn.bot.id,
-      body: current.text,
-      createdAt: clock.now().toISOString(),
-    });
+    tx.putMessage(
+      chatFinalMessage(current, tx.nextSequence(turn.roomId), clock.now().toISOString()),
+    );
     const completed = { ...current, status: 'completed' as const };
     tx.putChatTurn(completed);
     return completed;
@@ -48,6 +40,10 @@ export async function recoverChats(
 ): Promise<void> {
   const turns = store.atomic((tx) => tx.chatTurns());
   for (const turn of turns) {
+    if (turn.roomDelivery) {
+      await repairRoomHandoff({ store, tasks, clock }, turn.id);
+      continue;
+    }
     // A queued broadcast child was never dispatched; batch recovery owns its state.
     if (['queued', 'completed', 'failed', 'cancelled'].includes(turn.status)) continue;
     if (await publishKnownChatFailure({ store, tasks, ...(reviews ? { reviews } : {}) }, turn)) {
@@ -83,4 +79,24 @@ export async function recoverChats(
       });
     }
   }
+}
+
+/** One ordinary bot final shape, reused by room slices. */
+export function chatFinalMessage(
+  turn: ChatTurn,
+  seq: number,
+  createdAt: string,
+): ConversationMessage {
+  return {
+    id: 'reply_' + turn.id,
+    workspaceId: turn.workspaceId,
+    roomId: turn.roomId,
+    seq,
+    author: 'bot',
+    authorBotId: turn.bot.id,
+    turnId: turn.id,
+    targetBotId: turn.bot.id,
+    body: turn.text,
+    createdAt,
+  };
 }

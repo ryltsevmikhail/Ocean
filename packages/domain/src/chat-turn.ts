@@ -18,6 +18,16 @@ export interface ChatTurnBroadcastLink {
   /** Set only when an owner abandon terminalised a child that was never dispatched. */
   readonly abandoned?: boolean;
 }
+/** Immutable local intent captured after the delegate transaction; not completion. */
+export interface RoomHandoff {
+  readonly turnId: string;
+  readonly taskRunId: string;
+  readonly attemptId: string;
+  readonly callId: string;
+  readonly childTaskId: string;
+  readonly deliveryId: string;
+  readonly expectedRunVersion: number;
+}
 /** Durable admission and publication facts; a retry never creates new execution authority. */
 export interface ChatTurn {
   readonly roomDelivery?: {
@@ -25,6 +35,8 @@ export interface ChatTurn {
     readonly taskId: string;
     readonly deliveryId: string;
   };
+  readonly roomHandoff?: Readonly<{ version: 1 }> & RoomHandoff;
+  readonly roomSliceDisposition?: 'yielded';
   readonly codingTaskId?: string;
   readonly continuationReviewId?: string;
   readonly id: string;

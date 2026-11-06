@@ -224,6 +224,8 @@ export function updateChat(store: ConversationStore, expected: ChatTurn, next: C
   store.atomic((tx) => {
     const current = tx.chatTurn(expected.id);
     if (
+      (expected.roomDelivery !== undefined &&
+        JSON.stringify(current) !== JSON.stringify(expected)) ||
       current?.status !== expected.status ||
       current?.continuationReviewId !== expected.continuationReviewId
     )

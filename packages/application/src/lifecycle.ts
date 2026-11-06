@@ -20,11 +20,10 @@ import {
   type TokenUsagePayload,
 } from '@runnets/domain';
 
-import { executeStep } from './commands.js';
+import { completionSummary, executeStep } from './commands.js';
 import type { TurnInput, TurnOutcome } from './types.js';
 
 const PROTECTED_DIMENSION = 'provider_tokens';
-const SUMMARY_LIMIT = 200;
 const MESSAGE_LIMIT = 500;
 
 export interface StartedTurn {
@@ -128,8 +127,7 @@ export async function completeRun(
 ): Promise<TurnOutcome> {
   const state = await stateOf(input);
   if (isTerminal(state.status)) return failedOutcome(budgetText(state));
-  const trimmed = text.trim();
-  const summary = trimmed === '' ? 'turn completed' : trimmed.slice(0, SUMMARY_LIMIT);
+  const summary = completionSummary(text);
   await input.beforeComplete?.(text, stopReason === 'max_tokens' ? 'max_tokens' : 'end_turn');
   await commit(input, 'Complete', { summary, attemptId });
   return { kind: 'completed', stopReason, text };

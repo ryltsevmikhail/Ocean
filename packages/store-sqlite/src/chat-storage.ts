@@ -22,6 +22,15 @@ export function decodeChatTurn(row: Record<string, unknown>): ChatTurn {
     throw new Error('Inconsistent continuation review');
   if ('activation' in value) copyModelActivationSnapshot(value.activation);
   if ('modelBinding' in value) copyBotModelBinding(value.modelBinding);
+  validateRoomSlice(value as ChatTurn);
+  const t = value as ChatTurn;
+  if (
+    t.roomDelivery &&
+    (t.taskRunId !== row['task_run_id'] ||
+      t.workspaceId !== row['workspace_id'] ||
+      t.roomId !== row['room_id'])
+  )
+    throw Error('foreign room marker');
   return value as ChatTurn;
 }
 /** Chat phase updates share the surrounding conversation transaction and SQLite constraints. */
@@ -66,4 +75,47 @@ export function chatStorage(db: DatabaseSync): ChatStorage {
       );
     },
   };
+}
+
+/** Reject malformed optional lifecycle fields before any final projection. */
+function validateRoomSlice(t: ChatTurn): void {
+  const m = t.roomDelivery,
+    p = t.roomHandoff;
+  if (
+    m !== undefined &&
+    (!m ||
+      Object.keys(m).sort().join() !== 'deliveryId,taskId,version' ||
+      m.version !== 1 ||
+      ![m.taskId, m.deliveryId].every(
+        (s) => typeof s === 'string' && s.length > 0 && s.length <= 128,
+      ) ||
+      t.broadcast !== undefined ||
+      t.codingTaskId !== undefined)
+  )
+    throw Error('invalid room marker');
+  if (
+    p !== undefined &&
+    (!m ||
+      !p ||
+      Object.keys(p).sort().join() !==
+        'attemptId,callId,childTaskId,deliveryId,expectedRunVersion,taskRunId,turnId,version' ||
+      p.version !== 1 ||
+      p.turnId !== t.id ||
+      p.taskRunId !== t.taskRunId ||
+      ![p.attemptId, p.callId, p.childTaskId, p.deliveryId].every(
+        (s) => typeof s === 'string' && s.length > 0,
+      ) ||
+      !Number.isSafeInteger(p.expectedRunVersion) ||
+      p.expectedRunVersion < 1)
+  )
+    throw Error('invalid room handoff');
+  if (
+    t.roomSliceDisposition !== undefined &&
+    (t.roomSliceDisposition !== 'yielded' ||
+      !p ||
+      t.status !== 'completed' ||
+      t.text !== '' ||
+      t.preparedVersion !== null)
+  )
+    throw Error('invalid room disposition');
 }

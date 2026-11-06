@@ -1,19 +1,14 @@
+import { canonicalJson } from '@runnets/domain';
+import type { RoomCompleteEvidence } from './room-task-records.js';
 /** Internal evidence for a committed local delegation; never model-provided authority. */
-import { DomainError, validConversationText, type Command } from '@runnets/domain';
+import { DomainError, taskRunId, validConversationText, type Command } from '@runnets/domain';
 import { RUNTIME_ACTOR } from './commands.js';
 import type { CommandReceipt } from './ports.js';
 import type { ToolResult } from './tools.js';
 import type { TurnInput, YieldedRoomSlice } from './types.js';
 
-export interface RoomHandoff {
-  readonly turnId: string;
-  readonly taskRunId: string;
-  readonly attemptId: string;
-  readonly callId: string;
-  readonly childTaskId: string;
-  readonly deliveryId: string;
-  readonly expectedRunVersion: number;
-}
+import type { RoomHandoff } from '@runnets/domain';
+export type { RoomHandoff } from '@runnets/domain';
 const handoffs = new WeakMap<ToolResult, RoomHandoff>();
 const SUMMARY = 'Room delegation committed';
 
@@ -55,14 +50,7 @@ export async function finishRoomHandoff(
   proof: RoomHandoff,
 ): Promise<YieldedRoomSlice> {
   if (proof.taskRunId !== input.taskRunId) throw Error('room handoff run mismatch');
-  const command: Command<'Complete'> = {
-    type: 'Complete',
-    commandId: `room-handoff-complete/v1:${proof.turnId}`,
-    taskRunId: input.taskRunId,
-    actor: RUNTIME_ACTOR,
-    expectedVersion: proof.expectedRunVersion,
-    payload: { attemptId: proof.attemptId, summary: SUMMARY },
-  };
+  const command = roomHandoffCommand(proof);
   let receipt: CommandReceipt | null = null;
   let result;
   try {
@@ -80,25 +68,7 @@ export async function finishRoomHandoff(
       throw Error('unproven completion disposition');
     receipt = result.value.receipt;
   }
-  const event = receipt?.events[0];
-  if (
-    receipt === null ||
-    receipt.commandId !== command.commandId ||
-    receipt.taskRunId !== input.taskRunId ||
-    receipt.version !== proof.expectedRunVersion + 1 ||
-    receipt.events.length !== 1 ||
-    event?.type !== 'task_run.succeeded' ||
-    event.sequence !== receipt.version ||
-    event.aggregateType !== 'task_run' ||
-    event.aggregateId !== input.taskRunId ||
-    event.causationId !== command.commandId ||
-    event.actor.kind !== RUNTIME_ACTOR.kind ||
-    event.actor.id !== RUNTIME_ACTOR.id ||
-    Object.keys(event.actor).length !== 2 ||
-    Object.keys(event.payload).length !== 2 ||
-    event.payload.attemptId !== proof.attemptId ||
-    event.payload.summary !== SUMMARY
-  )
+  if (receipt === null || !roomCompleteReceipt(command, receipt))
     throw Error('room handoff completion receipt uncertain');
   const state = await input.service.state(input.taskRunId);
   if (
@@ -112,4 +82,56 @@ export async function finishRoomHandoff(
   )
     throw Error('room handoff completion head uncertain');
   return { kind: 'yielded', handoff: proof };
+}
+
+export function roomHandoffCommand(proof: RoomHandoff): Command<'Complete'> {
+  return {
+    type: 'Complete',
+    commandId: `room-handoff-complete/v1:${proof.turnId}`,
+    taskRunId: taskRunId(proof.taskRunId),
+    actor: RUNTIME_ACTOR,
+    expectedVersion: proof.expectedRunVersion,
+    payload: { attemptId: proof.attemptId, summary: SUMMARY },
+  };
+}
+/** Request-bound success proof, shared by engine completion and locked publication. */
+export function roomCompleteReceipt(
+  command: Command<'Complete'>,
+  receipt: CommandReceipt | null,
+): boolean {
+  const event = receipt?.events[0];
+  return (
+    receipt !== null &&
+    receipt.commandId === command.commandId &&
+    receipt.taskRunId === command.taskRunId &&
+    receipt.version === command.expectedVersion + 1 &&
+    receipt.events.length === 1 &&
+    event?.type === 'task_run.succeeded' &&
+    event.sequence === receipt.version &&
+    event.aggregateType === 'task_run' &&
+    event.aggregateId === command.taskRunId &&
+    event.causationId === command.commandId &&
+    event.actor.kind === command.actor.kind &&
+    event.actor.id === command.actor.id &&
+    Object.keys(event.actor).length === 2 &&
+    Object.keys(event.payload).length === 2 &&
+    event.payload.attemptId === command.payload.attemptId &&
+    event.payload.summary === command.payload.summary
+  );
+}
+
+export function roomCompleteEvidence(
+  e: RoomCompleteEvidence,
+  command: Command<'Complete'>,
+): boolean {
+  return (
+    roomCompleteReceipt(command, e.receipt) &&
+    canonicalJson(e.headEvent) === canonicalJson(e.receipt!.events[0]) &&
+    e.run.version === e.receipt!.version &&
+    e.run.status === 'succeeded' &&
+    e.run.terminal?.status === 'succeeded' &&
+    e.run.terminal.summary === command.payload.summary &&
+    e.run.terminal.failure === null &&
+    e.run.activeAttempt?.attemptId === command.payload.attemptId
+  );
 }

@@ -1,3 +1,4 @@
+import { decodeChatTurn } from './chat-storage.js';
 import {
   STATUS_AFTER_EVENT,
   type ChatTurnStatus,
@@ -64,12 +65,13 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
   function run({ workspaceId, roomId, runId }: RunQuery): RoomRunState | null {
     const t = db
       .prepare(
-        `SELECT id,status,json_extract(payload,'$.inboundMessageId') AS message,
+        `SELECT *,json_extract(payload,'$.inboundMessageId') AS message,
       json_extract(payload,'$.requestId') AS request,json_extract(payload,'$.bot.id') AS bot,
       json_extract(payload,'$.codingTaskId') AS task ${BOUND_TURN}`,
       )
       .get(workspaceId, roomId, runId);
     if (!t) return null;
+    const decoded = decodeChatTurn(t);
     const turnId = readText(t, 'id'),
       performerId = readText(t, 'bot'),
       turnStatus = readText(t, 'status') as ChatTurnStatus;
@@ -114,7 +116,10 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
       taskStatus,
       version,
       pendingDecisionIds,
-      resultMessageId: turnStatus === 'completed' ? 'reply_' + turnId : null,
+      resultMessageId:
+        turnStatus === 'completed' && decoded.roomSliceDisposition !== 'yielded'
+          ? 'reply_' + turnId
+          : null,
     };
   }
   function requireRun(query: RunQuery) {

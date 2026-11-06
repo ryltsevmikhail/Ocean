@@ -27,7 +27,7 @@ it('migrates missing envelopes to null while preserving every frozen receipt byt
   omitRoomTaskSchema(db);
   db.exec("UPDATE meta SET value='22' WHERE key='schema_version'");
   initializeSchema(db);
-  expect(SCHEMA_VERSION).toBe(27);
+  expect(SCHEMA_VERSION).toBe(28);
   expect(
     JSON.parse(
       db

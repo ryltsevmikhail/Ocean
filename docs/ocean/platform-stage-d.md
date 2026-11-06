@@ -130,28 +130,57 @@ a separately committed handoff retains its truthful completion behavior. Final
 root checks:3819 source tests and166 process tests passed; build and format passed.
 The approved test-fixture split and existing turn-safety regression stay≤300 lines.
 
-This engine contract introduces no room producer, send endpoint, delivery claim,
-host job or new permission. Durable send/proof persistence and crash repair before
-generic recovery, gated child claims, versioned parent-result delivery, bounded
-fresh continuation history, root identity/model pins and current privacy/physical
-authority checks remain planned. Actual A→B→A execution and the full D/native gate
-remain incomplete; existing result/status wire contracts have not changed.
+This foundation alone introduced no producer. D19.2.4 below adds local application
+claim/publication/recovery; production room dispatch remains disabled.
+
+## Implemented: D19.2.4 durable local room slices
+
+Schema 28 preserves the two v27 room tables and their existing rows, messages and
+receipts. It adds inverse result deliveries and immutable saved handoff/disposition
+fields. A completed/yielded slice has no final message or result ID: its bot task
+waits on the committed child. The child's ordinary self-targeted final is reused
+by the result edge; a fresh parent run resumes the same bot task with a fresh
+bounded activation. Nested results reference the original delegated assignment.
+
+The narrow application claim API selects one committed delivery under the SQLite
+write lock. It verifies receipts, pins, current membership/privacy, local scope,
+input ordering, pending effects and the fixed two concurrent /32 total slice
+limits. Only the accepted→dispatching winner enters the existing
+`executeChatTurn`→`runTurn` path. Peer/result input is attributed bot data and
+history stops at the selected sequence. Text-only recipients receive no tools.
+Physical and coding mandates fail closed at this boundary.
+
+Local handoff repair and ordinary final publication replay contiguous Core events
+and compare the identical Complete request, receipt and head on the same locked
+connection as their writes. A changed head, unknown effects, stop or lost authority
+retains the hold. Accepted-claim discovery is separate and proves absence or an
+exactly created run with no attempt/model/effect before reusing its IDs. Generic
+chat recovery never dispatches a marked model request. A committed handoff is
+checked before generic failure handling, and its pinned head survives a failed
+local Complete after the genuine carrier/context checks.
+
+Qualification uses scripted providers, the common engine and temporary on-disk
+SQLite, including contention, nested/drained queues, crash repair, rollback and a
+genuine populated BASE v27 migration fixture. This is application/local persistence
+qualification only; no native, provider network or external service claim is made.
 
 ## Planned: execution and host integration
 
-D is not complete. This persistence surface is deliberately unwired: no runtime
-start/tool endpoint, scheduler, claim API, model dispatch, result publication or UI
-is introduced. New admissions create no ChatTurn or Core TaskRun. Test-only setup
-attaches a marked turn to a real queued delivery and commits Core lifecycle/model
-settlement commands without calling a provider.
+D and Task 19.2 are not complete. The local application surface remains unwired
+to runtime hosts: no production start/tool endpoint, scheduler, RPC, startup
+auto-dispatch or UI producer is enabled. Inert start/send admission still creates
+no ChatTurn or Core TaskRun; the explicit local claim/execution caller owns those
+steps. Production producers remain disabled until a negotiated task view and
+observers can expose waiting-child and yielded disposition truthfully.
 
 The addressed-history wire gate is implemented; the frozen RC2 decoder remains
-unchanged and receives an upgrade error for peer-containing pages. The later
-engine must explicitly label peer input rather than passing it as the
-current user input to `roomContext`.
+unchanged and receives an upgrade error for peer-containing pages. The local
+engine labels peer/result input as attributed bot data; it does not grant current
+owner text or attachment authority.
 
-Execution accounting, scheduling, stop/cleanup and parent result publication remain
-planned. At each eventual physical-operation boundary, the root mandate and a valid
+Cross-producer accounting, scheduling, stop/cleanup, mixed-model outages and
+native/live gates remain planned. Actual provider-start/tool limits, repeated
+handoff pause rules and full ancestor grant intersection belong to host integration. At each eventual physical-operation boundary, the root mandate and a valid
 captured grant at every actual delegating level and recipient remain mandatory;
 this leaf does not promise that a captured grant remains usable. Native behavior,
 external services and live models are not qualified by these persistence tests.

@@ -124,3 +124,12 @@ export * from './room-task-records.js';
 export { RoomTaskPersistence, type RoomTaskPersistenceDeps } from './room-task-persistence.js';
 
 export { validRoomTaskIdentity } from './room-task-identity.js';
+
+export {
+  claimRoomDelivery,
+  recoverUnstartedRoomClaims,
+  type RoomDeliveryClaim,
+  type RoomDeliveryClaimDeps,
+} from './room-delivery-claim.js';
+export { repairRoomHandoff, type RoomSlicePublicationDeps } from './room-slice-publication.js';
+export { recoverChats } from './direct-chat-publication.js';

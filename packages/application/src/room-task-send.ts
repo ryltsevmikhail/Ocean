@@ -1,3 +1,5 @@
+import { roomSliceAuthority } from './room-delivery-evidence.js';
+import type { RoomHandoff } from '@runnets/domain';
 import {
   canonicalJson,
   conversationFailure,
@@ -37,11 +39,24 @@ function origin(f: RoomTaskOriginFacts, actor: RoomTaskActor): RoomDeliveryOrigi
     callId: actor.callId,
   };
 }
+type HandoffSend = { readonly receipt: RoomTaskReceipt; readonly proof: RoomHandoff | null };
 export function persistRoomTaskSend(
   d: RoomTaskPersistenceDeps,
   actor: RoomTaskActor,
   request: unknown,
-): ConversationResult<RoomTaskReceipt> {
+): ConversationResult<RoomTaskReceipt>;
+export function persistRoomTaskSend(
+  d: RoomTaskPersistenceDeps,
+  actor: RoomTaskActor,
+  request: unknown,
+  handoff: true,
+): ConversationResult<HandoffSend>;
+export function persistRoomTaskSend(
+  d: RoomTaskPersistenceDeps,
+  actor: RoomTaskActor,
+  request: unknown,
+  handoff?: true,
+): ConversationResult<RoomTaskReceipt | HandoffSend> {
   if (
     !actor ||
     typeof actor !== 'object' ||
@@ -92,7 +107,9 @@ export function persistRoomTaskSend(
           rows[0]!.senderBotId === facts.turn.bot.id &&
           rows[0]!.recipientBotId === request.toBotId &&
           receipt.rootId === facts.root.id
-          ? ok(receipt)
+          ? handoff
+            ? ok({ receipt, proof: savedProof(facts, actor, rows[0]!) })
+            : ok(receipt)
           : conversationFailure('request_conflict');
       }
       if (rt.restored()) return conversationFailure('recovery_required');
@@ -100,6 +117,22 @@ export function persistRoomTaskSend(
       if (!facts || facts.root.rootPayload.ownerId !== d.ownerId)
         return conversationFailure('approval_required');
       const { task, root, input, turn, liveRun } = facts;
+      if (
+        handoff &&
+        (!roomSliceAuthority(tx, root, task, d.clock.now().getTime(), d.sha256) ||
+          !turn.activation ||
+          d.clock.now().getTime() >= Date.parse(turn.activation.deadlineAt))
+      )
+        return conversationFailure('recovery_required');
+      const evidence = tx.chatFailureEvidence?.(actor.taskRunId);
+      if (
+        !evidence ||
+        evidence.taskVersion !== liveRun!.version ||
+        evidence.relatedPendingEffects !== 0 ||
+        (turn.activation?.capabilities.usage === 'reported' &&
+          liveRun!.modelExecution!.lastRequest.settlement?.usage.kind !== 'actual')
+      )
+        return conversationFailure('recovery_required');
       const ordinal = liveRun!.modelExecution!.lastRequest.ordinal,
         prefix = `${actor.attemptId}_r${ordinal}_`;
       if (!actor.callId.startsWith(prefix) || actor.callId.length <= prefix.length)
@@ -173,7 +206,17 @@ export function persistRoomTaskSend(
         binding: decided.value.binding,
         reply: { kind: 'message', data: message },
       });
-      return ok({
+      const proof: RoomHandoff | null =
+        handoff && request.kind === 'delegate'
+          ? {
+              ...actor,
+              childTaskId: child.id,
+              deliveryId: delivery.id,
+              expectedRunVersion: liveRun!.version,
+            }
+          : null;
+      if (proof) tx.putChatTurn({ ...turn, roomHandoff: { version: 1, ...proof } });
+      const receipt: RoomTaskReceipt = {
         version: 1,
         workspaceId: task.workspaceId,
         roomId: task.roomId,
@@ -181,11 +224,34 @@ export function persistRoomTaskSend(
         messageId: message.id,
         seq: message.seq,
         deliveries: [{ botId: request.toBotId, taskId: child.id, deliveryId: delivery.id }],
-      });
+      };
+      return handoff ? ok({ receipt, proof }) : ok(receipt);
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'revision_conflict')
       return conversationFailure('room_busy');
     throw error;
   }
+}
+
+function savedProof(
+  f: RoomTaskOriginFacts,
+  a: RoomTaskActor,
+  row: RoomDeliveryRecord,
+): RoomHandoff | null {
+  const p = f.turn.roomHandoff;
+  if (!p) return null; // An inert historical receipt never manufactures execution authority.
+  if (
+    p.turnId !== a.turnId ||
+    p.taskRunId !== a.taskRunId ||
+    p.attemptId !== a.attemptId ||
+    p.callId !== a.callId ||
+    p.deliveryId !== row.id ||
+    p.childTaskId !== row.toTaskId ||
+    row.kind !== 'delegate' ||
+    row.fromTaskId !== f.task.id ||
+    row.causeId !== f.input.id
+  )
+    throw Error('conflicting original room proof');
+  return p;
 }

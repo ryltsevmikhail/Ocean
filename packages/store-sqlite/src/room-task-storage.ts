@@ -1,3 +1,4 @@
+import { roomTaskSliceStorage } from './room-task-slice-storage.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { validRoomTaskIdentity } from '@runnets/application';
 import { canonicalJson } from '@runnets/domain';
@@ -117,7 +118,8 @@ export function readRoomTask(db: DatabaseSync, id: string): RoomTaskRecord | nul
 export function decodeRoomDelivery(r: Row): RoomDeliveryRecord {
   if (
     r['version'] !== 1 ||
-    !['start', 'message', 'delegate'].includes(String(r['kind'])) ||
+    !['queued', 'claimed', 'consumed', 'held'].includes(String(r['state'])) ||
+    !['start', 'message', 'delegate', 'result'].includes(String(r['kind'])) ||
     !Number.isSafeInteger(r['position']) ||
     Number(r['position']) < 0 ||
     Number(r['position']) > 31 ||
@@ -148,6 +150,7 @@ export function decodeRoomDelivery(r: Row): RoomDeliveryRecord {
 }
 export function roomTaskStorage(db: DatabaseSync): RoomTaskTransaction {
   return {
+    ...roomTaskSliceStorage(db),
     task: (id) => readRoomTask(db, id),
     deliveriesForReceipt: (key, _messageId) =>
       db

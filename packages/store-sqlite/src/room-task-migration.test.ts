@@ -127,7 +127,7 @@ function logicalRows(db: DatabaseSync) {
       ]),
   );
 }
-it('publishes v27 with two durable task tables', () => {
+it('publishes v28 with two durable task tables', () => {
   const db = new DatabaseSync(':memory:');
   try {
     initializeSchema(db);
@@ -139,7 +139,7 @@ it('publishes v27 with two durable task tables', () => {
         .all(),
     ).toHaveLength(2);
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '27',
+      '28',
     );
   } finally {
     db.close();
@@ -193,12 +193,12 @@ it('migrates a genuine BASE v26 disposable snapshot preserving reply, review, ba
     rmSync(root, { recursive: true, force: true });
   }
 });
-it('rolls interrupted v27 publication back to exact predecessor schema and logical rows', () => {
+it('rolls interrupted v28 publication back to exact predecessor schema and logical rows', () => {
   const root = mkdtempSync(join(tmpdir(), 'room-v26-')),
     db = predecessor(join(root, 'v26.sqlite'));
   try {
     db.exec(
-      "CREATE TRIGGER stop_27 BEFORE UPDATE ON meta WHEN NEW.value='27' BEGIN SELECT RAISE(ABORT,'v27 interrupted'); END",
+      "CREATE TRIGGER stop_27 BEFORE UPDATE ON meta WHEN NEW.value='28' BEGIN SELECT RAISE(ABORT,'v27 interrupted'); END",
     );
     const rows = logicalRows(db),
       ddl = db.prepare('SELECT * FROM sqlite_master ORDER BY rowid').all();
@@ -216,7 +216,7 @@ it('rolls interrupted v27 publication back to exact predecessor schema and logic
     rmSync(root, { recursive: true, force: true });
   }
 });
-it('inspects and snapshots inert v27 state and rejects unsupported future28', async () => {
+it('inspects and snapshots inert current state and rejects unsupported future29', async () => {
   const f = roomTasks();
   try {
     const started = f.service.start(f.input);
@@ -225,16 +225,16 @@ it('inspects and snapshots inert v27 state and rejects unsupported future28', as
       copy = path + '.snapshot';
     expect(inspectDatabase(path)).toMatchObject({
       status: 'ok',
-      summary: { schema: 27, heldRooms: 1, unfinishedRuns: 0 },
+      summary: { schema: 28, heldRooms: 1, unfinishedRuns: 0 },
     });
-    await expect(snapshotDatabase(path, copy)).resolves.toMatchObject({ schema: 27, heldRooms: 1 });
+    await expect(snapshotDatabase(path, copy)).resolves.toMatchObject({ schema: 28, heldRooms: 1 });
     const db = new DatabaseSync(copy);
     try {
       initializeSchema(db);
       expect(
         new SqliteConversationStore(db).atomic((tx) => tx.history('room', 0, 10)),
       ).toHaveLength(1);
-      db.exec("UPDATE meta SET value='28' WHERE key='schema_version'");
+      db.exec("UPDATE meta SET value='29' WHERE key='schema_version'");
       expect(() => initializeSchema(db)).toThrow(/newer/);
       expect(inspectDatabase(copy)).toEqual({ status: 'unsupported_schema' });
     } finally {

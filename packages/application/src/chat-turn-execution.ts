@@ -1,20 +1,18 @@
+import { createChatCommand } from './commands.js';
+import { combineChatTools } from './chat-turn-tools.js';
+import { repairRoomHandoff } from './room-slice-publication.js';
+import { roomSliceAuthority } from './room-delivery-evidence.js';
+import { canonicalJson, type TaskRunId } from '@runnets/domain';
 import { prepareChatTools } from './chat-turn-tools.js';
 /**
  * Shared single-turn execution.
  *
  * One implementation of create-task, cancel-before-dispatch, preparation,
  * dispatching, prepared, publication and failure/uncertainty rules. A direct
- * dialogue and a broadcast child both call it; no host forks these rules.
+ * dialogue, broadcast child and marked room slice call it; no host forks these rules.
  */
 
-import {
-  conversationId,
-  taskRunId,
-  unlimitedBudget,
-  validConversationText,
-  workspaceId,
-  type ChatTurn,
-} from '@runnets/domain';
+import { taskRunId, validConversationText, type ChatTurn } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
 import type { Clock } from './ports.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
@@ -33,6 +31,7 @@ export interface ChatTurnExecutionDeps extends ChatFailureEvidence {
   readonly tasks: TaskRunService;
   readonly store: ConversationStore;
   readonly clock: Clock;
+  readonly sha256?: (text: string) => string;
   /** Absent for broadcast children: those never receive coding authority. */
   readonly codingTools?: { forTurn(turn: ChatTurn, signal: AbortSignal): Promise<ChatCodingTools> };
   /**
@@ -52,50 +51,80 @@ export interface ChatTurnExecutionInput {
   readonly signal: AbortSignal;
   readonly emit: (update: TurnUpdate) => void;
 }
+type RoomSliceExecution = Readonly<{
+  parentRunId: TaskRunId | null;
+  tools: GrantedPluginTools | null;
+}>;
 export async function executeChatTurn(
   deps: ChatTurnExecutionDeps,
   input: ChatTurnExecutionInput,
+  room?: RoomSliceExecution,
 ): Promise<ChatTurn> {
   const { tasks, store, clock } = deps;
   let turn = input.turn;
+  if (!!room !== !!turn.roomDelivery) throw Error('room execution marker mismatch');
+  if (room && (turn.codingTaskId !== undefined || !turn.activation || !input.provider))
+    throw Error('unsupported room scope');
   const id = taskRunId(turn.taskRunId);
   let preparationStarted = false,
     preparationSettled = turn.codingTaskId === undefined;
   const cancelled = async () => {
+    if (room) return null;
     if (!(await cancelBeforeDispatch(tasks, turn, input.signal))) return null;
     const next = { ...turn, status: 'cancelled' as const };
     updateChat(store, turn, next);
     return next;
   };
   try {
-    const created = await tasks.execute({
-      type: 'CreateTaskRun',
-      commandId: 'chat-create-' + turn.id,
-      taskRunId: id,
-      expectedVersion: 0,
-      actor: { kind: 'user', id: 'owner' },
-      payload: {
-        conversationId: conversationId('cv_' + turn.roomId),
-        workspaceId: workspaceId('ws_' + turn.workspaceId),
-        parentTaskRunId: null,
-        model: turn.activation?.identity.modelId ?? turn.bot.model,
-        policyId: 'pl_ocean',
-        budget: unlimitedBudget(),
-      },
-    });
+    const created = await tasks.execute(createChatCommand(turn, room?.parentRunId ?? null));
     if (!created.ok) throw created.error;
     const early = await cancelled();
     if (early) return early;
     preparationStarted = turn.codingTaskId !== undefined;
-    const tools = await prepareChatTools(deps, turn, input.signal);
+    const tools = room
+      ? combineChatTools(room.tools)
+      : await prepareChatTools(deps, turn, input.signal);
     if (tools && tools.cleanupConfirmed !== true) throw Error('preparation cleanup unknown');
     preparationSettled = true;
     const afterPreparation = await cancelled();
     if (afterPreparation) return afterPreparation;
     const dispatched = { ...turn, status: 'dispatching' as const };
-    updateChat(store, turn, dispatched);
+    if (room)
+      store.atomic((tx) => {
+        const current = tx.chatTurn(turn.id),
+          rt = tx.roomTasks,
+          marker = turn.roomDelivery!;
+        const task = rt?.task(marker.taskId),
+          delivery = rt?.delivery(marker.deliveryId),
+          root = task && rt?.task(task.rootId);
+        const evidence = rt?.unstartedEvidence(createChatCommand(turn, room.parentRunId)),
+          effects = tx.chatFailureEvidence?.(turn.taskRunId);
+        if (
+          !current ||
+          canonicalJson(current) !== canonicalJson(turn) ||
+          current.status !== 'accepted' ||
+          !task ||
+          task.kind !== 'bot' ||
+          task.status !== 'ready' ||
+          !root ||
+          root.kind !== 'root' ||
+          !delivery ||
+          delivery.state !== 'claimed' ||
+          !roomSliceAuthority(tx, root, task, clock.now().getTime(), deps.sha256) ||
+          !evidence ||
+          evidence.kind !== 'created' ||
+          evidence.run.parentTaskRunId !== room.parentRunId ||
+          !effects ||
+          effects.taskVersion !== 1 ||
+          effects.relatedPendingEffects !== 0 ||
+          clock.now().getTime() >= Date.parse(turn.activation!.deadlineAt)
+        )
+          throw Error('room executor claim held');
+        tx.putChatTurn(dispatched);
+      });
+    else updateChat(store, turn, dispatched);
     turn = dispatched;
-    const outcome = await runTurn({
+    const turnInput: TurnInput = {
       // Room continuations never inherit tool authority from a legacy CLI or ACP session.
       tools,
       service: tasks,
@@ -121,7 +150,21 @@ export async function executeChatTurn(
         updateChat(store, turn, prepared);
         turn = prepared;
       },
-    });
+    };
+    const outcome = room ? await runTurn(turnInput, { turnId: turn.id }) : await runTurn(turnInput);
+    if (room) {
+      const published = await repairRoomHandoff(deps, turn.id);
+      if (published) return published;
+      const saved = store.atomic((tx) => tx.chatTurn(turn.id));
+      if (saved?.roomHandoff || saved?.status === 'prepared') return saved;
+      if (!saved) throw Error('room turn missing');
+      if (saved.status === 'dispatching') {
+        const held = { ...saved, status: 'uncertain' as const };
+        updateChat(store, saved, held);
+        return held;
+      }
+      return saved;
+    }
     if (outcome.kind === 'completed') return await publishChat(store, tasks, clock, turn);
     if (outcome.kind !== 'cancelled') {
       const failed = await publishKnownChatFailure(deps, turn);
@@ -136,6 +179,15 @@ export async function executeChatTurn(
     updateChat(store, turn, next);
     return next;
   } catch (error) {
+    if (room) {
+      const saved = store.atomic((tx) => tx.chatTurn(turn.id));
+      if (saved?.roomHandoff || saved?.status === 'prepared') {
+        const repaired = await repairRoomHandoff(deps, turn.id);
+        return repaired ?? saved;
+      }
+      // A losing executor never mutates the winning invocation's accepted/dispatching turn.
+      throw error;
+    }
     if (error instanceof ChatPreparationRefusal) preparationSettled = true;
     if (preparationSettled && turn.status !== 'prepared') {
       const beforeAttempt = await cancelled();

@@ -46,7 +46,7 @@ it('restores a source-deleted format2 D archive, replays start/peer receipts and
     const manifest = await backupProfile(source, archive);
     expect(manifest).toMatchObject({
       format: 2,
-      summary: { schema: 27, messages: 2, unfinishedRuns: 1, heldRooms: 1 },
+      summary: { schema: 28, messages: 2, unfinishedRuns: 1, heldRooms: 1 },
     });
     const archiveDigest = digest(join(archive, 'runtime.sqlite'));
     expect(archiveDigest).toBe(manifest.sha256);

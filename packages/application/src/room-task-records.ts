@@ -1,5 +1,8 @@
+import type { CommandReceipt } from './ports.js';
 import type {
   ChatTurn,
+  Command,
+  TaskRunEvent,
   CodingTask,
   ModelExecutionIdentity,
   OwnerGrantReference,
@@ -68,7 +71,27 @@ export type RoomTaskOriginFacts = Readonly<{
   turn: ChatTurn;
   liveRun: TaskRunState | null;
 }>;
+export type RoomCompleteEvidence = Readonly<{
+  run: TaskRunState;
+  headEvent: TaskRunEvent;
+  receipt: CommandReceipt | null;
+}>;
+export type RoomRunEvidence =
+  | Readonly<{ kind: 'absent' }>
+  | Readonly<{
+      kind: 'created';
+      run: TaskRunState;
+      headEvent: TaskRunEvent;
+    }>;
 export interface RoomTaskTransaction {
+  delivery(id: string): RoomDeliveryRecord | null;
+  inputs(taskId: string): readonly RoomDeliveryRecord[];
+  tasks(rootId: string): readonly RoomTaskRecord[];
+  claim(id: string): void;
+  consume(id: string): void;
+  advanceTask(task: RoomTaskRecord, expectedRevision: number): void;
+  completeEvidence(command: Command<'Complete'>): RoomCompleteEvidence | null;
+  unstartedEvidence(command: Command<'CreateTaskRun'>): RoomRunEvidence | null;
   task(id: string): RoomTaskRecord | null;
   /** Complete key evidence, including contradictory message IDs; never hide mixed-key rows. */
   deliveriesForReceipt(key: string, messageId: string): readonly RoomDeliveryRecord[];
@@ -76,7 +99,7 @@ export interface RoomTaskTransaction {
     turnId: string,
     runId: string,
     attemptId: string,
-    live: boolean,
+    live: boolean | 'settled',
   ): RoomTaskOriginFacts | null;
   grant(id: string): OwnerScopeGrant | null;
   modelConnection(id: string): ModelConnectionRecord | null;

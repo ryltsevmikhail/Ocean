@@ -31,15 +31,7 @@ type Append = (
 /** Commit request-bound receipts and events in the same SQLite write transaction. */
 export function sqliteCommands(db: DatabaseSync, append: Append): CommandCommitPort {
   const dedup = new SqliteCommandDedup(db);
-  function lookup(command: CommandLookup): Result<CommandReceipt | null> {
-    const row = db
-      .prepare('SELECT request_binding FROM command_receipts WHERE command_id = ?')
-      .get(command.commandId);
-    // Legacy receipts lack the original request: never guess authorization or payload identity.
-    if (!row) return ok(null);
-    if (row['request_binding'] !== commandBinding(command)) return commandConflict();
-    return ok(dedup.read(command.commandId));
-  }
+  const lookup = (command: CommandLookup) => lookupSqliteCommand(db, command);
   function commitWithDisposition(
     command: AnyCommand,
     version: number,
@@ -79,4 +71,17 @@ export function sqliteCommands(db: DatabaseSync, append: Append): CommandCommitP
       return result.ok ? ok(result.value.receipt) : result;
     },
   };
+}
+
+export function lookupSqliteCommand(
+  db: DatabaseSync,
+  command: CommandLookup,
+): Result<CommandReceipt | null> {
+  const row = db
+    .prepare('SELECT request_binding FROM command_receipts WHERE command_id = ?')
+    .get(command.commandId);
+  // Legacy receipts lack the original request: never guess authorization or payload identity.
+  if (!row) return ok(null);
+  if (row['request_binding'] !== commandBinding(command)) return commandConflict();
+  return ok(new SqliteCommandDedup(db).read(command.commandId));
 }

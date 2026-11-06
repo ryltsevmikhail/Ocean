@@ -65,7 +65,7 @@ const status = {
 describe('provider connection migration 15', () => {
   it('creates the metadata and receipt tables at the current schema version', () => {
     const db = memory();
-    expect(SCHEMA_VERSION).toBe(27);
+    expect(SCHEMA_VERSION).toBe(28);
     expect(tables(db)).toEqual(expect.arrayContaining([...PROVIDER_CONNECTION_TABLES]));
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
       String(SCHEMA_VERSION),

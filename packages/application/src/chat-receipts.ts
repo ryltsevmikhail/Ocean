@@ -74,6 +74,17 @@ export async function readChatRun(
       : null;
   });
   if (!turn) return null;
+  const disposition: unknown = turn.roomSliceDisposition;
+  if (
+    disposition !== undefined &&
+    (disposition !== 'yielded' ||
+      !turn.roomDelivery ||
+      !turn.roomHandoff ||
+      turn.status !== 'completed' ||
+      turn.text !== '' ||
+      turn.preparedVersion !== null)
+  )
+    throw Error('invalid room disposition');
   const state = await tasks.state(taskRunId(runId));
   return {
     ...turnReceipt(turn),
@@ -86,6 +97,9 @@ export async function readChatRun(
           ? ('admitted_before_run' as const)
           : ('not_created' as const),
     version: state.version,
-    resultMessageId: turn.status === 'completed' ? 'reply_' + turn.id : null,
+    resultMessageId:
+      turn.status === 'completed' && turn.roomSliceDisposition !== 'yielded'
+        ? 'reply_' + turn.id
+        : null,
   };
 }

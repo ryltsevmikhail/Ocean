@@ -190,6 +190,7 @@ async function runExclusiveTurn(
         return failWithUsage(input, attemptId, null, 'invalid or unavailable tool dispatch');
       if (!hasTokenCapacity(settled)) return exhaustedRun(input, settled);
       if (ordinal === max) break;
+      let admittedHandoff = false;
       try {
         const prior = messages.length;
         const executed = await executeTools(input, reply.calls, ordinal, attemptId, messages);
@@ -201,11 +202,14 @@ async function runExclusiveTurn(
         if (executed.kind === 'delegated') {
           if (room?.turnId !== executed.handoff.turnId)
             return uncertainRun(input, 'room handoff context uncertain; reconcile before retrying');
+          admittedHandoff = true;
           return await finishRoomHandoff(input, executed.handoff);
         }
       } catch {
         // Once execution is entered, a lost response cannot prove absence of effects.
-        return uncertainRun(input, 'tool outcome uncertain; inspect effects before retrying');
+        return admittedHandoff
+          ? { kind: 'uncertain', stopReason: 'refusal', text: 'room completion uncertain' }
+          : uncertainRun(input, 'tool outcome uncertain; inspect effects before retrying');
       }
       if (input.signal.aborted) return cancelRun(input, attemptId, null, text, true);
       continue;
