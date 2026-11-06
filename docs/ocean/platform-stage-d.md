@@ -100,8 +100,12 @@ modern pages retain the existing continuous-prefix frame budget.
 Synthetic accepted persistence is qualified through the normal built runtime,
 real shared socket and independent current/frozen RC2 client processes. This
 qualifies reading and compatibility only; it introduces no execution endpoint
-and does not qualify provider, service or native behavior. Independent acceptance
-review for this leaf remains separate from implementation verification.
+and does not qualify provider, service or native behavior.
+
+19.2.2 принят на `486df4f` после независимого ревью без важных замечаний.
+Полные `pnpm check` (3785 source / 166 process; 44/36 настроенных пропусков),
+`pnpm build` и `pnpm format:check` прошли. Все восемь замороженных RC2-фикстур
+сохранены побайтно. Шум унаследованных тестовых фикстур учтён для финального F.
 
 ## Planned: execution and host integration
 

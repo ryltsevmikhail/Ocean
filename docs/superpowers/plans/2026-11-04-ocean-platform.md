@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`; исполнение D и этапы E–H остаются запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`; исполнение D и этапы E–H остаются запланированы.
 Долг сохранённых регрессий Executor закрыт в C18.6: чистые root gates прошли
 на квалифицированном `1f31974`; финальные проверки текущего выпуска остаются F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -1715,6 +1715,9 @@ index re-exports it), `packages/tools-node/src/{local-runtime-client,local-room-
 update existing `client-compatibility.test.ts` and tools-node
 `local-plugin-compatibility.test.ts`; add tools-node `local-room-client.test.ts` and
 CLI `addressed-history-process.test.ts`; update `docs/ocean/platform-stage-d.md`.
+Exact-count compatibility maintenance also touches existing CLI
+`model-negotiation.test.ts`, `plugin-compatibility.test.ts` and non-frozen
+`test-fixtures/model-process-negotiation.ts`, `model-process-old.test.ts`.
 The new process filename already matches vitest.process-cases.config.ts; no redundant
 registration or extra protocol/client service. Frozen RC2 fixtures remain unchanged.
 
@@ -1745,12 +1748,12 @@ continuous sequence. runs.result continues using the backed ordinary reply selec
 Inspect any other actual message-bearing read only for this concrete representation
 risk; no general protocol rewrite or new event redaction system.
 
-- [ ] **Behavioral RED→GREEN and decoding.** Exercise current client hello feature,
+- [x] **Behavioral RED→GREEN and decoding.** Exercise current client hello feature,
       negotiated peer history, ordinary fallback against an older runtime, and explicit
       legacy refusal. Test no-feature peer rejection; null/missing/invalid bot targets,
       wrong scope/seq/base64/UTF-8; unchanged user and ordinary frames. A modern
       getResult must reject a peer row and accept the ordinary final response.
-- [ ] **Actual shared socket and independent client.** Reuse normal built runtime and
+- [x] **Actual shared socket and independent client.** Reuse normal built runtime and
       existing local process fixtures; seed only synthetic accepted persistence/history.
       Connect current and frozen RC2 clients. Both read ordinary history unchanged;
       current reads exact A-author/B-target and final rows while RC2 gets an explicit
@@ -1759,11 +1762,18 @@ risk; no general protocol rewrite or new event redaction system.
       feature/cap bounds remain valid for modern/legacy/unknown-feature clients.
       At least one client runs in an independent process against the real socket;
       no model/provider/service call, task dispatch or fabricated new author schema.
-- [ ] **Verify without expanding delivery.** Owning focused tests/strict test typing,
+- [x] **Verify without expanding delivery.** Owning focused tests/strict test typing,
       root pnpm check/build/format on frozen source through private runner, source<=300;
       commit exact paths and obtain independent review. Existing finite broadcasts,
       taskId=coding, receipt and cancellation semantics remain intact. No task-start
       endpoint, scheduler, model tools, GUI or native/live qualification in this leaf.
+
+19.2.2 accepted at `486df4f` after independent spec/quality review0Critical/
+0Important. Actual root3785source/166process (44/36 configured skips), build/format0;
+16exact paths/max267 and all8frozenRC2 bytes independently verified. Normal built
+runtime and independent clients prove the shared-socket history contract; no autonomous
+execution or native/live acceptance is implied. Inherited fixture stdout noise is
+recorded for F. Next19.2.3 engine details follow the accepted storage/wire interfaces.
 
 ### Task 19.3: Qualify independent managed service workspaces
 
