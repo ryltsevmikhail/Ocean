@@ -15,6 +15,7 @@ export function returnResult(
   const rt = tx.roomTasks!,
     edge = rt.inputs(task.id).find((v) => v.kind === 'delegate' && v.toTaskId === task.id);
   if (!edge) return;
+  if (!roomAssignmentReturnReady(tx, root, task)) throw Error('invalid original assignment');
   const parent = rt.task(task.parentId);
   if (
     !parent ||
@@ -115,5 +116,27 @@ export function publishedRoomResult(
     !!parent &&
     parent.kind === 'bot' &&
     !!inputEvidence(tx, row, parent, root, true)
+  );
+}
+
+/** Validate the original assignment before any final write and again before parent release. */
+export function roomAssignmentReturnReady(
+  tx: ConversationTransaction,
+  root: RoomTaskRoot,
+  task: RoomTaskBot,
+  inputId?: string,
+): boolean {
+  const rt = tx.roomTasks!,
+    edge = rt.inputs(task.id).find((v) => v.kind === 'delegate');
+  if (!edge) return true;
+  const parent = rt.task(task.parentId);
+  return (
+    (edge.state === 'consumed' || (edge.id === inputId && edge.state === 'claimed')) &&
+    !!parent &&
+    parent.kind === 'bot' &&
+    parent.waitingChildId === task.id &&
+    parent.status === 'waiting' &&
+    edge.fromTaskId === parent.id &&
+    !!inputEvidence(tx, edge, task, root, true)
   );
 }

@@ -193,7 +193,8 @@ async function runExclusiveTurn(
       let admittedHandoff = false;
       try {
         const prior = messages.length;
-        const executed = await executeTools(input, reply.calls, ordinal, attemptId, messages);
+        const executed = await executeTools(input, reply.calls, ordinal, attemptId, messages, room);
+        admittedHandoff = executed.kind === 'delegated' && room?.turnId === executed.handoff.turnId;
         history.push(...messages.slice(prior));
         input.onHistory?.(history.splice(0));
         // Uncertain effects take precedence over a concurrently requested cancellation.

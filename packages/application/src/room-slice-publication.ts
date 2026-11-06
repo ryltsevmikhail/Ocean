@@ -6,7 +6,11 @@ import type { TaskRunService } from './service.js';
 import { completionSummary, stepCommand } from './commands.js';
 import { roomCompleteEvidence, roomHandoffCommand } from './room-slice-handoff.js';
 import { inputEvidence, roomSliceAuthority } from './room-delivery-evidence.js';
-import { publishedRoomResult, returnResult } from './room-slice-result.js';
+import {
+  publishedRoomResult,
+  roomAssignmentReturnReady,
+  returnResult,
+} from './room-slice-result.js';
 export interface RoomSlicePublicationDeps {
   readonly store: ConversationStore;
   readonly tasks: TaskRunService;
@@ -217,6 +221,8 @@ function publish(
     return completed;
   }
   if (task.status !== 'ready' || turn.status !== 'prepared') return null;
+  const draining = rt.inputs(task.id).every((v) => v.id === input.id || v.state === 'consumed');
+  if (draining && !roomAssignmentReturnReady(tx, root, task, input.id)) return null;
   if (!d.sha256 && rt.inputs(task.id).some((v) => v.kind === 'delegate')) return null;
   const final = chatFinalMessage(turn, tx.nextSequence(turn.roomId), d.clock.now().toISOString());
   const completed = { ...turn, status: 'completed' as const };

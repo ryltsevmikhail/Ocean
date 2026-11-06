@@ -1,4 +1,4 @@
-import { migrateRoomTaskSlices } from './room-task-slice-schema.js';
+import { migrateRoomTaskSlices, protectRoomTaskSlices } from './room-task-slice-schema.js';
 import { protectRoomTaskHistory } from './room-task-history-schema.js';
 import { ROOM_TASK_TABLES, migrateRoomTasks } from './room-task-schema.js';
 import { migrateServiceOwnerReceipts } from './service-owner-receipts.js';
@@ -137,6 +137,7 @@ export function applyMigrations(
     for (const table of ROOM_TASK_TABLES)
       if (!existing.has(table)) throw Error('database schema is missing table ' + table);
   if (previousVersion < 28) migrateRoomTaskSlices(db);
+  protectRoomTaskSlices(db);
   protectRoomTaskHistory(db);
   if (existing.has('tool_invocations_v2')) migrateToolAdmission(db, previousVersion);
 }

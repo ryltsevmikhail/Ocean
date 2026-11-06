@@ -1,17 +1,13 @@
+import { fixture, seed } from '../test-fixtures/room-slices-v27.js';
+import { RoomTaskPersistence } from '@runnets/application';
 import { SqliteConversationStore } from './conversations.js';
 import { expect, it } from 'vitest';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inspectDatabase, snapshotDatabase, openSqliteStore } from './index.js';
-const bytes = readFileSync(new URL('../test-fixtures/room-slices-v27.json', import.meta.url));
-const fixture = JSON.parse(bytes.toString()) as {
-  base: string;
-  schema: { type: string; name: string; sql: string }[];
-  rows: Record<string, Record<string, SQLInputValue>[]>;
-};
 it('migrates genuine populated BASE v27 without inventing proof, history or wake', () => {
   expect(fixture.base).toBe('b83121a5bcde505d648b845ced816a514466a933');
   expect(
@@ -32,6 +28,66 @@ it('migrates genuine populated BASE v27 without inventing proof, history or wake
         expect(
           read.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
         ).toBe('28');
+        const service = new RoomTaskPersistence({
+          store: store.conversations,
+          ownerId: 'owner',
+          sha256: (s) => createHash('sha256').update(s).digest('hex'),
+          clock: {
+            now() {
+              throw Error('replay clock');
+            },
+          },
+          nextId() {
+            throw Error('replay allocation');
+          },
+        });
+        expect(
+          service.start({
+            workspaceId: 'ws_fixture',
+            roomId: 'room',
+            requestId: 'start',
+            text: 'work',
+            initialBotIds: ['a', 'b'],
+            participants: ['a', 'b', 'c'].map((botId) => ({ botId, grantReferences: [] })),
+            mandate: { projectId: null, codingTaskId: null, permissions: [] },
+          }),
+        ).toEqual({
+          ok: true,
+          value: {
+            version: 1,
+            workspaceId: 'ws_fixture',
+            roomId: 'room',
+            rootId: 'd_1',
+            messageId: 'd_2',
+            seq: 1,
+            deliveries: [
+              { botId: 'a', taskId: 'd_3', deliveryId: 'd_4' },
+              { botId: 'b', taskId: 'd_5', deliveryId: 'd_6' },
+            ],
+          },
+        });
+        expect(
+          service.send(
+            {
+              turnId: 'turn_d_3',
+              taskRunId: 'tr_turn_d_3',
+              attemptId: 'at_turn_d_3',
+              callId: 'at_turn_d_3_r1_call',
+            },
+            { kind: 'delegate', toBotId: 'b', text: 'v27 inert wait' },
+          ),
+        ).toEqual({
+          ok: true,
+          value: {
+            version: 1,
+            workspaceId: 'ws_fixture',
+            roomId: 'room',
+            rootId: 'd_1',
+            messageId: 'd_7',
+            seq: 2,
+            deliveries: [{ botId: 'b', taskId: 'd_8', deliveryId: 'd_9' }],
+          },
+        });
         for (const [table, rows] of Object.entries(fixture.rows))
           if (table !== 'meta')
             expect(read.prepare(`SELECT * FROM ${table}`).all(), table).toEqual(rows);
@@ -57,20 +113,6 @@ it('migrates genuine populated BASE v27 without inventing proof, history or wake
     rmSync(dir, { recursive: true, force: true });
   }
 });
-
-function seed(db: DatabaseSync): void {
-  db.exec('PRAGMA foreign_keys=OFF; BEGIN');
-  for (const s of fixture.schema.filter((s) => s.type === 'table')) db.exec(s.sql);
-  for (const [table, rows] of Object.entries(fixture.rows))
-    for (const row of rows) {
-      const keys = Object.keys(row);
-      db.prepare(
-        `INSERT INTO ${table}(${keys.join(',')}) VALUES(${keys.map(() => '?').join(',')})`,
-      ).run(...Object.values(row));
-    }
-  for (const s of fixture.schema.filter((s) => s.type !== 'table')) db.exec(s.sql);
-  db.exec('COMMIT');
-}
 
 it('keeps an unmigrated genuine v27 snapshot readable and held through doctor/backup', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'room-v27-maintenance-')),

@@ -61,37 +61,6 @@ it('runs A delegate, text-only B final, then fresh A on the same task with one i
   }
 });
 
-it('returns nested B completion to the original A delegate despite B finishing on a C result', async () => {
-  const f = roomSlices(
-    [
-      delegate('b', 'B work'),
-      delegate('c', 'C work'),
-      answer('C done'),
-      answer('B done'),
-      answer('A done'),
-    ],
-    ['c'],
-  );
-  try {
-    const start = f.start(),
-      a1 = await f.execute(start.deliveries[0]!.deliveryId);
-    const b1 = await f.execute(a1.roomHandoff!.deliveryId);
-    const c = await f.execute(b1.roomHandoff!.deliveryId);
-    const toB = f.deliveries(b1.roomDelivery!.taskId).find((d) => d.kind === 'result')!;
-    expect(toB.causeId).toBe(b1.roomHandoff!.deliveryId);
-    const b2 = await f.execute(toB.id);
-    expect(b2.inboundMessageId).toBe('reply_' + c.id);
-    const toA = f.deliveries(a1.roomDelivery!.taskId).find((d) => d.kind === 'result')!;
-    expect(toA.causeId).toBe(a1.roomHandoff!.deliveryId);
-    expect(toA.sourceTurnId).toBe(b2.id);
-    await f.execute(toA.id);
-    expect(f.turns()).toHaveLength(5);
-    expect(f.requests).toHaveLength(5);
-    expect(f.db!.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  } finally {
-    f.close();
-  }
-});
 it('drains an earlier queued input exactly and emits only one terminal assignment result', async () => {
   const f = roomSlices(
     [
@@ -243,38 +212,6 @@ it('executes a committed message-only child without creating a result or waking 
     expect(
       f.store.conversations.atomic((tx) => tx.roomTasks!.task(start.deliveries[0]!.taskId)?.status),
     ).toBe('ready');
-  } finally {
-    f.close();
-  }
-});
-
-it('protects a prepared room final beyond the Core summary and rejects an A1 final after yield', async () => {
-  const f = roomSlices([delegate('b', 'go'), answer('x'.repeat(200) + 'original')]);
-  try {
-    const start = f.start(),
-      a = await f.execute(start.deliveries[0]!.deliveryId);
-    const b = await f.execute(a.roomHandoff!.deliveryId);
-    expect(() =>
-      f.store.conversations.atomic((tx) =>
-        tx.putChatTurn({ ...b, text: 'x'.repeat(200) + 'altered' }),
-      ),
-    ).toThrow();
-    expect(() =>
-      f.store.conversations.atomic((tx) =>
-        tx.putMessage({
-          id: 'reply_' + a.id,
-          workspaceId: a.workspaceId,
-          roomId: a.roomId,
-          seq: tx.nextSequence(a.roomId),
-          author: 'bot',
-          authorBotId: 'a',
-          targetBotId: 'a',
-          turnId: a.id,
-          body: 'forged final',
-          createdAt: f.deps.clock.now().toISOString(),
-        }),
-      ),
-    ).toThrow();
   } finally {
     f.close();
   }

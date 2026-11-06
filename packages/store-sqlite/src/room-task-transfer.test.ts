@@ -98,14 +98,51 @@ it('retains the privacy barrier for a stopped unresolved claim even after its ch
       error: { code: 'model_policy_work_conflict' },
     });
     expect(roomTaskCounts(f)).toEqual(before);
+    expect(() =>
+      f.store.conversations.atomic((tx) =>
+        tx.putChatTurn({ ...tx.chatTurn(actor.turnId)!, status: 'completed' }),
+      ),
+    ).toThrow('invalid room slice');
+    // Synthetic terminal ChatTurn only; the unresolved privacy barrier must remain.
     f.store.conversations.atomic((tx) =>
-      tx.putChatTurn({ ...tx.chatTurn(actor.turnId)!, status: 'completed' }),
+      tx.putChatTurn({ ...tx.chatTurn(actor.turnId)!, status: 'cancelled' }),
     );
     expect(f.store.conversations.atomic((tx) => tx.roomTasks!.pendingTransfer('room'))).toBe(true);
     expect(policy.service.set(policy.input)).toMatchObject({
       ok: false,
       error: { code: 'model_policy_work_conflict' },
     });
+  } finally {
+    f.close();
+  }
+});
+
+it('refuses private-room cloud transfers without writes', async () => {
+  const f = roomTasks();
+  try {
+    f.store.conversations.atomic((tx) =>
+      tx.putRoomModelPolicy({ roomId: 'room', cloudTransfer: 'deny', revision: 2 }),
+    );
+    const before = roomTaskCounts(f);
+    expect(f.service.start(f.input)).toMatchObject({
+      ok: false,
+      error: { code: 'model_transfer_denied' },
+    });
+    expect(roomTaskCounts(f)).toEqual(before);
+    f.store.conversations.atomic((tx) =>
+      tx.putRoomModelPolicy({ roomId: 'room', cloudTransfer: 'allow', revision: 3 }),
+    );
+    const started = f.service.start(f.input);
+    if (!started.ok) throw Error('start');
+    const actor = await attachRoomActor(f, started.value);
+    f.store.conversations.atomic((tx) =>
+      tx.putRoomModelPolicy({ roomId: 'room', cloudTransfer: 'deny', revision: 4 }),
+    );
+    const prior = roomTaskCounts(f);
+    expect(f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'private' })).toMatchObject(
+      { ok: false, error: { code: 'model_transfer_denied' } },
+    );
+    expect(roomTaskCounts(f)).toEqual(prior);
   } finally {
     f.close();
   }

@@ -15,6 +15,7 @@ export async function executeTools(
   round: number,
   attemptId: string,
   messages: ChatMessage[],
+  room?: { readonly turnId: string },
 ): Promise<ToolRoundDisposition> {
   if (input.tools === undefined) return { kind: 'continue' };
   const skipped = (from: number, reason: string): void => {
@@ -55,12 +56,25 @@ export async function executeTools(
       // A rejected execution promise cannot establish that no effect occurred.
       result = { isError: true, uncertain: true, output: 'tool outcome uncertain' };
     }
-    input.emit({
-      sessionUpdate: 'tool_call_update',
-      toolCallId: id,
-      status: result.isError || result.uncertain === true ? 'failed' : 'completed',
-      content: [{ type: 'content', content: { type: 'text', text: result.output } }],
-    });
+    const handoff = roomHandoffOf(result);
+    const committed =
+      handoff !== undefined &&
+      room?.turnId === handoff.turnId &&
+      !result.isError &&
+      result.uncertain !== true &&
+      handoff.taskRunId === input.taskRunId &&
+      handoff.attemptId === attemptId &&
+      handoff.callId === id;
+    try {
+      input.emit({
+        sessionUpdate: 'tool_call_update',
+        toolCallId: id,
+        status: result.isError || result.uncertain === true ? 'failed' : 'completed',
+        content: [{ type: 'content', content: { type: 'text', text: result.output } }],
+      });
+    } catch (error) {
+      if (!committed) throw error;
+    }
     messages.push({
       role: 'tool',
       toolCallId: call.id,
@@ -70,7 +84,6 @@ export async function executeTools(
           ? '\nOutcome uncertain; do not repeat automatically. Inspect effects first.'
           : ''),
     });
-    const handoff = roomHandoffOf(result);
     if (result.uncertain === true) {
       skipped(index + 1, 'prior tool outcome uncertain');
       return { kind: 'uncertain' };

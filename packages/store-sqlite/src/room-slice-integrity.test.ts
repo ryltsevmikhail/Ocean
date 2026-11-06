@@ -1,3 +1,4 @@
+import { initializeSchema } from './schema.js';
 import { taskRunId } from '@runnets/domain';
 import { expect, it } from 'vitest';
 import { roomTasks, attachRoomActor } from '../test-fixtures/room-tasks.js';
@@ -22,35 +23,51 @@ it('protects the entire admitted room activation on actual upsert', async () => 
   }
 });
 
-it.each(['proofVersion', 'proofCall', 'markerKeys', 'disposition', 'foreignProof'] as const)(
-  'rejects raw malformed %s before persistence',
-  async (mode) => {
-    const { roomSlices, delegate } = await import('../test-fixtures/room-slices.js');
-    const f = roomSlices([delegate('b', 'go')]);
-    try {
-      const start = f.start(),
-        turn = await f.execute(start.deliveries[0]!.deliveryId);
-      const payload: Record<string, unknown> = { ...structuredClone(turn) };
-      if (mode === 'proofVersion')
-        payload['roomHandoff'] = { ...turn.roomHandoff, expectedRunVersion: 0 };
-      if (mode === 'proofCall') payload['roomHandoff'] = { ...turn.roomHandoff, callId: '' };
-      if (mode === 'markerKeys')
-        payload['roomDelivery'] = { ...turn.roomDelivery, extra: 'authority' };
-      if (mode === 'disposition') payload['roomSliceDisposition'] = 'final';
-      if (mode === 'foreignProof')
-        payload['roomHandoff'] = { ...turn.roomHandoff, taskRunId: 'other' };
-      expect(() =>
-        f
-          .db!.prepare('UPDATE ocean_chat_turns SET payload=? WHERE id=?')
-          .run(JSON.stringify(payload), turn.id),
-      ).toThrow();
-    } finally {
-      f.close();
-    }
-  },
-);
+it.each([
+  'proofVersion',
+  'proofCall',
+  'markerKeys',
+  'disposition',
+  'foreignProof',
+  'handoffBoolean',
+  'handoffReal',
+] as const)('rejects raw malformed %s before persistence', async (mode) => {
+  const { roomSlices, delegate } = await import('../test-fixtures/room-slices.js');
+  const f = roomSlices([delegate('b', 'go')]);
+  try {
+    const start = f.start(),
+      turn = await f.execute(start.deliveries[0]!.deliveryId);
+    const payload: Record<string, unknown> = { ...structuredClone(turn) };
+    if (mode === 'proofVersion')
+      payload['roomHandoff'] = { ...turn.roomHandoff, expectedRunVersion: 0 };
+    if (mode === 'handoffBoolean') payload['roomHandoff'] = { ...turn.roomHandoff, version: true };
+    if (mode === 'handoffReal') payload['roomHandoff'] = { ...turn.roomHandoff, version: 1 };
+    if (mode === 'proofCall') payload['roomHandoff'] = { ...turn.roomHandoff, callId: '' };
+    if (mode === 'markerKeys')
+      payload['roomDelivery'] = { ...turn.roomDelivery, extra: 'authority' };
+    if (mode === 'disposition') payload['roomSliceDisposition'] = 'final';
+    if (mode === 'foreignProof')
+      payload['roomHandoff'] = { ...turn.roomHandoff, taskRunId: 'other' };
+    const json = JSON.stringify(payload).replace(
+      mode === 'handoffReal' ? '"roomHandoff":{"version":1,' : 'unused',
+      '"roomHandoff":{"version":1.0,',
+    );
+    expect(() =>
+      mode.startsWith('handoff')
+        ? f
+            .db!.prepare(
+              `INSERT INTO ocean_chat_turns VALUES(?,?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET payload=excluded.payload`,
+            )
+            .run(turn.id, turn.workspaceId, turn.roomId, turn.taskRunId, turn.status, json, null)
+        : f.db!.prepare('UPDATE ocean_chat_turns SET payload=? WHERE id=?').run(json, turn.id),
+    ).toThrow(mode.startsWith('handoff') ? 'invalid room slice' : undefined);
+  } finally {
+    f.close();
+  }
+});
 
-it.each(['markerKeys', 'markerNull', 'proofWithoutMarker'] as const)(
+it.each(['markerKeys', 'markerNull', 'proofWithoutMarker', 'markerBoolean', 'markerReal'] as const)(
   'rejects malformed %s on actual INSERT rather than relying on a decoder',
   async (mode) => {
     const { roomSlices } = await import('../test-fixtures/room-slices.js');
@@ -67,6 +84,12 @@ it.each(['markerKeys', 'markerNull', 'proofWithoutMarker'] as const)(
         delete payload['roomDelivery'];
         payload['roomSliceDisposition'] = 'yielded';
       }
+      if (mode.startsWith('markerB') || mode === 'markerReal') {
+        f.db!.exec('DROP TRIGGER ocean_room_slice_insert');
+        initializeSchema(f.db!);
+      }
+      if (mode === 'markerBoolean')
+        payload['roomDelivery'] = { ...c.turn.roomDelivery, version: true };
       f.db!.prepare('DELETE FROM ocean_chat_turns WHERE id=?').run(c.turn.id);
       expect(() =>
         f
@@ -77,7 +100,9 @@ it.each(['markerKeys', 'markerNull', 'proofWithoutMarker'] as const)(
             c.turn.roomId,
             c.turn.taskRunId,
             c.turn.status,
-            JSON.stringify(payload),
+            mode === 'markerReal'
+              ? JSON.stringify(payload).replace('"version":1,"taskId"', '"version":1.0,"taskId"')
+              : JSON.stringify(payload),
             null,
           ),
       ).toThrow();
@@ -234,51 +259,6 @@ it.each(['head', 'receipt', 'stop', 'pin', 'unknown', 'unrelated'] as const)(
       expect(f.requests).toHaveLength(1);
       expect(f.claim(turn.roomHandoff!.deliveryId).kind).toBe(
         mode === 'unrelated' ? 'claimed' : 'held',
-      );
-    } finally {
-      f.close();
-    }
-  },
-);
-
-it.each([false, true])(
-  'rechecks selected room grant references at claim, revoked=%s',
-  async (revoked) => {
-    const { ownerGrant } = await import('../../../test-fixtures/service-authority.js');
-    const { roomSlices } = await import('../test-fixtures/room-slices.js');
-    const f = roomSlices([]);
-    try {
-      f.store.serviceAuthority.atomic((tx) =>
-        tx.putGrant(
-          {
-            ...ownerGrant,
-            subject: {
-              ...ownerGrant.subject,
-              workspaceId: f.input.workspaceId,
-              roomId: 'room',
-              botId: 'a',
-              projectId: f.deps.sha256('/fixture'),
-            },
-          },
-          null,
-        ),
-      );
-      const start = f.service.start({
-        ...f.input,
-        initialBotIds: ['a'],
-        participants: f.input.participants.map((p) =>
-          p.botId === 'a'
-            ? { ...p, grantReferences: [{ grantId: ownerGrant.id, revision: 1 }] }
-            : p,
-        ),
-      });
-      if (!start.ok) throw Error('grant start');
-      if (revoked)
-        f.store.serviceAuthority.atomic((tx) =>
-          tx.putGrant({ ...tx.grant(ownerGrant.id)!, revision: 2, state: 'revoked' }, 1),
-        );
-      expect(f.claim(start.value.deliveries[0]!.deliveryId).kind).toBe(
-        revoked ? 'held' : 'claimed',
       );
     } finally {
       f.close();

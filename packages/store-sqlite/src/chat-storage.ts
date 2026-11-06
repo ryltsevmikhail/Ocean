@@ -110,6 +110,17 @@ function validateRoomSlice(t: ChatTurn): void {
   )
     throw Error('invalid room handoff');
   if (
+    m &&
+    t.status === 'completed' &&
+    t.roomSliceDisposition === undefined &&
+    (p !== undefined ||
+      !Number.isSafeInteger(t.preparedVersion) ||
+      t.preparedVersion === null ||
+      t.preparedVersion < 1 ||
+      (t.stopReason !== 'end_turn' && t.stopReason !== 'max_tokens'))
+  )
+    throw Error('invalid room final');
+  if (
     t.roomSliceDisposition !== undefined &&
     (t.roomSliceDisposition !== 'yielded' ||
       !p ||

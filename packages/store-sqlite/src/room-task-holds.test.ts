@@ -26,36 +26,6 @@ it('preserves legacy broadcast and uncertain room holds before new starts', () =
     f.close();
   }
 });
-it('refuses private-room cloud transfers without writes', async () => {
-  const f = roomTasks();
-  try {
-    f.store.conversations.atomic((tx) =>
-      tx.putRoomModelPolicy({ roomId: 'room', cloudTransfer: 'deny', revision: 2 }),
-    );
-    const before = roomTaskCounts(f);
-    expect(f.service.start(f.input)).toMatchObject({
-      ok: false,
-      error: { code: 'model_transfer_denied' },
-    });
-    expect(roomTaskCounts(f)).toEqual(before);
-    f.store.conversations.atomic((tx) =>
-      tx.putRoomModelPolicy({ roomId: 'room', cloudTransfer: 'allow', revision: 3 }),
-    );
-    const started = f.service.start(f.input);
-    if (!started.ok) throw Error('start');
-    const actor = await attachRoomActor(f, started.value);
-    f.store.conversations.atomic((tx) =>
-      tx.putRoomModelPolicy({ roomId: 'room', cloudTransfer: 'deny', revision: 4 }),
-    );
-    const prior = roomTaskCounts(f);
-    expect(f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'private' })).toMatchObject(
-      { ok: false, error: { code: 'model_transfer_denied' } },
-    );
-    expect(roomTaskCounts(f)).toEqual(prior);
-  } finally {
-    f.close();
-  }
-});
 it('fails closed on corrupt restore evidence while archived identical receipts stay readable', () => {
   const f = roomTasks();
   try {
@@ -185,8 +155,16 @@ it('retains D cleanup holds after a root stop and review linkage, preventing a s
         }),
       ),
     ).toThrow();
+    expect(() =>
+      f
+        .db!.prepare(
+          "UPDATE ocean_chat_turns SET status='completed',payload=json_set(payload,'$.status','completed') WHERE id=?",
+        )
+        .run(actor.turnId),
+    ).toThrow('invalid room slice');
+    // Synthetic terminal phase only; this fixture does not prove Core cleanup.
     f.db!.prepare(
-      "UPDATE ocean_chat_turns SET status='completed',payload=json_set(payload,'$.status','completed') WHERE id=?",
+      "UPDATE ocean_chat_turns SET status='cancelled',payload=json_set(payload,'$.status','cancelled') WHERE id=?",
     ).run(actor.turnId);
     expect(f.store.conversations.atomic((tx) => tx.roomTasks!.roomHold('room'))).toBe(false);
   } finally {

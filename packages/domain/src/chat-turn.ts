@@ -1,6 +1,6 @@
 import type { ModelActivationSnapshot } from './model-dispatch.js';
 import type { BotModelBinding } from './model-binding.js';
-import type { Bot } from './conversations.js';
+import type { Bot, ConversationMessage } from './conversations.js';
 export type ChatTurnStatus =
   | 'queued'
   | 'accepted'
@@ -57,4 +57,31 @@ export interface ChatTurn {
   readonly text: string;
   readonly preparedVersion: number | null;
   readonly stopReason: 'end_turn' | 'max_tokens';
+}
+
+/** A marked ordinary result exists only as the exact prepared self-targeted final. */
+export function roomFinalMessageMatches(
+  turn: ChatTurn,
+  message: ConversationMessage | null | undefined,
+): boolean {
+  return (
+    turn.roomDelivery !== undefined &&
+    turn.status === 'completed' &&
+    turn.roomSliceDisposition === undefined &&
+    turn.roomHandoff === undefined &&
+    Number.isSafeInteger(turn.preparedVersion) &&
+    turn.preparedVersion !== null &&
+    turn.preparedVersion > 0 &&
+    (turn.stopReason === 'end_turn' || turn.stopReason === 'max_tokens') &&
+    !!message &&
+    message.id === 'reply_' + turn.id &&
+    message.workspaceId === turn.workspaceId &&
+    message.roomId === turn.roomId &&
+    message.author === 'bot' &&
+    message.authorBotId === turn.bot.id &&
+    message.targetBotId === turn.bot.id &&
+    message.turnId === turn.id &&
+    message.body === turn.text &&
+    message.seq > turn.readThroughSeq
+  );
 }

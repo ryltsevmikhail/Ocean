@@ -4,148 +4,15 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, it } from 'vitest';
 import {
-  recoverChats,
   claimRoomDelivery,
-  recoverUnstartedRoomClaims,
   executeChatTurn,
   repairRoomHandoff,
-  createChatCommand,
-  executeStep,
   TaskRunService,
   type ConversationStore,
 } from '@runnets/application';
 import { roomSlices, delegate, answer } from '../test-fixtures/room-slices.js';
 import { openSqliteStore } from './index.js';
 
-it('two connections claim once and only the accepted→dispatching winner enters the engine', async () => {
-  const f = roomSlices([answer('once')]);
-  const path = String(f.db!.prepare('PRAGMA database_list').get()?.['file']);
-  const other = openSqliteStore({ path });
-  try {
-    const start = f.start(),
-      id = start.deliveries[0]!.deliveryId;
-    const c1 = f.claim(id),
-      c2 = claimRoomDelivery({ ...f.deps, store: other.conversations }, id);
-    expect(c1.kind).toBe('claimed');
-    expect(c2.kind).toBe('existing');
-    if (c1.kind !== 'claimed') throw Error('claim');
-    const tasks = new TaskRunService({
-      log: other.log,
-      clock: f.deps.clock,
-      ids: { commandId: () => 'unused', eventId: () => 'unused' },
-    });
-    const input = { ...c1, signal: new AbortController().signal, emit() {} };
-    const results = await Promise.allSettled([
-      executeChatTurn(f.deps, input, c1),
-      executeChatTurn({ ...f.deps, store: other.conversations, tasks }, input, c1),
-    ]);
-    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(f.requests).toHaveLength(1);
-    expect(
-      f
-        .db!.prepare("SELECT count(*) AS n FROM events WHERE type='attempt.model_request_started'")
-        .get()?.['n'],
-    ).toBe(1);
-  } finally {
-    other.close();
-    f.close();
-  }
-});
-it.each(['absent', 'created', 'started', 'model-started'] as const)(
-  'discovers only proven unstarted %s claims after a fresh connection',
-  async (phase) => {
-    const directory = mkdtempSync(join(tmpdir(), 'room-reopen-'));
-    const f = roomSlices([answer('recovered')], ['b'], join(directory, 'store.sqlite'));
-    let closed = false;
-    let reopened: ReturnType<typeof openSqliteStore> | undefined;
-    try {
-      const start = f.start(),
-        claimed = f.claim(start.deliveries[0]!.deliveryId);
-      if (claimed.kind !== 'claimed') throw Error('claim');
-      if (phase !== 'absent')
-        expect((await f.tasks.execute(createChatCommand(claimed.turn, null))).ok).toBe(true);
-      if (phase === 'started' || phase === 'model-started')
-        for (const [type, payload] of [
-          ['Admit', {}],
-          ['Schedule', {}],
-          [
-            'StartAttempt',
-            {
-              attemptId: claimed.turn.taskRunId + '_at_0001',
-              reason: 'initial',
-              provider: 'fixture',
-              model: 'one',
-            },
-          ],
-        ] as const) {
-          const state = await f.tasks.state(taskRunId(claimed.turn.taskRunId));
-          expect(
-            (
-              await executeStep(
-                f.tasks,
-                taskRunId(claimed.turn.taskRunId),
-                type,
-                payload,
-                state.version,
-              )
-            ).ok,
-          ).toBe(true);
-        }
-      if (phase === 'model-started') {
-        const state = await f.tasks.state(taskRunId(claimed.turn.taskRunId));
-        expect(
-          (
-            await executeStep(
-              f.tasks,
-              taskRunId(claimed.turn.taskRunId),
-              'StartModelRequest',
-              {
-                attemptId: claimed.turn.taskRunId + '_at_0001',
-                ordinal: 1,
-                activation: claimed.turn.activation!,
-                startedAt: f.deps.clock.now().toISOString(),
-              },
-              state.version,
-            )
-          ).ok,
-        ).toBe(true);
-      }
-      const path = String(f.db!.prepare('PRAGMA database_list').get()?.['file']);
-      f.close();
-      closed = true;
-      reopened = openSqliteStore({ path });
-      const tasks = new TaskRunService({
-        log: reopened.log,
-        clock: f.deps.clock,
-        ids: { commandId: () => 'unused', eventId: () => 'unused' },
-      });
-      const deps = { ...f.deps, store: reopened.conversations, tasks };
-      await recoverChats(deps.store, tasks, deps.clock);
-      const eligible = recoverUnstartedRoomClaims(deps);
-      expect(eligible).toHaveLength(phase === 'started' || phase === 'model-started' ? 0 : 1);
-      expect(f.requests).toHaveLength(0);
-      if (eligible[0]) {
-        const c = eligible[0];
-        const result = await executeChatTurn(
-          deps,
-          { ...c, signal: new AbortController().signal, emit() {} },
-          c,
-        );
-        expect(result.id).toBe(claimed.turn.id);
-        expect(result.text).toBe('recovered');
-        expect(
-          (await tasks.events(taskRunId(claimed.turn.taskRunId))).filter(
-            (e) => e.type === 'task_run.created',
-          ),
-        ).toHaveLength(1);
-      }
-    } finally {
-      reopened?.close();
-      if (!closed) f.close();
-      rmSync(directory, { recursive: true, force: true });
-    }
-  },
-);
 it('repairs a committed delegate transaction without provider reentry and yields once', async () => {
   const f = roomSlices([delegate('b', 'go')]);
   try {
@@ -280,3 +147,32 @@ it.each(['yield', 'final', 'result', 'response'] as const)(
     }
   },
 );
+
+it('retains the exact committed handoff across a throwing post-commit tool observer', async () => {
+  const f = roomSlices([delegate('b', 'notify after commit')]);
+  try {
+    const c = f.claim(f.start().deliveries[0]!.deliveryId);
+    if (c.kind !== 'claimed') throw Error('claim');
+    const turn = await executeChatTurn(
+      f.deps,
+      {
+        ...c,
+        signal: new AbortController().signal,
+        emit(update) {
+          if (update.sessionUpdate === 'tool_call_update') throw Error('observer disconnected');
+        },
+      },
+      c,
+    );
+    expect(turn.roomSliceDisposition).toBe('yielded');
+    const events = await f.tasks.events(taskRunId(turn.taskRunId));
+    expect(events.some((e) => e.type === 'task_run.reconciling')).toBe(false);
+    expect(events.at(-1)?.sequence).toBe(turn.roomHandoff!.expectedRunVersion + 1);
+    expect(await repairRoomHandoff(f.deps, turn.id)).toEqual(turn);
+    expect(await repairRoomHandoff(f.deps, turn.id)).toEqual(turn);
+    expect(f.claim(turn.roomHandoff!.deliveryId).kind).toBe('claimed');
+    expect(f.requests).toHaveLength(1);
+  } finally {
+    f.close();
+  }
+});

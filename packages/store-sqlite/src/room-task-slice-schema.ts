@@ -68,6 +68,12 @@ export function migrateRoomTaskSlices(db: DatabaseSync): void {
   );
   db.exec('DROP TRIGGER ocean_room_turn_immutable;');
   db.exec(turnImmutable);
+}
+/** Reinstall strengthened guards on existing v28 stores without rewriting any row. */
+export function protectRoomTaskSlices(db: DatabaseSync): void {
+  db.exec(
+    'DROP TRIGGER IF EXISTS ocean_room_slice_insert; DROP TRIGGER IF EXISTS ocean_room_slice_update; DROP TRIGGER IF EXISTS ocean_room_proof_immutable; DROP TRIGGER IF EXISTS ocean_room_no_handoff_final;',
+  );
   for (const operation of ['INSERT', 'UPDATE'])
     db.exec(`
     CREATE TRIGGER ocean_room_slice_${operation.toLowerCase()} BEFORE ${operation} ON ocean_chat_turns
@@ -75,6 +81,7 @@ export function migrateRoomTaskSlices(db: DatabaseSync): void {
       json_type(NEW.payload,'$.roomDelivery') IS NOT 'object'
       OR (SELECT count(*) FROM json_each(NEW.payload,'$.roomDelivery'))<>3
       OR EXISTS(SELECT 1 FROM json_each(NEW.payload,'$.roomDelivery') WHERE key NOT IN ('version','taskId','deliveryId'))
+      OR json_type(NEW.payload,'$.roomDelivery.version') IS NOT 'integer'
       OR json_extract(NEW.payload,'$.roomDelivery.version') IS NOT 1
       OR json_type(NEW.payload,'$.roomDelivery.taskId') IS NOT 'text'
       OR json_type(NEW.payload,'$.roomDelivery.deliveryId') IS NOT 'text'))
@@ -88,7 +95,9 @@ export function migrateRoomTaskSlices(db: DatabaseSync): void {
       OR length(CAST(json_extract(NEW.payload,'$.roomHandoff.callId') AS BLOB)) NOT BETWEEN 1 AND 512
       OR NEW.status NOT IN ('dispatching','uncertain','completed')
       OR (NEW.status='completed' AND json_extract(NEW.payload,'$.roomSliceDisposition') IS NOT 'yielded')
+      OR json_type(NEW.payload,'$.roomDelivery.version') IS NOT 'integer'
       OR json_extract(NEW.payload,'$.roomDelivery.version') IS NOT 1
+      OR json_type(NEW.payload,'$.roomHandoff.version') IS NOT 'integer'
       OR json_extract(NEW.payload,'$.roomHandoff.version') IS NOT 1
       OR json_extract(NEW.payload,'$.roomHandoff.turnId') IS NOT NEW.id
       OR json_extract(NEW.payload,'$.roomHandoff.taskRunId') IS NOT NEW.task_run_id
@@ -98,6 +107,25 @@ export function migrateRoomTaskSlices(db: DatabaseSync): void {
         AND d.to_task_id=json_extract(NEW.payload,'$.roomHandoff.childTaskId')
         AND d.from_task_id=json_extract(NEW.payload,'$.roomDelivery.taskId')
         AND d.cause_id=json_extract(NEW.payload,'$.roomDelivery.deliveryId'))))
+      OR (json_extract(NEW.payload,'$.roomDelivery') IS NOT NULL AND NEW.status='completed'
+        AND json_type(NEW.payload,'$.roomSliceDisposition') IS NULL AND (
+          json_extract(NEW.payload,'$.roomHandoff') IS NOT NULL
+          OR json_type(NEW.payload,'$.preparedVersion') IS NOT 'integer'
+          OR json_extract(NEW.payload,'$.preparedVersion')<1
+          OR json_type(NEW.payload,'$.text') IS NOT 'text'
+          OR json_extract(NEW.payload,'$.stopReason') NOT IN ('end_turn','max_tokens')
+          OR NOT EXISTS(SELECT 1 FROM ocean_chat_turns old WHERE old.id=NEW.id
+            AND old.status IN ('prepared','completed') AND old.workspace_id=NEW.workspace_id AND old.room_id=NEW.room_id
+            AND old.task_run_id=NEW.task_run_id AND json_extract(old.payload,'$.text')=json_extract(NEW.payload,'$.text')
+            AND json_extract(old.payload,'$.preparedVersion')=json_extract(NEW.payload,'$.preparedVersion')
+            AND json_extract(old.payload,'$.stopReason')=json_extract(NEW.payload,'$.stopReason'))
+          OR NOT EXISTS(SELECT 1 FROM events e WHERE e.aggregate_id=NEW.task_run_id AND e.type='task_run.succeeded'
+            AND e.sequence=json_extract(NEW.payload,'$.preparedVersion')+1
+            AND e.sequence=(SELECT max(sequence) FROM events WHERE aggregate_id=NEW.task_run_id))
+          OR NOT EXISTS(SELECT 1 FROM ocean_messages m WHERE m.id='reply_'||NEW.id AND m.turn_id=NEW.id
+            AND m.workspace_id=NEW.workspace_id AND m.room_id=NEW.room_id AND m.seq>json_extract(NEW.payload,'$.readThroughSeq')
+            AND m.author='bot' AND m.author_bot_id=json_extract(NEW.payload,'$.bot.id') AND m.target_bot_id=m.author_bot_id
+            AND m.body=json_extract(NEW.payload,'$.text'))))
       OR (json_type(NEW.payload,'$.roomSliceDisposition') IS NOT NULL AND (
         json_extract(NEW.payload,'$.roomSliceDisposition') IS NOT 'yielded' OR NEW.status IS NOT 'completed'
         OR json_type(NEW.payload,'$.roomHandoff') IS NULL OR json_extract(NEW.payload,'$.text') IS NOT ''

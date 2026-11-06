@@ -1,3 +1,5 @@
+import { taskRunId } from '@runnets/domain';
+import { TaskRunService, executeStep } from '@runnets/application';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -64,6 +66,52 @@ it.runIf(process.platform === 'linux')(
         );
         if (!sent.ok) throw Error('fixture_send:' + sent.error.code);
       }
+      const tasks = new TaskRunService({
+        log: f.store.log,
+        clock: f.service.deps.clock,
+        ids: { commandId: () => 'unused', eventId: () => 'unused' },
+      });
+      const id = taskRunId(actor.taskRunId),
+        activation = f.store.conversations.atomic((tx) => tx.chatTurn(actor.turnId)!.activation!);
+      for (const [type, payload] of [
+        [
+          'StartModelRequest',
+          { attemptId: actor.attemptId, ordinal: 2, activation, startedAt: '2026-11-06T00:00:03Z' },
+        ],
+        [
+          'SettleModelRequest',
+          {
+            attemptId: actor.attemptId,
+            ordinal: 2,
+            finishedAt: '2026-11-06T00:00:04Z',
+            completion: { kind: 'terminal', stopReason: 'stop' },
+            usage: { kind: 'actual', tokens: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+          },
+        ],
+      ] as const)
+        expect(
+          (await executeStep(tasks, id, type, payload, (await tasks.state(id)).version)).ok,
+        ).toBe(true);
+      const preparedVersion = (await tasks.state(id)).version;
+      f.store.conversations.atomic((tx) =>
+        tx.putChatTurn({
+          ...tx.chatTurn(actor.turnId)!,
+          status: 'prepared',
+          text: 'final',
+          preparedVersion,
+        }),
+      );
+      expect(
+        (
+          await executeStep(
+            tasks,
+            id,
+            'Complete',
+            { attemptId: actor.attemptId, summary: 'final' },
+            preparedVersion,
+          )
+        ).ok,
+      ).toBe(true);
       f.store.conversations.atomic((tx) => {
         tx.putMessage({
           ...scope,
@@ -76,7 +124,15 @@ it.runIf(process.platform === 'linux')(
           body: 'final',
           createdAt: '2026-11-06T00:00:00Z',
         });
-        tx.putChatTurn({ ...tx.chatTurn(actor.turnId)!, status: 'completed', text: 'final' });
+        const current = tx.chatTurn(actor.turnId)!;
+        tx.putChatTurn({ ...current, status: 'completed' });
+        tx.roomTasks!.consume(current.roomDelivery!.deliveryId);
+        const task = tx.roomTasks!.task(current.roomDelivery!.taskId)!;
+        if (task.kind !== 'bot') throw Error('fixture_assignment');
+        tx.roomTasks!.advanceTask(
+          { ...task, status: 'completed', lastDeliverySeq: current.readThroughSeq },
+          task.revision,
+        );
       });
       expected = f.store.conversations.atomic((tx) => tx.history(scope.roomId, 0, 50));
     } finally {

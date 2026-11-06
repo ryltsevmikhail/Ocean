@@ -127,6 +127,11 @@ export function roomTaskSliceStorage(
       try {
         const receipt = lookupSqliteCommand(db, command);
         if (!receipt.ok) return null;
+        if (
+          db.prepare("SELECT 1 FROM sqlite_master WHERE name='tool_invocations_v2'").get() &&
+          db.prepare('SELECT 1 FROM tool_invocations_v2 WHERE task_run_id=? LIMIT 1').get(id)
+        )
+          return null;
         const events = eventsFor(db, id);
         if (events.length === 0) {
           if (receipt.value !== null) return null;
@@ -165,6 +170,15 @@ export function roomTaskSliceStorage(
           run.workspaceId !== command.payload.workspaceId ||
           run.conversationId !== command.payload.conversationId ||
           run.policyId !== command.payload.policyId
+        )
+          return null;
+        if (
+          db
+            .prepare(
+              `SELECT 1 FROM command_receipts WHERE aggregate_id=? AND command_id<>?
+          UNION ALL SELECT 1 FROM checkpoints WHERE aggregate_id=? LIMIT 1`,
+            )
+            .get(id, command.commandId, id)
         )
           return null;
         return { kind: 'created', run, headEvent };

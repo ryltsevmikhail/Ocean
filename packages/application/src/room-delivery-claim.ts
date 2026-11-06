@@ -32,17 +32,35 @@ export function claimRoomDelivery(d: RoomDeliveryClaimDeps, deliveryId: string):
     const rt = tx.roomTasks,
       delivery = rt?.delivery(deliveryId);
     if (!rt || !delivery) return { kind: 'held' };
-    const existing = tx.chatTurns().find((t) => t.roomDelivery?.deliveryId === delivery.id);
-    if (existing) return { kind: 'existing', turn: existing };
     const task = rt.task(delivery.toTaskId),
       root = rt.task(delivery.rootId);
     if (
-      delivery.state !== 'queued' ||
       !task ||
       task.kind !== 'bot' ||
-      task.status !== 'ready' ||
       !root ||
       root.kind !== 'root' ||
+      root.rootPayload.ownerId !== d.ownerId ||
+      tx.workspace()?.id !== root.workspaceId ||
+      task.rootId !== root.id ||
+      task.assigneeBotId !== delivery.recipientBotId ||
+      ![task, root].every(
+        (v) => v.workspaceId === delivery.workspaceId && v.roomId === delivery.roomId,
+      )
+    )
+      return { kind: 'held' };
+    const existing = tx.chatTurns().find((t) => t.roomDelivery?.deliveryId === delivery.id);
+    if (existing)
+      return existing.roomDelivery?.taskId === task.id &&
+        existing.workspaceId === root.workspaceId &&
+        existing.roomId === root.roomId &&
+        existing.bot.id === task.assigneeBotId &&
+        existing.inboundMessageId === delivery.messageId &&
+        existing.readThroughSeq === delivery.seq
+        ? { kind: 'existing', turn: existing }
+        : { kind: 'held' };
+    if (
+      delivery.state !== 'queued' ||
+      task.status !== 'ready' ||
       root.rootPayload.ownerId !== d.ownerId ||
       !roomSliceAuthority(tx, root, task, d.clock.now().getTime(), d.sha256)
     )

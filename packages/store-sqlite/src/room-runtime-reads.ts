@@ -1,6 +1,7 @@
 import { decodeChatTurn } from './chat-storage.js';
 import {
   STATUS_AFTER_EVENT,
+  roomFinalMessageMatches,
   type ChatTurnStatus,
   type TaskRunEventType,
   type Sensitivity,
@@ -72,6 +73,15 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
       .get(workspaceId, roomId, runId);
     if (!t) return null;
     const decoded = decodeChatTurn(t);
+    if (
+      decoded.roomDelivery &&
+      decoded.status === 'completed' &&
+      decoded.roomSliceDisposition === undefined
+    ) {
+      const row = db.prepare('SELECT * FROM ocean_messages WHERE id=?').get('reply_' + decoded.id);
+      if (!roomFinalMessageMatches(decoded, row ? messageRow(row) : null))
+        throw Error('invalid room final');
+    }
     const turnId = readText(t, 'id'),
       performerId = readText(t, 'bot'),
       turnStatus = readText(t, 'status') as ChatTurnStatus;
@@ -87,6 +97,15 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
         ? 'admitted_before_run'
         : 'not_created';
     if (!taskStatus || (!event && version !== 0)) throw Error('invalid_committed_state');
+    if (
+      decoded.roomDelivery &&
+      turnStatus === 'completed' &&
+      decoded.roomSliceDisposition === undefined &&
+      (taskStatus !== 'succeeded' ||
+        decoded.preparedVersion === null ||
+        version !== decoded.preparedVersion + 1)
+    )
+      throw Error('invalid room completion head');
     const task = readNullableText(t, 'task');
     const at = now();
     const pendingDecisionIds = db
