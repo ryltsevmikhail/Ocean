@@ -40,8 +40,9 @@ function fixture() {
       if (fail) throw Error('provider_write_failed');
       entries.set(ref, key);
     },
-    replace() {
-      throw Error('unused');
+    replace(previous, ref, key) {
+      secrets.write(ref, key);
+      if (previous !== null) entries.delete(previous);
     },
     remove() {
       throw Error('unused');
@@ -95,7 +96,7 @@ it('persists intent before private publication, retains original receipts indepe
     trust: { identity: { status: 'unverified' } },
   });
   expect(second.receipt('save')).toEqual(first);
-  expect(f.entries.size).toBe(2);
+  expect(f.entries.size).toBe(1);
   const stored = f.db.prepare('SELECT record FROM ocean_service_owner_receipts').all();
   expect(JSON.stringify(stored)).not.toContain(request.key);
   expect(JSON.stringify(stored)).not.toContain('synthetic-secret-B');

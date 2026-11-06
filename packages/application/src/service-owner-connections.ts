@@ -68,3 +68,17 @@ export function ownerConnectionRecord(
     updatedAt: at,
   };
 }
+
+/** Retaining a bearer is safe only for the same HTTP origin, never a different transport. */
+export function assertCredentialDestination(
+  old: ServiceConnection | null,
+  request: ServiceConnectionSetRequest,
+): void {
+  if (!old?.credentialReference) return;
+  if (request.configuration.kind === 'stdio') throw Error('invalid_params');
+  const compatible =
+    old.configuration.kind === 'http' &&
+    new URL(old.configuration.url).origin === new URL(request.configuration.url).origin;
+  if (!compatible && request.key === undefined && request.removeKey !== true)
+    throw Error('invalid_params');
+}

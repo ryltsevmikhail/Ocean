@@ -18,7 +18,11 @@ import type { ProviderSecretStorePort } from './provider-connection-ports.js';
 import { keyDigest, validRequestId, type Sha256 } from './provider-connection-request.js';
 import { currentServiceCatalog } from './service-catalog-policy.js';
 import { OwnerScopeService } from './owner-scope.js';
-import { ownedConnection, ownerConnectionRecord } from './service-owner-connections.js';
+import {
+  ownedConnection,
+  ownerConnectionRecord,
+  assertCredentialDestination,
+} from './service-owner-connections.js';
 import {
   serviceOwnerReceiptView,
   type ServiceOwnerReceipt,
@@ -131,6 +135,7 @@ export class ServiceOwnerSettings {
       expectedVersions: request.expectedVersions,
       secretReference: request.key === undefined ? null : 'psec_' + this.#o.nextId(),
     };
+    let previousSecret: string | null = null;
     const record = this.#o.store.atomic((tx) => {
       const old = ownedConnection(
         tx,
@@ -138,6 +143,10 @@ export class ServiceOwnerSettings {
         request.connectionId,
         request.expectedVersions,
       );
+      assertCredentialDestination(old, request);
+      previousSecret = old?.credentialReference?.startsWith('saved:')
+        ? old.credentialReference.slice(6)
+        : null;
       const ref = receipt.secretReference
         ? 'saved:' + receipt.secretReference
         : request.removeKey
@@ -168,7 +177,8 @@ export class ServiceOwnerSettings {
       return result;
     });
     if (receipt.secretReference !== null) {
-      if (request.key !== undefined) this.#o.secrets.write(receipt.secretReference, request.key);
+      if (request.key !== undefined)
+        this.#o.secrets.replace(previousSecret, receipt.secretReference, request.key);
       else this.#o.secrets.remove(receipt.secretReference);
       this.#o.store.atomic((tx) => {
         this.#assertWritable();

@@ -95,6 +95,9 @@ export class OwnerScopeService {
     transaction?: ServiceAuthorityTransaction,
   ): OwnerScopeGrant {
     if (
+      (Object.hasOwn(intent, 'mode') &&
+        intent.mode !== 'autonomous' &&
+        intent.mode !== 'confirm') ||
       Object.keys(intent).some(
         (k) => !['id', 'subject', 'permissions', 'limits', 'mode'].includes(k),
       )
@@ -115,7 +118,7 @@ export class OwnerScopeService {
         id: intent.id,
         subject: intent.subject,
         limits: intent.limits,
-        mode: intent.mode ?? old?.mode ?? 'autonomous',
+        mode: Object.hasOwn(intent, 'mode') ? intent.mode! : (old?.mode ?? 'autonomous'),
         permissions: intent.permissions.map((p) => materialize(tx, this.ownerId, p)),
         policyVersion: 2,
         state: 'active',

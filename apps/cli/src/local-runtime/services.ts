@@ -35,7 +35,7 @@ export class RuntimeServiceSettings {
   dispatch(
     method: string,
     params: Record<string, unknown>,
-    detached: AbortSignal,
+    _detached: AbortSignal,
   ): RuntimeReply | Promise<RuntimeReply> {
     const s = this.#service;
     let work: () => unknown;
@@ -62,7 +62,8 @@ export class RuntimeServiceSettings {
         break;
       case 'service.connection-refresh':
         if (!isLocalServiceConnectionRequest(params)) return this.#invalid();
-        work = () => s.refreshConnection(params, detached);
+        // Runtime stop/deadline owns accepted metadata work across socket detach.
+        work = () => s.refreshConnection(params);
         break;
       case 'service.grant-set':
         if (!isLocalServiceGrantSetRequest(params)) return this.#invalid();

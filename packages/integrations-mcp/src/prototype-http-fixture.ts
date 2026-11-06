@@ -32,6 +32,7 @@ export function definition(version: string): Tool {
 }
 export async function httpFixture(name: string, evidenceDir?: string, catalogTtlMs = 0) {
   const rows: string[] = [];
+  const authorizations: { method: string; authorization: string }[] = [];
   const headers: string[] = [];
   const pairs: string[][] = [];
   const types: string[] = [];
@@ -96,6 +97,7 @@ export async function httpFixture(name: string, evidenceDir?: string, catalogTtl
           : undefined;
         const method = message ? (message.method ?? 'response') : (req.method ?? 'GET');
         rows.push(method);
+        authorizations.push({ method, authorization: String(req.headers.authorization ?? '') });
         if (method === 'tools/call') {
           if (evidenceDir)
             appendFileSync(join(evidenceDir, 'dispatches'), 'send\n', { flush: true });
@@ -174,6 +176,7 @@ export async function httpFixture(name: string, evidenceDir?: string, catalogTtl
     releaseResponse,
     url: new URL('http://127.0.0.1:' + addr.port + '/mcp'),
     rows,
+    authorizations,
     headers,
     pairs,
     extra,

@@ -109,7 +109,7 @@ export function validServiceGrantSetRequest(v: unknown): v is ServiceGrantSetReq
   return (
     validOwnerScopeGrant({
       ...i,
-      mode: i['mode'] ?? 'autonomous',
+      mode: Object.hasOwn(i, 'mode') ? i['mode'] : 'autonomous',
       policyVersion: 2,
       revision: 1,
       state: 'active',
