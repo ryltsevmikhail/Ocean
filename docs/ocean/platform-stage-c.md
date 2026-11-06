@@ -188,9 +188,50 @@ process-фаза не достигнута, build0, format1 только protect
 для F: combined-tool wording, изолированная changed-definition проверка,
 obsolete legacy binding и drop-specific ordering/zero-answer assertions.
 
+## Настройки владельца и квитанции C18.5.1
+
+Принято на `4798c95` после полного и одного scoped-ревью. Capability
+`service.authority-v2` открывает восемь методов authenticated runtime socket:
+`service.connections`, `service.grants`, `service.receipt`,
+`service.connection-set`, `service.connection-disconnect`,
+`service.connection-refresh`, `service.grant-set`, `service.grant-revoke`.
+Это реализованный wire API; текущие Desktop/TUI-формы подключаются в18.5.3.
+
+Schema26 хранит prepared/completed owner receipts. Мутации используют requestId
+и точные ожидаемые версии; replay возвращает прежний снимок, изменённые данные
+отказывают. Grant policy остаётся в OwnerScopeService; новая явная выдача по
+умолчанию autonomous. Явный некорректный mode, включая null, не создаёт разрешение.
+Maintenance разрешает только безопасные reads, старый клиент не получает новых
+прав через неподдерживаемый контракт. Принятый metadata refresh переживает
+отключение клиента и завершает квитанции coalesced запросов один раз.
+
+Ключи хранятся в существующем private store вне профиля/backup. Ответы и SQLite
+не содержат их значений. Material binding доказывает только неизменность байтов,
+не идентичность аккаунта. Неявный перенос bearer на другой origin запрещён;
+нужны явная передача материала или удаление. Для перехода keyed HTTP→stdio
+сначала удаляется ключ. Credential/trust revisions сохраняют отказ старым grants.
+
+Private publication ограничена65536 UTF-8 байт и проверяет размер до замены файла.
+Ротация атомарно заменяет прежний service entry, сохраняя provider entries.
+Corrupt/insecure/oversized shared state не очищается записью или удалением одного
+ключа: операция отказывает. Подготовленная операция после сбоя сама не повторяется;
+для допустимого private state возможен новый явный запрос с материалом и текущими
+версиями. Автоматического ремонта повреждённого общего файла нет.
+
+Проверки с реальной SQLite/private-store показали сохранность несвязанного
+provider-ключа при переполнении и отказе финального SQL commit, reopen без retry
+и явное восстановление. Исправления:186 source tests в31 файле,1 process,
+strict main/Node/Desktop и scoped lint/format0. Root до исправлений:
+3689pass/3protectedfail/44skip, process-фаза не достигнута, build0/format1 только
+protected2. Это не новый root gate и не installed/live квалификация.
+M1 стоимости list, M2 точного момента потери generic mutation reply и N1 лишней
+записи при отсутствующем private file сохранены для F. Межпроцессный тест
+подтверждает исходную квитанцию после reconnect/restart; точный drop после commit
+для этой generic mutation ещё требует усиления наблюдения.
+
 ## Дальше по плану
 
-18.4.2 принят;18.5 — owner/client настройки, точные подтверждения
+18.5.1 принят;18.5.2 — точные подтверждения;18.5.3 — тонкие клиенты
 и консервативная миграция;
 18.6 — установленная/live/package-приёмка и удаление Executor. Затем D —
 сохраняемые поручения и свободное взаимодействие команды, E/F — клиент и выпуск.

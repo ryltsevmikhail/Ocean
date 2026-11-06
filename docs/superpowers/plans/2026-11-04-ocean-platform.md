@@ -759,14 +759,14 @@ verified identity/resource evidence. Grant-set takes existing OwnerScopeIntent;
 reuse OwnerScopeService's current policy/materialization in the same transaction,
 without copying policy or nesting BEGIN. New explicit issuance defaults autonomous.
 
-- [ ] **RED owner operations.** Through actual SQLite plus authenticated socket,
+- [x] **RED owner operations.** Through actual SQLite plus authenticated socket,
       prove neutral settings unavailable before implementation. Assert owner mutation
       receipts survive lost reply/restart: same request/payload returns the original
       snapshot, changed payload refuses, concurrent expected-version writes have one
       winner. Invalid/foreign/restored/maintenance/old-client mutation sends0 and
       changes no grants. Reads expose only bounded keyless metadata. Use actual
       mutation counts, not always-refusing stubs.
-- [ ] **Implement atomic settings/receipts.** Extend the existing service authority
+- [x] **Implement atomic settings/receipts.** Extend the existing service authority
       transaction with owner receipt read/write, using one additive bounded receipt
       table in the next actual schema version (currently25). Keep existing rows,
       journals and historical schemas intact. Mutate connection/grant and completed
@@ -775,7 +775,7 @@ without copying policy or nesting BEGIN. New explicit issuance defaults autonomo
       account continuity. Recheck exact current versions, subject membership and
       baseline. Disconnect removes readiness through current-authority checks before
       async cleanup; revoke keeps history and never resolves an unknown effect.
-- [ ] **One existing private secret path.** Raw key <=512 characters uses the
+- [x] **One existing private secret path.** Raw key <=512 characters uses the
       existing private store outside profile/backups; client responses, SQLite,
       receipts, logs and model context never contain it. Use fresh opaque saved
       references for owner replacements and a trusted SHA256 binding of material.
@@ -787,7 +787,7 @@ without copying policy or nesting BEGIN. New explicit issuance defaults autonomo
       explicitly; no ambient token/account lookup. No trusted continuity callback is
       inferred from equal endpoint/name/schema. Reuse current SHA256/keyDigest and
       private-store ports rather than invent cryptography/identity infrastructure.
-- [ ] **Persist intent before private writes.** Reuse the existing provider pending
+- [x] **Persist intent before private writes.** Reuse the existing provider pending
       request pattern in the owner receipt: prepared intent contains only exact
       request binding, new opaque reference and expected versions. Only after that
       durable record may the private write occur, then current state/receipt commit.
@@ -797,7 +797,7 @@ without copying policy or nesting BEGIN. New explicit issuance defaults autonomo
       cannot adopt them. Unused private entries are not execution authority. Test
       before/after secret publication and before final SQLite commit using synthetic
       keys; corrupt/insecure/missing private state refuses without env fallback.
-- [ ] **Wire through the sole host.** Add owner dispatch/typed DTO validation and
+- [x] **Wire through the sole host.** Add owner dispatch/typed DTO validation and
       explicit capability; old clients/ACP retain their existing contract and cannot
       silently operate the new rights. Maintenance permits safe keyless reads and
       refuses mutations/discovery. Normal connection-refresh alone may call existing
@@ -805,7 +805,7 @@ without copying policy or nesting BEGIN. New explicit issuance defaults autonomo
       invocation is a settings method. Join owner mutations/refresh with existing
       drain. Owner disconnect must not cancel active admitted business work or
       falsely confirm cleanup; current dispatch guards still enforce revocation.
-- [ ] **GREEN acceptance.** Actual owner API configures an anonymous synthetic
+- [x] **GREEN acceptance.** Actual owner API configures an anonymous synthetic
       HTTP service and an enrolled stdio declaration, refreshes metadata and issues
       a bounded neutral grant. Normal scripted chat uses the existing SDK/admission
       path with one durable claim and one effect. Revoke before held send gives0;
@@ -814,13 +814,25 @@ without copying policy or nesting BEGIN. New explicit issuance defaults autonomo
       byte changes refuse on reconnect/restart, no credential bytes in SQLite/wire.
       A second owner client observes original receipt and current independent state.
       No new native/live/ready-server matrix or UI is required in this child.
-- [ ] **Verify and commit.** Run owning RED→GREEN, strict/scoped checks and root
+- [x] **Verify and commit.** Run owning RED→GREEN, strict/scoped checks and root
       pnpm check/build/format once on final implementation. Preserve the protected
       catalog3/format2 debt exactly until18.6, record process reachability; fix new
       failures, no exclusions. Run only affected socket/process controls separately
       if root stops earlier. Source<=300. Report interfaces/schema/receipt/credential
       crash semantics, commands/output/pins/limitations; commit owned paths and obtain
       independent review. Then refine18.5.2 exact decisions, not client UI in this task.
+
+C18.5.1 accepted on `4798c95` after full review and one scoped correction round.
+Owner API, schema26 receipts, existing private-store credential binding and
+runtime-owned refresh are implemented; clients/exact decisions remain next.
+Critical shared-secret loss and three Important findings are closed at`ec187e0`.
+Actual SQLite/private-store near-limit and failure/recovery witnesses plus
+186 covering/1 process checks passed; strict main/Node/Desktop/scoped checks0.
+Last root is the earlier implementation:3689pass/3protectedfail/44skip,
+process-unreached/build0/format-protected2; no fresh correction aggregate claimed.
+M1 list cost, M2 generic lost-reply timing and N1 absent-file remove write are
+retained for F. Explicit key operations now refuse corrupt shared private bytes
+rather than reset unrelated credentials; no automatic private-state repair.
 
 #### Task 18.5.2: Service confirm mode in existing durable owner decisions
 
