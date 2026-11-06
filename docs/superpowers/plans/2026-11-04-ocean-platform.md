@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4–6 и этапы D–H пока запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop/миграция C18.5.3.2, установленная приёмка C18.6 и этапы D–H остаются запланированы.
 Полные root gates остаются красными на сохранённых регрессиях Executor;
 приёмка A не заменяет их исправление в C и выпускные проверки F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -1006,14 +1006,14 @@ from prepared private storage enters the operation view. Existing receipt bound
 131072 bytes and binding semantics remain. No input from this read view is itself
 execution authority.
 
-- [ ] **RED consumer contract.** Use current actual authenticated runtime and a
+- [x] **RED consumer contract.** Use current actual authenticated runtime and a
       second shared client to demonstrate missing typed operations/read discovery.
       A prepared new connection has no live connection row. Close/reopen the client
       and owner; the second client must find its original UUID/target/keyless intent
       without the first GUI's memory. Require0 automatic private writes/discovery/
       business/model calls from reads. Test completed snapshots separately from
       current state, unchanged request replay and changed-payload refusal.
-- [ ] **Implement bounded runtime projections.** Persist validated optional keyless
+- [x] **Implement bounded runtime projections.** Persist validated optional keyless
       operation metadata in existing receipts and add owner-only read dispatch/capability/
       maintenance-read allowance. Add bounded owner-filtered receipt iteration through
       current ServiceAuthorityTransaction; no unknown effect is replayed. Also resolve
@@ -1022,14 +1022,14 @@ execution authority.
       owner view stops before further catalog reads after its output bound. Existing
       no-argument core grant/connection enumeration semantics stay unchanged. Test
       actual SQL bounds and no discarded-row catalog expansion, not just array size.
-- [ ] **Implement one validated client.** All input/output validation and request,
+- [x] **Implement one validated client.** All input/output validation and request,
       target, method/profile correlation use public contracts; do not import application
       or duplicate authority policy. Preserve original historical receipt on replay,
       refuse malformed/foreign frames, and never turn absent/prepared into completed.
       Verify capability before new calls; absent service.owner-operations support
       gives explicit service_operations_upgrade_required. Existing decisions.service-v1
       and old client/ACP behavior stay compatible. No secret bytes in logs/cache/DTOs.
-- [ ] **GREEN recovery and readiness.** Actual SQLite/private-store publication
+- [x] **GREEN recovery and readiness.** Actual SQLite/private-store publication
       failure creates a discoverable prepared intent; owner restart never resubmits
       it. Second client reads same original intent/receipt, then a new explicit request
       with material/current versions may recover; the old prepared fact is not rewritten
@@ -1037,7 +1037,7 @@ execution authority.
       owner/state filtering and stable non-skipping cursor, current session retirement
       versus stale durable active state, and secret-field rejection in public intent.
       Readiness itself grants nothing; actual C3 still decides execution.
-- [ ] **Verify and commit.** Add a small read-only independent-client example using
+- [x] **Verify and commit.** Add a small read-only independent-client example using
       the public existing client entry, with reproducible start/connect/read commands.
       Run owning RED→GREEN, strict/scoped and one final root check/build/format;
       protectedcatalog3/format2 remain until18.6, no skips/exclusions. Run affected
@@ -1045,6 +1045,16 @@ execution authority.
       matrix here. Report exact API/views/compatibility/recovery bounds, files,
       commands/exits/pins and protected state, commit owned source/report and obtain
       fresh independent review before expanding18.5.3.2. Installed TS/package debt F.
+
+C18.5.3.1 accepted at925db6f after full independent review and one scoped
+correction round (I1 field-origin rules, I2 contradictory wire facts, I3 legacy
+metadata budget). One shared client and bounded existing-receipt reads are
+implemented, including prepared-intent discovery and live readiness. Original
+root atbfe198a:3758pass/3protectedfail/44skip/process-unreached/build0/
+formatprotected2; correctionce00760 has37 owning/3 process passes and strict/
+scoped/build0, not a new full-root aggregate. The exact-budget negative is
+explicitly post-implementation, not a BASE RED. Desktop/import remains next;
+installed/native/live/current-release acceptance remains18.6/F.
 
 ##### Task 18.5.3.2: Desktop settings, service decisions and legacy configuration import
 
