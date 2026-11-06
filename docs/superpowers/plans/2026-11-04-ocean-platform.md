@@ -712,6 +712,135 @@ at its recorded earlier pin, not a new aggregate. Deferred M1–M4 go to F.
 Parent18.4 is complete within this scope.18.5 owner/client settings, exact
 confirmation and conservative migration follow;18.6 owns installed/live/removal.
 
+### Task 18.5: Owner settings, exact confirmations and conservative migration
+
+Keep one neutral authority and the existing authenticated owner socket. Three
+reviewable deliverables:18.5.1 usable owner configuration/grant API;18.5.2 exact
+service confirmation through current durable decisions;18.5.3 thin clients and
+legacy migration. No second credential manager, permission engine, journal,
+marketplace, arbitrary package installer or universal OAuth. Do not remove
+Executor/protected2 until18.6. E still owns autonomous-team GUI, not this settings
+surface. Each child expands only against its predecessor's accepted interfaces.
+
+#### Task 18.5.1: Durable owner service settings and credential binding
+
+**Files:** application `service-owner-settings.ts`, focused connection/request/view
+helpers and tests beside existing `owner-scope.ts`, `service-authority-ports.ts`;
+domain `service-connection.ts`; SQLite service-authority storage/schema and
+migration/restore tests; contracts `local-services.ts` plus validators/exports;
+CLI `local-runtime/services.ts`, existing server/settings composition,
+`runtime-services.ts` and owning socket/process tests. Reuse tools-node private
+`createProviderSecretStore`/0700-0600 persistence and existing injected SHA256.
+Do not generalize or rename the provider credential subsystem to do this.
+
+**Interfaces:** application `ServiceOwnerSettings` owns trusted owner/time/hash,
+existing service authority and the private secret-store port. It exposes keyless
+`connections()`, `grants()`, `receipt(requestId)`, `setConnection(request)`,
+`disconnect(request)`, `refreshConnection(request,signal?)`, `setGrant(request)`
+and `revokeGrant(request)`. Refresh consumes the existing host metadata port.
+`RuntimeServices` exposes this owner-only facade and its existing explicit
+`refresh(connectionId,signal?)`; never serialize stores/transport/OwnerScopeService.
+Advertise `service.authority-v2`. Owner methods are `service.connections`,
+`service.grants`, `service.receipt`, `service.connection-set`,
+`service.connection-disconnect`, `service.connection-refresh`,
+`service.grant-set`, `service.grant-revoke`. Exact request validators reject extra
+keys. Mutations carry requestId and expected current connection version tuple
+or grant revision (null only for creation); runtime injects owner identity.
+Connection-set is `{requestId,connectionId,expectedVersions,name,configuration,
+metadataPermission,key?,removeKey?}`; key and removeKey=true are exclusive and
+stdio accepts neither. Disconnect/refresh use
+`{requestId,connectionId,expectedVersions}`. Grant-set is
+`{requestId,expectedRevision,intent:OwnerScopeIntent}`, revoke is
+`{requestId,grantId,expectedRevision}`, receipt query is `{requestId}`; list queries
+are empty objects with existing frame/page bounds. Refresh is a receipted explicit
+metadata operation; lost reply replay must not start a second discovery.
+It never accepts client asserted
+verified identity/resource evidence. Grant-set takes existing OwnerScopeIntent;
+reuse OwnerScopeService's current policy/materialization in the same transaction,
+without copying policy or nesting BEGIN. New explicit issuance defaults autonomous.
+
+- [ ] **RED owner operations.** Through actual SQLite plus authenticated socket,
+      prove neutral settings unavailable before implementation. Assert owner mutation
+      receipts survive lost reply/restart: same request/payload returns the original
+      snapshot, changed payload refuses, concurrent expected-version writes have one
+      winner. Invalid/foreign/restored/maintenance/old-client mutation sends0 and
+      changes no grants. Reads expose only bounded keyless metadata. Use actual
+      mutation counts, not always-refusing stubs.
+- [ ] **Implement atomic settings/receipts.** Extend the existing service authority
+      transaction with owner receipt read/write, using one additive bounded receipt
+      table in the next actual schema version (currently25). Keep existing rows,
+      journals and historical schemas intact. Mutate connection/grant and completed
+      receipt atomically. A route/workspace change advances configuration and trust;
+      a credential replacement/removal advances credential revision and cannot claim
+      account continuity. Recheck exact current versions, subject membership and
+      baseline. Disconnect removes readiness through current-authority checks before
+      async cleanup; revoke keeps history and never resolves an unknown effect.
+- [ ] **One existing private secret path.** Raw key <=512 characters uses the
+      existing private store outside profile/backups; client responses, SQLite,
+      receipts, logs and model context never contain it. Use fresh opaque saved
+      references for owner replacements and a trusted SHA256 binding of material.
+      Extend neutral references to saved handles without changing SDK APIs. Optional
+      legacy binding metadata may remain absent/inert; production must refuse a
+      credential handle whose actual material no longer matches its owner binding,
+      including env:NAME changed under the same name across reconnect/restart.
+      Current env-only declarations are not account proof. Owner supplies new material
+      explicitly; no ambient token/account lookup. No trusted continuity callback is
+      inferred from equal endpoint/name/schema. Reuse current SHA256/keyDigest and
+      private-store ports rather than invent cryptography/identity infrastructure.
+- [ ] **Persist intent before private writes.** Reuse the existing provider pending
+      request pattern in the owner receipt: prepared intent contains only exact
+      request binding, new opaque reference and expected versions. Only after that
+      durable record may the private write occur, then current state/receipt commit.
+      Crash/failed publication must leave no active broadened grant or falsely
+      completed mutation. Prepared operations after restart are visible as requiring
+      explicit recovery and are never automatically resubmitted; a different payload
+      cannot adopt them. Unused private entries are not execution authority. Test
+      before/after secret publication and before final SQLite commit using synthetic
+      keys; corrupt/insecure/missing private state refuses without env fallback.
+- [ ] **Wire through the sole host.** Add owner dispatch/typed DTO validation and
+      explicit capability; old clients/ACP retain their existing contract and cannot
+      silently operate the new rights. Maintenance permits safe keyless reads and
+      refuses mutations/discovery. Normal connection-refresh alone may call existing
+      coalesced metadata work, after its current durable permission; no business
+      invocation is a settings method. Join owner mutations/refresh with existing
+      drain. Owner disconnect must not cancel active admitted business work or
+      falsely confirm cleanup; current dispatch guards still enforce revocation.
+- [ ] **GREEN acceptance.** Actual owner API configures an anonymous synthetic
+      HTTP service and an enrolled stdio declaration, refreshes metadata and issues
+      a bounded neutral grant. Normal scripted chat uses the existing SDK/admission
+      path with one durable claim and one effect. Revoke before held send gives0;
+      old/current-set/new-tool policy retains accepted behavior without regrant on
+      restart/TTL. Rotate synthetic key A→B: old grant cannot send as B; same-handle
+      byte changes refuse on reconnect/restart, no credential bytes in SQLite/wire.
+      A second owner client observes original receipt and current independent state.
+      No new native/live/ready-server matrix or UI is required in this child.
+- [ ] **Verify and commit.** Run owning RED→GREEN, strict/scoped checks and root
+      pnpm check/build/format once on final implementation. Preserve the protected
+      catalog3/format2 debt exactly until18.6, record process reachability; fix new
+      failures, no exclusions. Run only affected socket/process controls separately
+      if root stops earlier. Source<=300. Report interfaces/schema/receipt/credential
+      crash semantics, commands/output/pins/limitations; commit owned paths and obtain
+      independent review. Then refine18.5.2 exact decisions, not client UI in this task.
+
+#### Task 18.5.2: Service confirm mode in existing durable owner decisions
+
+Pending detailed expansion after18.5.1. Reuse RuntimeOwnerDecisions, existing
+room/run/ID/version/digest/expiry CAS, one exact admitted operation and C3 claim.
+Two clients may answer once; stale/expired/revoked/changed operation gives0send;
+restart cannot recreate authority from an allowed row. Autonomous grants still
+need no per-operation prompt. No boolean permit from model text or second broker.
+
+#### Task 18.5.3: Thin client settings and conservative legacy migration
+
+Pending detailed expansion after18.5.2. Desktop and shared client consume the
+capability/receipts and existing decision views; secrets clear immediately and
+never return. Import only already-available HTTP/pinned stdio configurations.
+Explicit migration preserves old history, narrow tool/resource scope and unknown
+claims; no all-future/team/autonomous widening. If old enforcement/account facts
+cannot be established, show inert configuration and an exact reason requiring
+new owner setup. Qualify on disposable copied profiles; never real profiles or
+protected2. Native GUI settings tests are affected-case checks, not the F release.
+
 ## Task 19: D. Автономные задачи и общение ботов — приоритет 1
 
 **Files:** `packages/application/src/{direct-chat-admission,chat-turn-execution,room-broadcast}.ts`,
