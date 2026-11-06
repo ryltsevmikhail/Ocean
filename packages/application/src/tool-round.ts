@@ -41,6 +41,10 @@ export async function executeTools(
               : 'edit',
       status: 'pending',
     });
+    if (input.signal.aborted) {
+      skipped(index, 'turn cancelled');
+      return { kind: 'continue' };
+    }
     let result: ToolResult;
     try {
       result = await input.tools.execute({ ...call, id }, input.signal, {
