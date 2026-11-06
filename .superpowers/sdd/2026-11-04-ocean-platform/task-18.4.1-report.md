@@ -100,3 +100,25 @@ The fault server was built from the frozen source with the existing Rolldown 1.2
 All nine normal native drivers exited 0. In the observer control, injected EACCES on final observation returned unknown and refused the next discovery even though a separate observer could see the cgroup retired. For kill, the live owner checked all four counters before SIGKILL. The runner returned 247 (child signal 9). The external observer found the cgroup retired and none of its recorded PID/start identities remaining. These observations concern the owned synthetic tree and the independently recorded effect. The fresh evidence lives in per-mode `result.json`, or `kill/before-kill.json` and `kill/retirement.json`, with a compact `counters.json`.
 
 The original full-root result above remains the aggregate on its recorded source: 3624 passed, 3 protected failures, 44 skipped, process phase unreached, build 0 and format 1 for the two protected files. Correction verification was scoped. The official ready-server and sole approved GitHub read retain their original source pins. The protected file hashes and staging state match the original report. The correction awaits fresh independent review of the exact range from `8a006f6` through the correction report commit.
+
+## Correction round 2
+
+Source commit `f6be7d97954a1e8d996dea95fdc057c75f2add2a` addresses N1 against `7300c8db908a5036856dfe3ceb178cf27767031a`. Both catalog discovery and reply export now scan the serialized JSON once for a literal credential and also check decoded keys and string values. This restores coverage for numeric JSON values and preserves coverage for quoted and backslashed credentials.
+
+Two loopback regressions in `packages/integrations-mcp/src/credential-echo.test.ts` use the synthetic bearer `724938162573`. On the previous production source the numeric-only run exited 1 with **2 failed**. Discovery returned a candidate containing those digits as the integer default of a tool property. The call returned an observed reply containing those digits as a number in `structuredContent.value`. The fixture's reply text was `fixture`, so string detection could not mask the numeric case. With the correction, discovery refuses the catalog with the existing sanitized error, and the sent call returns sanitized uncertainty with one received call and one effect.
+
+Commands used `P = python3 .superpowers/sdd/2026-11-04-ocean-platform/run-private.py`. Exact logs and exit codes are in `/home/ryltsevmg/Projects/Ocean-artifacts/c18.4.1-fix2-KQmYQp`.
+
+```sh
+P pnpm exec vitest run --config vitest.source.config.ts packages/integrations-mcp/src/credential-echo.test.ts -t numeric
+P pnpm exec vitest run --config vitest.source.config.ts packages/integrations-mcp/src/{credential-echo,transport,admission}.test.ts
+P pnpm typecheck
+P pnpm typecheck:tests:node
+P pnpm typecheck:tests:desktop
+P pnpm exec eslint packages/integrations-mcp/src/{session,prototype-http-fixture,credential-echo.test}.ts
+P pnpm exec prettier --check packages/integrations-mcp/src/{session,prototype-http-fixture,credential-echo.test}.ts
+```
+
+The covering run exited 0 with **28/28 passed in three files**, including both numeric regressions and all three previous escaped-key/string controls. Strict main, Node and Desktop compiler checks, scoped ESLint, Prettier and staged whitespace checks passed. The largest changed source file is 238 physical lines. The two protected paths retain their previously recorded SHA-256 digests and staging state.
+
+The earlier full-root, native, ready-server and live evidence retains its recorded scope. M1 and M2 remain deferred to F. The correction awaits fresh scoped review of N1 and any breakage in the range from `7300c8d` through this report commit.
