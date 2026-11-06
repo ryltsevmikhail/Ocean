@@ -71,6 +71,15 @@ export function persistRoomTaskSend(
           key,
           prior,
           roomAgentBinding(origin(facts, actor), request),
+          {
+            workspaceId: facts.task.workspaceId,
+            roomId: facts.task.roomId,
+            author: 'bot',
+            body: request.text,
+            targetBotId: request.toBotId,
+            authorBotId: facts.turn.bot.id,
+            turnId: actor.turnId,
+          },
         );
         if (!receipt) return conversationFailure('request_conflict');
         const rows = rt.deliveriesForReceipt(key, receipt.messageId);

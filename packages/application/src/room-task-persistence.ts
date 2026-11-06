@@ -49,7 +49,16 @@ export class RoomTaskPersistence {
     return d.store.atomic((tx) => {
       const prior = tx.receipt(input.requestId);
       if (prior) {
-        const receipt = roomTaskReceipt(tx, input.requestId, prior, binding);
+        const room = tx.room(input.roomId);
+        if (!room || room.workspaceId !== input.workspaceId)
+          return conversationFailure('request_conflict');
+        const receipt = roomTaskReceipt(tx, input.requestId, prior, binding, {
+          workspaceId: input.workspaceId,
+          roomId: input.roomId,
+          author: 'user',
+          body: input.text,
+          targetBotId: room.kind === 'direct' ? room.botId : null,
+        });
         if (!receipt) return conversationFailure('request_conflict');
         const rt = tx.roomTasks!,
           root = rt.task(receipt.rootId);

@@ -42,7 +42,7 @@ it('rolls back start and delegate at the final receipt write, reopening with unc
     f.close();
   }
 });
-it('replays immutable receipts after wait, stop, revocation and sender roster removal', async () => {
+it('replays immutable receipts after wait, stop and sender roster removal', async () => {
   const f = roomTasks();
   try {
     const start = f.service.start(f.input);
@@ -162,6 +162,62 @@ it('races identical starts in independent workers with bounded SQLite locking', 
       ocean_receipts: 1,
       events: 0,
     });
+  } finally {
+    f.close();
+  }
+});
+
+it('replays a lost peer receipt after actual selected-grant revocation with an otherwise eligible actor', async () => {
+  const { ownerGrant } = await import('../../../test-fixtures/service-authority.js');
+  const f = roomTasks();
+  try {
+    f.store.serviceAuthority.atomic((tx) =>
+      tx.putGrant(
+        {
+          ...ownerGrant,
+          id: 'replay-grant',
+          subject: {
+            ...ownerGrant.subject,
+            workspaceId: f.input.workspaceId,
+            roomId: 'room',
+            botId: 'b',
+            projectId: sha256('/fixture'),
+          },
+        },
+        null,
+      ),
+    );
+    const input = {
+      ...f.input,
+      participants: f.input.participants.map((p) =>
+        p.botId === 'b' ? { ...p, grantReferences: [{ grantId: 'replay-grant', revision: 1 }] } : p,
+      ),
+    };
+    const start = f.service.start(input);
+    if (!start.ok) throw Error('start');
+    const actor = await attachRoomActor(f, start.value),
+      request = { kind: 'message', toBotId: 'b', text: 'committed before revocation' };
+    const receipt = f.service.send(actor, request);
+    expect(receipt.ok).toBe(true);
+    expect(
+      f.store.serviceAuthority.atomic((tx) => {
+        const old = tx.grant('replay-grant')!;
+        return tx.putGrant({ ...old, state: 'revoked', revision: 2 }, 1);
+      }),
+    ).toBe(true);
+    expect(f.store.serviceAuthority.atomic((tx) => tx.grant('replay-grant'))).toMatchObject({
+      state: 'revoked',
+      revision: 2,
+    });
+    expect(
+      f.store.conversations.atomic((tx) =>
+        tx.roomTasks!.origin(actor.turnId, actor.taskRunId, actor.attemptId, true),
+      ),
+    ).not.toBeNull();
+    const before = roomTaskCounts(f);
+    expect(f.service.send(actor, request)).toEqual(receipt);
+    expect(f.service.start(input)).toEqual(start);
+    expect(roomTaskCounts(f)).toEqual(before);
   } finally {
     f.close();
   }

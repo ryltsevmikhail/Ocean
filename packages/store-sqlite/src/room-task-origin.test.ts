@@ -71,7 +71,7 @@ it('keeps settled sender identity after edits and refuses a freshly changed reci
     f.close();
   }
 });
-it('rejects reviewed or stopped sources, removed recipients and invalid marker mutations', async () => {
+it('rejects stopped sources, removed recipients and invalid marker mutations', async () => {
   const f = roomTasks();
   try {
     const start = f.service.start(f.input);

@@ -44,7 +44,8 @@ one user message and ordered queued deliveries. Peer sends persist a new direct
 child, one queued delivery and an A-author/B-target message tied to the actual
 source turn. Delegation atomically moves the sender to waiting for that child.
 Failures during publication roll all writes back. Repeated identical requests return
-original IDs and sequence positions from immutable joins; changed requests and
+original IDs and sequence positions from complete-key immutable joins tied to the
+requested scope, body and target; changed requests and
 cross-kind key collisions conflict. Receipt lookup precedes mutable eligibility.
 
 Roots retain the trusted owner, immutable mandate, exact selected C references,
@@ -61,11 +62,14 @@ operation authority.
 Fresh work respects current membership, transfer privacy, legacy room/batch holds,
 text-only recovery restrictions and restore-origin quarantine. D roots and unresolved
 marked slices hold legacy executing admissions, including slices linked to a review
-after a root stop. Unaddressed group notes retain their existing path. Queued
+after a root stop. Unaddressed group notes retain their existing path. Runnable queued
 nonlocal pins participate in the privacy-deny barrier even after a local rebind.
+Never-claimed queued rows under stopped/completed roots or tasks are inert and
+do not prevent tightening privacy; claimed/unresolved work still requires evidence.
 Maintenance retains schema 26 and reports distinct held rooms for schema 27 without
 counting inert deliveries as model runs or effects. Predecessor history, final-reply
 uniqueness, direct-room targeting and the ten physical history columns are preserved.
+Stored message facts are immutable on update, including on reopened v27 snapshots.
 
 This candidate requires independent task review before acceptance or the next leaf.
 No canonical D acceptance boxes are marked by this implementation.

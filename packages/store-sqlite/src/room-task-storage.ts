@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { validModelConnectionEndpoint } from '@runnets/application';
+import { validRoomTaskIdentity } from '@runnets/application';
 import { canonicalJson } from '@runnets/domain';
 import type {
   RoomTaskRecord,
@@ -79,7 +79,7 @@ export function readRoomTask(db: DatabaseSync, id: string): RoomTaskRecord | nul
           new Set(m.grantReferences.map((r: OwnerGrantReference) => r.grantId)).size ===
             m.grantReferences.length &&
           m.identity?.source === 'connection' &&
-          validPin(m.identity) &&
+          validRoomTaskIdentity(m.identity) &&
           Number.isSafeInteger(m.identity.connectionRevision) &&
           m.identity.connectionRevision > 0,
       )
@@ -113,26 +113,6 @@ export function readRoomTask(db: DatabaseSync, id: string): RoomTaskRecord | nul
     waitingChildId: readNullableText(r, 'waiting_child_id'),
     rootPayload: null,
   };
-}
-function validPin(i: RoomTaskRootPayload['members'][number]['identity']): boolean {
-  return (
-    Object.keys(i).sort().join() ===
-      'artifactDigest,auth,backendVersion,botProfileVersion,connectionId,connectionRevision,endpoint,kind,modelId,providerId,source' &&
-    validConversationText(i.connectionId, 128) &&
-    validConversationText(i.modelId, 256) &&
-    validConversationText(i.providerId, 128) &&
-    Number.isSafeInteger(i.botProfileVersion) &&
-    i.botProfileVersion >= 1 &&
-    (i.kind === 'cloud' || i.kind === 'local') &&
-    validModelConnectionEndpoint(i.kind, i.endpoint) &&
-    (i.auth === 'api_key' || (i.kind === 'local' && i.auth === 'none')) &&
-    (i.kind === 'cloud'
-      ? i.artifactDigest === null && i.backendVersion === null
-      : typeof i.artifactDigest === 'string' &&
-        /^[0-9a-f]{64}$/.test(i.artifactDigest) &&
-        typeof i.backendVersion === 'string' &&
-        validConversationText(i.backendVersion, 128))
-  );
 }
 export function decodeRoomDelivery(r: Row): RoomDeliveryRecord {
   if (
@@ -169,12 +149,10 @@ export function decodeRoomDelivery(r: Row): RoomDeliveryRecord {
 export function roomTaskStorage(db: DatabaseSync): RoomTaskTransaction {
   return {
     task: (id) => readRoomTask(db, id),
-    deliveriesForReceipt: (key, messageId) =>
+    deliveriesForReceipt: (key, _messageId) =>
       db
-        .prepare(
-          'SELECT * FROM ocean_room_deliveries WHERE request_key=? AND message_id=? ORDER BY position',
-        )
-        .all(key, messageId)
+        .prepare('SELECT * FROM ocean_room_deliveries WHERE request_key=? ORDER BY position')
+        .all(key)
         .map(decodeRoomDelivery),
     origin: (turn, run, attempt, live) => roomTaskOrigin(db, turn, run, attempt, live),
     grant: (id) => readAuthorityGrant(db, id),
@@ -196,8 +174,10 @@ export function roomTaskStorage(db: DatabaseSync): RoomTaskTransaction {
         .prepare(
           `SELECT 1 FROM ocean_room_deliveries d
       JOIN ocean_room_tasks r ON r.id=d.root_id
+      JOIN ocean_room_tasks t ON t.id=d.to_task_id
       LEFT JOIN json_each(r.root_payload,'$.members') m ON json_extract(m.value,'$.botId')=d.recipient_bot_id
       WHERE d.room_id=? AND d.state IN ('queued','claimed','held')
+      AND (d.state<>'queued' OR (r.status NOT IN ('completed','stopped') AND t.status NOT IN ('completed','stopped')))
       AND coalesce(json_extract(m.value,'$.identity.kind'),'unknown')<>'local' LIMIT 1`,
         )
         .get(roomId),

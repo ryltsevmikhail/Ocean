@@ -203,7 +203,7 @@ it('persists single-bot direct starts as a root plus its distinct child', () => 
     f.close();
   }
 });
-it('queues qualified local pins under deny without copying connection secrets', async () => {
+it('replays a qualified local pin with B-valid multibyte backend metadata after reopen', async () => {
   const f = roomTasks();
   try {
     const cloud = f.store.modelConnections.read('cloud')!;
@@ -218,7 +218,7 @@ it('queues qualified local pins under deny without copying connection secrets', 
         localQualification: {
           modelId: 'one',
           artifactDigest: 'a'.repeat(64),
-          backendVersion: 'fixture',
+          backendVersion: 'é'.repeat(65),
           configuredContextTokens: 4096,
           capabilities: {
             tools: true,
@@ -236,20 +236,29 @@ it('queues qualified local pins under deny without copying connection secrets', 
       tx.putModelBinding('a', { connectionId: 'qualified', modelId: 'one' });
       tx.putRoomModelPolicy({ roomId: 'room', cloudTransfer: 'deny', revision: 2 });
     });
-    const started = f.service.start({
-      ...f.input,
-      initialBotIds: ['a'],
-      participants: [f.input.participants[0]!],
-    });
+    const input = { ...f.input, initialBotIds: ['a'], participants: [f.input.participants[0]!] };
+    const started = f.service.start(input);
+    expect(f.service.start(input)).toEqual(started);
     expect(started.ok).toBe(true);
     if (!started.ok) throw Error('local');
     const root = f.store.conversations.atomic((tx) => tx.roomTasks!.task(started.value.rootId));
     expect(root?.rootPayload?.members[0]?.identity).toMatchObject({
       kind: 'local',
       artifactDigest: 'a'.repeat(64),
-      backendVersion: 'fixture',
+      backendVersion: 'é'.repeat(65),
     });
     expect(JSON.stringify(root)).not.toContain('secretRef');
+    const { openSqliteStore } = await import('./index.js');
+    const { RoomTaskPersistence } = await import('@runnets/application');
+    const reopened = openSqliteStore({
+      path: String(f.db!.prepare('PRAGMA database_list').get()?.['file']),
+    });
+    try {
+      const replay = new RoomTaskPersistence({ ...f.service.deps, store: reopened.conversations });
+      expect(replay.start(input)).toEqual(started);
+    } finally {
+      reopened.close();
+    }
   } finally {
     f.close();
   }

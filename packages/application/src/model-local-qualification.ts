@@ -13,6 +13,7 @@ const text = (v: unknown, max: number): v is string =>
   v.length > 0 &&
   v.length <= max &&
   ![...v].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127);
+export const validLocalModelBackendVersion = (value: unknown): value is string => text(value, 128);
 const positive = (v: unknown): v is number =>
   typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 /** Closed detached evidence; malformed present data is never converted to qualification. */
@@ -20,7 +21,7 @@ export function copyLocalQualification(value: unknown): LocalModelQualification 
   if (
     !object(value) ||
     !text(value['modelId'], 256) ||
-    !text(value['backendVersion'], 128) ||
+    !validLocalModelBackendVersion(value['backendVersion']) ||
     typeof value['artifactDigest'] !== 'string' ||
     !/^[0-9a-f]{64}$/.test(value['artifactDigest']) ||
     !positive(value['configuredContextTokens'])

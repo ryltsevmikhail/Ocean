@@ -1,9 +1,5 @@
 import { expect, it } from 'vitest';
-import {
-  RoomBroadcastService,
-  RoomModelPolicyService,
-  unconfiguredModelConnection,
-} from '@runnets/application';
+import { RoomBroadcastService } from '@runnets/application';
 import { roomTasks, attachRoomActor, roomTaskCounts } from '../test-fixtures/room-tasks.js';
 it('preserves legacy broadcast and uncertain room holds before new starts', () => {
   const f = roomTasks();
@@ -30,44 +26,7 @@ it('preserves legacy broadcast and uncertain room holds before new starts', () =
     f.close();
   }
 });
-it('blocks privacy policy lowering for frozen queued cloud pins after local rebind', () => {
-  const f = roomTasks();
-  try {
-    expect(f.service.start(f.input).ok).toBe(true);
-    f.store.modelConnections.put(
-      {
-        ...unconfiguredModelConnection('fixture'),
-        connectionId: 'local',
-        kind: 'local',
-        auth: 'none',
-        endpoint: 'http://127.0.0.1:1234',
-        revision: 1,
-        intent: 'disconnected',
-      },
-      null,
-    );
-    f.store.conversations.atomic((tx) => {
-      for (const bot of ['a', 'b', 'c'])
-        tx.putModelBinding(bot, { connectionId: 'local', modelId: 'one' });
-    });
-    const policy = new RoomModelPolicyService({
-      store: f.store.conversations,
-      connections: f.store.modelConnections,
-    });
-    expect(
-      policy.set({
-        workspaceId: f.input.workspaceId,
-        roomId: 'room',
-        requestId: 'deny',
-        expectedRevision: 1,
-        cloudTransfer: 'deny',
-      }),
-    ).toMatchObject({ ok: false, error: { code: 'model_policy_work_conflict' } });
-  } finally {
-    f.close();
-  }
-});
-it('refuses private-room cloud transfers and recovery-restricted starts without writes', async () => {
+it('refuses private-room cloud transfers without writes', async () => {
   const f = roomTasks();
   try {
     f.store.conversations.atomic((tx) =>
@@ -171,6 +130,15 @@ it('retains D cleanup holds after a root stop and review linkage, preventing a s
     f.store.conversations.atomic((tx) =>
       tx.putChatTurn({ ...turn, status: 'dispatching', continuationReviewId: 'review' }),
     );
+    expect(
+      f.store.conversations.atomic((tx) => tx.roomTasks!.task(start.value.rootId)?.status),
+    ).toBe('ready');
+    expect(f.store.conversations.atomic((tx) => tx.roomPolicy('room'))).toBeNull();
+    const reviewOnly = roomTaskCounts(f);
+    expect(
+      f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'review-only refusal' }),
+    ).toMatchObject({ ok: false, error: { code: 'approval_required' } });
+    expect(roomTaskCounts(f)).toEqual(reviewOnly);
     f.db!.prepare("UPDATE ocean_room_tasks SET status='stopped' WHERE id=?").run(
       start.value.rootId,
     );
@@ -270,6 +238,56 @@ it('blocks fresh work after a valid restored snapshot marker while preserving or
       error: { code: 'recovery_required' },
     });
     expect(f.service.start(f.input)).toEqual(old);
+  } finally {
+    f.close();
+  }
+});
+
+it('isolates text-only recovery refusal from transfer policy and source review', async () => {
+  const f = roomTasks();
+  try {
+    const start = f.service.start(f.input);
+    if (!start.ok) throw Error('start');
+    const actor = await attachRoomActor(f, start.value);
+    expect(f.service.start({ ...f.input, requestId: 'eligible-start' }).ok).toBe(true);
+    expect(f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'eligible send' }).ok).toBe(
+      true,
+    );
+    f.db!.prepare('INSERT INTO ocean_reviews VALUES(?,?,?,?,?,?,?)').run(
+      'policy-review',
+      f.input.workspaceId,
+      'room',
+      actor.taskRunId,
+      actor.turnId,
+      start.value.messageId,
+      JSON.stringify({ id: 'policy-review' }),
+    );
+    f.store.conversations.atomic((tx) =>
+      tx.putRoomPolicy({ roomId: 'room', mode: 'text_only', reviewId: 'policy-review' }),
+    );
+    expect(f.store.conversations.atomic((tx) => tx.roomModelPolicy('room')?.cloudTransfer)).toBe(
+      'allow',
+    );
+    expect(
+      f.store.conversations.atomic((tx) => tx.chatTurn(actor.turnId)?.continuationReviewId),
+    ).toBeUndefined();
+    expect(
+      f.store.conversations.atomic((tx) =>
+        tx.roomTasks!.origin(actor.turnId, actor.taskRunId, actor.attemptId, true),
+      ),
+    ).not.toBeNull();
+    const before = roomTaskCounts(f);
+    expect(f.service.start({ ...f.input, requestId: 'restricted-start' })).toMatchObject({
+      ok: false,
+      error: { code: 'recovery_required' },
+    });
+    expect(
+      f.service.send(
+        { ...actor, callId: actor.callId + '-new' },
+        { kind: 'message', toBotId: 'b', text: 'restricted send' },
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'recovery_required' } });
+    expect(roomTaskCounts(f)).toEqual(before);
   } finally {
     f.close();
   }

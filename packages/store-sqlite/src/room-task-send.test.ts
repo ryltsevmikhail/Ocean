@@ -89,3 +89,30 @@ it('rejects extra hidden/symbol model fields and self-targets before writing', a
     f.close();
   }
 });
+it.each(['body', 'scope'] as const)(
+  'keeps backed peer %s immutable on SQL update',
+  async (field) => {
+    const f = roomTasks();
+    try {
+      const start = f.service.start(f.input);
+      if (!start.ok) throw Error('start');
+      const actor = await attachRoomActor(f, start.value);
+      const sent = f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'original' });
+      if (!sent.ok) throw Error('send');
+      const before = f.store.conversations.atomic((tx) => tx.history('room', 0, 10));
+      const sql =
+        field === 'body'
+          ? "UPDATE ocean_messages SET body='changed' WHERE id=?"
+          : "UPDATE ocean_messages SET room_id='other-room' WHERE id=?";
+      expect(() => f.db!.prepare(sql).run(sent.value.messageId)).toThrow(
+        'immutable conversation message',
+      );
+      expect(f.store.conversations.atomic((tx) => tx.history('room', 0, 10))).toEqual(before);
+      expect(f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'original' })).toEqual(
+        sent,
+      );
+    } finally {
+      f.close();
+    }
+  },
+);

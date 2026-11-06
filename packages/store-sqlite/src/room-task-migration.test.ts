@@ -172,6 +172,21 @@ it('migrates a genuine BASE v26 disposable snapshot preserving reply, review, ba
         "INSERT INTO ocean_messages VALUES('untargeted','ws','direct',1,'user',NULL,'no','now',NULL,NULL)",
       ),
     ).toThrow('direct message requires a target');
+    store.atomic((tx) => tx.putBot({ ...tx.bot('bot')!, id: 'peer', handle: 'peer' }));
+    db.exec("INSERT INTO ocean_members VALUES('ws','room','peer')");
+    expect(() =>
+      db.exec("UPDATE ocean_messages SET target_bot_id='peer' WHERE id='reply_done'"),
+    ).toThrow('immutable conversation message');
+    expect(() =>
+      db.exec(
+        "INSERT INTO ocean_messages VALUES('another-final','ws','room',3,'bot','bot','again','now','bot','done')",
+      ),
+    ).toThrow();
+    expect(
+      db.prepare("SELECT target_bot_id FROM ocean_messages WHERE id='reply_done'").get()?.[
+        'target_bot_id'
+      ],
+    ).toBe('bot');
     expect(store.atomic((tx) => tx.activeChatTurn('room'))).toBeNull();
   } finally {
     db.close();
@@ -225,6 +240,24 @@ it('inspects and snapshots inert v27 state and rejects unsupported future28', as
     } finally {
       db.close();
     }
+  } finally {
+    f.close();
+  }
+});
+
+it('installs the history update guard when reopening an already-published v27 database', () => {
+  const f = roomTasks();
+  try {
+    const started = f.service.start(f.input);
+    if (!started.ok) throw Error('start');
+    f.db!.exec('DROP TRIGGER IF EXISTS ocean_message_immutable');
+    initializeSchema(f.db!);
+    expect(() =>
+      f
+        .db!.prepare("UPDATE ocean_messages SET body='changed' WHERE id=?")
+        .run(started.value.messageId),
+    ).toThrow('immutable conversation message');
+    expect(f.service.start(f.input)).toEqual(started);
   } finally {
     f.close();
   }

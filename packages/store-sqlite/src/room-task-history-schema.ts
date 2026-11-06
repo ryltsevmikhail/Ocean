@@ -36,3 +36,13 @@ export function migrateRoomTaskHistory(db: DatabaseSync): void {
   BEGIN SELECT RAISE(ABORT,'addressed message requires delivery'); END;
   `);
 }
+
+/** Also install on previously-created v27 snapshots; history facts cannot be rewritten. */
+export function protectRoomTaskHistory(db: DatabaseSync): void {
+  db.exec(`CREATE TRIGGER IF NOT EXISTS ocean_message_immutable BEFORE UPDATE ON ocean_messages
+    WHEN NEW.id IS NOT OLD.id OR NEW.workspace_id IS NOT OLD.workspace_id OR NEW.room_id IS NOT OLD.room_id
+      OR NEW.seq IS NOT OLD.seq OR NEW.author IS NOT OLD.author OR NEW.target_bot_id IS NOT OLD.target_bot_id
+      OR NEW.body IS NOT OLD.body OR NEW.created_at IS NOT OLD.created_at
+      OR NEW.author_bot_id IS NOT OLD.author_bot_id OR NEW.turn_id IS NOT OLD.turn_id
+    BEGIN SELECT RAISE(ABORT,'immutable conversation message'); END;`);
+}

@@ -70,6 +70,7 @@ export type RoomTaskOriginFacts = Readonly<{
 }>;
 export interface RoomTaskTransaction {
   task(id: string): RoomTaskRecord | null;
+  /** Complete key evidence, including contradictory message IDs; never hide mixed-key rows. */
   deliveriesForReceipt(key: string, messageId: string): readonly RoomDeliveryRecord[];
   origin(
     turnId: string,

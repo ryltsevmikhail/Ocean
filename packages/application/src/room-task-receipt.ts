@@ -1,15 +1,35 @@
-import { canonicalJson, type ConversationMessage } from '@runnets/domain';
+import { canonicalJson, validConversationText, type ConversationMessage } from '@runnets/domain';
 import type { ConversationReceipt, ConversationTransaction } from './conversation-ports.js';
 import type { RoomDeliveryRecord, RoomTaskReceipt } from './room-task-records.js';
+type MessageIntent = Pick<
+  ConversationMessage,
+  'workspaceId' | 'roomId' | 'author' | 'body' | 'targetBotId' | 'authorBotId' | 'turnId'
+>;
 /** Replays immutable joins only; current eligibility never reauthorizes old receipts. */
 export function roomTaskReceipt(
   tx: ConversationTransaction,
   key: string,
   receipt: ConversationReceipt,
   binding: string,
+  expected: MessageIntent,
 ): RoomTaskReceipt | null {
   if (receipt.binding !== binding || receipt.reply.kind !== 'message' || !tx.roomTasks) return null;
   const m = receipt.reply.data;
+  if (
+    !m ||
+    typeof m !== 'object' ||
+    !validConversationText(m.id, 128) ||
+    !Number.isSafeInteger(m.seq) ||
+    m.seq < 1 ||
+    m.workspaceId !== expected.workspaceId ||
+    m.roomId !== expected.roomId ||
+    m.author !== expected.author ||
+    m.body !== expected.body ||
+    m.targetBotId !== expected.targetBotId ||
+    m.authorBotId !== expected.authorBotId ||
+    m.turnId !== expected.turnId
+  )
+    return null;
   const stored = tx.history(m.roomId, m.seq - 1, 1)[0];
   if (!stored || canonicalJson(stored) !== canonicalJson(m)) return null;
   const ds = tx.roomTasks.deliveriesForReceipt(key, m.id);
