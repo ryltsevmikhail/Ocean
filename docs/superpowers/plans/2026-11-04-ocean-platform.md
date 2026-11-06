@@ -1427,28 +1427,34 @@ Later durable receipt lookup precedes fresh routing checks and may hash this
 internal key using the existing trusted SHA256 port; it cannot repeat execution.
 This pure decision performs no identity allocation, authority grant, I/O or state mutation.
 
-- [ ] **RED addressing behavior.** Add positive A→B message/delegate cases with
+- [x] **RED addressing behavior.** Add positive A→B message/delegate cases with
       zero and multiple refs; assert derived sender and exact key/binding, stable
       replay identity, changed text/recipient/kind changes binding only, distinct
       room bindings. Include compound callId>128<=512 and exact UTF-8 boundaries.
       Add a minimal temporary contract stub if needed to make positive cases fail
       behaviorally; report missing-export RED separately, not as per-case behavior.
-- [ ] **Implement the minimal decision.** Reuse existing Result/ok/err, canonical
+- [x] **Implement the minimal decision.** Reuse existing Result/ok/err, canonical
       JSON, Unicode text and C grant-reference guards. Validate plain request with
       exact own keys, bounded dense arrays, IDs/refs/cursor and actor eligibility.
       No new validator/policy framework, schema, engine, capability or endpoint.
-- [ ] **GREEN refusals and immutability.** Reject forged sender/root/grants/result,
+- [x] **GREEN refusals and immutability.** Reject forged sender/root/grants/result,
       missing/extra keys, malformed/empty/oversized/NUL/surrogate text/IDs, sparse or
       duplicate/oversized members/refs, bad reference revision, null/self parent,
       owner root presented as bot, unsafe/negative cursor. Reject current removal,
       outsider, self, stale assignee and waiting/paused/completed/stopped routes as
       ineligible when otherwise well shaped. Accept parent=root and parent=bot.
       Prove inputs unchanged; no mocks that merely refuse everything.
-- [ ] **Verify and report.** Run owning domain RED→GREEN and strict test typing;
+- [x] **Verify and report.** Run owning domain RED→GREEN and strict test typing;
       root pnpm check/build/format:check once on final source through private runner,
       source<=300. Update implemented/planned docs and commit exact owned paths.
       Obtain independent task review before19.2 detail. No native/live/key requests
       or repeated C matrices: this does not yet execute or persist autonomous tasks.
+
+D19.1 accepted atba6ec5c after independent spec/quality review0Critical/
+0Important/0Minor. Actual behavioral RED→GREEN,35domain files278passes;
+frozen root3707source+165process (44/36configuredskips), build/format0.
+Only pure addressing projections/decision and status docs are implemented.
+Parent D, persistence/authority/engine/hosts and native/live remain incomplete.
 
 ### Task 19.2: Durable team work through the common engine and server
 

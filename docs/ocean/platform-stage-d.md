@@ -42,3 +42,8 @@ Autonomous task persistence, scheduling/execution, engine integration, hosts,
 client/UI capabilities and delivery receipt validation remain planned. Current C
 permissions and external service behavior are unchanged. This leaf does not
 qualify native behavior or live model/service execution.
+
+19.1 принят на `ba6ec5c` после независимого ревью без замечаний. Поведенческие
+RED→GREEN и278 доменных тестов прошли; полные `pnpm check` (3707 source /
+165 process), `pnpm build`, `pnpm format:check` завершились с кодом0.
+Это контракт адресации; сохранение, пробуждение и исполнение задач ещё запланированы.
