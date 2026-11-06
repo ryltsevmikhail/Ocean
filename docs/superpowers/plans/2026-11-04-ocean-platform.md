@@ -943,16 +943,136 @@ proof Minors (readiness-timeout child cleanup; whole journal/counters after exit
 remain F. Current shared client/TUI contract supports service-call; Desktop
 view/IPC and owner-settings typed client are next18.5.3, not GUI-qualified here.
 
-#### Task 18.5.3: Thin client settings and conservative legacy migration
+#### Task 18.5.3: Thin clients and conservative legacy migration
 
-Pending detailed expansion after18.5.2. Desktop and shared client consume the
-capability/receipts and existing decision views; secrets clear immediately and
-never return. Import only already-available HTTP/pinned stdio configurations.
-Explicit migration preserves old history, narrow tool/resource scope and unknown
-claims; no all-future/team/autonomous widening. If old enforcement/account facts
-cannot be established, show inert configuration and an exact reason requiring
-new owner setup. Qualify on disposable copied profiles; never real profiles or
-protected2. Native GUI settings tests are affected-case checks, not the F release.
+Two reviewable deliverables:18.5.3.1 shared typed owner client plus the read
+projections needed after reconnect;18.5.3.2 Desktop settings/decisions and
+conservative legacy configuration import. Neither creates another authority,
+secret manager, client database or execution engine. Current prepared creation
+may have no connection row, while receipt(requestId) requires the lost client's
+UUID; expose recoverable keyless intent from the existing runtime-owned receipts.
+Actual session readiness is read from the existing MCP port, not inferred from
+an active durable connection or catalog pointer. Expand UI details after the
+shared contract is accepted. Project/coding GUI remains G; TUI UX remains H.
+
+##### Task 18.5.3.1: Shared owner client and recoverable settings projections
+
+**Files:** contracts `local-services.ts`/`local-service-views.ts` and exports;
+pure domain `service-owner-operations.ts` and exports; application
+`service-owner-{settings,receipt,views}.ts` and owning tests; SQLite
+`service-owner-receipts.ts`/`service-authority-storage.ts`/public ports and tests;
+CLI existing runtime-services and owner service dispatch/read capability;
+tools-node `local-service-client.ts`, current LocalRuntimeClient and tests;
+CLI read-only client example/docs. Reuse existing rows, immediate transaction,
+metadata helpers, frame bounds and validatedParams. No new table/schema version,
+provider/credential mutation behavior, model/tool permissions or SDK changes.
+
+**Interfaces:** add methods to the existing shared LocalRuntimeClient:
+`serviceConnections()`, `serviceGrants()`, `serviceReceipt({requestId})`,
+`setServiceConnection(request)`, `disconnectServiceConnection(request)`,
+`refreshServiceConnection(request)`, `setOwnerScopeGrant(request)`,
+`revokeOwnerScopeGrant(request)` and `listServiceOwnerOperations(query)`.
+The first eight consume accepted methods/DTOs; advertise service.authority-v2
+in the existing hello. Add one read method `service.owner-operations` with
+exact query `{after?,limit?,state?}`: after is an opaque request ID, default
+limit50/range1..100, state absent/prepared/completed. Return `{items,next}`,
+ordered by requestId, owner-filtered in SQL before limit; next is the last
+returned ID only when more may exist. Reuse400000 canonical-character page
+budget and existing2MiB frame. This is settings intent/history, not business
+ToolEffect history or an endpoint to execute/retry anything.
+
+Public output DTOs/validators belong to contracts and reuse domain record guards;
+application must not import contracts. A connection view is the existing
+ServiceConnection plus tools names and readiness:
+`ready|disconnected|metadata_required|unavailable|unknown`. Add an optional
+trusted read-only `ready(connection,catalog):boolean` to owner settings options;
+normal composition supplies existing transport.ready with current lifecycle
+restriction. No discovery/claim or permission follows from this view. Older
+v2 responses lacking readiness normalize to unknown, never ready. Existing
+receipt replies retain their current shape and original keyless result snapshot.
+
+Operation items carry requestId/method/state/recovery, targetId|null and
+operation|null. The optional persisted operation is one of
+`{method:'service.connection-set',input:Omit<ServiceConnectionSetRequest,'key'>,
+requiresKey:boolean}` or
+`{method:'service.connection-refresh',input:ServiceConnectionRequest,
+requiresKey:false}`. Capture it before the external/private effect in the
+existing prepared receipt JSON; exclude key even when supplied, preserve the
+original requestId/expected versions and exact keyless intent. Historical rows
+without it remain valid and explicitly unknown; never fabricate their input.
+Completed grant/disconnect target IDs may come from their validated result;
+legacy prepared rows without parameters have null target. No raw secret/reference
+from prepared private storage enters the operation view. Existing receipt bound
+131072 bytes and binding semantics remain. No input from this read view is itself
+execution authority.
+
+- [ ] **RED consumer contract.** Use current actual authenticated runtime and a
+      second shared client to demonstrate missing typed operations/read discovery.
+      A prepared new connection has no live connection row. Close/reopen the client
+      and owner; the second client must find its original UUID/target/keyless intent
+      without the first GUI's memory. Require0 automatic private writes/discovery/
+      business/model calls from reads. Test completed snapshots separately from
+      current state, unchanged request replay and changed-payload refusal.
+- [ ] **Implement bounded runtime projections.** Persist validated optional keyless
+      operation metadata in existing receipts and add owner-only read dispatch/capability/
+      maintenance-read allowance. Add bounded owner-filtered receipt iteration through
+      current ServiceAuthorityTransaction; no unknown effect is replayed. Also resolve
+      C5.1M1 in this touched read path: optional bounded owner metadata queries for
+      connections/grants apply SQL limit/owner filter before row expansion, and the
+      owner view stops before further catalog reads after its output bound. Existing
+      no-argument core grant/connection enumeration semantics stay unchanged. Test
+      actual SQL bounds and no discarded-row catalog expansion, not just array size.
+- [ ] **Implement one validated client.** All input/output validation and request,
+      target, method/profile correlation use public contracts; do not import application
+      or duplicate authority policy. Preserve original historical receipt on replay,
+      refuse malformed/foreign frames, and never turn absent/prepared into completed.
+      Verify capability before new calls; absent service.owner-operations support
+      gives explicit service_operations_upgrade_required. Existing decisions.service-v1
+      and old client/ACP behavior stay compatible. No secret bytes in logs/cache/DTOs.
+- [ ] **GREEN recovery and readiness.** Actual SQLite/private-store publication
+      failure creates a discoverable prepared intent; owner restart never resubmits
+      it. Second client reads same original intent/receipt, then a new explicit request
+      with material/current versions may recover; the old prepared fact is not rewritten
+      as completed. Cover metadata refresh intent, old rows lacking metadata, paged
+      owner/state filtering and stable non-skipping cursor, current session retirement
+      versus stale durable active state, and secret-field rejection in public intent.
+      Readiness itself grants nothing; actual C3 still decides execution.
+- [ ] **Verify and commit.** Add a small read-only independent-client example using
+      the public existing client entry, with reproducible start/connect/read commands.
+      Run owning RED→GREEN, strict/scoped and one final root check/build/format;
+      protectedcatalog3/format2 remain until18.6, no skips/exclusions. Run affected
+      process controls if root stops first. Source<=300. No GUI/native/live/package
+      matrix here. Report exact API/views/compatibility/recovery bounds, files,
+      commands/exits/pins and protected state, commit owned source/report and obtain
+      fresh independent review before expanding18.5.3.2. Installed TS/package debt F.
+
+##### Task 18.5.3.2: Desktop settings, service decisions and legacy configuration import
+
+Pending detailed expansion from accepted18.5.3.1. Thin Desktop IPC/state/components
+consume that client and the existing verified full decision preview, with key
+clearing before await, explicit original receipt reads and new-request recovery,
+context guards across room/bot/profile/window changes. Do not automatically replay
+prepared or unknown work. Backend owns all authority; current UI must show recorded
+permission/actual readiness/unknown outcome as distinct facts. Existing legacy
+plugin UI can remain a clearly separate historical fallback; no external design
+checkout changes or UI redesign.
+
+Legacy data has no durable material continuity proof. Import only known declarative
+HTTP/pinned Node stdio configuration, with no key/metadata permission or grant
+silently inherited. Preserve old tool/repository/visibility bounds and unknown
+history read-only. Qualify which evidence, if any, permits active conversion;
+otherwise show inert/unverified configuration and explicit new owner setup.
+Never call copied rows a migrated active grant. No all-future/team/autonomous
+widening or automatic npm/git/OAuth install. A new explicit broader scope is a
+new grant, not migration. Include corrupt shared-store-specific provider/model
+hints (C1 compatibility), not destructive reset advice.
+
+Qualify actual isolated Desktop entry with synthetic provider/MCP, two owner clients,
+settings lost reply/reopen/prepared intent, same exact service card/one effect,
+close/reconnect, accurate legacy import and1024 composer/focus reachability. Use
+owned profiles/retained qualified inputs; no real credential/model/service access,
+released install changes or unchanged whole native/asset matrix. Current installed/
+live replacement and Executor/protected semantic port remain18.6/F.
 
 ## Task 19: D. Автономные задачи и общение ботов — приоритет 1
 
