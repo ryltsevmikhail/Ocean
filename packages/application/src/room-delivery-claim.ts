@@ -245,7 +245,7 @@ export function inspectUnstartedRoomClaim(
         ['accepted', 'dispatching', 'prepared', 'uncertain'].includes(t.status),
     );
   if (siblings.length !== 1 || siblings[0]?.id !== turn.id) return null;
-  const facts = inputEvidence(tx, input, task, root);
+  const facts = inputEvidence(tx, input, task, root, false, publication);
   if (!facts) return null;
   const evidence = rt.unstartedEvidence(createChatCommand(turn, facts.parent)),
     effects = tx.chatFailureEvidence?.(turn.taskRunId);

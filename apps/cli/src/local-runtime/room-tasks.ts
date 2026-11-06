@@ -110,8 +110,13 @@ export class RuntimeRoomTasks {
               )
               .map((turn) => turn.id),
           );
-          for (const id of accepted)
-            await releaseUnstartedRoomClaim({ ...this.#deps, tasks: this.#execution.tasks }, id);
+          for (const id of accepted) {
+            if (
+              await releaseUnstartedRoomClaim({ ...this.#deps, tasks: this.#execution.tasks }, id)
+            )
+              for (const [runId, job] of this.#jobs)
+                if (job.held && job.turnId === id) this.#jobs.delete(runId);
+          }
           return { result };
         });
       }

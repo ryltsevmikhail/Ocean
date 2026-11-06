@@ -44,7 +44,7 @@ export class GitCodingSnapshots implements ChangesetPort {
   ): Promise<Changeset> {
     assertCodingInspection(guard);
     const worktrees = new GitCodingWorktrees(dirname(binding.root));
-    await worktrees.verify(task, binding);
+    await worktrees.verify(task, binding, guard);
     assertCodingInspection(guard);
     const base = await codingBaseFiles(binding.root, task.baseCommit, guard);
     assertCodingInspection(guard);
@@ -54,7 +54,8 @@ export class GitCodingSnapshots implements ChangesetPort {
     await this.#betweenScans?.();
     assertCodingInspection(guard);
     const confirm = await codingWorkingTree(binding.root, base, guard);
-    await worktrees.verify(task, binding);
+    assertCodingInspection(guard);
+    await worktrees.verify(task, binding, guard);
     if (codingManifest(confirm) !== afterTreeHash) throw new CodingArtifactError('stale_capture');
     const paths = [...new Set([...base.keys(), ...after.keys()])].sort(),
       files: CodingFileChange[] = [];

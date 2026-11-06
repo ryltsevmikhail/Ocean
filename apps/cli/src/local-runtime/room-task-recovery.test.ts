@@ -89,3 +89,120 @@ it('holds a persistent pre-dispatch refusal without starving a second root or ow
     f.close();
   }
 });
+
+it('retires a proved stopped held job before clean host drainage, without any model stream', async () => {
+  const { ChatPreparationRefusal } = await import('@runnets/application');
+  const { assertRuntimeDrained } = await import('./drain-supervision.js');
+  const f = roomSlices([]),
+    start = f.start();
+  let attempts = 0;
+  const supervisor = new RuntimeRoomTasks(
+    f.service,
+    f.deps,
+    {
+      ...f.deps,
+      grantedTools: {
+        async forTurn() {
+          attempts++;
+          throw new ChatPreparationRefusal('pre-dispatch hold');
+        },
+      },
+    },
+    f.store.openRoomReads(Date.now),
+    'stop-held',
+    1,
+  );
+  try {
+    supervisor.start();
+    for (let i = 0; attempts < 1 && i < 100; i++) await delay(5);
+    expect(attempts).toBe(1);
+    const turn = f.turns()[0]!;
+    const stop = {
+      workspaceId: f.input.workspaceId,
+      roomId: 'room',
+      rootId: start.rootId,
+      requestId: 'stop',
+      expectedRevision: 1,
+    };
+    expect(
+      await supervisor.dispatch('roomTasks.stop', stop, new AbortController().signal, {
+        roomTasks: true,
+        addressedHistory: true,
+        models: true,
+      }),
+    ).toMatchObject({ result: { status: 'stopped' } });
+    expect(f.turns()[0]?.status).toBe('cancelled');
+    expect(f.requests).toHaveLength(0);
+    await expect(assertRuntimeDrained([supervisor], 1000)).resolves.toBeUndefined();
+    expect(supervisor.controllerFor(turn.taskRunId)).toBeUndefined();
+  } finally {
+    await supervisor.drain();
+    f.close();
+  }
+});
+it.each(['own', 'unscoped'] as const)(
+  'keeps %s unknown effect evidence uncertain rather than releasing or retrying it',
+  async (scope) => {
+    const { ChatPreparationRefusal } = await import('@runnets/application');
+    const { assertRuntimeDrained } = await import('./drain-supervision.js');
+    const f = roomSlices([]),
+      start = f.start();
+    let attempts = 0;
+    const supervisor = new RuntimeRoomTasks(
+      f.service,
+      f.deps,
+      {
+        ...f.deps,
+        grantedTools: {
+          async forTurn(turn: ChatTurn) {
+            attempts++;
+            if (scope === 'unscoped')
+              f.db!.exec("INSERT INTO tool_invocations_v1 VALUES('unknown','legacy','uncertain')");
+            else
+              f.db!.prepare('INSERT INTO tool_invocations_v2 VALUES(?,?,?,?,?,?,NULL)').run(
+                'unknown',
+                'legacy',
+                turn.taskRunId,
+                'unknown',
+                'unknown',
+                'uncertain',
+              );
+            throw new ChatPreparationRefusal('unknown effect remains');
+          },
+        },
+      },
+      f.store.openRoomReads(Date.now),
+      'unknown',
+      1,
+    );
+    try {
+      supervisor.start();
+      for (let i = 0; attempts < 1 && i < 100; i++) await delay(5);
+      await delay(10);
+      expect(attempts).toBe(1);
+      expect(f.requests).toHaveLength(0);
+      const journal = f.store.tools.inspectPending!();
+      expect(journal).toHaveLength(1);
+      expect(
+        await supervisor.dispatch(
+          'roomTasks.stop',
+          {
+            workspaceId: f.input.workspaceId,
+            roomId: 'room',
+            rootId: start.rootId,
+            requestId: 'stop',
+            expectedRevision: 1,
+          },
+          new AbortController().signal,
+          { roomTasks: true, addressedHistory: true, models: true },
+        ),
+      ).toMatchObject({ result: { status: 'stopped' } });
+      expect(f.turns()[0]?.status).toBe('accepted');
+      expect(f.store.tools.inspectPending!()).toEqual(journal);
+      await expect(assertRuntimeDrained([supervisor], 1000)).rejects.toThrow('stop_incomplete');
+    } finally {
+      await supervisor.drain();
+      f.close();
+    }
+  },
+);

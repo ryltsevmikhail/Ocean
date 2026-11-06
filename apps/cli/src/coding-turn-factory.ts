@@ -64,7 +64,9 @@ export function codingTurnFactory(deps: CodingTurnFactoryDeps) {
           : undefined) ?? deps.tasks.authorize(access);
       if (!admission.ok) {
         if (admission.error.code === 'recovery_required')
-          throw new ToolError('coding_denied', 'coding recovery required');
+          throw marked
+            ? new CodingTurnRefusal('coding recovery required')
+            : new ToolError('coding_denied', 'coding recovery required');
         throw new CodingTurnRefusal('task read admission refused');
       }
       const resolved = deps.store.atomic((tx) => ({

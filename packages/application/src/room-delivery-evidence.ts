@@ -22,6 +22,8 @@ export function inputEvidence(
   task: RoomTaskBot,
   root: RoomTaskRoot,
   historical = false,
+  // Historical issuer evidence only, never execution authority; input/wait joins stay current.
+  historicalOrigin = historical,
 ): { message: ConversationMessage; parent: TaskRunId | null } | null {
   const rt = tx.roomTasks!,
     receipt = tx.receipt(d.requestKey);
@@ -160,7 +162,7 @@ export function inputEvidence(
       source.id,
       source.taskRunId,
       d.sourceAttemptId,
-      historical ? 'historical' : 'settled',
+      historicalOrigin ? 'historical' : 'settled',
     );
     const effects = tx.chatFailureEvidence?.(source.taskRunId);
     if (

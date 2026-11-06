@@ -1,3 +1,4 @@
+import type { ToolDispatchGuard } from '@runnets/application';
 import { expect, it, vi } from 'vitest';
 import { GitCodingWorktrees } from '@runnets/tools-node';
 import { setup, settledRead, script } from '../test-fixtures/room-coding.js';
@@ -40,13 +41,18 @@ it('forwards the actual marked invocation guard through session/capture and refu
   scans.writes = 0;
   scans.preparationReads = 0;
   const f = setup();
-  let verified = 0;
+  let verified = 0,
+    capturedGuard: ToolDispatchGuard | undefined;
   const lease = f.store.coding.atomic((tx) => tx.worktree(f.b.id)!.lease);
-  vi.spyOn(GitCodingWorktrees.prototype, 'verify').mockImplementation(async () => {
-    await Promise.resolve();
-    verified++;
-    f.live.delete(lease.token);
-  });
+  vi.spyOn(GitCodingWorktrees.prototype, 'verify').mockImplementation(
+    async (_task, _binding, guard) => {
+      capturedGuard = guard;
+      expect(guard?.inspect?.()).toBe(true);
+      await Promise.resolve();
+      verified++;
+      f.live.delete(lease.token);
+    },
+  );
   try {
     const r = await settledRead(f);
     expect(f.deps.leases.owns(lease)).toBe(true);
@@ -61,6 +67,7 @@ it('forwards the actual marked invocation guard through session/capture and refu
     );
     expect(verified).toBeGreaterThanOrEqual(1);
     expect(f.deps.leases.owns(lease)).toBe(false);
+    expect(capturedGuard?.inspect?.()).toBe(false);
     expect(result).toMatchObject({ isError: true });
     expect(scans).toEqual({ base: 0, tree: 0, writes: 0, preparationReads: 1 });
     expect(verified).toBe(1);

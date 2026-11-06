@@ -8,9 +8,9 @@ import {
   type WorktreePlan,
   type WorktreeBinding,
 } from '@runnets/domain';
-import type { WorktreePort } from '@runnets/application';
+import type { ToolDispatchGuard, WorktreePort } from '@runnets/application';
 import { GitCodingProject } from './coding-project.js';
-import { codingGit } from './coding-git.js';
+import { assertCodingInspection, codingGit } from './coding-git.js';
 import { codingTree, FILE_BYTES, TREE_BYTES } from './coding-tree.js';
 import { blockedName } from './backend.js';
 /** Creates metadata without Git checkout, then materializes raw blobs without hooks/filters. */
@@ -22,11 +22,17 @@ export class GitCodingWorktrees implements WorktreePort {
   get #directory(): string {
     return this.#configured ?? join(homedir(), '.local/state/ocean-worktrees');
   }
-  async plan(task: CodingTask): Promise<WorktreePlan> {
+  async plan(task: CodingTask, guard?: ToolDispatchGuard): Promise<WorktreePlan> {
     const id = createHash('sha256')
       .update(JSON.stringify([task.lease.ownerId, task.projectRoot, task.id]))
       .digest('hex');
-    const common = await codingGit(task.projectRoot, ['rev-parse', '--git-common-dir']);
+    const common = await codingGit(
+      task.projectRoot,
+      ['rev-parse', '--git-common-dir'],
+      undefined,
+      guard,
+    );
+    assertCodingInspection(guard);
     return {
       root: join(this.#directory, id),
       branch: 'codex/ocean/' + id,
@@ -119,12 +125,22 @@ export class GitCodingWorktrees implements WorktreePort {
     await this.verify(task, binding);
     return binding;
   }
-  async verify(task: CodingTask, binding: WorktreeBinding): Promise<void> {
+  async verify(
+    task: CodingTask,
+    binding: WorktreeBinding,
+    guard?: ToolDispatchGuard,
+  ): Promise<void> {
+    assertCodingInspection(guard);
     if (
       task.id !== binding.taskId ||
       task.projectRoot !== binding.projectRoot ||
-      task.baseCommit !== binding.baseCommit ||
-      JSON.stringify(await this.plan(task)) !==
+      task.baseCommit !== binding.baseCommit
+    )
+      throw new CodingArtifactError('worktree_unavailable');
+    const plan = await this.plan(task, guard);
+    assertCodingInspection(guard);
+    if (
+      JSON.stringify(plan) !==
         JSON.stringify({
           root: binding.root,
           branch: binding.branch,
@@ -133,13 +149,20 @@ export class GitCodingWorktrees implements WorktreePort {
       (await realpath(binding.root)) !== binding.root
     )
       throw new CodingArtifactError('worktree_unavailable');
-    const head = (await codingGit(binding.root, ['rev-parse', 'HEAD'])).toString().trim();
-    const branch = (await codingGit(binding.root, ['symbolic-ref', '--quiet', 'HEAD']))
+    const head = (await codingGit(binding.root, ['rev-parse', 'HEAD'], undefined, guard))
       .toString()
       .trim();
-    const common = (await codingGit(binding.root, ['rev-parse', '--git-common-dir']))
+    const branch = (
+      await codingGit(binding.root, ['symbolic-ref', '--quiet', 'HEAD'], undefined, guard)
+    )
       .toString()
       .trim();
+    const common = (
+      await codingGit(binding.root, ['rev-parse', '--git-common-dir'], undefined, guard)
+    )
+      .toString()
+      .trim();
+    assertCodingInspection(guard);
     if (
       head !== task.baseCommit ||
       branch !== 'refs/heads/' + binding.branch ||
