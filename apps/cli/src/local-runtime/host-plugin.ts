@@ -6,7 +6,7 @@
  * the plugin connection store is bound after the runtime opens it.
  */
 
-import { hostPluginTransport } from '../plugin-transport.js';
+import { DisabledPluginTransport } from '../plugin-runtime.js';
 import type { PluginConnectionStorePort, ServicePluginTransportPort } from '@runnets/application';
 import type { LocalRuntimeHostOptions } from './host-options.js';
 
@@ -23,21 +23,13 @@ export async function hostPluginSettings(
     'pluginTransport' | 'pluginEnv' | 'pluginEndpointOverride'
   >,
 ): Promise<HostPluginSettings> {
+  await Promise.resolve();
   const env = options.pluginEnv ?? process.env;
-  let connections: PluginConnectionStorePort | undefined;
-  const transport = await hostPluginTransport({
-    transport: options.pluginTransport,
-    env,
-    connections: () => connections,
-    ...(options.pluginEndpointOverride === undefined
-      ? {}
-      : { endpointOverride: options.pluginEndpointOverride }),
-  });
+
+  const transport = options.pluginTransport ?? new DisabledPluginTransport();
   return {
     transport,
     env,
-    connections(store) {
-      connections = store;
-    },
+    connections() {},
   };
 }

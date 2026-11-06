@@ -12,6 +12,7 @@ export function openOceanProfile(
   initialize = false,
   options: Pick<
     RuntimeOptions,
+    | 'serviceTransportOptions'
     | 'codingTools'
     | 'requireUnpublished'
     | 'imageResolver'

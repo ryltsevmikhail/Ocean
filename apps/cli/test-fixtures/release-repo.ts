@@ -53,7 +53,7 @@ export function releaseRepo(base: string, target: ReleaseRepoTarget = {}): strin
   const adapter = target.adapter ?? 'real';
   for (const name of readdirSync(join(workspace, 'packages'))) {
     const destination = join(repo, 'packages', name);
-    if (name !== 'integrations-executor' || adapter === 'real') {
+    if (name !== 'integrations-mcp' || adapter === 'real') {
       symlinkSync(join(workspace, 'packages', name), destination);
       continue;
     }
@@ -67,18 +67,16 @@ export function releaseRepo(base: string, target: ReleaseRepoTarget = {}): strin
     writeFileSync(
       join(destination, 'dist/index.js'),
       [
-        "import '@executor-js/sdk/core';",
-        "import '@executor-js/plugin-openapi/core';",
-        "import '@executor-js/plugin-mcp/core';",
-        "import 'effect';",
+        "export * from '@modelcontextprotocol/client';",
+        "export * from '@modelcontextprotocol/client/stdio';",
         'export const fixtureAdapter = true;',
         '',
       ].join('\n'),
     );
     mkdirSync(join(destination, 'THIRD_PARTY_LICENSES'));
     copyFileSync(
-      join(source, 'THIRD_PARTY_LICENSES/executor-MIT.txt'),
-      join(destination, 'THIRD_PARTY_LICENSES/executor-MIT.txt'),
+      join(source, 'THIRD_PARTY_LICENSES/modelcontextprotocol-client-LICENSE'),
+      join(destination, 'THIRD_PARTY_LICENSES/modelcontextprotocol-client-LICENSE'),
     );
     // Real pinned identities (patch, SDK chunk, versions) resolve through this link.
     symlinkSync(join(source, 'node_modules'), join(destination, 'node_modules'));

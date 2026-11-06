@@ -3,6 +3,19 @@ import { InvocationSend } from './send.js';
 
 /** No transport gets authority from an SDK connection or an AsyncLocalStorage token. */
 export class SessionWriter {
+  private readonly pending = new Set<Promise<unknown>>();
+  track<T>(work: () => Promise<T>): Promise<T> {
+    const promise = work();
+    this.pending.add(promise);
+    void promise.then(
+      () => this.pending.delete(promise),
+      () => this.pending.delete(promise),
+    );
+    return promise;
+  }
+  async afterWork(): Promise<void> {
+    while (this.pending.size) await Promise.allSettled([...this.pending]);
+  }
   discovering = true;
   usable = true;
   transmitted = false;

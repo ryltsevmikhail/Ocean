@@ -13,14 +13,13 @@ import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 
 import { createArchive } from './archive.js';
-import { PINNED_SDK_CHUNK_SHA256, PINNED_PATCH_SHA256 } from './bundle.js';
+
 import { archiveFiles, installArchive, sha256 } from './installer.js';
 import { packageRelease } from './package.js';
 import {
   addReleaseRepoPackage,
   commitReleaseRepo,
   releaseRepo,
-  tamperReleaseRepoPatch,
   workspace,
 } from '../../test-fixtures/release-repo.js';
 
@@ -33,7 +32,7 @@ function temporary(label: string): string {
   roots.push(root);
   return root;
 }
-const ADAPTER = 'node_modules/@runnets/integrations-executor/';
+const ADAPTER = 'node_modules/@runnets/integrations-mcp/';
 
 it('ships the pinned adapter bundle with a verified manifest inventory', async () => {
   const root = temporary('package-bundle');
@@ -41,7 +40,7 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   const release = await packageRelease(repo, '1.1.0-rc.2', join(root, 'artifact'));
   const files = archiveFiles(readFileSync(release.archive));
   const names = [...files.keys()];
-  expect(names.filter((name) => name.includes('integrations-mcp'))).toEqual([]);
+  expect(names.filter((name) => name.includes('integrations-executor'))).toEqual([]);
   expect(names.filter((name) => name.endsWith('.map'))).toEqual([]);
   expect(names.filter((name) => name.includes('/node_modules/'))).toEqual([]);
   expect(names.filter((name) => name.includes('node_modules/.pnpm'))).toEqual([]);
@@ -63,7 +62,7 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   expect(names).toContain(ADAPTER + 'dist/bundle-integrity.json');
   expect(names).toContain(ADAPTER + 'package.json');
   expect(names).toContain(ADAPTER + 'LICENSE');
-  expect(names).toContain(ADAPTER + 'THIRD_PARTY_LICENSES/executor-MIT.txt');
+  expect(names).toContain(ADAPTER + 'THIRD_PARTY_LICENSES/modelcontextprotocol-client-LICENSE');
   // Only bundled .js chunks ship: the packaged manifest must not advertise d.ts
   // declaration files that the archive does not contain (RC2 final review M8).
   const adapterManifest = JSON.parse(
@@ -78,7 +77,7 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   expect(adapterManifest.exports['.'].import).toBe('./dist/index.js');
   expect(adapterManifest.dependencies).toBeUndefined();
   const chunks = names.filter((name) => name.startsWith(ADAPTER + 'dist/'));
-  expect(chunks.length).toBeGreaterThan(10);
+  expect(chunks.length).toBeGreaterThan(1);
   const manifestBytes = files.get('manifest.json')?.body;
   expect(manifestBytes).toBeDefined();
   const manifest = JSON.parse(manifestBytes?.toString() ?? '') as {
@@ -93,15 +92,9 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
     };
   };
   expect(manifest.version).toBe('1.1.0-rc.2');
-  expect(manifest.bundle.adapter).toBe('@runnets/integrations-executor');
-  expect(manifest.bundle.identities['@executor-js/sdk']).toBe('1.6.11');
-  expect(manifest.bundle.identities['@effect/platform-node-shared']).toBe('4.0.0-beta.59');
-  expect(manifest.bundle.identities['@executor-js/sdk#dist/chunk-Q3W5ARXY.js']).toBe(
-    'sha256:' + PINNED_SDK_CHUNK_SHA256,
-  );
-  expect(manifest.bundle.identities['patch#patches/@executor-js__sdk@1.6.11.patch']).toBe(
-    'sha256:' + PINNED_PATCH_SHA256,
-  );
+  expect(manifest.bundle.adapter).toBe('@runnets/integrations-mcp');
+  expect(manifest.bundle.identities['@modelcontextprotocol/client']).toBe('2.4.0');
+  expect(manifest.bundle.identities['@modelcontextprotocol/core']).toBe('2.4.0');
   const integrity = files.get(ADAPTER + manifest.bundle.integrity)?.body;
   expect(integrity).toBeDefined();
   expect(sha256(integrity ?? Buffer.alloc(0))).toBe(manifest.bundle.integritySha256);
@@ -111,8 +104,6 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
     pinnedPatchSha256: string;
     bundler: { name: string; version: string };
   };
-  expect(record.pinnedSdkChunkSha256).toBe(PINNED_SDK_CHUNK_SHA256);
-  expect(record.pinnedPatchSha256).toBe(PINNED_PATCH_SHA256);
   expect(record.bundler).toEqual({ name: 'rolldown', version: '1.2.16' });
   // The manifest bundle inventory is exactly the integrity inventory plus itself.
   const shipped = Object.keys(manifest.bundle.files).sort();
@@ -172,11 +163,17 @@ it('still refuses every other unpackaged runtime dependency, producing no archiv
 it('refuses to bundle when a pinned identity is deliberately drifted', async () => {
   const root = temporary('package-identity');
   const repo = releaseRepo(join(root, 'repo'));
-  tamperReleaseRepoPatch(repo);
+  writeFileSync(
+    join(repo, 'pnpm-lock.yaml'),
+    readFileSync(join(repo, 'pnpm-lock.yaml'), 'utf8').replaceAll(
+      "'@modelcontextprotocol/client':",
+      "'@modelcontextprotocol/drifted':",
+    ),
+  );
   commitReleaseRepo(repo, 'drift the pinned patch');
   const out = join(root, 'artifact');
   await expect(packageRelease(repo, '1.1.0-rc.2', out)).rejects.toThrow(
-    'pinned patch identity mismatch',
+    'lockfile MCP identity mismatch',
   );
   expect(existsSync(out)).toBe(false);
 });

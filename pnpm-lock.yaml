@@ -212,9 +212,9 @@ importers:
       '@runnets/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@runnets/integrations-executor':
+      '@runnets/integrations-mcp':
         specifier: workspace:*
-        version: link:../../packages/integrations-executor
+        version: link:../../packages/integrations-mcp
       '@runnets/provider-anthropic':
         specifier: workspace:*
         version: link:../../packages/provider-anthropic
@@ -239,6 +239,10 @@ importers:
       '@runnets/tools-node':
         specifier: workspace:*
         version: link:../../packages/tools-node
+    devDependencies:
+      '@runnets/integrations-executor':
+        specifier: workspace:*
+        version: link:../../packages/integrations-executor
 
   apps/desktop:
     dependencies:

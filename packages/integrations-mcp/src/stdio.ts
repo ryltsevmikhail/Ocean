@@ -12,16 +12,14 @@ export async function serviceStdio(
 ): Promise<{ transport: StdioClientTransport; cleanup(): Promise<McpCleanupEvidence> }> {
   const cfg = c.configuration;
   // The qualified offline profile has no credential channel.
-  if (
-    cfg.kind !== 'stdio' ||
-    secret ||
-    !options.stdio ||
-    !Object.hasOwn(options.stdio.workspaces, c.id)
-  )
-    throw Error('stdio not enrolled');
+  if (cfg.kind !== 'stdio' || secret || !options.stdio) throw Error('stdio not enrolled');
+  const injected = options.stdio.workspaces?.[c.id];
+  const workspace = cfg.workspaceRoot ?? injected;
+  if (!workspace || (cfg.workspaceRoot && injected && cfg.workspaceRoot !== injected))
+    throw Error('stdio enrollment conflict');
   const handle = await prepareManagedStdio({
     profileRoot: options.stdio.profileRoot,
-    workspace: options.stdio.workspaces[c.id]!,
+    workspace,
     connectionId: c.id,
     artifact: cfg.executable,
     sha256: cfg.sha256,
@@ -50,10 +48,12 @@ export async function serviceStdio(
       await handle.observe();
     }
     override async send(message: Parameters<StdioClientTransport['send']>[0]) {
-      const method = 'method' in message ? message.method : 'response';
-      const send = await writer.prepare(method);
-      writer.admit(method, send);
-      return super.send(message);
+      return writer.track(async () => {
+        const method = 'method' in message ? message.method : 'response';
+        const send = await writer.prepare(method);
+        writer.admit(method, send);
+        return super.send(message);
+      });
     }
   }
   const transport = new Managed(handle.parameters);

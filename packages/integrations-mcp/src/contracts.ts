@@ -17,7 +17,7 @@ export interface McpServiceTransportOptions {
   readonly githubIssueReadOnly?: boolean;
   readonly stdio?: {
     readonly profileRoot: string;
-    readonly workspaces: Readonly<Record<string, string>>;
+    readonly workspaces?: Readonly<Record<string, string>>;
   };
   /** Optional trusted preparation; authorization always follows it at the writer. */
   prepareDispatch?(invocationId: string): void | Promise<void>;
@@ -25,6 +25,7 @@ export interface McpServiceTransportOptions {
   refreshNeeded?(connectionId: string): void;
 }
 export interface McpServiceTransport extends ServiceCallTransportPort {
+  ready(connection: ServiceConnection, catalog: ServiceCatalogSnapshot): boolean;
   discover(
     connection: ServiceConnection,
     options: McpDiscoveryOptions,

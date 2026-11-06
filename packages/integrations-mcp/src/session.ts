@@ -225,6 +225,7 @@ export class Session {
       } catch {
         closed = false;
       }
+      await this.writer.afterWork();
       const evidence = this.stdio
         ? await this.stdio.cleanup()
         : ({

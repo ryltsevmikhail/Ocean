@@ -159,7 +159,7 @@ it('upgrades and rolls back between disposable versions without touching profile
   const before = sha256(readFileSync(database));
   const installed = join(target.prefix, 'lib/ocean/releases/1.1.0-rc.2');
   expect(
-    readdirSync(join(installed, 'node_modules/@runnets/integrations-executor/dist')).some(
+    readdirSync(join(installed, 'node_modules/@runnets/integrations-mcp/dist')).some(
       (name) => name === 'bundle-integrity.json',
     ),
   ).toBe(true);
@@ -197,43 +197,22 @@ it('upgrades and rolls back between disposable versions without touching profile
 
 const bundleProbe = `
 const m = await import(process.argv[1]);
-const base = { tenantId: 'probe-tenant', subjectId: 'probe-subject', allowedOrigins: ['http://127.0.0.1:1'] };
-const refused = await m.ExecutorServicePluginTransport.open(base).then(() => 'opened').catch((e) => e.reason);
-const transport = await m.ExecutorServicePluginTransport.open({ ...base, enableExecution: true });
-const status = transport.qualification();
-await transport.close();
-console.log(JSON.stringify({ exports: Object.keys(m).sort(), refused, status: { qualified: status.qualified, mode: status.integrityMode, chunks: status.bundleFileCount, digest: transport.status().installedChunkSha256 } }));
+const transport = m.createMcpServiceTransport({});
+console.log(JSON.stringify({ exports: Object.keys(m).sort(), cleanup: await transport.close() }));
 `;
-it('the installed tree loads and qualifies the bundled adapter without plugin execution', () => {
+it('the installed tree imports the single MCP adapter without node_modules or discovery', () => {
   const target = privateInstall(root, 'bundle');
   install(target, artifact);
   const entry = join(
     target.prefix,
-    'lib/ocean/current/node_modules/@runnets/integrations-executor/dist/index.js',
+    'lib/ocean/current/node_modules/@runnets/integrations-mcp/dist/index.js',
   );
   const output = execFileSync(process.execPath, ['--input-type=module', '-e', bundleProbe, entry], {
     encoding: 'utf8',
     env: { ...target.env },
   });
-  const proof = JSON.parse(output.trim()) as {
-    exports: string[];
-    refused: string;
-    status: { qualified: boolean; mode: string; chunks: number; digest: string };
-  };
-  expect(proof.exports).toEqual([
-    'ExecutorPluginSetup',
-    'ExecutorServicePluginTransport',
-    'ExecutorSetupError',
-    'ExecutorTransportOpenError',
-    'PINNED_IDENTITIES',
-  ]);
-  // No product path enables execution; catalog discovery/invoke are never called.
-  expect(proof.refused).toBe('execution_not_enabled');
-  expect(proof.status).toEqual({
-    qualified: true,
-    mode: 'bundle',
-    chunks: expect.any(Number) as unknown as number,
-    digest: '6d3d22c97454dde48daacce07d901b174a642a480efee0b8c73fe31aa6d3a0b9',
+  expect(JSON.parse(output.trim())).toEqual({
+    exports: ['createMcpServiceTransport'],
+    cleanup: { status: 'never_started' },
   });
-  expect(proof.status.chunks).toBeGreaterThan(10);
 });

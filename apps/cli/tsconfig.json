@@ -43,6 +43,9 @@
     },
     {
       "path": "../../packages/provider-local"
+    },
+    {
+      "path": "../../packages/integrations-mcp"
     }
   ]
 }

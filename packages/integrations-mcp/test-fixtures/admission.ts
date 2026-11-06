@@ -88,6 +88,7 @@ export function admission(
   });
   return {
     store,
+    service,
     authority,
     owner,
     metadata: (target: ServiceConnection) =>

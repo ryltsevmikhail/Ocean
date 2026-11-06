@@ -1,3 +1,4 @@
+import { combineChatTools } from './chat-turn-tools.js';
 /**
  * Shared single-turn execution.
  *
@@ -86,10 +87,11 @@ export async function executeChatTurn(
     const early = await cancelled();
     if (early) return early;
     preparationStarted = turn.codingTaskId !== undefined;
-    const tools =
+    const coding =
       turn.codingTaskId === undefined
-        ? ((await deps.grantedTools?.forTurn(turn, input.signal)) ?? undefined)
+        ? undefined
         : await deps.codingTools!.forTurn(turn, input.signal);
+    const tools = combineChatTools(coding, await deps.grantedTools?.forTurn(turn, input.signal));
     if (tools && tools.cleanupConfirmed !== true) throw Error('preparation cleanup unknown');
     preparationSettled = true;
     const afterPreparation = await cancelled();

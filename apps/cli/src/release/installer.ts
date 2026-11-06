@@ -119,28 +119,30 @@ function manifestOf(files: Map<string, { body: Buffer; mode: number }>): Release
   validateBundle(m, files);
   return m;
 }
-/**
- * Cross-check the optional bundled-adapter record against the shipped bytes.
- * Per-file archive integrity is the manifest map above; this keeps the published
- * bundle facts anchored to the same bytes the installed adapter re-verifies.
- */
 function validateBundle(
   m: ReleaseManifest,
   files: Map<string, { body: Buffer; mode: number }>,
 ): void {
   const b = m.bundle;
   if (b === undefined) return;
-  const base = 'node_modules/@runnets/integrations-executor/',
+  const modern = b.adapter === '@runnets/integrations-mcp';
+  const base =
+      'node_modules/' +
+      (modern ? '@runnets/integrations-mcp' : '@runnets/integrations-executor') +
+      '/',
     integrity = files.get(base + 'dist/bundle-integrity.json');
   if (
-    b.adapter !== '@runnets/integrations-executor' ||
+    (!modern && b.adapter !== '@runnets/integrations-executor') ||
     b.entry !== 'dist/index.js' ||
     b.integrity !== 'dist/bundle-integrity.json' ||
     !/^[a-f0-9]{64}$/.test(b.integritySha256) ||
     integrity === undefined ||
     sha256(integrity.body) !== b.integritySha256 ||
     typeof b.files[b.entry] !== 'string' ||
-    typeof b.identities['@executor-js/sdk'] !== 'string' ||
+    (modern
+      ? b.identities['@modelcontextprotocol/client'] !== '2.4.0' ||
+        b.identities['@modelcontextprotocol/core'] !== '2.4.0'
+      : typeof b.identities['@executor-js/sdk'] !== 'string') ||
     !files.has(base + 'package.json') ||
     !files.has(base + 'LICENSE')
   )

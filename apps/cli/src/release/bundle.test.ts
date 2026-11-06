@@ -28,7 +28,7 @@ import {
   PINNED_PATCH_SHA256,
   PINNED_SDK_CHUNK_SHA256,
   type AdapterBundle,
-} from './bundle.js';
+} from './legacy-bundle.js';
 import { workspace } from '../../test-fixtures/release-repo.js';
 
 let bundle: AdapterBundle;

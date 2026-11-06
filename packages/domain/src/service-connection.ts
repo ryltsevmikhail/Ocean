@@ -20,6 +20,8 @@ export type ServiceConfiguration =
   | {
       readonly kind: 'stdio';
       readonly executable: string;
+      /** Explicit isolated owner enrollment; absent legacy rows remain inert. */
+      readonly workspaceRoot?: string;
       readonly sha256: string;
       /** Optional exact sibling package.json used by the bundled server to read its version. */
       readonly packageJsonSha256?: string;
@@ -70,9 +72,24 @@ export function validServiceConfiguration(v: unknown): v is ServiceConfiguration
   if (!object(v)) return false;
   if (v['kind'] === 'stdio')
     return (
-      (keys(v, ['kind', 'executable', 'sha256', 'args']) ||
-        (keys(v, ['kind', 'executable', 'sha256', 'args', 'packageJsonSha256']) &&
-          validPluginSchemaDigest(v['packageJsonSha256']))) &&
+      keys(v, [
+        'kind',
+        'executable',
+        'sha256',
+        'args',
+        ...(Object.hasOwn(v, 'packageJsonSha256') ? ['packageJsonSha256'] : []),
+        ...(Object.hasOwn(v, 'workspaceRoot') ? ['workspaceRoot'] : []),
+      ]) &&
+      (!Object.hasOwn(v, 'packageJsonSha256') || validPluginSchemaDigest(v['packageJsonSha256'])) &&
+      (!Object.hasOwn(v, 'workspaceRoot') ||
+        (text(v['workspaceRoot'], 4096) &&
+          v['workspaceRoot'].startsWith('/') &&
+          v['workspaceRoot'] !== '/' &&
+          !v['workspaceRoot'].includes('\\') &&
+          !v['workspaceRoot']
+            .split('/')
+            .slice(1)
+            .some((part: string) => !part || part === '.' || part === '..'))) &&
       text(v['executable'], 4096) &&
       String(v['executable']).startsWith('/') &&
       validPluginSchemaDigest(v['sha256']) &&

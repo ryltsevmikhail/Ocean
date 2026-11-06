@@ -114,3 +114,6 @@ export * from './service-admission-types.js';
 export * from './service-admission.js';
 export * from './service-catalog-policy.js';
 export { codingEffectAdmission, boundCodingEffect } from './coding-grant-admission.js';
+
+export * from './service-turn-tools.js';
+export { combineChatTools } from './chat-turn-tools.js';

@@ -1,0 +1,67 @@
+[
+  {
+    "name": "@modelcontextprotocol/client",
+    "version": "2.4.0",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "@modelcontextprotocol/core",
+    "version": "2.4.0",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "cross-spawn",
+    "version": "7.0.6",
+    "license": "MIT"
+  },
+  {
+    "name": "eventsource",
+    "version": "3.0.7",
+    "license": "MIT"
+  },
+  {
+    "name": "eventsource-parser",
+    "version": "3.1.1",
+    "license": "MIT"
+  },
+  {
+    "name": "isexe",
+    "version": "2.0.0",
+    "license": "ISC"
+  },
+  {
+    "name": "jose",
+    "version": "6.2.15",
+    "license": "MIT"
+  },
+  {
+    "name": "path-key",
+    "version": "3.1.1",
+    "license": "MIT"
+  },
+  {
+    "name": "pkce-challenge",
+    "version": "5.0.1",
+    "license": "MIT"
+  },
+  {
+    "name": "shebang-command",
+    "version": "2.0.0",
+    "license": "MIT"
+  },
+  {
+    "name": "shebang-regex",
+    "version": "3.0.0",
+    "license": "MIT"
+  },
+  {
+    "name": "which",
+    "version": "2.0.2",
+    "license": "ISC"
+  },
+  {
+    "name": "zod",
+    "version": "4.6.7",
+    "license": "MIT"
+  }
+]

@@ -99,6 +99,28 @@ export function createMcpServiceTransport(
   }
   return {
     discover,
+    ready(connection, catalog) {
+      const s = active.get(connection.id);
+      return (
+        !!s &&
+        !closed &&
+        !unknown &&
+        s.writer.usable &&
+        !s.stop.signal.aborted &&
+        s.published === catalog.id &&
+        connection.currentCatalogId === catalog.id &&
+        connection.state === 'active' &&
+        catalog.connectionId === connection.id &&
+        catalog.configRevision === connection.configRevision &&
+        catalog.trustRevision === connection.trustRevision &&
+        catalog.credentialRevision === connection.credentialRevision &&
+        canonicalJson(s.connection.configuration) === canonicalJson(connection.configuration) &&
+        s.connection.configRevision === connection.configRevision &&
+        s.connection.trustRevision === connection.trustRevision &&
+        s.connection.credentialRevision === connection.credentialRevision &&
+        canonicalJson({ ...s.catalog?.candidate, id: catalog.id }) === canonicalJson(catalog)
+      );
+    },
     activate(candidate, snapshot, confirmPublished) {
       const s = candidates.get(candidate);
       if (
@@ -132,14 +154,20 @@ export function createMcpServiceTransport(
     },
     async invoke(input) {
       const s = active.get(input.connection.id);
-      return !closed && !unknown && s
-        ? s.invoke(input)
-        : {
-            kind: 'not_started',
-            code: 'catalog_unavailable',
-            invocationId: input.invocationId,
-            detail: 'no active catalog',
-          };
+      if (closed || unknown || !s)
+        return {
+          kind: 'not_started',
+          code: 'catalog_unavailable',
+          invocationId: input.invocationId,
+          detail: 'no active catalog',
+        };
+      const work = s.invoke(input);
+      pending.add(work);
+      try {
+        return await work;
+      } finally {
+        pending.delete(work);
+      }
     },
     async close(): Promise<McpCleanupEvidence> {
       closed = true;

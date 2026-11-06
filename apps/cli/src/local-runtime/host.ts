@@ -1,3 +1,4 @@
+import { failedStartupDrain } from './service-drain.js';
 import {
   runtimeDesktopAssets,
   desktopSubmitRefusal,
@@ -59,10 +60,10 @@ export async function startLocalRuntime(
   let images: ImageAssetResolverPort | undefined;
   const plugin = await hostPluginSettings(options);
   const runtime = openOceanProfile(paths.profile, false, {
-    pluginTransport: plugin.transport,
+    ...(options.pluginTransport === undefined ? {} : { pluginTransport: plugin.transport }),
+    serviceTransportOptions: options.serviceTransportOptions,
     pluginEnv: plugin.env,
     pluginMutationsAllowed: options.restore !== true,
-    // This host alone validates and retires a surviving publication before serving.
     requireUnpublished: false,
     imageResolver: (store) =>
       (images = desktopImageResolver(store, paths.profile, paths.profileId)),
@@ -78,6 +79,7 @@ export async function startLocalRuntime(
   let publication: ReturnType<typeof publishEndpoint> | undefined;
   try {
     const recovery = await runtime.ready;
+    await runtime.services?.start();
     checkRestoration();
     const proof = runtime.openEndpointProof?.();
     if (!proof) throw Error('durable_runtime_required');
@@ -93,7 +95,6 @@ export async function startLocalRuntime(
     if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
       throw Error('durable_runtime_required');
     const restored = options.restore === true || runtime.restored === true;
-    // Saved/environment credentials and plugin state are resolved by the runtime, never by a client.
     const { provider, plugins, models } = settingsHosts({
       profile: paths.profile,
       runtime,
@@ -142,9 +143,7 @@ export async function startLocalRuntime(
         tasks: runtime.service,
         store: runtime.conversationStore,
         clock: systemClock,
-        ...(runtime.pluginRuntime?.tools === null || runtime.pluginRuntime?.tools === undefined
-          ? {}
-          : { grantedTools: runtime.pluginRuntime.tools }),
+        ...(runtime.grantedTools ? { grantedTools: runtime.grantedTools } : {}),
       },
       clock: systemClock,
       resolver: provider.resolver,
@@ -178,6 +177,7 @@ export async function startLocalRuntime(
             await assertRuntimeDrained(
               [
                 turns,
+                runtime.services,
                 broadcasts,
                 options.drain,
                 decisions,
@@ -243,8 +243,6 @@ export async function startLocalRuntime(
           if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
             return provider.settings.dispatch(method, params, detached);
           if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
-          // Prepared-attachment admission runs before any submit dispatch, including
-          // the broadcast runner: a mismatched marker must never commit a message.
           if (method === 'turns.submit' || method === 'broadcasts.submit') {
             const code = desktopSubmitRefusal(
               runtime.desktopAssets!,
@@ -292,7 +290,7 @@ export async function startLocalRuntime(
       }
     } finally {
       layout?.close();
-      runtime.close();
+      await failedStartupDrain(runtime, drainDeadlineMs);
     }
     throw error;
   }

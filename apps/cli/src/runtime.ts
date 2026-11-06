@@ -1,3 +1,5 @@
+import type { ChatTurn } from '@runnets/domain';
+import { composeRuntimeServices } from './runtime-services.js';
 import { runtimeServiceOver as serviceOver } from './runtime-service.js';
 import { codingTurnFactory } from './coding-turn-factory.js';
 import {
@@ -15,6 +17,7 @@ import { runtimeIncomplete, restoredRuntimeAdmission } from './runtime-restorati
 import { randomUUID, createHash } from 'node:crypto';
 import {
   RoomRuntimeRuns,
+  combineChatTools,
   CodingTaskService,
   CodingReviewService,
   CodingApplyService,
@@ -116,12 +119,30 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       ...(options.pluginTransport === undefined ? {} : { transport: options.pluginTransport }),
       ...(options.pluginEnv === undefined ? {} : { env: options.pluginEnv }),
     });
+    const services = composeRuntimeServices({
+      profile: dirname(dbPath),
+      store,
+      clock: deps.clock,
+      ownerId: codingDeps.ownerId,
+      restored,
+      env: options.pluginEnv,
+      transportOptions: options.serviceTransportOptions,
+    });
+    const grantedTools = {
+      forTurn: async (turn: ChatTurn, signal: AbortSignal) =>
+        combineChatTools(
+          await services.tools.forTurn(turn, signal),
+          options.pluginTransport === undefined
+            ? null
+            : await pluginRuntime.tools?.forTurn(turn, signal),
+        ) ?? null,
+    };
     const reviews = new ChatReviewService({ ...deps, tasks: service, journal: store.tools });
     const chat = new DirectChatService({
       reviews,
       ...deps,
       tasks: service,
-      ...(pluginRuntime.tools === null ? {} : { grantedTools: pluginRuntime.tools }),
+      grantedTools,
       ...(options.codingTools
         ? {
             codingTools: codingTurnFactory({
@@ -161,6 +182,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         operations: store.pluginOperations,
       },
       pluginRuntime,
+      services,
+      grantedTools,
       ownerId: codingDeps.ownerId,
       openRebindStore: () => store.rebind,
       service,

@@ -24,6 +24,7 @@ export interface LocalRuntimeHost {
   stop(): Promise<LocalRuntimeStop>;
 }
 export interface LocalRuntimeHostOptions {
+  readonly serviceTransportOptions?: RuntimeOptions['serviceTransportOptions'];
   readonly profile: string;
   readonly restore?: boolean;
   /** Host-only composition. Providers and coding authority never arrive over the wire. */
