@@ -1,5 +1,8 @@
 # Platform stage D — bot tasks and communication
 
+Current source milestone: D19.2.5 is accepted at `0f7435b`. Native 19.3 and later
+GUI/release gates remain open. Earlier sections record their own historical boundaries.
+
 ## Implemented: D19.1 pure addressing contract
 
 Domain exports readonly `RoomTaskAddress` and `RoomDeliveryAddress` projections,
@@ -131,7 +134,8 @@ root checks:3819 source tests and166 process tests passed; build and format pass
 The approved test-fixture split and existing turn-safety regression stay≤300 lines.
 
 This foundation alone introduced no producer. D19.2.4 below adds local application
-claim/publication/recovery; production room dispatch remains disabled.
+claim/publication/recovery; production dispatch was disabled at that foundation.
+D19.2.5 below connects the ordinary host.
 
 ## Implemented: D19.2.4 durable local room slices
 
@@ -148,12 +152,12 @@ input ordering, pending effects and the fixed two concurrent /32 total slice
 limits. Only the accepted→dispatching winner enters the existing
 `executeChatTurn`→`runTurn` path. Peer/result input is attributed bot data and
 history stops at the selected sequence. Text-only recipients receive no tools.
-Physical and coding mandates fail closed at this boundary.
+At this leaf, physical and coding mandates failed closed; D19.2.5 adds their host admission.
 
 Local handoff repair and ordinary final publication replay contiguous Core events
 and compare the identical Complete request, receipt and head on the same locked
-connection as their writes. A changed head, unknown effects, stop or lost authority
-retains the hold. Accepted-claim discovery is separate and proves absence or an
+connection as their writes. A changed head or unknown effect retains the hold. D19.2.5 separates
+known local publication from current authority for fresh execution. Accepted-claim discovery is separate and proves absence or an
 exactly created run with no attempt/model/effect before reusing its IDs. Generic
 chat recovery never dispatches a marked model request. A committed handoff is
 checked before generic failure handling, and its pinned head survives a failed
@@ -170,27 +174,57 @@ source-deleted restore with exact inert receipt replay. Final frozen root gates:
 3899 source tests and166 process tests passed; build/format passed. The44/36
 configured skips remain separate native/live gates.
 
-Configured generic recovery still needs its digest forwarded by the next host
-integration. Inherited fixture stdout and a marked-run history-prefix scan are
-recorded for F triage. Neither changes the local acceptance boundary.
+D19.2.5 forwards the configured generic recovery digest. Inherited fixture stdout
+and a marked-run history-prefix scan remain recorded for F triage.
 
-## Planned: execution and host integration
+## Implemented: D19.2.5 ordinary runtime room tasks
 
-D and Task 19.2 are not complete. The local application surface remains unwired
-to runtime hosts: no production start/tool endpoint, scheduler, RPC, startup
-auto-dispatch or UI producer is enabled. Inert start/send admission still creates
-no ChatTurn or Core TaskRun; the explicit local claim/execution caller owns those
-steps. Production producers remain disabled until a negotiated task view and
-observers can expose waiting-child and yielded disposition truthfully.
+The ordinary durable runtime exposes owner-authenticated `roomTasks.start`, `roomTasks.get`,
+`roomTasks.stop` and `roomTasks.observe` through one negotiated `room.tasks-v1`
+feature, together with addressed-history
+support. The shared client validates typed projections and bounded signed pages.
+An exact request replay returns the original committed IDs without waking execution;
+changed inputs conflict. Disconnect detaches a client. Root stop persists a fence
+before joining active work; uncertain effects retain their uncertainty.
 
-The addressed-history wire gate is implemented; the frozen RC2 decoder remains
-unchanged and receives an upgrade error for peer-containing pages. The local
-engine labels peer/result input as attributed bot data; it does not grant current
-owner text or attachment authority.
+Room work uses the existing executeChatTurn/runTurn engine. A delegates without
+occupying a waiting worker; B's final creates one inverse delivery, and a fresh A
+slice can resume with the same recorded model identity and a new deadline. A yielded
+slice has no final answer. Independent roots share the bounded supervisor fairly.
+Create-only preparation holds release capacity and retry only after relevant readiness
+or startup; unknown execution is never automatically repeated.
 
-Cross-producer accounting, scheduling, stop/cleanup, mixed-model outages and
-native/live gates remain planned. Actual provider-start/tool limits, repeated
-handoff pause rules and full ancestor grant intersection belong to host integration. At each eventual physical-operation boundary, the root mandate and a valid
-captured grant at every actual delegating level and recipient remain mandatory;
-this leaf does not promise that a captured grant remains usable. Native behavior,
-external services and live models are not qualified by these persistence tests.
+Fresh model and physical actions require current executor and actual issuer authority,
+selected grant references and the root mandate. Known local publication instead checks
+immutable historical evidence, host/epoch/quarantine and exact Core/receipt/head facts;
+it does not reauthorize a new external action. Coding reads and mutations retain exact
+dev assignment/current leases, operation-specific preparation and one actual dispatch.
+Root limits remain two active slices, 32 total slices, 64 model starts and 64 existing
+physical claims plus local receipts. Charged unknown or failed starts are not refunded.
+
+Schema 29 adds a nullable immutable host scope. Historical unbound or archived roots
+remain inert; replay never enrolls them. Fresh roots require the verified profile
+owner/epoch. Ordinary startup recovery reuses only exact never-started identities and
+preserves unknown model/tool effects. Configured generic recovery now forwards its
+digest to the existing local handoff repair.
+
+Source `0f7435b` accepted after two scoped correction rounds and clean independent
+review; the earlier review closed eight findings and the final review closed all four
+remaining Important items without new findings.
+Final controlling source gate: 4018 source and 172 process tests passed, strict production
+and Node/desktop test TypeScript/lint/build/format passed. 44 source and 36 process skips
+remain explicit opt-in qualifications. Scripted cloud/local 503 directions preserve
+original pins and measured sends with no provider fallback. Built owner/two SDK peers,
+lost ACKs and marked SIGKILL recovery are source/process evidence, not native containment.
+
+## Remaining D acceptance and later client delivery
+
+D and Task 19.2 still require 19.3 native managed-workspace proof: disjoint versus same,
+nested or alias roots, launch/refresh and already-active idle writers, and unknown
+write/restart behavior. Real mixed cloud/local routing/outages and native cleanup are
+separate gates. The bot GUI is stage E; installed artifacts, device identity, backup,
+live acceptance and release are stage F. No installed RC2 qualification is advanced by
+this source gate. Original ledger Minors/Rulings remain mandatory final-review inputs.
+
+F review retains failed-start SQLite cleanup for malformed restore-origin data,
+unexpected claim diagnostics and the recorded historical read-path/test hygiene debt.

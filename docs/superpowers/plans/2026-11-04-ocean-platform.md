@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`, локальное долговечное исполнение D19.2.4 — на `c3d7c21`; подключение host, оставшаяся приёмка D и этапы E–H запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`, локальное долговечное исполнение D19.2.4 — на `c3d7c21`, общий room-task host D19.2.5 — на `0f7435b` после двух раундов исправлений; нативная приёмка D19.3 и этапы E–H запланированы.
 Долг сохранённых регрессий Executor закрыт в C18.6: чистые root gates прошли
 на квалифицированном `1f31974`; финальные проверки текущего выпуска остаются F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -2168,6 +2168,454 @@ unchanged. The full accepted range has59 paths; modified code/test helpers stay�
 Deferred: configured generic recovery digest forwarding belongs to the next host
 integration; inherited test stdout and the marked-run prior-history scan belong to
 F triage. These minor items do not qualify the remaining production gates.
+
+### Task 19.2.5: Execute owner room tasks through the normal runtime
+
+IMPLEMENTED source leaf, accepted at `0f7435b` after two scoped fix rounds and clean independent review. No installed release enablement.
+Final root check/build/format: exit0; 4018 source and172 process tests passed,44/36 configured skips remain separate qualification gates.
+Base: accepted lifecycle c3d7c21; acceptance HEAD 79edcaa. Parent Task 19.2, its remaining
+production gate, Global Constraints verbatim, AGENTS.md and autonomy spec §§5/6/8/10/11 bind.
+One owner submits to a group; A delegates, B answers, a fresh A slice sees B’s attributed result.
+Two independent clients read the same root, tasks and three runs; A1 yields without a final.
+One B final backs one result delivery; A2 publishes its own answer once. No waiting process.
+
+#### Owner contract and eligibility
+
+- Add one negotiated capability/hello feature `room.tasks-v1` for four methods, not four caps.
+  Require it AND addressed-history support, authenticated owner socket and eligible durable host.
+  Filter hello AND status; enforce on every method even for raw callers. Missing: client_upgrade_required.
+  78+1 ≤ modern 80; existing negotiation ≤16 strings of ≤64; old modern/RC2 (≤64) frames unchanged.
+- `roomTasks.start(RoomTaskStart) -> RoomTaskReceipt`: same explicit workspace, room, requestId,
+  text, initialBotIds, participants/selected grant refs and mandate; no actor, provider or task IDs
+  supplied by owner other than existing mandate.codingTaskId. Bind owner from profile/exclusive runtime.
+  Share RoomTaskPersistence.start transaction with new startHosted(input), which requires tx's bound scope
+  and stamps it on fresh root insert. start(input) stays inert (NULL). Replay never stamps a root.
+  Read bound receipt first; same input returns original immutable IDs/order even after stop/rotation;
+  altered body, participants, order, room, operation or selected revisions conflict; no wake on replay.
+- `Scope={workspaceId,roomId,rootId}`; `roomTasks.get(Scope & {page?:string})->RootView`;
+  `roomTasks.stop(Scope & {requestId,expectedRevision})->StopReceipt`;
+  `roomTasks.observe(Scope & {cursor?,waitMs?})->{kind,cursor,instanceId,view:RootView}`.
+  StopReceipt = scope + requestId, expectedRevision, committed root revision and status:'stopped'.
+  First stop CAS on root revision/status; exact prior receipt returns even if revision advanced;
+  distinct stale request conflicts; completed root is terminal. No claim on get/observe/receipt replay.
+- RootView = scope, root status/revision, fence reason or null, counts {active,slices,modelStarts,
+  toolCalls}, rows:Row[], nextPage:string|null. Rows discriminated by `type`, tagged task{id,parentId,botId,status,waitingChildId},
+  delivery{id,kind,fromTaskId,toTaskId,causeId,state,messageId,seq}, slice{taskId,deliveryId,runId,
+  turnId,turnStatus,taskStatus,version,disposition:'yielded'|null,resultMessageId,pendingDecisionIds}.
+  Include a bounded enumerable hold code per affected row (unknown/unproved if evidence missing);
+  queued is queued, stopped is a fence, reported completion uses actual prepared/final + Core/head.
+  Join exact workspace/room/root, task/turn/slice/input and decision/run facts; fetch large text only
+  through existing history/result APIs. Never emit resultMessageId for yielded/unproven responses.
+  Order by tag (task,delivery,slice) then binary ID (turnId for slice). First page omits page; bound to
+  50 rows AND MAX_FRAME−1024 serialized bytes including envelope/cursor, ≤200 decision IDs/slice.
+  Sign nextPage over purpose, instance, scope, full projection hash, last tag/ID; changed view returns
+  resync_required. Observe returns first page and own wait cursor. SDK validates scope/typed bounded rows and follows nextPage.
+- Extend RuntimeObservers' signed instance/scope mark with rootId and hash of complete durable
+  projection (incl. child/decision changes), existing wait limits and detach signal. No execution wake.
+  Snapshot on initial attach, resync on foreign/expired mark or restart; fresh get for pages at new mark.
+- No new meaning of turns.submit.taskId, ACP, broadcasts, rooms.history, runs.cancel or runs.result.
+  Eligible ordinary durable source runtimes advertise and serve this feature by negotiation. The sole
+  test scheduling override is trusted host capacity 1. Maintenance/quarantine and ephemeral hosts refuse.
+
+#### Host, scheduling and shared tools
+
+- Compose a small RuntimeRoomTasks in startLocalRuntime beside RuntimeBroadcasts; use runtime.chat's
+  task service, conversation store, digest, clock, scoped tool providers, provider.resolver and images.
+  Supply executeChatTurn(deps,{turn,provider,messages,signal,emit},
+  {parentRunId,tools}); retain runTurn, settled-request-before-tool ordering and branded handoff proof.
+- Coalesce wake after eligible commits (new admission, send/result, finish, readiness change) and startup.
+  Scan eligible ready roots round-robin, stable input ordering per existing claim; do not spin on held
+  work, or let a blocked first root starve later ones. Claim again under lock, not from scan results.
+  Only 'claimed' executes; 'existing' does not attach a new executor; 'held' skips that delivery.
+  Reserve host slot synchronously before claim; register controller/promise by run before yielding;
+  on settlement finally remove both, release slot, schedule next. No parent promise waits on child.
+  Distinct root or independent task can progress between A1 and A2; keep accepted direct/batch holds.
+  Wire external run controllers into RuntimeTurns.attachControllers alongside broadcasts; use existing
+  assertRuntimeDrained. Runtime stop closes new starts first and joins actual jobs before DB close.
+- Split roomTools out of room-delivery-claim: room_send/room_delegate({toBotId,text}) and
+  room_state({taskId}); closed schemas, no actor/root/room/grant fields. Runtime builds RoomTaskActor
+  from captured turn.id, ToolEffectContext and expanded attempt/round/call.id. Use persistRoomTaskSend
+  with exact binding; delegate alone returns committedRoomDelegate, skips suffix and closes A1;
+  send creates its own constrained message child, never a waiting sender or a peer's independent task.
+  State only for own/actual ancestor/descendant by verified edges in same root+room, live actor,
+  minimal task/slice status and published result reference; no arbitrary sibling/other-room history.
+- In marked executeChatTurn select combineChatTools(room.tools, scopedService, scopedCoding); resolve
+  ONLY if frozen activation supports tools. Text-only gets undefined tools including no schemas or
+  sandbox setup; still executes assigned provider. A null/unavailable resolver holds before dispatch;
+  never normalize to null-provider deterministic text, switch backend, inherit legacy grants or retry.
+  New slice gets a new deadline for the same pinned identity. Recovered claim reuses original deadline.
+  Check current binding/profile/connection/qualification, membership, explicit transfer policy and
+  restored/text-only quarantine at claim, prepare and each actual model start (including later rounds).
+
+#### Current authority and exact effect boundaries
+
+- Replace fail-closed physical/coding clauses of roomSliceAuthority and marked executor together.
+  Build one pure per-candidate decision over transaction-supplied facts. From stored turn + input
+  verify current task and original assignment edges (from/to, parent/cause/receipt/source proof);
+  walk actual issuing tasks back to root, detect cycles/missing joins; result is a return on the
+  original delegate, not a new source of grant authority. Never traverse unrelated room members.
+  Evaluate recipient and each issuing ancestor against its OWN bot/room/workspace/project/coding
+  subject from pinned root + persisted workspace/coding task. Owner start has no bot ancestor.
+  Every captured ref for those subjects must still identify that owner's current active revision,
+  membership, expiry and matching subject. No replacement, dropped stale ref or union across bots.
+  For a concrete action require root mandate permits it AND each subject has a selected grant
+  permitting the whole action/resource. Empty selected refs permit communication, no physical access.
+  Existing C bytes/call limits, confirm modes, catalog/trust/account and resource restrictions apply
+  to each contributing grant. Deterministically bind sorted exact contributing refs per subject;
+  enforce tightest mode; only explicit required confirmation via existing exact C decision, no prompt
+  inside autonomous scope, no confirmation overrides missing/revoked/ancestor authority.
+- ServiceTurnTools currently iterates listGrants(); restrict marked selection to allowed aliases.
+  Factor existing service-admission-prepare tool/catalog/bytes/arguments/resource eligibility for
+  reuse against mandate and each subject. At tx.claim in ServiceCallAdmissionService AND its
+  synchronous authorizeDispatch rederive trusted marked scope from DB runId (never optional client
+  flags); compare exact selected basis incl. actual classification. Confirm expiry/rotation/revocation
+  during async owner wait fails closed. SqliteServiceAuthority.claim uses journal.claimNow;
+  journal the unique (chargedRunId,subject,grantId,revision) basis on each actual effect claim.
+  Executor charges its own run. Each issuer charges the original issuing run proved by the historical
+  edge's sourceTurnId/sourceAttemptId, under that issuer’s subject. Children/siblings share that debit.
+  Extend SqliteToolJournal.grantCalls to count distinct invocations across executor and ancestor bases
+  by chargedRunId+grantId, including prior C-format claims. At claim enforce maxCalls then at dispatch
+  revalidate the same refs/revisions/limits incl. this claim once. Each invocation costs root one.
+  The same attribution applies to coding claims/reads. An unknown alias/global-unknown
+  takes C's existing conservative conflict scope; different paths/connection IDs do not prove disjoint.
+- For coding mandate resolve reserved CodingTask and assigned ready worktree, matching owner/dev,
+  leases and project digest. Mark only actual dev turn with validated codingTaskId (make immutable);
+  other bots communicate, never become coding dev by receiving a message. Do not widen task-specific
+  grants to other bots. In coding-turn-factory/CodingTurnTools project only permitted read/edit/preset
+  actions. Marked selection reads policy/presets only: defer createCodingOperationSession/sandbox
+  qualification to first actual coding invocation after settled model start; recheck scope before
+  launch, guard read after async tools.prepare and retain exact cleanup evidence. No apparently
+  unstarted accepted turn can have prepared a worker. Require guarded edit/test dispatch.
+  At CodingApprovalService.consume (journal claim) and authorizeDispatch verify same current ancestry
+  and exact binding/registered preset/lease. An owner vote cannot bypass scope. Keep writes/commands
+  out of reviewer turns including service aliases granting mutation/command; in this slice restrict
+  known reviewBotId of the selected CodingTask to room communications. Actual review is ONLY
+  CodingReviewService.dispatch -> CodingReviewerPort.review({request,changeset,evidence}) -> bound
+  verdict/findings; no chat/tools or implicit verdict. continuationReviewId is owner recovery, no role.
+
+#### Serialized counts, stop and repair
+
+- In store.ts/buildStore capture one private initially-null RoomHostScope={ownerId,epochId:string|null}.
+  Expose bindRoomHost(scope,verified:{origin:RestoreOrigin|null,active:ProfileRebindRecord|null}):void once per trusted SqliteStore. runtime.ts
+  calls it after exclusive ownership, restoredRuntimeAdmission/verifyRuntimeEpoch FS proof and ordinary
+  host admission, before recovery. Freeze existing ownerId/epochId and fingerprint verified origin/active record.
+  Inject same closure through SqliteEventLog→sqliteCommands, conversation, service and coding adapters.
+  Under each actual lock compare current origin/active fingerprint, owner/epoch and root stamp. Native
+  epoch null requires absent origin/active. Unbound adapters, missing/mismatched/invalid proof refuse marked I/O.
+  Schema 29 nullable immutable root stamp, default NULL. Every roomDelivery run requires positive
+  stamp for claim, StartModelRequest, tool claims/dispatch and repair, even explicit application calls.
+  On replay return exact receipts only. Unbound/old roots remain inert. Eligible rebound starts use
+  current epoch/grants in executable rooms. Maintain rt.restored() fallback, text-only/archive holds.
+  Root status fences; tagged existing conversation receipts store stop/pause/state.
+  For total child_runs limit 32 use pure reserve/settle(1) against count of committed marked turns
+  while claiming delivery + inserting turn. Active count uses accepted/dispatching/prepared/uncertain;
+  enforce ≤2 and one live slice/task; yield releases concurrency, not total; no refund on crash.
+- In SQLite command-commit AFTER exact lookup and BEFORE append, locate marked run and validate
+  root/slice, actual phase/attempt, current authority/privacy, stop and deadline; count committed
+  attempt.model_request_started events across marked runs under same BEGIN IMMEDIATE. If <64,
+  append StartModelRequest + immutable receipt atomically; only 'committed' gets dispatch authority.
+  Replayed/altered/stale/denied receives no new start; no counter increment on version conflict.
+  At modelRound before provider.stream, verify this fresh start + same current pins/privacy/fence
+  synchronously, including abort after await. On proven veto before I/O settle not_sent; charge
+  the already committed start. Restart never deduces not_sent from absence of a response.
+  Count all ordinals and outages; no provider_requests dimension, process_starts substitution or
+  fictitious ReserveBudget command. SettleModelRequest and RecordUsage keep actual vs unavailable;
+  finite token budgets require reported usage; never turn unknown usage into zero or release it.
+- For 64 tool_calls, count existing physical tool journal claims by joined room run (service/coding
+  writes/presets AND guarded coding reads) plus local room call receipts (send/delegate/state).
+  For room_state use same actor key family, strict operation/target binding, scoped reply in existing
+  conversation receipts. For coding read bind a journal observation to actual worktree, actor, call
+  and grant basis; existing read/list path lacks such a claim. No duplicate receipt for physical I/O.
+  Derive RunBudget from durable counts; reserve(tool_calls,1), settle(1) for actual admitted call
+  in SAME transaction as tx.claim/claimApprovalOperation or local receipt+delivery/state. No helper
+  transaction. If a fresh claim refuses, rollback all writes; a stale/altered replay never dispatches. Physical
+  reads take their sole charge at journal claim; guard again immediately before dispatch. Rollback
+  removes unused reservation; no refund of admitted starts due to unknown/failure. Count distinct
+  validated claims, not callbacks. For room tools no generic physical journal claim can precede send:
+  it would invalidate the accepted no-pending-effect proof. Duplicate local results replay by receipt;
+  physical replay never re-executes. Freeze a stable limit hold/reason when total/start/tool cap blocks
+  next eligible work; reaching cap alone never prevents last local completion. Capacity saturation waits.
+- In send transaction after exact receipt lookup and before a fresh child/message, count prior matching
+  (root,senderBotId,recipientBotId,kind,text.trim().normalize('NFC')) since newest proved result for
+  this exchange (original delegate pair + matching inverse/result receipt and verified final/Core head).
+  Unrelated result, message, echoed text, partial, yielded run or technical receipt is not progress.
+  On third occurrence CAS ready→paused with one reason receipt in existing store; no child/message/
+  provider retry or duplicate notification. RootView exposes reason once by stable receipt ID.
+- Owner stop writes bound stop receipt + root ready/paused→stopped before aborting/joining active
+  jobs. Preserve child phases/wait links for exact repair. Release a proven never-started accepted
+  hold only after executor join + locked unstarted evidence: absent Core is a no-start refusal;
+  exact Create-only uses scoped RequestCancel and CompleteCleanup only with no preparation/effect
+  and verified receipts. Keep stale/contradictory cases held. Distinguish not-started from
+  cancelling/unknown. Do not issue RequestCancel over already prepared/proven local success.
+  Explicit runs.cancel stays scoped Core request then controller.abort; detach only closes observer.
+  Runtime shutdown fences this instance, never persist root stop solely on disconnect or orderly exit.
+- Separate proof-only publication from start authority: verified exact Complete or prepared/handoff
+  with exact unchanged running head, settled request, no related pending effects, saved version and
+  absent Complete receipt can finish locally after stop. Recheck locked evidence after identical Complete; retain
+  fence and all wait/result proof, never overwrite stopped/paused root as completed. Emit result only
+  on matching parent wait and leave returned delivery inert behind fence. Never repair deadlined/
+  contradicted evidence by rebasing; deadline limits new I/O, not already proven local publication.
+  Archived/foreign-epoch and quarantined writes remain prohibited. Failed/unknown model or tool cannot retry by repair.
+- Before claiming: exclusive runtime + restoration checks; forward configured SHA-256 through
+  an optional DirectChatDeps.sha256 in runtime.ts -> DirectChatService.recover -> recoverChats ->
+  repairRoomHandoff BEFORE generic reconciliation.
+  Preserve broadcast/coding/plugin recovery. Reconcile pending tool claims conservatively. Extract
+  exact unstarted-evidence classification from recoverUnstartedRoomClaims before reconcileInterrupted
+  issues BeginReconcile; exempt ONLY those proven same accepted IDs (absent or exact sole Create,
+  no other receipt/checkpoint/attempt/effect incl. new local receipts). Do not exempt all room runs.
+  After runtime.ready/endpoint ownership, rerun recoverUnstartedRoomClaims with resolver and recheck exact claims.
+  Scan only current-scope roots. Archived/old-epoch/unenrolled roots, inert v27 waits and
+  contradictory evidence remain held. Replay cannot enroll or wake them.
+
+#### Concrete edit map and acceptance
+
+- contracts/src/local-runtime-room-tasks.ts (new DTO/codecs); tools-node/src/local-room-tasks-client.ts
+  (new), local-runtime-client.ts and package indexes. cli/src/local-runtime/{server,client-compatibility,
+  capabilities,host,host-options,turns,observe}.ts and new room-tasks.ts; runtime.ts/runtime-types.ts/
+  runtime-services.ts, coding-turn-factory.ts compose authority using runtime-restoration.ts/runtime-epoch.ts.
+- application/src/{room-task-persistence,room-task-records,room-task-send,room-delivery-claim,
+  room-delivery-evidence,room-slice-publication,room-slice-result,chat-turn-execution,direct-chat,
+  direct-chat-publication,reconciliation}.ts; new room-task-host.ts, room-task-authority.ts,
+  room-task-tools.ts. Extend conversation-ports, service-turn-tools/admission(-prepare)/authority-ports,
+  coding-grant-admission/coding-approval/coding-turn-tools at actual claims. Public index; no registry.
+- store-sqlite/src/{store,event-log,command-commit,service-authority-storage,service-run-scope,coding-approval-storage,
+  tool-journal,room-task-storage,room-task-slice-storage,room-task-chat-schema,room-runtime-reads,schema,
+  schema-migrations,maintenance}.ts; new room-host-storage.ts (same-transaction facts/count reads). Domain
+  profile-backup admits 29; maintenance retains historical schema28. Keep chat-receipts.ts and room-runtime-reads.ts evidence-based. No 2nd journal.
+- RED→GREEN: disposable normal runtime/Unix socket; separate SDK processes; lost start/stop ACK,
+  altered request conflicts; detach/reconnect/restart cursors; one slot A→text-only B→A after A1 deadline,
+  unrelated root between slices; exact IDs, attribution, no A1 final, only one inverse result.
+- Race two runs at 2/32/64/64 and replay last command/claim; compare SQLite receipts/events against
+  actual transport calls. Fail before/after each commit; same-ID unstarted vs started, orphan receipt/
+  checkpoint, pending effects, scoped/unscoped unknown; recover twice and assert no duplicate effects.
+- Test sender/ancestor revoke between selection, claim, confirmation and dispatch; changed member/pin,
+  cloud deny after claim/first round, opposite mixed-provider outages/no fallback; peer escalation,
+  dev/reviewer boundaries, sibling delegates exhaust one issuing-run grant, cross-room/root state denial.
+- Third normalized duplicate concurrent vs verified/unrelated result; one pause. Stop-vs-send/claim/
+  model/C3/Complete/publication/drain; prepared child result survives stopped parent, unknown held.
+  Positive RoomSlices fixtures bind disposable host + startHosted. Retain inert D1, genuine 27/28,
+  synthetic wire data, CV7 refusal, 7.9 rebind and old clients/ACP. Never grant provider I/O to fixtures by origin.
+- Implementation requires strict test TS,
+  root pnpm check/build/format:check and ≤300 physical lines. Accepted 3899+166 are source evidence.
+  Next 19.3: native Linux disjoint vs same/nested/alias worktrees incl. stdio startup/idle writers and
+  lost reply + restart, descriptor/containment proof. Separate frozen real cloud→local→cloud/offline,
+  mixed failures and installed Linux/client gates before stable activation. Existing RC2 installation stays pinned.
+
+#### Concrete regression map and migration constraints
+
+Known local action versus fresh execution authority: preserve Task19.2.1's explicit
+settled-sender rule (owner edits after settlement do not invalidate that LOCAL tool
+call). Runtime-authored persisted activation+settled Core proof still match immutable
+sender pin; current room membership, host/epoch/quarantine/root status, loop/budget and
+fresh recipient pin/privacy checks remain. Do not reuse the new-model/physical full
+current-sender identity predicate to reject this already-admitted local action. Fresh
+child claims/model starts and physical C dispatch continue to check current issuer
+pins/refs, so a stale sender never authorizes new external I/O. Known receipt replay
+and proof-only publication remain unchanged. Preserve original sender-edit local-send
+success, recipient-only provider_unavailable and privacy model_transfer_denied/no-write
+checks; isolate recipient edit from invalid sender state. This is existing contract
+preservation, not a client override or new execution path.
+
+Receipt replay owner boundary: rotation means model/key/connection/grant revision
+changes under the SAME owner identity. Execution-owner rebind changing ownerId changes
+an implicit bound input and conflicts on old requestId; old roots/receipts remain
+immutable/inert, never stamped/woken/rewritten. New owner uses a fresh request with
+current scope/grants. Ordinary same-profile restart keeps owner identity and replays
+original receipt. Preserve accepted cross-owner refusal; no archive replay/rebind layer.
+Marked grant expiry/current checks use the injected clock/now, not a silent wall-time
+fallback. Existing host clock plumbing is sufficient; no new clock abstraction.
+
+Own read observation and live leases: coding-turn-factory may accept an optional
+trusted ProjectLeasePort supplied from existing codingDeps, REQUIRED for marked reads.
+Normal CodingTaskService.authorize runs before claim; after claim its own pending
+observation would trigger the old blanket hold. Dispatch instead combines exact
+readClaimed (only its exact id/binding/run/attempt row excluded, all other conflicts
+remain) with live ownership of CURRENT task and worktree leases. Missing/mismatched
+port/lease denies. This is host effect-boundary wiring, not ProjectLeasePort injected
+into SQL bindRoomHost. Test valid own read vs altered/conflicting row and lease loss
+after async preparation with zero physical I/O. No client exclusion flag/global exemption.
+
+Exact read confirmation ruling (same C/owner-decision mechanism): mutation
+CodingApprovalBinding remains write|test|apply with real preparation hashes. A read
+uses a small CodingReadRequest (scope/task/worktree/run/attempt/invocation, read_file
+or list_files, canonical bounded arguments/operation digest, selected basis/limits),
+without asserting content/tree/toolchain evidence before reading. Add optional read
+confirmation method to existing coding owner port; absent method fails closed if
+confirm mode is required. RuntimeOwnerDecisions persists kind project-read using an
+exact metadata-only preview. Existing CodingApprovalService/store claimRead derives
+trusted current own/ancestor authority; autonomous scope needs no vote. Confirmation
+precedes any session/prepare/read. After vote recheck basis/current leases/scope and
+atomically claim sole existing journal observation; vote never overrides missing or
+revoked grants. No second approval table or journal. Historical read proof is tagged
+existing journal evidence, not a fabricated mutation CodingApproval receipt.
+Approved app owner-decisions.ts/coding-approval.ts, contracts local-runtime-decisions.ts,
+CLI local-runtime/decisions.ts + owning tests. All decisions methods (list/get/preview/
+resolve) gate project-read on room.tasks-v1 and return client_upgrade_required to old
+peers before new-kind data, never silently omit cards. Test exact/stale/simultaneous
+owner votes and revoke during wait with zero I/O. GUI-specific flow stays stage E.
+Approved cap helper packages/application/src/coding-read-admission.ts holds exact read
+request/preview types and pure eligibility/basis helpers, used by existing service/store
+and turn tools/factory. Share coding policy rather than diverging from mutation guards;
+no extra service/framework. Keep strict TS, public entry points and≤300 physical lines.
+
+Approved test cap split: `apps/cli/src/room-coding-turn.test.ts` owns marked lazy
+selection/read/lease-loss factory regressions with existing coding-consumer fixture,
+real task/approval/journal/root/Core and scripted platform session. Existing295-line
+coding-turn-factory.test.ts retains unmarked behavior. No test-import-test/native claim.
+
+Exact coding evidence/dispatch seam additions:
+
+- packages/domain/src/coding-approval.ts may add optional immutable roomBasis using
+  a local debit tuple type with existing OwnerScopeGrant subject; no new shared module
+  only for possible reuse. coding-approval-state.ts, store coding-claim-evidence.ts and
+  coding-journal-receipt.ts may update exact immutable transition/read proof as needed.
+  Basis comes only from trusted DB scope, never input. Validate bounded exact primitive
+  tuples; no duplicate debit identity. Current claim/dispatch rederive live basis;
+  historical finalization verifies frozen approval+journal basis, not today's grants.
+  Absent roomBasis preserves old approval/journal shapes and byte semantics.
+- packages/tools-node/src/{backend,executor,coding-operation,sandbox-probe}.ts may
+  forward optional signal/ToolDispatchGuard through read/list and WorkspaceTools.prepare
+  to existing sandboxFile dispatch. Add regressions in existing executor.test.ts,
+  coding-operation.test.ts and sandbox-files.test.ts. Omitted guard preserves old callers.
+  Marked public read/list has its single journal observation BEFORE lazy session/prepare;
+  actual backend.read can occur DURING prepare, so check guard after asynchronous verify
+  and immediately before file dispatch, not only PreparedTool.execute. Guard mutation
+  preparation's internal reads too; exact write/preset claim remains before actual effect.
+  Internal qualification/preparation is distinct from requested mutation; no duplicate
+  top-level charge, new physical journal or general receipt framework.
+
+Model inference dispatch recheck: add optional trusted ModelRequest.authorizeDispatch():boolean
+in packages/application/src/provider.ts, forwarded from existing TurnInput authority callback
+in round.ts. Built-in provider-{local,deepseek,openai,anthropic}/src/provider.ts check it
+immediately before actual inference send; local checks AFTER awaited metadata preflight.
+Undefined preserves existing unmarked behavior. No client/wire/model field, new authority
+registry or alternate execution path. False/throw before send is proven not_sent, keeps
+committed model start charged and never retries. Never run guard in requestBytes/body
+serialization (can precede StartModelRequest); preserve dispatched→unknown semantics.
+Add exact regressions in existing owning adapter tests, including local preflight
+revocation with zero /api/chat and cloud denied callback with zero inference sends.
+
+Required ordinary text-only model correction (D19.2.5, not a B restart): allow
+qualified qwen3:1.7b completion metadata without tools as capabilities.tools=false.
+Approved paths: packages/provider-local/src/{profile,metadata,provider}.ts and
+qualification.test.ts; apps/cli/src/local-runtime/provider-local-lifecycle.test.ts.
+wire/stream and their existing tests may change only for exact no-tools enforcement.
+Keep exact model/backend/full digest/local-origin/tensors/context4096/streaming/text/
+usage/timeout/preflight requirements. Provider advertises actual toolCalls; explicit
+schemas/native tool history on a text-only profile refuse before I/O, returned tool
+calls never execute. Missing completion, vision or unknown local origin still refuse.
+Only explicit owner check publishes changed qualification/revision; active frozen
+true→false or false→true preflight drift refuses, no implicit feature upgrade.
+Replace only obsolete tools:false-is-unsupported expectation; preserve a genuine
+unsupported-profile negative. Test ordinary A→text-only B→A through real activation
+factory, no test resolver override; separate metadata traffic from inference counts.
+
+Coding lease boundary clarification: add only narrow codingWorktree transaction
+read and keep assigned dev codingTaskId immutable. SQL model-start authority checks
+persisted task/worktree/lease identities/current scope, not external lease-registry
+or FS I/O. Existing host CodingTaskService.authorize checks live leases in preparation;
+actual read/list/edit/preset dispatch rechecks both external lease ownerships, including
+after async preparation. Generation alone is not a worktree effect. Do not add a
+ProjectLeasePort to bindRoomHost or claim atomicity across two registries. Prove lease
+loss before physical read/write/spawn yields zero I/O. Lazy coding session starts only
+after a settled model invocation, preserving known local publication on stop.
+
+Recovery capacity regression: two proven unstarted claims restored with trusted host
+capacity1 must both eventually execute; do not discard overflow from a recovery array
+while the ordinary scan sees queued deliveries only. Reuse existing jobs/scan, no new
+pending-work registry. claimRoomDelivery is currently synchronous; do not add an async
+claim coordinator without an actual dependency.
+
+Approved test cap split: `packages/store-sqlite/src/room-host-service.test.ts`
+covers actual C claim/dispatch/contributing-basis/ancestor-debit regressions separately
+from model/ancestor/loop/publication cases in room-host-authority.test.ts.
+
+Approved cap split: `packages/store-sqlite/src/room-host-command.ts` owns marked
+StartModelRequest authority/root-count guard and exact readonly same-transaction
+facts through existing sqliteCommands/EventLog. Binding/migration/count/projection
+remain in room-host-storage.ts; no new command journal or general policy system.
+
+Shared normal-host fixture exact path is `apps/cli/test-fixtures/room-task-host.ts`;
+it composes disposable CLI runtime/transport only, not a store→CLI dependency.
+
+Approved cap split: `packages/contracts/src/local-runtime-room-task-codecs.ts`
+contains closed request/row/view codecs; DTO module reexports them. No new protocol
+behavior or generic codec framework; both normally formatted and≤300 physical lines.
+
+19.2.5 cap-map addition (controller approved before implementation):
+`apps/cli/src/local-runtime/host-room-tasks.ts` may extract the existing broadcast
+and new room supervisor composition from host.ts (BASE297 lines), preserving
+controller/drain ordering. Root projection lives in already mapped room-host-storage.ts
+(BASE room-runtime-reads.ts278 lines). No generic scheduler or extra execution loop.
+
+- New contract tests: `packages/contracts/src/local-runtime-room-tasks.test.ts`.
+- New application tests: `packages/application/src/room-task-authority.test.ts`.
+- New SQLite tests: `packages/store-sqlite/src/room-host-admission.test.ts`,
+  `room-host-authority.test.ts`, `room-host-recovery.test.ts`, `room-host-migration.test.ts`.
+- New CLI tests: `apps/cli/src/local-runtime/room-tasks.test.ts`,
+  `room-tasks-process.test.ts`, `room-task-failures-process.test.ts`; register process cases
+  in `vitest.process-cases.config.ts`. Use separate ordinary SDK client processes.
+- Narrow shared fixtures: extend `packages/store-sqlite/test-fixtures/room-slices.ts`;
+  add `room-task-host.ts` only for shared normal-host setup. No test importing another test.
+  Every positive executing fixture binds the disposable verified host and uses startHosted;
+  inert admission and negative legacy-origin fixtures stay inert. No fixture-origin execution exemption.
+- Capture genuine schema28 before product edits from exact BASE, retain provenance/source pins
+  and normally formatted static data `packages/store-sqlite/test-fixtures/room-slices-v28.json`.
+  Its narrow loader may be `room-slices-v28.ts`. Compare historical named columns byte-for-byte
+  plus new host stamp NULL, not SELECT* shape equality. Preserve existing genuine26/27 bytes.
+  Adapt positional task inserts to explicit named columns; no implicit enrollment on migration/replay.
+- Current-schema/future-version expectation maintenance may touch the inventoried19.2.4 tests
+  above, `profile-backup.test.ts`, `maintenance.test.ts`, `room-slice-migration.test.ts` and
+  the positive room-slice/claim/recovery fixtures. Inventory exact edits in the report;
+  preserve behavioral assertions and old real schema fixtures, including eight frozen RC2 peers.
+  Do not widen existing permissions or weaken proof checks to make fixtures pass.
+- Root start currently does NOT call roomHold: an inert old root alone does not block a fresh
+  hosted root. Preserve direct/batch and actual active-turn holds. Rebound fresh admission still
+  requires an executable room/current grants; do not silently unquarantine or re-enroll old roots.
+- Use concrete modules above and existing ports only. Routine cap-only source/test splits
+  within these assigned module families/behaviors are implementation details: record exact
+  paths/responsibilities and moved versus new cases in the report; reconcile the final map
+  before review. Bring semantic authority/protocol/lifecycle changes or missing load-bearing
+  APIs to controller. No generic scheduler, policy engine, event journal, workflow or model loop.
+
+- [x] Implement the ordinary owner API/SDK, bounded root views and shared-engine room supervisor.
+- [x] Enforce current ancestry, exact physical admission, serialized root limits, loop and stop fences.
+- [x] Prove the listed interprocess/recovery/authority/migration scenarios with actual RED→GREEN;
+      retain all unknown-effect holds and old-client semantics.
+- [x] Freeze owned sources; pass strict root check/build/format, ≤300 physical lines;
+      exact-path commit and independent spec/quality review before acceptance.
+
+Acceptance of this leaf does not accept native19.3, live mixed execution, E/F or the full A–H goal.
+
+Fence receipt namespace (19.2.5 review correction): internal fences use a NUL-prefixed
+storage key outside the already-valid owner requestId alphabet, with an independent valid
+public ID. Verify exact saved binding and root state before deduplication. Preserve
+historical v1 receipts, including collisions; an unrelated owner receipt cannot suppress
+a new pause. Root get/observe must pass the ordinary SDK decoder after pausing.
+
+Snapshot authority (19.2.5 review correction): forward the existing optional guard
+per operation through concrete snapshot reads, rechecking after async verification.
+Preparation uses the selected write/preset permission and current leases; own-claim
+exclusion requires the exact consumed approval. Keep repeatable preparation checks
+separate from single-use dispatch and do not retain a previous read invocation guard.
+The existing internal ToolDispatchGuard may add optional inspect():boolean for repeatable
+checks; it never consumes or replaces authorize(). Marked snapshots require it; omitted
+unmarked callers remain compatible. Do not fallback inspection to single-use dispatch.
+
+Coding actor binding (19.2.5 review correction): use the same exact stored executor
+and immutable dev assignment match for marked reads and mutations, including workspace,
+room, bot, project, task and run. Reuse the existing admission helper and preserve
+unmarked compatibility; request fields never select a different executor.
+
+Historical publication (19.2.5 review correction): saved edge proof and proof-only
+local publication also survive later member removal, with full immutable scope, host,
+epoch, quarantine, Core/attempt and receipt checks. A trusted historical origin mode
+may omit current membership only for that proof. New sends, claims and model/tool
+execution continue to require current membership; no client override is added.
+
+Never-started release retains current input and wait joins. Its saved issuer-membership
+proof may use historical semantics independently of historical wait relaxation, through
+one optional trusted internal argument; no client field or fresh execution exemption.
 
 ### Task 19.3: Qualify independent managed service workspaces
 
