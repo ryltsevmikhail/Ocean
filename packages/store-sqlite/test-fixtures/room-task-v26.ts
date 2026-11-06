@@ -8,6 +8,7 @@ export function omitRoomTaskSchema(db: DatabaseSync): void {
     db.exec(`
     DROP TRIGGER IF EXISTS ocean_room_slice_insert; DROP TRIGGER IF EXISTS ocean_room_slice_update;
     DROP TRIGGER IF EXISTS ocean_room_proof_immutable;
+    DROP TRIGGER IF EXISTS ocean_room_coding_immutable;
     DROP TRIGGER ocean_room_turn_insert; DROP TRIGGER ocean_room_turn_immutable;
     DROP INDEX ocean_room_delivery_turn; DROP INDEX ocean_room_task_hold;
     DROP INDEX ocean_chat_room_hold;

@@ -40,6 +40,7 @@ export function roomSlices(
   path?: string,
 ) {
   const f = roomTasks(path);
+  f.store.bindRoomHost({ ownerId: 'owner', epochId: null }, { origin: null, active: null });
   let id = 1000,
     now = Date.parse('2026-11-06T00:00:00Z');
   const requests: ModelRequest[] = [];
@@ -102,7 +103,7 @@ export function roomSlices(
       now += ms;
     },
     start() {
-      const result = f.service.start({ ...f.input, initialBotIds: ['a'] });
+      const result = f.service.startHosted({ ...f.input, initialBotIds: ['a'] });
       if (!result.ok) throw Error('start failed');
       return result.value;
     },
@@ -123,6 +124,70 @@ export function roomSlices(
     },
     turns() {
       return f.store.conversations.atomic((tx) => tx.chatTurns());
+    },
+  };
+}
+
+import {
+  ownerGrant,
+  serviceConnection,
+  serviceCatalog,
+} from '../../../test-fixtures/service-authority.js';
+import type { RoomTaskActor } from '@runnets/application';
+/** Selected per-bot service scope over the same genuine disposable room host. */
+export function roomServiceSlices(maxCalls = 10, mode: 'autonomous' | 'confirm' = 'autonomous') {
+  const f = roomSlices([], []);
+  const grants = ['a', 'b', 'c'].map((botId) => ({
+    ...ownerGrant,
+    id: 'grant_' + botId,
+    mode,
+    subject: {
+      workspaceId: 'ws_fixture',
+      roomId: 'room',
+      botId,
+      projectId: f.deps.sha256('/fixture'),
+      taskId: null,
+    },
+    limits: { ...ownerGrant.limits, maxCalls },
+    permissions: ownerGrant.permissions.map((p) =>
+      p.kind === 'service' ? { ...p, baselineCatalogId: 'catalog' } : p,
+    ),
+  }));
+  f.store.serviceAuthority.atomic((tx) => {
+    tx.putConnection(serviceConnection, null);
+    tx.putCatalog(serviceCatalog);
+    tx.publishCatalog('third', serviceConnection, 'catalog');
+    for (const g of grants) tx.putGrant(g, null);
+  });
+  return {
+    ...f,
+    grants,
+    startService() {
+      const result = f.service.startHosted({
+        ...f.input,
+        initialBotIds: ['a'],
+        participants: grants.map((g) => ({
+          botId: g.subject.botId,
+          grantReferences: [{ grantId: g.id, revision: g.revision }],
+        })),
+        mandate: { projectId: null, codingTaskId: null, permissions: grants[0]!.permissions },
+      });
+      if (!result.ok) throw Error(result.error.code);
+      return result.value;
+    },
+    request(actor: RoomTaskActor, botId = 'a') {
+      const g = grants.find((g) => g.subject.botId === botId)!;
+      return {
+        ...g.subject,
+        connectionId: 'third',
+        catalogId: 'catalog',
+        tool: 'notes.search',
+        arguments: {},
+        grantReference: { grantId: g.id, revision: 1 },
+        taskRunId: actor.taskRunId,
+        attemptId: actor.attemptId,
+        invocationId: actor.callId,
+      };
     },
   };
 }

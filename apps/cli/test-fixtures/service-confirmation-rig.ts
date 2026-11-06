@@ -42,7 +42,7 @@ export function confirmedProvider(onRequest: () => void = () => {}) {
   return { provider, facts };
 }
 export async function configureService(
-  f: PrivateRoot,
+  f: Pick<PrivateRoot, 'profile' | 'roomId' | 'botId'>,
   url: string,
   mode: 'autonomous' | 'confirm',
 ) {

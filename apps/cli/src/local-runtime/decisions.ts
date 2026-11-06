@@ -37,6 +37,7 @@ const errors = new Set([
   'decision_pending',
   'approval_required',
   'service_confirmation_upgrade_required',
+  'client_upgrade_required',
 ]);
 export class RuntimeDecisions {
   readonly owner: RuntimeOwnerDecisions;
@@ -81,6 +82,41 @@ export class RuntimeDecisions {
   }
   coding(turn: ChatTurn, signal: AbortSignal): CodingApprovalOwnerPort {
     return {
+      decideRead: async (operation, current) => {
+        const r = operation.request;
+        if (
+          this.#draining ||
+          r.workspaceId !== turn.workspaceId ||
+          r.roomId !== turn.roomId ||
+          r.runId !== turn.taskRunId ||
+          r.botId !== turn.bot.id ||
+          r.taskId !== turn.codingTaskId
+        )
+          return 'cancel';
+        const preview = ownerPreview(operation),
+          createdAt = this.owner.now();
+        const outcome = await this.owner.open(
+          {
+            workspaceId: r.workspaceId,
+            roomId: r.roomId,
+            runId: r.runId,
+            decisionId:
+              'read-' +
+              digest(JSON.stringify([r.runId, r.attemptId, r.invocationId, r.operationDigest])),
+            kind: 'project-read',
+            version: 1,
+            status: 'pending',
+            bindingDigest: digest(preview),
+            createdAt,
+            expiresAt: createdAt + 300000,
+            previewLength: preview.length,
+          },
+          preview,
+          signal,
+          current,
+        );
+        return outcome === 'allowed' ? 'allow-once' : outcome === 'denied' ? 'deny' : 'cancel';
+      },
       decide: async (approval, current) => {
         const b = approval.binding;
         if (
@@ -136,6 +172,8 @@ export class RuntimeDecisions {
     context: RuntimeWireContext,
   ): Promise<RuntimeReply> {
     const compatible = (card: ReturnType<RuntimeOwnerDecisions['get']>) => {
+      if (card.kind === 'project-read' && (!context.roomTasks || !context.addressedHistory))
+        throw Error('client_upgrade_required');
       if (card.kind === 'service-call' && !context.serviceConfirmations)
         throw Error('service_confirmation_upgrade_required');
       return card;

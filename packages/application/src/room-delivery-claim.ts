@@ -1,7 +1,11 @@
+import type { ConversationTransaction } from './conversation-ports.js';
+import { freezeRoomTask } from './room-task-host.js';
+import { roomTools } from './room-task-tools.js';
+import { admitRoomCount, roomCodingTask } from './room-task-authority.js';
 import { admitImageRequest, type ImageAssetResolverPort } from './image-content.js';
 import { createChatCommand } from './commands.js';
 import { roomSliceAuthority, inputEvidence } from './room-delivery-evidence.js';
-import { canonicalJson, type ChatTurn, type TaskRunId } from '@runnets/domain';
+import { canonicalJson, taskRunId, type ChatTurn, type TaskRunId } from '@runnets/domain';
 import type { RoomTaskPersistenceDeps } from './room-task-persistence.js';
 import type { ProviderActivationPort } from './model-activation-types.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
@@ -9,10 +13,9 @@ import type { GrantedPluginTools } from './plugin-turn-tools.js';
 import { freezeModelActivation } from './model-activation-snapshot.js';
 import { providerAdmits } from './provider-admission.js';
 import { roomContext } from './room-context.js';
-import { persistRoomTaskSend } from './room-task-send.js';
-import { committedRoomDelegate } from './room-slice-handoff.js';
 export type RoomDeliveryClaimDeps = RoomTaskPersistenceDeps & {
   readonly resolver: ProviderActivationPort;
+  readonly codingAvailable?: boolean;
   readonly images?: ImageAssetResolverPort;
 };
 export type RoomDeliveryClaim =
@@ -71,17 +74,20 @@ export function claimRoomDelivery(d: RoomDeliveryClaimDeps, deliveryId: string):
     const active = marked.filter((t) =>
       ['accepted', 'dispatching', 'prepared', 'uncertain'].includes(t.status),
     );
-    if (
-      marked.length >= 32 ||
-      active.length >= 2 ||
-      active.some((t) => t.roomDelivery!.taskId === task.id)
-    )
+    if (active.length >= 2 || active.some((t) => t.roomDelivery!.taskId === task.id))
       return { kind: 'held' };
     const next = rt
       .inputs(task.id)
       .find((v) => v.state === 'queued' && inputEvidence(tx, v, task, root));
     if (next?.id !== delivery.id) return { kind: 'held' };
+    if (!admitRoomCount(rt.counts(root.id), 'child_runs')) {
+      freezeRoomTask(tx, root, 'slice_limit', d.sha256);
+      return { kind: 'held' };
+    }
     const facts = inputEvidence(tx, delivery, task, root)!;
+    const coding = roomCodingTask(tx, root, d.sha256);
+    if (coding?.task.devBotId === task.assigneeBotId && d.codingAvailable !== true)
+      return { kind: 'held' };
     const bot = tx.bot(task.assigneeBotId)!,
       binding = tx.modelBinding(bot.id)!;
     const at = d.clock.now().toISOString(),
@@ -130,6 +136,7 @@ export function claimRoomDelivery(d: RoomDeliveryClaimDeps, deliveryId: string):
       modelBinding: binding,
       activation: snapshot,
       roomDelivery: { version: 1, taskId: task.id, deliveryId: delivery.id },
+      ...(coding?.task.devBotId === bot.id ? { codingTaskId: coding.task.id } : {}),
       status: 'accepted',
       text: '',
       preparedVersion: null,
@@ -150,55 +157,6 @@ export function claimRoomDelivery(d: RoomDeliveryClaimDeps, deliveryId: string):
     };
   });
 }
-function roomTools(d: RoomTaskPersistenceDeps, turnId: string): GrantedPluginTools {
-  return {
-    cleanupConfirmed: true,
-    callDigest: d.sha256,
-    definitions: [
-      {
-        name: 'room_delegate',
-        description: 'Delegate local conversation work and yield this slice.',
-        parameters: {
-          type: 'object',
-          properties: { toBotId: { type: 'string' }, text: { type: 'string' } },
-          required: ['toBotId', 'text'],
-          additionalProperties: false,
-        },
-      },
-    ],
-    execute(call, _signal, context) {
-      if (!context || call.name !== 'room_delegate')
-        return Promise.resolve({ isError: true, output: 'tool unavailable' });
-      let request: unknown;
-      try {
-        request = JSON.parse(call.arguments);
-      } catch {
-        return Promise.resolve({ isError: true, output: 'invalid arguments' });
-      }
-      if (
-        !request ||
-        typeof request !== 'object' ||
-        Object.keys(request).sort().join() !== 'text,toBotId'
-      )
-        return Promise.resolve({ isError: true, output: 'invalid arguments' });
-      const sent = persistRoomTaskSend(
-        d,
-        { turnId, ...context, callId: call.id },
-        { kind: 'delegate', ...request },
-        true,
-      );
-      if (!sent.ok) return Promise.resolve({ isError: true, output: sent.error.code });
-      if (!sent.value.proof)
-        return Promise.resolve({
-          isError: true,
-          uncertain: true,
-          output: 'historical receipt has no handoff proof',
-        });
-      return Promise.resolve(committedRoomDelegate(sent.value.proof));
-    },
-  };
-}
-
 /** Discovery only: no fresh IDs, new activation deadline or model dispatch on restart. */
 export function recoverUnstartedRoomClaims(
   d: RoomDeliveryClaimDeps,
@@ -207,53 +165,12 @@ export function recoverUnstartedRoomClaims(
     const rt = tx.roomTasks;
     if (!rt) return [];
     return tx.chatTurns().flatMap((turn) => {
-      if (
-        turn.status !== 'accepted' ||
-        !turn.roomDelivery ||
-        !turn.activation ||
-        !turn.modelBinding ||
-        turn.roomHandoff ||
-        turn.continuationReviewId !== undefined ||
-        d.clock.now().getTime() >= Date.parse(turn.activation.deadlineAt)
-      )
-        return [];
-      const input = rt.delivery(turn.roomDelivery.deliveryId),
-        task = rt.task(turn.roomDelivery.taskId);
-      const root = task && rt.task(task.rootId);
-      if (
-        !input ||
-        input.state !== 'claimed' ||
-        !task ||
-        task.kind !== 'bot' ||
-        task.status !== 'ready' ||
-        !root ||
-        root.kind !== 'root' ||
-        root.rootPayload.ownerId !== d.ownerId ||
-        !roomSliceAuthority(tx, root, task, d.clock.now().getTime(), d.sha256)
-      )
-        return [];
-      const siblings = tx
-        .chatTurns()
-        .filter(
-          (t) =>
-            t.roomDelivery?.taskId === task.id &&
-            ['accepted', 'dispatching', 'prepared', 'uncertain'].includes(t.status),
-        );
-      if (siblings.length !== 1 || siblings[0]?.id !== turn.id) return [];
-      const facts = inputEvidence(tx, input, task, root);
-      if (!facts) return [];
-      const evidence = rt.unstartedEvidence(createChatCommand(turn, facts.parent)),
-        effects = tx.chatFailureEvidence?.(turn.taskRunId);
-      if (
-        !evidence ||
-        !effects ||
-        effects.relatedPendingEffects !== 0 ||
-        effects.taskVersion !== (evidence.kind === 'absent' ? 0 : 1)
-      )
-        return [];
+      const proof = inspectUnstartedRoomClaim(tx, turn, d);
+      if (!proof) return [];
+      const { input, facts } = proof;
       const resolved = d.resolver.resolve(
-        { bot: turn.bot, binding: turn.modelBinding },
-        turn.activation.admittedAt,
+        { bot: turn.bot, binding: turn.modelBinding! },
+        turn.activation!.admittedAt,
       );
       if (
         !resolved.ok ||
@@ -279,10 +196,73 @@ export function recoverUnstartedRoomClaims(
               provider: resolved.value.provider,
               messages: messages.value,
               parentRunId: facts.parent,
-              tools: turn.activation.capabilities.tools ? roomTools(d, turn.id) : null,
+              tools: turn.activation!.capabilities.tools ? roomTools(d, turn.id) : null,
             },
           ]
         : [];
     });
   });
+}
+
+export function inspectUnstartedRoomClaim(
+  tx: ConversationTransaction,
+  turn: ChatTurn,
+  d: RoomTaskPersistenceDeps,
+  publication = false,
+) {
+  const rt = tx.roomTasks;
+  if (!rt) return null;
+  if (
+    turn.status !== 'accepted' ||
+    !turn.roomDelivery ||
+    !turn.activation ||
+    !turn.modelBinding ||
+    turn.roomHandoff ||
+    turn.continuationReviewId !== undefined ||
+    (!publication && d.clock.now().getTime() >= Date.parse(turn.activation.deadlineAt))
+  )
+    return null;
+  const input = rt.delivery(turn.roomDelivery.deliveryId),
+    task = rt.task(turn.roomDelivery.taskId);
+  const root = task && rt.task(task.rootId);
+  if (
+    !input ||
+    input.state !== 'claimed' ||
+    !task ||
+    task.kind !== 'bot' ||
+    task.status !== 'ready' ||
+    !root ||
+    root.kind !== 'root' ||
+    root.rootPayload.ownerId !== d.ownerId ||
+    !roomSliceAuthority(tx, root, task, d.clock.now().getTime(), d.sha256, publication)
+  )
+    return null;
+  const siblings = tx
+    .chatTurns()
+    .filter(
+      (t) =>
+        t.roomDelivery?.taskId === task.id &&
+        ['accepted', 'dispatching', 'prepared', 'uncertain'].includes(t.status),
+    );
+  if (siblings.length !== 1 || siblings[0]?.id !== turn.id) return null;
+  const facts = inputEvidence(tx, input, task, root);
+  if (!facts) return null;
+  const evidence = rt.unstartedEvidence(createChatCommand(turn, facts.parent)),
+    effects = tx.chatFailureEvidence?.(turn.taskRunId);
+  if (
+    !evidence ||
+    !effects ||
+    effects.relatedPendingEffects !== 0 ||
+    effects.taskVersion !== (evidence.kind === 'absent' ? 0 : 1)
+  )
+    return null;
+  return { input, task, root, facts, evidence };
+}
+export function unstartedRoomClaimRuns(d: RoomTaskPersistenceDeps): readonly TaskRunId[] {
+  return d.store.atomic((tx) =>
+    tx
+      .chatTurns()
+      .filter((turn) => inspectUnstartedRoomClaim(tx, turn, d) !== null)
+      .map((turn) => taskRunId(turn.taskRunId)),
+  );
 }

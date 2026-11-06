@@ -5,6 +5,8 @@ import {
   ownerResourceIncludes,
   validEffectResourceScope,
   type OwnerPermission,
+  type OwnerScopeGrant,
+  type ServiceJson,
   type ServiceConnection,
   type ServiceCatalogSnapshot,
   type ServiceToolDefinition,
@@ -78,16 +80,15 @@ export function prepare(
     !['mutation', 'observation'].includes(facts.effectKind)
   )
     return 'authority_denied';
-  const allowed = g.permissions.some((p) => {
-    if (p.kind !== 'service' || !p.baselineCatalogId || !permittedResources(p, c, facts.scope))
-      return false;
-    const baseline = tx.catalog(p.baselineCatalogId);
-    const continuous =
-      !!baseline &&
-      baseline.credentialRevision !== current.credentialRevision &&
-      options.credentialContinuous?.(structuredClone(c), structuredClone(baseline)) === true;
-    return eligibleServiceTool(p, baseline, current, tool, continuous);
-  });
+  const allowed = servicePermissionsAllow(
+    tx,
+    g.permissions,
+    c,
+    current,
+    tool,
+    facts.scope,
+    options,
+  );
   if (!allowed) return 'authority_denied';
   const bytes = utf8Length(canonicalJson({ name: r.tool, arguments: r.arguments }));
   if (
@@ -95,11 +96,76 @@ export function prepare(
     tx.grantCalls(r.taskRunId, g.id) + (frozen ? 0 : 1) > g.limits.maxCalls
   )
     return 'grant_limit';
+  const room = tx.roomScope?.(r.taskRunId, options.now());
+  if (room === false || room?.reviewer) return 'authority_denied';
+  let roomBasis: ServiceJson[] | undefined;
+  let confirmationRequired = g.mode === 'confirm';
+  if (room) {
+    const own = room.subjects[0];
+    if (
+      room.attemptId !== r.attemptId ||
+      !own ||
+      canonicalJson(own.subject) !==
+        canonicalJson({
+          workspaceId: r.workspaceId,
+          roomId: r.roomId,
+          botId: r.botId,
+          projectId: r.projectId,
+          taskId: r.taskId,
+        }) ||
+      !own.refs.some((ref) => ref.grantId === g.id && ref.revision === g.revision) ||
+      !servicePermissionsAllow(
+        tx,
+        room.root.rootPayload.mandate.permissions,
+        c,
+        current,
+        tool,
+        facts.scope,
+        options,
+      )
+    )
+      return 'authority_denied';
+    roomBasis = [];
+    for (const issuer of room.subjects) {
+      if (!issuer.chargedRunId) return 'authority_denied';
+      const candidates = issuer.refs
+        .map((ref) => tx.grant(ref.grantId))
+        .filter(
+          (grant): grant is OwnerScopeGrant =>
+            !!grant &&
+            grant.owner.ownerId === c.trust.ownerId &&
+            servicePermissionsAllow(
+              tx,
+              grant.permissions,
+              c,
+              current,
+              tool,
+              facts.scope,
+              options,
+            ) &&
+            bytes <= grant.limits.maxEffectBytes &&
+            tx.grantCalls(issuer.chargedRunId!, grant.id) + (frozen ? 0 : 1) <=
+              grant.limits.maxCalls,
+        )
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.revision - b.revision));
+      if (!candidates.length) return 'authority_denied';
+      for (const grant of candidates) {
+        confirmationRequired ||= grant.mode === 'confirm';
+        roomBasis.push({
+          chargedRunId: issuer.chargedRunId,
+          subject: { ...issuer.subject },
+          grantId: grant.id,
+          revision: grant.revision,
+        });
+      }
+    }
+  }
   const admission: ToolEffectAdmission = {
     scope: facts.scope,
     effectKind: facts.effectKind,
     grantReference: r.grantReference,
     binding: {
+      ...(roomBasis ? { roomBasis } : {}),
       ...(facts.githubRepositoryIds ? { githubRepositoryIds: facts.githubRepositoryIds } : {}),
       workspaceId: r.workspaceId,
       roomId: r.roomId,
@@ -121,6 +187,28 @@ export function prepare(
     catalog: current,
     tool,
     admission,
-    confirmationRequired: g.mode === 'confirm',
+    confirmationRequired,
   };
+}
+
+/** Shared complete action/catalog/resource eligibility; no union of partial permissions. */
+export function servicePermissionsAllow(
+  tx: ServiceAuthorityTransaction,
+  permissions: readonly OwnerPermission[],
+  c: ServiceConnection,
+  current: ServiceCatalogSnapshot,
+  tool: ServiceToolDefinition,
+  scope: ToolEffectAdmission['scope'],
+  options: ServiceCallAdmissionOptions,
+): boolean {
+  return permissions.some((p) => {
+    if (p.kind !== 'service' || !p.baselineCatalogId || !permittedResources(p, c, scope))
+      return false;
+    const baseline = tx.catalog(p.baselineCatalogId);
+    const continuous =
+      !!baseline &&
+      baseline.credentialRevision !== current.credentialRevision &&
+      options.credentialContinuous?.(structuredClone(c), structuredClone(baseline)) === true;
+    return eligibleServiceTool(p, baseline, current, tool, continuous);
+  });
 }

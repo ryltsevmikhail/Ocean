@@ -40,7 +40,11 @@ s.on('error',()=>process.exit(0));
 setTimeout(()=>process.exit(3),500);
 });
 `;
-export async function probeSandbox(options: SandboxOptions): Promise<SandboxQualification> {
+export async function probeSandbox(
+  options: SandboxOptions,
+  guard?: ToolDispatchGuard,
+  signal?: AbortSignal,
+): Promise<SandboxQualification> {
   const platform = process.platform + '/' + process.arch;
   let qualified = false;
   try {
@@ -49,6 +53,8 @@ export async function probeSandbox(options: SandboxOptions): Promise<SandboxQual
       ...options,
       program: '/toolchain/node',
       args: ['-e', canary],
+      ...(guard ? { guard } : {}),
+      ...(signal ? { signal } : {}),
     });
     qualified =
       result.exitCode === 0 &&
@@ -112,6 +118,8 @@ export async function createSandboxBackend(
   options: SandboxOptions,
   presets: readonly CodingTestPreset[],
   snapshot: () => Promise<string>,
+  guard?: ToolDispatchGuard,
+  signal?: AbortSignal,
 ): Promise<WorkspaceBackend> {
   const frozen = structuredClone({ options, presets });
   options = frozen.options;
@@ -131,7 +139,9 @@ export async function createSandboxBackend(
         : fingerprintTree(mount.source);
   options = { ...options, expectedInputs };
   const qualifiedIdentity = await identity();
-  if (!(await probeSandbox(options)).qualified)
+  if (signal?.aborted || (guard && !guard.authorize()))
+    throw new ToolError('coding_denied', 'sandbox preparation refused');
+  if (!(await probeSandbox(options, guard, signal)).qualified)
     throw new ToolError('containment_unavailable', 'sandbox qualification failed');
   if ((await identity()) !== qualifiedIdentity)
     throw new ToolError('containment_unavailable', 'sandbox inputs changed during qualification');
@@ -159,13 +169,13 @@ export async function createSandboxBackend(
       processContainment: true,
       confirmedTreeStop: true,
     },
-    async read(path) {
+    async read(path, signal, guard) {
       await verify();
-      return (await fileOperation({ op: 'read', path })) as string | null;
+      return (await fileOperation({ op: 'read', path }, signal, guard)) as string | null;
     },
-    async list(path) {
+    async list(path, signal, guard) {
       await verify();
-      const entries = (await fileOperation({ op: 'list', path })) as FileEntry[];
+      const entries = (await fileOperation({ op: 'list', path }, signal, guard)) as FileEntry[];
       return entries
         .filter((e) => !blockedName(e.name))
         .sort((a, b) => a.name.localeCompare(b.name));

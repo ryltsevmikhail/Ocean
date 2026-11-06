@@ -12,7 +12,7 @@ export type { RoomHandoff } from '@runnets/domain';
 const handoffs = new WeakMap<ToolResult, RoomHandoff>();
 const SUMMARY = 'Room delegation committed';
 
-/** Future trusted producer calls this only after durable admission. No host uses it yet. */
+/** Runtime room tools call this only after the exact delegation is durably admitted. */
 export function committedRoomDelegate(proof: RoomHandoff): ToolResult {
   const { turnId, taskRunId, attemptId, callId, childTaskId, deliveryId, expectedRunVersion } =
     proof;

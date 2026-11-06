@@ -112,6 +112,13 @@ it('requires authoritative task scope current membership live lease and no unres
   owns = false;
   expect(codingApprovalAdmission(binding, tx, deps)).toBe(false);
   owns = true;
+  expect(
+    codingApprovalAdmission(
+      binding,
+      { ...tx, roomScope: (_run, at) => (Number.isNaN(at) ? false : null) },
+      deps,
+    ),
+  ).toBe(false);
   member = false;
   expect(codingApprovalAdmission(binding, tx, deps)).toBe(false);
 });

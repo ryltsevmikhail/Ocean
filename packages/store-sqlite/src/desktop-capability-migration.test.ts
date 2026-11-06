@@ -30,7 +30,7 @@ it('advances the capability epoch transactionally without following legacy paths
   const before = db.prepare('SELECT * FROM ocean_desktop_operations ORDER BY id').all();
   initializeSchema(db);
   expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-    '28',
+    '29',
   );
   expect(db.prepare('SELECT * FROM ocean_desktop_operations ORDER BY id').all()).toEqual(before);
   expect(
@@ -43,7 +43,7 @@ it('leaves schema 18 and authority unchanged when capability publication fails',
   const db = previous();
   const before = db.prepare('SELECT * FROM meta ORDER BY key').all();
   db.exec(
-    "CREATE TRIGGER stop_capability BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='28' BEGIN SELECT RAISE(ABORT,'synthetic interruption'); END",
+    "CREATE TRIGGER stop_capability BEFORE UPDATE ON meta WHEN NEW.key='schema_version' AND NEW.value='29' BEGIN SELECT RAISE(ABORT,'synthetic interruption'); END",
   );
   expect(() => initializeSchema(db)).toThrow('synthetic interruption');
   expect(db.prepare('SELECT * FROM meta ORDER BY key').all()).toEqual(before);

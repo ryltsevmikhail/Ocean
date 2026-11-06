@@ -27,7 +27,7 @@ it('migrates genuine populated BASE v27 without inventing proof, history or wake
       try {
         expect(
           read.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-        ).toBe('28');
+        ).toBe('29');
         const service = new RoomTaskPersistence({
           store: store.conversations,
           ownerId: 'owner',
@@ -90,7 +90,17 @@ it('migrates genuine populated BASE v27 without inventing proof, history or wake
         });
         for (const [table, rows] of Object.entries(fixture.rows))
           if (table !== 'meta')
-            expect(read.prepare(`SELECT * FROM ${table}`).all(), table).toEqual(rows);
+            expect(
+              read
+                .prepare(`SELECT ${Object.keys(rows[0] ?? {}).join(',') || '*'} FROM ${table}`)
+                .all(),
+              table,
+            ).toEqual(rows);
+        expect(
+          read
+            .prepare('SELECT host_scope FROM ocean_room_tasks WHERE host_scope IS NOT NULL')
+            .all(),
+        ).toEqual([]);
         expect(read.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
         expect(
           read

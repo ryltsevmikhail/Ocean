@@ -1,3 +1,5 @@
+import { roomHostPhysicalScope } from './room-host-command.js';
+import type { RoomHostBinding } from './room-host-storage.js';
 import {
   readServiceOwnerReceipt,
   putServiceOwnerReceipt,
@@ -30,7 +32,13 @@ const versionsMatch = (a: ServiceConnectionVersions, b: ServiceConnectionVersion
 export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
   readonly #db: DatabaseSync;
   readonly #journal: SqliteToolJournal;
-  constructor(db: DatabaseSync, journal = new SqliteToolJournal(db)) {
+  readonly #host: RoomHostBinding;
+  constructor(
+    db: DatabaseSync,
+    journal = new SqliteToolJournal(db),
+    host: RoomHostBinding = () => null,
+  ) {
+    this.#host = host;
     this.#journal = journal;
     this.#db = db;
   }
@@ -41,6 +49,10 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
     };
     const db = this.#db;
     const tx: ServiceAuthorityTransaction = {
+      roomScope: (run, at, selection) => {
+        guard();
+        return roomHostPhysicalScope(db, this.#host, run, at, selection);
+      },
       listOwnerReceipts: (ownerId, query) => {
         guard();
         return listServiceOwnerReceipts(db, ownerId, query);
@@ -65,9 +77,9 @@ export class SqliteServiceAuthority implements ServiceAuthorityStorePort {
         guard();
         return this.#journal.grantCalls(run, id);
       },
-      claim: (r, fingerprint, admission) => {
+      claim: (r, fingerprint, admission, at) => {
         guard();
-        return this.#journal.claimNow(r.invocationId, r.tool, r, fingerprint, admission);
+        return this.#journal.claimNow(r.invocationId, r.tool, r, fingerprint, admission, at);
       },
       pending: () => {
         guard();

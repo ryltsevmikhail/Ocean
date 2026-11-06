@@ -1,3 +1,10 @@
+import type { RoomHostScope } from '@runnets/application';
+import { changesetStorage } from './changeset-storage.js';
+import { chatStorage } from './chat-storage.js';
+import { roomHostModelAllowed } from './room-host-command.js';
+import { roomHostCounts } from './room-host-storage.js';
+import { roomHostProjection } from './room-host-storage.js';
+import type { RoomHostBinding } from './room-host-storage.js';
 import { roomTaskSliceStorage } from './room-task-slice-storage.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { validRoomTaskIdentity } from '@runnets/application';
@@ -89,6 +96,7 @@ export function readRoomTask(db: DatabaseSync, id: string): RoomTaskRecord | nul
     return {
       ...base,
       kind: 'root',
+      hostScope: readHostScope(r['host_scope']),
       parentId: null,
       assigneeBotId: null,
       lastDeliverySeq: 0,
@@ -148,9 +156,23 @@ export function decodeRoomDelivery(r: Row): RoomDeliveryRecord {
     state: readText(r, 'state') as RoomDeliveryRecord['state'],
   };
 }
-export function roomTaskStorage(db: DatabaseSync): RoomTaskTransaction {
+export function roomTaskStorage(
+  db: DatabaseSync,
+  host: RoomHostBinding = () => null,
+): RoomTaskTransaction {
   return {
     ...roomTaskSliceStorage(db),
+    sourceTurn: chatStorage(db).chatTurn,
+    hostScope: host,
+    authorizeModel: (run, at) => roomHostModelAllowed(db, host, run, at),
+    counts: (id) => roomHostCounts(db, id),
+    projection: (id) => roomHostProjection(db, id),
+    roots: () =>
+      db
+        .prepare('SELECT id FROM ocean_room_tasks WHERE id=root_id ORDER BY id COLLATE BINARY')
+        .all()
+        .map((r) => readRoomTask(db, String(r['id']))!)
+        .filter((r) => r.kind === 'root'),
     task: (id) => readRoomTask(db, id),
     deliveriesForReceipt: (key, _messageId) =>
       db
@@ -160,9 +182,10 @@ export function roomTaskStorage(db: DatabaseSync): RoomTaskTransaction {
     origin: (turn, run, attempt, live) => roomTaskOrigin(db, turn, run, attempt, live),
     grant: (id) => readAuthorityGrant(db, id),
     modelConnection: (id) => readModelConnection(db, id),
+    codingWorktree: (id) => changesetStorage(db).worktree(id),
     codingTask: (id) =>
       codingTask(db.prepare('SELECT * FROM ocean_coding_tasks WHERE id=?').get(id)),
-    restored: () => restoreOriginStore(db).origin() !== null,
+    restored: () => restoreOriginStore(db).origin() !== null && !host()?.epochId,
     roomHold: (roomId) =>
       !!db
         .prepare(
@@ -185,7 +208,9 @@ export function roomTaskStorage(db: DatabaseSync): RoomTaskTransaction {
         )
         .get(roomId),
     putTask(t) {
-      db.prepare('INSERT INTO ocean_room_tasks VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(
+      db.prepare(
+        'INSERT INTO ocean_room_tasks(id,workspace_id,room_id,root_id,parent_id,assignee_bot_id,status,version,revision,last_delivery_seq,waiting_child_id,root_payload,host_scope) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      ).run(
         t.id,
         t.workspaceId,
         t.roomId,
@@ -198,6 +223,7 @@ export function roomTaskStorage(db: DatabaseSync): RoomTaskTransaction {
         t.lastDeliverySeq,
         t.waitingChildId,
         t.rootPayload === null ? null : JSON.stringify(t.rootPayload),
+        t.kind === 'root' && t.hostScope ? JSON.stringify(t.hostScope) : null,
       );
     },
     putDelivery(d) {
@@ -233,4 +259,24 @@ export function roomTaskStorage(db: DatabaseSync): RoomTaskTransaction {
       if (changed.changes !== 1) throw Error('revision_conflict');
     },
   };
+}
+
+function readHostScope(raw: unknown): RoomHostScope | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== 'string') throw Error('invalid room host');
+  const value: unknown = JSON.parse(raw);
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join() !== 'epochId,ownerId' ||
+    !('ownerId' in value) ||
+    typeof value.ownerId !== 'string' ||
+    !validConversationText(value.ownerId, 128) ||
+    !('epochId' in value) ||
+    (value.epochId !== null &&
+      (typeof value.epochId !== 'string' || !validConversationText(value.epochId, 128)))
+  )
+    throw Error('invalid room host');
+  return { ownerId: value.ownerId, epochId: value.epochId };
 }

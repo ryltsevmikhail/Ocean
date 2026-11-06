@@ -1,3 +1,4 @@
+import type { RoomPhysicalScope } from './room-task-authority.js';
 import type { ServiceOwnerReceipt } from './service-owner-receipt.js';
 import type { ToolEffectAdmission, ToolEffectRecord, ToolEffectOutcome } from './tools.js';
 import type { ServiceCallRequest } from './service-admission-types.js';
@@ -10,6 +11,7 @@ import type {
 } from '@runnets/domain';
 /** Runtime-only storage; these operations grant no model-facing mutation capability. */
 export interface ServiceAuthorityTransaction {
+  roomScope?(runId: string, at: number, selection?: true): RoomPhysicalScope | false | null;
   listOwnerReceipts(
     ownerId: string,
     query: ServiceOwnerOperationsQuery,
@@ -19,7 +21,12 @@ export interface ServiceAuthorityTransaction {
   participates(subject: OwnerScopeGrant['subject']): boolean;
   runMatches(request: ServiceCallRequest): boolean;
   grantCalls(run: string, grantId: string): number;
-  claim(request: ServiceCallRequest, fingerprint: string, admission: ToolEffectAdmission): boolean;
+  claim(
+    request: ServiceCallRequest,
+    fingerprint: string,
+    admission: ToolEffectAdmission,
+    at?: number,
+  ): boolean;
   pending(): readonly ToolEffectRecord[];
   settle(request: ServiceCallRequest, outcome: Exclude<ToolEffectOutcome, 'started'>): void;
   connection(id: string): ServiceConnection | null;

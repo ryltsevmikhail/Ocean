@@ -40,6 +40,7 @@ export interface RecordedRoomMessage {
 }
 export interface DirectChatDeps extends ConversationServiceDeps {
   readonly tasks: TaskRunService;
+  readonly sha256?: (text: string) => string;
   readonly reviews?: Pick<ChatReviewService, 'review'>;
   readonly codingTools?: {
     /** Successful preparation must join its workers and prove their cleanup before returning. */
@@ -153,6 +154,12 @@ export class DirectChatService {
   }
   /** Requires exclusive host ownership. Never replays a provider or tool request. */
   recover(): Promise<void> {
-    return recoverChats(this.#deps.store, this.#deps.tasks, this.#deps.clock, this.#deps.reviews);
+    return recoverChats(
+      this.#deps.store,
+      this.#deps.tasks,
+      this.#deps.clock,
+      this.#deps.reviews,
+      this.#deps.sha256,
+    );
   }
 }

@@ -130,6 +130,22 @@ export class DeepSeekProvider implements ProviderPort {
       return;
     }
 
+    let authorized = false;
+    try {
+      authorized = request.authorizeDispatch?.() !== false;
+    } catch {
+      /* A veto proves no send. */
+    }
+    if (!authorized || signal?.aborted) {
+      yield {
+        type: 'error',
+        error: new ProviderError('invalid_request', 'model dispatch refused', {
+          dispatch: 'not_sent',
+          retryable: false,
+        }),
+      };
+      return;
+    }
     let response: HttpResponse;
     try {
       response = await withAbort(

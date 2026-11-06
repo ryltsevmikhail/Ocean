@@ -13,10 +13,17 @@ import {
 /** Host composition: ephemeral state or a single-owner durable runtime with reconciliation. */
 import { realpathSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { runtimeIncomplete, restoredRuntimeAdmission } from './runtime-restoration.js';
+import {
+  runtimeIncomplete,
+  restoredRuntimeAdmission,
+  bindRuntimeRoomHost,
+  codingResolutionAuthority,
+} from './runtime-restoration.js';
 import { randomUUID, createHash } from 'node:crypto';
 import {
   RoomRuntimeRuns,
+  RoomTaskPersistence,
+  unstartedRoomClaimRuns,
   combineChatTools,
   CodingTaskService,
   CodingReviewService,
@@ -98,6 +105,11 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       clock: deps.clock,
       restored,
     };
+    bindRuntimeRoomHost(
+      store,
+      codingDeps.ownerId,
+      !restored && options.pluginMutationsAllowed !== false,
+    );
     if (!restored) recoverCodingFinalizations(store.finalization, codingDeps.leases);
     const coding = new CodingTaskService(codingDeps);
     const codingApprovals = new CodingApprovalService({
@@ -149,23 +161,24 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
             },
           };
     const reviews = new ChatReviewService({ ...deps, tasks: service, journal: store.tools });
+    const codingTools = options.codingTools
+      ? codingTurnFactory({
+          ...options.codingTools,
+          store: store.coding,
+          tasks: coding,
+          approvals: codingApprovals,
+          journal: store.tools,
+          leases: codingDeps.leases,
+          evidence: store.codingEvidence,
+        })
+      : undefined;
     const chat = new DirectChatService({
       reviews,
+      sha256: codingDeps.projectId,
       ...deps,
       tasks: service,
       grantedTools,
-      ...(options.codingTools
-        ? {
-            codingTools: codingTurnFactory({
-              ...options.codingTools,
-              store: store.coding,
-              tasks: coding,
-              approvals: codingApprovals,
-              journal: store.tools,
-              evidence: store.codingEvidence,
-            }),
-          }
-        : {}),
+      ...(codingTools ? { codingTools } : {}),
     });
     const codingApply = new CodingApplyService(
       store.codingApplications,
@@ -173,16 +186,25 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       (task, tx) => codingApplyAdmission(task, tx, codingDeps),
     );
     const broadcasts = new RoomBroadcastService({ ...deps, nextId: deps.nextId });
+    const roomTasks = new RoomTaskPersistence({
+      ...deps,
+      ownerId: codingDeps.ownerId,
+      sha256: codingDeps.projectId,
+    });
     const ready = chat.recover().then(() => {
       // Unfinished batches pause only after started children were resolved by chat recovery.
       broadcasts.recover();
       codingApply.recover();
       // Lower crashed plugin operations to `uncertain` before generic journal recovery.
       pluginRuntime.operations?.recover();
-      return reconcileInterrupted(service, store.tools);
+      return reconcileInterrupted(service, store.tools, (id) =>
+        unstartedRoomClaimRuns(roomTasks.deps).includes(id),
+      );
     });
     return {
       restored,
+      roomTasks,
+      ...(codingTools ? { codingTools } : {}),
       finalization: store.finalization,
       providerConnections: store.providerConnections,
       plugins: {
@@ -215,27 +237,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         store.codingResolutions,
         new GitCodingApplyProject(),
         {
-          ownerId: codingDeps.ownerId,
-          clock: codingDeps.clock,
-          admit: (task, tx) => {
-            const worktree = tx.worktree(task.id);
-            return (
-              !codingDeps.restored &&
-              task.status === 'reserved' &&
-              worktree !== null &&
-              worktree.state === 'ready' &&
-              worktree.root === task.worktreeRoot &&
-              worktree.projectRoot === task.projectRoot &&
-              worktree.baseCommit === task.baseCommit &&
-              worktree.workspaceId === task.workspaceId &&
-              worktree.taskId === task.id &&
-              worktree.lease.ownerId === codingDeps.ownerId &&
-              worktree.lease.projectRoot === worktree.root &&
-              task.lease.projectRoot === task.projectRoot &&
-              codingDeps.leases.owns(task.lease) &&
-              codingDeps.leases.owns(worktree.lease)
-            );
-          },
+          ...codingResolutionAuthority(codingDeps),
         },
       ),
       codingApplyInspection: new CodingApplyInspectionService(

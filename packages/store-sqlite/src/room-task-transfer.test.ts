@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { RoomModelPolicyService, unconfiguredModelConnection } from '@runnets/application';
-import { roomTasks, attachRoomActor, roomTaskCounts } from '../test-fixtures/room-tasks.js';
-function localPolicy(f: ReturnType<typeof roomTasks>) {
+import { hostedRoomTasks, attachRoomActor, roomTaskCounts } from '../test-fixtures/room-tasks.js';
+function localPolicy(f: ReturnType<typeof hostedRoomTasks>) {
   f.store.modelConnections.put(
     {
       ...unconfiguredModelConnection('fixture'),
@@ -33,9 +33,9 @@ function localPolicy(f: ReturnType<typeof roomTasks>) {
   };
 }
 it('blocks privacy policy lowering for runnable frozen queued cloud pins after local rebind', () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    expect(f.service.start(f.input).ok).toBe(true);
+    expect(f.service.startHosted(f.input).ok).toBe(true);
     const policy = localPolicy(f),
       before = roomTaskCounts(f);
     expect(policy.service.set(policy.input)).toMatchObject({
@@ -53,9 +53,9 @@ it.each([
   { row: 'task', status: 'stopped' },
   { row: 'task', status: 'completed' },
 ])('permits privacy deny for a never-claimed queue under $row=$status', ({ row, status }) => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start({ ...f.input, initialBotIds: ['a'] });
+    const start = f.service.startHosted({ ...f.input, initialBotIds: ['a'] });
     if (!start.ok) throw Error('start');
     const policy = localPolicy(f);
     expect(policy.service.set({ ...policy.input, requestId: 'before-stop' })).toMatchObject({
@@ -82,9 +82,9 @@ it.each([
   }
 });
 it('retains the privacy barrier for a stopped unresolved claim even after its chat becomes terminal', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start({ ...f.input, initialBotIds: ['a'] });
+    const start = f.service.startHosted({ ...f.input, initialBotIds: ['a'] });
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       policy = localPolicy(f);
@@ -118,13 +118,13 @@ it('retains the privacy barrier for a stopped unresolved claim even after its ch
 });
 
 it('refuses private-room cloud transfers without writes', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
     f.store.conversations.atomic((tx) =>
       tx.putRoomModelPolicy({ roomId: 'room', cloudTransfer: 'deny', revision: 2 }),
     );
     const before = roomTaskCounts(f);
-    expect(f.service.start(f.input)).toMatchObject({
+    expect(f.service.startHosted(f.input)).toMatchObject({
       ok: false,
       error: { code: 'model_transfer_denied' },
     });
@@ -132,7 +132,7 @@ it('refuses private-room cloud transfers without writes', async () => {
     f.store.conversations.atomic((tx) =>
       tx.putRoomModelPolicy({ roomId: 'room', cloudTransfer: 'allow', revision: 3 }),
     );
-    const started = f.service.start(f.input);
+    const started = f.service.startHosted(f.input);
     if (!started.ok) throw Error('start');
     const actor = await attachRoomActor(f, started.value);
     f.store.conversations.atomic((tx) =>

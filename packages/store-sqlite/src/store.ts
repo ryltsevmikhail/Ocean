@@ -1,3 +1,6 @@
+import { createRoomHostBinding } from './room-host-storage.js';
+import type { RoomHostScope } from '@runnets/application';
+import type { RestoreOrigin, ProfileRebindRecord } from '@runnets/domain';
 import { SqliteServiceAuthority } from './service-authority-storage.js';
 import type { ServiceAuthorityStorePort } from '@runnets/application';
 import { upgradeDesktopBinding, type DesktopBindingUpgrade } from './desktop-binding-upgrade.js';
@@ -80,6 +83,10 @@ export interface OpenSqliteStoreOptions {
 }
 
 export interface SqliteStore {
+  bindRoomHost(
+    scope: RoomHostScope,
+    verified: { origin: RestoreOrigin | null; active: ProfileRebindRecord | null },
+  ): void;
   readonly serviceAuthority: ServiceAuthorityStorePort;
   readonly modelConnections: ModelConnectionStorePort;
   readonly providerConnections: ProviderConnectionStorePort;
@@ -137,15 +144,17 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
   // SQLite indexes equal keys by rowid, so a reverse seek finds the latest matching preset.
   db.exec(`CREATE INDEX IF NOT EXISTS ocean_evidence_preset
     ON ocean_coding_test_evidence(task_id,json_extract(payload,'$.presetId'))`);
+  const roomHost = createRoomHostBinding(db);
   const generator = ids ?? createDurableIdGenerator(db);
-  const log = new SqliteEventLog(db, generator);
+  const log = new SqliteEventLog(db, generator, () => roomHost.current());
   const dedup = new SqliteCommandDedup(db);
   const checkpoints = new SqliteCheckpointStore(db, log);
   const recovery = createRecovery(log, checkpoints);
   let closed = false;
-  const tools = new SqliteToolJournal(db);
+  const tools = new SqliteToolJournal(db, () => roomHost.current());
   return {
-    serviceAuthority: new SqliteServiceAuthority(db, tools),
+    bindRoomHost: (scope, verified) => roomHost.bind(scope, verified),
+    serviceAuthority: new SqliteServiceAuthority(db, tools, () => roomHost.current()),
     modelConnections: new SqliteModelConnections(db),
     providerConnections: new SqliteProviderConnections(db),
     pluginCatalog: new SqlitePluginCatalog(db),
@@ -167,8 +176,8 @@ function buildStore(db: DatabaseSync, ids: IdGenerator | undefined): SqliteStore
     codingResolutions: new SqliteCodingApplyResolutionStore(db),
     codingReviews: new SqliteCodingReviewStore(db),
     codingEvidence: new SqliteCodingTestEvidenceStore(db),
-    codingApprovals: new SqliteCodingApprovalStore(db),
-    conversations: new SqliteConversationStore(db),
+    codingApprovals: new SqliteCodingApprovalStore(db, tools, () => roomHost.current()),
+    conversations: new SqliteConversationStore(db, { roomHost: () => roomHost.current() }),
     log,
     dedup,
     checkpoints,

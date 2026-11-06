@@ -8,7 +8,7 @@ import { expect, it } from 'vitest';
 import type { LocalMessage, LocalRuntimeIdentity } from '@runnets/contracts';
 import { openOceanProfile } from '../ocean/profile.js';
 import {
-  roomTasks,
+  hostedRoomTasks,
   attachRoomActor,
 } from '../../../../packages/store-sqlite/test-fixtures/room-tasks.js';
 import { child } from '../../test-fixtures/model-process-rpc.ts';
@@ -23,12 +23,12 @@ it.runIf(process.platform === 'linux')(
     const initialized = openOceanProfile(profile, true);
     await initialized.ready;
     initialized.close();
-    const f = roomTasks(join(profile, 'runtime.sqlite'));
+    const f = hostedRoomTasks(join(profile, 'runtime.sqlite'));
     const scope = { workspaceId: 'ws_fixture', roomId: 'room' };
     let runId: string;
     let expected: readonly LocalMessage[];
     try {
-      const start = f.service.start(f.input);
+      const start = f.service.startHosted(f.input);
       if (!start.ok) throw Error('fixture_start');
       const actor = await attachRoomActor(f, start.value);
       runId = actor.taskRunId;

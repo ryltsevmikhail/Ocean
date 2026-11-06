@@ -1,11 +1,11 @@
 import { initializeSchema } from './schema.js';
 import { taskRunId } from '@runnets/domain';
 import { expect, it } from 'vitest';
-import { roomTasks, attachRoomActor } from '../test-fixtures/room-tasks.js';
+import { hostedRoomTasks, attachRoomActor } from '../test-fixtures/room-tasks.js';
 it('protects the entire admitted room activation on actual upsert', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const started = f.service.start(f.input);
+    const started = f.service.startHosted(f.input);
     if (!started.ok) throw Error('start');
     const actor = await attachRoomActor(f, started.value);
     const turn = f.store.conversations.atomic((tx) => tx.chatTurn(actor.turnId))!;
@@ -137,7 +137,7 @@ it.each(['member', 'pin', 'policy', 'stop', 'receipt', 'unknown', 'physical'] as
               },
             }
           : f.input;
-      const start = f.service.start({ ...input, initialBotIds: ['a'] });
+      const start = f.service.startHosted({ ...input, initialBotIds: ['a'] });
       if (!start.ok) throw Error('start');
       if (mode === 'member')
         f.db!.prepare("DELETE FROM ocean_members WHERE room_id='room' AND bot_id='a'").run();
@@ -158,8 +158,10 @@ it.each(['member', 'pin', 'policy', 'stop', 'receipt', 'unknown', 'physical'] as
         f.db!.prepare("UPDATE ocean_receipts SET binding='altered' WHERE request_id='start'").run();
       if (mode === 'unknown')
         f.db!.exec("INSERT INTO tool_invocations_v1 VALUES('unknown','legacy','uncertain')");
-      expect(f.claim(start.value.deliveries[0]!.deliveryId).kind).toBe('held');
-      expect(f.turns()).toHaveLength(0);
+      expect(f.claim(start.value.deliveries[0]!.deliveryId).kind).toBe(
+        mode === 'physical' ? 'claimed' : 'held',
+      );
+      expect(f.turns()).toHaveLength(mode === 'physical' ? 1 : 0);
       expect(f.requests).toHaveLength(0);
     } finally {
       f.close();
@@ -255,7 +257,9 @@ it.each(['head', 'receipt', 'stop', 'pin', 'unknown', 'unrelated'] as const)(
           'other',
         );
       const repaired = await repairRoomHandoff(f.deps, turn.id);
-      expect(repaired?.roomSliceDisposition ?? null).toBe(mode === 'unrelated' ? 'yielded' : null);
+      expect(repaired?.roomSliceDisposition ?? null).toBe(
+        mode === 'unrelated' || mode === 'stop' ? 'yielded' : null,
+      );
       expect(f.requests).toHaveLength(1);
       expect(f.claim(turn.roomHandoff!.deliveryId).kind).toBe(
         mode === 'unrelated' ? 'claimed' : 'held',

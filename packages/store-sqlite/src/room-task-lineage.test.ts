@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest';
-import { roomTasks, attachRoomActor, roomTaskCounts } from '../test-fixtures/room-tasks.js';
+import { hostedRoomTasks, attachRoomActor, roomTaskCounts } from '../test-fixtures/room-tasks.js';
 it('rejects a newly inserted parent from another root while accepting the same-root parent', () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const first = f.service.start(f.input),
-      other = f.service.start({ ...f.input, requestId: 'other' });
+    const first = f.service.startHosted(f.input),
+      other = f.service.startHosted({ ...f.input, requestId: 'other' });
     if (!first.ok || !other.ok) throw Error('start');
     const row = f.store.conversations.atomic((tx) =>
       tx.roomTasks!.task(first.value.deliveries[0]!.taskId),
@@ -34,9 +34,9 @@ it('rejects a newly inserted parent from another root while accepting the same-r
   }
 });
 it('rejects a fresh marked turn in a different existing room without a duplicate delivery or task hold', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value);
     f.store.conversations.atomic((tx) =>

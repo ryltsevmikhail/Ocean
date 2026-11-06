@@ -89,8 +89,7 @@ function validateRoomSlice(t: ChatTurn): void {
       ![m.taskId, m.deliveryId].every(
         (s) => typeof s === 'string' && s.length > 0 && s.length <= 128,
       ) ||
-      t.broadcast !== undefined ||
-      t.codingTaskId !== undefined)
+      t.broadcast !== undefined)
   )
     throw Error('invalid room marker');
   if (

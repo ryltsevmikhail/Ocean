@@ -177,3 +177,5 @@ export {
 
 export { prepareManagedStdio, type ManagedStdioRequest } from './managed-stdio.js';
 export type { LocalServiceClient } from './local-service-client.js';
+
+export * from './local-room-tasks-client.js';

@@ -202,3 +202,19 @@ describe('DeepSeekProvider metadata', () => {
     expect(target.capabilities.streaming).toBe(true);
   });
 });
+it.each([false, 'throw'] as const)('vetoes trusted dispatch %s before inference', async (mode) => {
+  const http = fakeHttp();
+  const p = makeProvider(http);
+  const events = [];
+  for await (const event of p.stream({
+    model: MODEL,
+    messages: [{ role: 'user', content: 'hi' }],
+    authorizeDispatch: () => {
+      if (mode === 'throw') throw Error('veto');
+      return false;
+    },
+  }))
+    events.push(event);
+  expect(events).toMatchObject([{ type: 'error', error: { dispatch: 'not_sent' } }]);
+  expect(http.calls).toHaveLength(0);
+});

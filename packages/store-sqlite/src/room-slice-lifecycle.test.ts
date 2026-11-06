@@ -153,7 +153,7 @@ it('drains an earlier queued input exactly and emits only one terminal assignmen
 it('allows an independent marked assignment to progress while A waits and preserves root capacity', async () => {
   const f = roomSlices([delegate('b', 'B work'), answer('C independent')]);
   try {
-    const started = f.service.start({ ...f.input, initialBotIds: ['a', 'c'] });
+    const started = f.service.startHosted({ ...f.input, initialBotIds: ['a', 'c'] });
     if (!started.ok) throw Error('start');
     const a = await f.execute(started.value.deliveries[0]!.deliveryId);
     expect(a.roomSliceDisposition).toBe('yielded');
@@ -169,7 +169,7 @@ it('allows an independent marked assignment to progress while A waits and preser
 it('enforces two claimed slices under the same root lock', () => {
   const f = roomSlices([]);
   try {
-    const started = f.service.start({ ...f.input, initialBotIds: ['a', 'b', 'c'] });
+    const started = f.service.startHosted({ ...f.input, initialBotIds: ['a', 'b', 'c'] });
     if (!started.ok) throw Error('start');
     expect(f.claim(started.value.deliveries[0]!.deliveryId).kind).toBe('claimed');
     expect(f.claim(started.value.deliveries[1]!.deliveryId).kind).toBe('claimed');
@@ -182,7 +182,7 @@ it('enforces two claimed slices under the same root lock', () => {
 it('never admits the thirty-third slice even with no currently executing run', async () => {
   const bots = ['a', 'b', 'c'];
   const f = roomSlices(
-    Array.from({ length: 32 }, (_, i) => delegate(bots[(i + 1) % 3]!, 'bounded')),
+    Array.from({ length: 32 }, (_, i) => delegate(bots[(i + 1) % 3]!, 'bounded ' + i)),
     [],
   );
   try {

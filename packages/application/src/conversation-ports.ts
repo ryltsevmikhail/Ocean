@@ -1,3 +1,8 @@
+import type {
+  RoomTaskStopReceipt,
+  RoomTaskStateReceipt,
+  RoomTaskFenceReceipt,
+} from './room-task-host.js';
 import type { RoomTaskTransaction } from './room-task-records.js';
 import type {
   BroadcastBatch,
@@ -43,6 +48,9 @@ export type ConversationReply =
 export interface ConversationReceipt {
   readonly binding: string;
   readonly reply:
+    | { readonly kind: 'room_task_state'; readonly data: RoomTaskStateReceipt }
+    | { readonly kind: 'room_task_fence'; readonly data: RoomTaskFenceReceipt }
+    | { readonly kind: 'room_task_stop'; readonly data: RoomTaskStopReceipt }
     | ConversationReply
     | { readonly kind: 'room_model_policy'; readonly data: RoomModelPolicy }
     | { readonly kind: 'bound_bot'; readonly data: BoundBot }

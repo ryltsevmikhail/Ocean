@@ -34,7 +34,9 @@ import { SCHEMA_VERSION } from './schema.js';
  * development artifacts can exist on a disposable profile; they are not
  * supported releases and may be dropped once no artifact ever produced them.
  */
-const historicalSchemas = [5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 26, 27];
+const historicalSchemas = [
+  5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 26, 27, 28,
+];
 const MAINTAINABLE_SCHEMAS = [...historicalSchemas, SCHEMA_VERSION];
 
 export interface DatabaseSummary {

@@ -28,6 +28,7 @@ export function exactCodingReceipt(
     a.binding,
     a.grantReference ?? null,
     codingProjectId(a.binding.projectRoot),
+    a.roomBasis,
   );
   return canonicalJson(actual) === canonicalJson(expected);
 }

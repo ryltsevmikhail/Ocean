@@ -127,6 +127,7 @@ it.each([
             'decisions.service-v1',
             'service.authority-v2',
             'room.addressed-history-v1',
+            'room.tasks-v1',
           ],
         },
       ]);

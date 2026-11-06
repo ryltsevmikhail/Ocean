@@ -17,6 +17,7 @@ export interface LocalDecisionRef extends LocalRunQuery {
 }
 export interface LocalDecision extends LocalDecisionRef {
   readonly kind:
+    | 'project-read'
     | 'service-call'
     | 'write'
     | 'test'
@@ -113,6 +114,7 @@ export function isLocalDecision(v: unknown): v is LocalDecision {
       'bindingDigest',
     ]) &&
     [
+      'project-read',
       'service-call',
       'write',
       'test',

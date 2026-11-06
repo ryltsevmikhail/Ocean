@@ -3,7 +3,6 @@ import { roomHandoffCommand, roomCompleteEvidence } from './room-slice-handoff.j
 import {
   canonicalJson,
   taskRunId,
-  ownerGrantApplies,
   roomAgentBinding,
   type ChatTurn,
   type TaskRunId,
@@ -11,65 +10,8 @@ import {
 } from '@runnets/domain';
 import type { ConversationTransaction } from './conversation-ports.js';
 import type { RoomDeliveryRecord, RoomTaskBot, RoomTaskRoot } from './room-task-records.js';
-import { roomTaskIdentity } from './room-task-identity.js';
-import { admitRoomModelTransfer } from './room-model-policy.js';
 import { roomTaskReceipt } from './room-task-receipt.js';
-/** Recheck current local authority; never broadens physical/coding mandates. */
-export function roomSliceAuthority(
-  tx: ConversationTransaction,
-  root: RoomTaskRoot,
-  task: RoomTaskBot,
-  at: number,
-  sha256?: (text: string) => string,
-): boolean {
-  const rt = tx.roomTasks,
-    room = tx.room(task.roomId),
-    bot = tx.bot(task.assigneeBotId);
-  if (
-    !rt ||
-    rt.restored() ||
-    tx.roomPolicy(task.roomId)?.mode === 'text_only' ||
-    !room ||
-    !bot ||
-    root.status !== 'ready' ||
-    root.workspaceId !== task.workspaceId ||
-    root.roomId !== task.roomId ||
-    tx.workspace()?.id !== root.workspaceId ||
-    root.rootPayload.mandate.codingTaskId !== null ||
-    root.rootPayload.mandate.permissions.length !== 0 ||
-    tx.activeChatTurn(task.roomId) ||
-    tx.broadcastBatchForRoom(task.roomId)
-  )
-    return false;
-  const members = room.kind === 'direct' ? [room.botId] : room.botIds;
-  const pin = root.rootPayload.members.find((m) => m.botId === bot.id);
-  if (
-    !members.includes(bot.id) ||
-    !pin ||
-    canonicalJson(roomTaskIdentity(tx, bot)) !== canonicalJson(pin.identity) ||
-    !admitRoomModelTransfer(tx, room.id, pin.identity).ok
-  )
-    return false;
-  return pin.grantReferences.every((ref) => {
-    const grant = rt.grant(ref.grantId);
-    return (
-      grant !== null &&
-      grant.revision === ref.revision &&
-      grant.owner.ownerId === root.rootPayload.ownerId &&
-      ownerGrantApplies(
-        grant,
-        {
-          workspaceId: root.workspaceId,
-          roomId: room.id,
-          botId: bot.id,
-          projectId: root.rootPayload.mandate.projectId ?? sha256?.(tx.workspace()!.root) ?? null,
-          taskId: null,
-        },
-        at,
-      )
-    );
-  });
-}
+export { roomSliceAuthority } from './room-task-authority.js';
 /** Stored receipts and joins establish meaning; delivery IDs select, never authorize. */
 export function inputEvidence(
   tx: ConversationTransaction,

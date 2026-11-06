@@ -24,14 +24,21 @@ export interface RoomTaskPersistenceDeps {
   readonly clock: Clock;
   readonly nextId: () => string;
   readonly sha256: (text: string) => string;
+  readonly onCommitted?: () => void;
 }
-/** Inert admissions only; no model/provider/service dispatch capability. */
+/** Persists owner intents; hosted admission stamps trusted scope without dispatching effects. */
 export class RoomTaskPersistence {
   readonly deps: RoomTaskPersistenceDeps;
   constructor(deps: RoomTaskPersistenceDeps) {
     this.deps = deps;
   }
   start(input: RoomTaskStart): ConversationResult<RoomTaskReceipt> {
+    return this.#start(input, false);
+  }
+  startHosted(input: RoomTaskStart): ConversationResult<RoomTaskReceipt> {
+    return this.#start(input, true);
+  }
+  #start(input: RoomTaskStart, hosted: boolean): ConversationResult<RoomTaskReceipt> {
     if (!validRoomTaskStart(input)) return conversationFailure('invalid_input');
     const d = this.deps,
       binding = canonicalJson([
@@ -78,6 +85,9 @@ export class RoomTaskPersistence {
           ? ok(receipt)
           : conversationFailure('request_conflict');
       }
+      const hostScope = hosted ? (tx.roomTasks?.hostScope() ?? null) : null;
+      if (hosted && (!hostScope || hostScope.ownerId !== d.ownerId))
+        return conversationFailure('admission_closed');
       const prepared = prepareRoomTaskStart(tx, input, d);
       if (!prepared.ok) return prepared;
       const { room, members } = prepared.value,
@@ -91,6 +101,7 @@ export class RoomTaskPersistence {
         rootId: '',
         status: 'ready',
         kind: 'root',
+        hostScope,
         parentId: null,
         assigneeBotId: null,
         lastDeliverySeq: 0,

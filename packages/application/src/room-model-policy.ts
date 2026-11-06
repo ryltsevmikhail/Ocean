@@ -38,7 +38,7 @@ export interface RoomModelPolicyDeps {
 }
 /** Current policy must exist even when it previously allowed transfers. */
 export function admitRoomModelTransfer(
-  tx: ConversationTransaction,
+  tx: Pick<ConversationTransaction, 'roomModelPolicy'>,
   roomId: string,
   identity: ModelExecutionIdentity | undefined,
 ): ConversationResult<void> {

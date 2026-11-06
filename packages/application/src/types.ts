@@ -14,6 +14,7 @@ import type { ModelActivationSnapshot, TaskRunId } from '@runnets/domain';
 import type { ChatMessage, ProviderPort } from './provider.js';
 
 export interface TurnInput {
+  readonly authorizeModelDispatch?: () => boolean;
   readonly activation?: ModelActivationSnapshot;
   readonly clock?: Clock;
   readonly beforeComplete?: (

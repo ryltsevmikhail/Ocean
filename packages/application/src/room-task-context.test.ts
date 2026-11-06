@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest';
-import { roomTasks, attachRoomActor } from '../../store-sqlite/test-fixtures/room-tasks.js';
+import { hostedRoomTasks, attachRoomActor } from '../../store-sqlite/test-fixtures/room-tasks.js';
 import { roomContext } from './room-context.js';
 it('keeps persisted addressed peer text attributed to its author in recipient context', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value);
     expect(

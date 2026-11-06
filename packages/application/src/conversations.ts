@@ -62,6 +62,9 @@ export class ConversationService {
         return previous.binding === binding &&
           previous.reply.kind !== 'review_request' &&
           previous.reply.kind !== 'bound_bot' &&
+          previous.reply.kind !== 'room_task_state' &&
+          previous.reply.kind !== 'room_task_fence' &&
+          previous.reply.kind !== 'room_task_stop' &&
           previous.reply.kind !== 'room_model_policy'
           ? ok(previous.reply)
           : conversationFailure('request_conflict');

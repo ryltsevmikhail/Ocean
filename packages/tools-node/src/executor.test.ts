@@ -98,3 +98,39 @@ it('fails closed when requested containment has no backend guarantee', async () 
     tools.prepare({ id: 'a', name: 'read_file', arguments: '{"path":"a"}' }),
   ).rejects.toThrow('containment');
 });
+it('guards the actual pre-read during prepare and the list dispatch after asynchronous preparation', async () => {
+  let reads = 0,
+    lists = 0,
+    allowed = true;
+  const backend: WorkspaceBackend = {
+    read: async () => {
+      reads++;
+      return 'content';
+    },
+    list: async () => {
+      lists++;
+      return [];
+    },
+    write: async () => {},
+    command: async () => ({ isError: false, output: '' }),
+  };
+  const tools = new WorkspaceTools(backend),
+    guard = {
+      prepare: async () => {
+        await Promise.resolve();
+        allowed = false;
+      },
+      authorize: () => allowed,
+    };
+  await expect(
+    tools.prepare({ id: 'read', name: 'read_file', arguments: '{"path":"file"}' }, signal, guard),
+  ).rejects.toMatchObject({ code: 'coding_denied' });
+  expect(reads).toBe(0);
+  const listing = await tools.prepare(
+    { id: 'list', name: 'list_files', arguments: '{"path":"."}' },
+    signal,
+    guard,
+  );
+  await expect(listing.execute(signal, guard)).rejects.toMatchObject({ code: 'coding_denied' });
+  expect(lists).toBe(0);
+});

@@ -1,3 +1,5 @@
+import { roomHostModelAllowed } from './room-host-command.js';
+import type { RoomHostBinding } from './room-host-storage.js';
 import {
   DomainError,
   err,
@@ -29,7 +31,11 @@ type Append = (
 ) => AppendOutcome;
 
 /** Commit request-bound receipts and events in the same SQLite write transaction. */
-export function sqliteCommands(db: DatabaseSync, append: Append): CommandCommitPort {
+export function sqliteCommands(
+  db: DatabaseSync,
+  append: Append,
+  host: RoomHostBinding = () => null,
+): CommandCommitPort {
   const dedup = new SqliteCommandDedup(db);
   const lookup = (command: CommandLookup) => lookupSqliteCommand(db, command);
   function commitWithDisposition(
@@ -45,6 +51,11 @@ export function sqliteCommands(db: DatabaseSync, append: Append): CommandCommitP
         if (!previous.ok) return previous;
         if (previous.value !== null)
           return ok({ receipt: previous.value, disposition: 'replayed' });
+        if (
+          command.type === 'StartModelRequest' &&
+          !roomHostModelAllowed(db, host, command.taskRunId, Date.parse(meta.timestamp), command)
+        )
+          return err(DomainError.invalidArgument('room_model_start_denied'));
         const binding = commandBinding(command);
         const result = append(command, version, drafts, meta);
         if (!result.ok) return err(DomainError.versionConflict(version, result.actualVersion));

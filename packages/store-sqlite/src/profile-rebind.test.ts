@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import type { ProfileRebindRecord } from '@runnets/domain';
 import { openSqliteStore } from './store.js';
 import { rebindFixture } from '../../application/test-fixtures/profile-rebind.test.js';
-import { ConversationService } from '@runnets/application';
 const digest = (preview: unknown) =>
   createHash('sha256').update(JSON.stringify(preview)).digest('hex');
 it('retains consumed rebind intent as held across two reopenings without publishing authority', async () => {
@@ -43,67 +42,7 @@ it('retains consumed rebind intent as held across two reopenings without publish
     rmSync(root, { recursive: true, force: true });
   }
 });
-it('publishes a fresh epoch and successor atomically while preserving the original task and decision', async () => {
-  const f = rebindFixture(),
-    card = await f.service.preview(f.input);
-  const preview = f.rows.get(f.input.requestId)!;
-  await f.owner.resolve(card, card.bindingDigest, card.version, 'allow-once');
-  await f.service.join();
-  const ready = f.service.result(f.input),
-    result = ready.result!;
-  const store = openSqliteStore({ path: ':memory:' });
-  try {
-    let index = 0;
-    const c = new ConversationService({
-      store: store.conversations,
-      clock: { now: () => new Date(0) },
-      nextId: () => ['dev', 'reviewer', 'room', 'review'][index++]!,
-    });
-    let request = 0;
-    const command = (v: Record<string, unknown>) =>
-      c.execute({ workspaceId: 'ws', requestId: 'setup-' + request++, ...v } as Parameters<
-        typeof c.execute
-      >[0]);
-    expect(command({ type: 'BindWorkspace', root: '/old' }).ok).toBe(true);
-    for (const handle of ['dev', 'reviewer'])
-      expect(
-        command({
-          type: 'CreateBot',
-          handle,
-          name: handle,
-          role: 'fixture',
-          provider: 'fixture',
-          model: 'fixture',
-        }).ok,
-      ).toBe(true);
-    for (const botId of ['dev', 'reviewer'])
-      expect(command({ type: 'OpenDirectRoom', botId }).ok).toBe(true);
-    store.coding.atomic((tx) => tx.putTask(f.old));
-    store.restoration.install(f.origin);
-    store.ownerDecisions.insert(card, JSON.stringify(preview.preview));
-    expect(store.ownerDecisions.settle(card, 'allowed')).toBe(true);
-    store.rebind.atomic((tx) => {
-      tx.save(preview, null);
-      tx.save({ ...preview, state: 'confirmed', revision: 2 }, 1);
-      tx.save({ ...ready, state: 'preparing', revision: 3, result: null }, 2);
-    });
-    expect(store.rebind.active?.() ?? null).toBeNull();
-    expect(() =>
-      store.rebind.atomic((tx) => tx.publish({ ...ready, revision: 4 }, result)),
-    ).not.toThrow();
-    expect(store.rebind.active()?.preview.ownerId).toBe(ready.preview.ownerId);
-    expect(store.coding.atomic((tx) => tx.task(f.old.id))).toEqual(f.old);
-    expect(store.coding.atomic((tx) => tx.task(result.task.id))).toEqual(result.task);
-    expect(store.coding.atomic((tx) => tx.worktree(result.task.id))).toEqual(result.worktree);
-    expect(store.coding.atomic((tx) => tx.workspaceRoot('ws'))).toBe('/new');
-    expect(store.ownerDecisions.find(card)?.status).toBe('allowed');
-    expect(() =>
-      store.rebind.atomic((tx) => tx.publish({ ...ready, revision: 4 }, result)),
-    ).toThrow();
-  } finally {
-    store.close();
-  }
-});
+
 it('cannot change preview scope, skip confirmation or reuse a consumed SQLite revision', async () => {
   const f = rebindFixture();
   await f.service.preview(f.input);

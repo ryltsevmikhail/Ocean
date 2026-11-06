@@ -74,8 +74,14 @@ export class ServiceTurnTools implements GrantedToolSource {
       definitions: ToolSchema[] = [];
     this.options.store.atomic((tx) => {
       if (!tx.participates(subject)) return;
+      const room = tx.roomScope?.(turn.taskRunId, this.options.now(), true);
+      if (room === false || room?.reviewer) return;
       for (const g of [...tx.listGrants()].sort((a, b) => a.id.localeCompare(b.id))) {
         if (
+          (room &&
+            !room.subjects[0]?.refs.some(
+              (ref) => ref.grantId === g.id && ref.revision === g.revision,
+            )) ||
           g.owner.ownerId !== this.options.ownerId ||
           !ownerGrantApplies(g, subject, this.options.now())
         )
@@ -89,6 +95,32 @@ export class ServiceTurnTools implements GrantedToolSource {
           if (!catalog || !this.options.ready(c, catalog)) continue;
           for (const tool of catalog.tools) {
             if (!eligibleServiceTool(p, baseline, catalog, tool, false)) continue;
+            if (room) {
+              const permits = (permissions: typeof g.permissions) =>
+                permissions.some(
+                  (permission) =>
+                    permission.kind === 'service' &&
+                    eligibleServiceTool(
+                      permission,
+                      permission.baselineCatalogId
+                        ? tx.catalog(permission.baselineCatalogId)
+                        : null,
+                      catalog,
+                      tool,
+                      false,
+                    ),
+                );
+              if (
+                !permits(room.root.rootPayload.mandate.permissions) ||
+                !room.subjects.every((issuer) =>
+                  issuer.refs.some((ref) => {
+                    const selected = tx.grant(ref.grantId);
+                    return !!selected && permits(selected.permissions);
+                  }),
+                )
+              )
+                continue;
+            }
             const name = serviceAlias(this.options.sha256, [c.id, tool.name]);
             const previous = routes.get(name);
             if (previous) {

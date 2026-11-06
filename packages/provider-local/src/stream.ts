@@ -12,6 +12,7 @@ export async function* mapLocalStream(
   chunks: AsyncIterable<string>,
   priorIds: readonly string[] = [],
   signal?: AbortSignal,
+  tools = true,
 ): AsyncIterable<ProviderEvent> {
   const calls: ToolCall[] = [],
     names = new Set<string>(),
@@ -38,9 +39,14 @@ export async function* mapLocalStream(
         if (typeof m['content'] === 'string' && m['content'] !== '')
           yield { type: 'text_delta', text: m['content'] };
         if (m['tool_calls'] !== undefined) {
-          const tools = m['tool_calls'];
-          if (!Array.isArray(tools) || tools.length > 128) throw Error('invalid local tools');
-          for (const raw of tools) {
+          const candidates = m['tool_calls'];
+          if (
+            !Array.isArray(candidates) ||
+            candidates.length > 128 ||
+            (!tools && candidates.length > 0)
+          )
+            throw Error('invalid local tools');
+          for (const raw of candidates) {
             const f = object(object(raw)?.['function']),
               name = f?.['name'],
               args = object(f?.['arguments']);

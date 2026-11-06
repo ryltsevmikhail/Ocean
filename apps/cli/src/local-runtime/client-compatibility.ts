@@ -1,5 +1,6 @@
 import {
   LOCAL_MODEL_CONNECTIONS,
+  LOCAL_ROOM_TASKS,
   LOCAL_SERVICE_CONFIRMATIONS,
   LOCAL_PLUGIN_SESSION_AUTHORITY,
   LOCAL_ADDRESSED_HISTORY,
@@ -22,6 +23,7 @@ export interface RuntimeWireContext {
   readonly models: boolean;
   readonly serviceConfirmations?: boolean;
   readonly addressedHistory?: boolean;
+  readonly roomTasks?: boolean;
 }
 export const LEGACY_WIRE_CONTEXT: RuntimeWireContext = Object.freeze({ models: false });
 export function clientIdentity<T extends LocalRuntimeIdentity>(
@@ -31,6 +33,7 @@ export function clientIdentity<T extends LocalRuntimeIdentity>(
   services = false,
   serviceConfirmations = false,
   addressedHistory = false,
+  roomTasks = false,
 ): T {
   return {
     ...identity,
@@ -38,6 +41,7 @@ export function clientIdentity<T extends LocalRuntimeIdentity>(
       (c) =>
         (serviceConfirmations || c !== LOCAL_SERVICE_CONFIRMATIONS) &&
         (addressedHistory || c !== LOCAL_ADDRESSED_HISTORY) &&
+        ((roomTasks && addressedHistory) || c !== LOCAL_ROOM_TASKS) &&
         (plugins || !c.startsWith('plugin.')) &&
         (models || c !== LOCAL_MODEL_CONNECTIONS) &&
         (services || !c.startsWith('service.')),

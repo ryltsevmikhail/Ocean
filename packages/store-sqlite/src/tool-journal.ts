@@ -1,3 +1,5 @@
+import { roomHostToolAllowed } from './room-host-command.js';
+import type { RoomHostBinding } from './room-host-storage.js';
 import { journalCodingApproval } from './coding-journal-receipt.js';
 import {
   effectResourcesConflict,
@@ -20,7 +22,9 @@ import { createHash } from 'node:crypto';
 /** Durable claims bind invocation identity to a run, attempt and immutable request. */
 export class SqliteToolJournal implements ToolJournalPort {
   readonly #db: DatabaseSync;
-  constructor(db: DatabaseSync) {
+  readonly #host: RoomHostBinding;
+  constructor(db: DatabaseSync, host: RoomHostBinding = () => null) {
+    this.#host = host;
     this.#db = db;
     db.exec(`CREATE TABLE IF NOT EXISTS tool_invocations_v1 (
       id TEXT PRIMARY KEY, tool TEXT NOT NULL,
@@ -54,12 +58,23 @@ export class SqliteToolJournal implements ToolJournalPort {
     context: ToolEffectContext,
     fingerprint: string,
     admission?: ToolEffectAdmission,
+    at?: number,
   ): boolean {
     if (!context.taskRunId || !context.attemptId || !fingerprint)
       throw Error('tool claim requires run, attempt and request identity');
     if (admission !== undefined && !validToolEffectAdmission(admission))
       throw Error('invalid tool effect admission');
     const insert = () => {
+      if (
+        this.#db
+          .prepare(
+            'SELECT 1 FROM tool_invocations_v2 WHERE task_run_id=? AND attempt_id=? AND id=?',
+          )
+          .get(context.taskRunId, context.attemptId, id)
+      )
+        return false;
+      if (!roomHostToolAllowed(this.#db, this.#host, context.taskRunId, at ?? NaN, admission))
+        return false;
       if (
         this.#db.prepare('SELECT id FROM tool_invocations_v1 WHERE id=?').get(id) ||
         this.inspectConflicts(admission).length
@@ -86,13 +101,33 @@ export class SqliteToolJournal implements ToolJournalPort {
   grantCalls(run: string, id: string): number {
     const rows = this.#db
       .prepare(
-        `SELECT id,tool,task_run_id,attempt_id,fingerprint,json_extract(admission,'$.grantReference.grantId') AS grant_id
-        FROM tool_invocations_v2 WHERE task_run_id=? AND (json_extract(admission,'$.grantReference.grantId')=? OR tool IN ('coding_write','coding_test'))`,
+        `SELECT id,tool,task_run_id,attempt_id,fingerprint,admission,
+      json_extract(admission,'$.grantReference.grantId') AS grant_id
+      FROM tool_invocations_v2 j WHERE
+      (task_run_id=? AND (json_extract(admission,'$.grantReference.grantId')=? OR tool IN ('coding_write','coding_test')))
+      OR EXISTS(SELECT 1 FROM json_each(j.admission,'$.binding.roomBasis') b
+        WHERE json_extract(b.value,'$.chargedRunId')=? AND json_extract(b.value,'$.grantId')=?)`,
       )
-      .all(run, id);
+      .all(run, id, run, id);
     return rows.filter((row) => {
+      const parsed: unknown = row['admission'] ? JSON.parse(String(row['admission'])) : null;
+      const binding =
+        parsed && typeof parsed === 'object' && 'binding' in parsed ? parsed.binding : null;
+      const basis =
+        binding && typeof binding === 'object' && 'roomBasis' in binding ? binding.roomBasis : null;
+      if (
+        Array.isArray(basis) &&
+        basis.some(
+          (b: { chargedRunId?: unknown; grantId?: unknown }) =>
+            b.chargedRunId === run && b.grantId === id,
+        )
+      )
+        return true;
       const approval = journalCodingApproval(this.#db, row);
-      return approval ? approval.grantReference?.grantId === id : row['grant_id'] === id;
+      return (
+        row['task_run_id'] === run &&
+        (approval ? approval.grantReference?.grantId === id : row['grant_id'] === id)
+      );
     }).length;
   }
   inspectConflicts(admission?: ToolEffectAdmission): readonly ToolEffectRecord[] {

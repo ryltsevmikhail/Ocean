@@ -70,7 +70,9 @@ export async function modelRound(
   let framingBroken = false;
   const calls: ToolCall[] = [];
   try {
+    if (input.signal.aborted || input.authorizeModelDispatch?.() === false) return notSentRound();
     const events = input.provider.stream({
+      ...(input.authorizeModelDispatch ? { authorizeDispatch: input.authorizeModelDispatch } : {}),
       model: input.model,
       messages: [...messages],
       signal: bound.signal,

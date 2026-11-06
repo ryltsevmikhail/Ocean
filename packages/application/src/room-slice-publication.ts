@@ -31,6 +31,8 @@ function inspect(tx: ConversationTransaction, id: string, sha256?: (text: string
     task.kind !== 'bot' ||
     !root ||
     root.kind !== 'root' ||
+    !root.hostScope ||
+    canonicalJson(root.hostScope) !== canonicalJson(rt.hostScope()) ||
     task.rootId !== root.id ||
     input.toTaskId !== task.id ||
     input.recipientBotId !== turn.bot.id ||
@@ -146,8 +148,7 @@ export async function repairRoomHandoff(
       f.evidence.receipt !== null ||
       f.evidence.run.status !== 'running' ||
       f.evidence.run.version !== f.command.expectedVersion ||
-      !roomSliceAuthority(tx, f.root, f.task, d.clock.now().getTime(), d.sha256) ||
-      d.clock.now().getTime() >= Date.parse(f.turn.activation!.deadlineAt)
+      !roomSliceAuthority(tx, f.root, f.task, d.clock.now().getTime(), d.sha256, true)
     )
       return null;
     if (
@@ -198,7 +199,7 @@ function publish(
       : null;
   }
   if (
-    !roomSliceAuthority(tx, root, task, d.clock.now().getTime(), d.sha256) ||
+    !roomSliceAuthority(tx, root, task, d.clock.now().getTime(), d.sha256, true) ||
     input.state !== 'claimed'
   )
     return null;
@@ -241,6 +242,7 @@ function publish(
   if (!remains) returnResult(tx, root, task, completed, final, f.command.payload.attemptId, d);
   const all = rt.tasks(root.id);
   if (
+    root.status === 'ready' &&
     tx
       .chatTurns()
       .filter((t) => t.roomDelivery && rt.task(t.roomDelivery.taskId)?.rootId === root.id)

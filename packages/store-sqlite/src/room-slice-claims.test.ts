@@ -90,6 +90,9 @@ it.each(['absent', 'created', 'started', 'model-started'] as const)(
           ).toBe(true);
         }
       if (phase === 'model-started') {
+        f.store.conversations.atomic((tx) =>
+          tx.putChatTurn({ ...claimed.turn, status: 'dispatching' }),
+        );
         const state = await f.tasks.state(taskRunId(claimed.turn.taskRunId));
         expect(
           (
@@ -112,6 +115,7 @@ it.each(['absent', 'created', 'started', 'model-started'] as const)(
       f.close();
       closed = true;
       reopened = openSqliteStore({ path });
+      reopened.bindRoomHost({ ownerId: 'owner', epochId: null }, { origin: null, active: null });
       const tasks = new TaskRunService({
         log: reopened.log,
         clock: f.deps.clock,
@@ -155,6 +159,7 @@ it.each(['receipt', 'checkpoint', 'completed-effect'] as const)(
       const id = taskRunId(c.turn.taskRunId);
       expect((await f.tasks.execute(createChatCommand(c.turn, null))).ok).toBe(true);
       if (evidence === 'receipt') {
+        f.store.conversations.atomic((tx) => tx.putChatTurn({ ...c.turn, status: 'dispatching' }));
         for (const [type, payload] of [
           ['Admit', {}],
           ['Schedule', {}],
@@ -182,10 +187,12 @@ it.each(['receipt', 'checkpoint', 'completed-effect'] as const)(
           ).toBe(true);
         }
         f.db!.prepare('DELETE FROM events WHERE aggregate_id=? AND sequence>1').run(id);
+        f.store.conversations.atomic((tx) => tx.putChatTurn(c.turn));
       } else if (evidence === 'completed-effect') {
         const context = { taskRunId: id, attemptId: id + '_at_0001' };
-        expect(await f.store.tools.claim('spent', 'read', context, 'spent')).toBe(true);
-        await f.store.tools.settle('spent', 'completed', context);
+        f.db!.prepare(
+          "INSERT INTO tool_invocations_v2 VALUES('spent','read',?,?,'spent','completed',NULL)",
+        ).run(context.taskRunId, context.attemptId);
       } else
         f.db!.prepare('INSERT INTO checkpoints VALUES(?,?,?,?)').run(id, 1, 1, '{"version":5}');
       expect(recoverUnstartedRoomClaims(f.deps)).toEqual([]);
@@ -247,7 +254,7 @@ it.each([false, true])(
           null,
         ),
       );
-      const start = f.service.start({
+      const start = f.service.startHosted({
         ...f.input,
         initialBotIds: ['a'],
         participants: f.input.participants.map((p) =>

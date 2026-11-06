@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import { roomTasks, attachRoomActor, roomTaskCounts } from '../test-fixtures/room-tasks.js';
+import { hostedRoomTasks, attachRoomActor, roomTaskCounts } from '../test-fixtures/room-tasks.js';
 it('refuses forged actor, wrong run/attempt/ordinal and unknown or absent settlement with zero writes', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       request = { kind: 'message', toBotId: 'b', text: 'text' };
@@ -38,43 +38,46 @@ it('refuses forged actor, wrong run/attempt/ordinal and unknown or absent settle
     f.close();
   }
 });
-it('keeps settled sender identity after edits and refuses a freshly changed recipient pin', async () => {
-  const f = roomTasks();
-  try {
-    const start = f.service.start(f.input);
-    if (!start.ok) throw Error('start');
-    const actor = await attachRoomActor(f, start.value);
-    f.store.conversations.atomic((tx) =>
-      tx.replaceBot({ ...tx.bot('a')!, model: 'changed', profileVersion: 2 }, 1),
-    );
-    expect(
-      f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'sender settled' }).ok,
-    ).toBe(true);
-    f.store.conversations.atomic((tx) =>
-      tx.replaceBot({ ...tx.bot('b')!, model: 'changed', profileVersion: 2 }, 1),
-    );
-    const before = roomTaskCounts(f);
-    expect(
-      f.service.send(
+it.each(['a', 'b'] as const)(
+  'checks current %s recipient scope while retaining settled sender identity',
+  async (changed) => {
+    const f = hostedRoomTasks();
+    try {
+      const start = f.service.startHosted(f.input);
+      if (!start.ok) throw Error('start');
+      const actor = await attachRoomActor(f, start.value);
+      expect(f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'before edit' }).ok).toBe(
+        true,
+      );
+      f.store.conversations.atomic((tx) =>
+        tx.replaceBot({ ...tx.bot(changed)!, model: 'changed', profileVersion: 2 }, 1),
+      );
+      const before = roomTaskCounts(f);
+      const sent = f.service.send(
         { ...actor, callId: actor.callId + '2' },
-        { kind: 'message', toBotId: 'b', text: 'recipient changed' },
-      ),
-    ).toMatchObject({ ok: false, error: { code: 'provider_unavailable' } });
-    expect(roomTaskCounts(f)).toEqual(before);
-    const root = f.store.conversations.atomic((tx) => tx.roomTasks!.task(start.value.rootId));
-    expect(root?.rootPayload?.members.map((m) => m.identity.modelId)).toEqual([
-      'one',
-      'one',
-      'one',
-    ]);
-  } finally {
-    f.close();
-  }
-});
+        { kind: 'message', toBotId: 'b', text: 'after edit' },
+      );
+      if (changed === 'a') expect(sent.ok).toBe(true);
+      else {
+        expect(sent).toMatchObject({ ok: false, error: { code: 'provider_unavailable' } });
+        expect(roomTaskCounts(f)).toEqual(before);
+      }
+      const root = f.store.conversations.atomic((tx) => tx.roomTasks!.task(start.value.rootId));
+      expect(root?.rootPayload?.members.map((m) => m.identity.modelId)).toEqual([
+        'one',
+        'one',
+        'one',
+      ]);
+    } finally {
+      f.close();
+    }
+  },
+);
+
 it('rejects stopped sources, removed recipients and invalid marker mutations', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       request = { kind: 'message', toBotId: 'c', text: 'hello' };
@@ -116,9 +119,9 @@ it('rejects stopped sources, removed recipients and invalid marker mutations', a
   }
 });
 it('rejects a marked actor whose persisted bot profile disagrees with its activation pin', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value, 'a', 2);
     expect(
@@ -131,7 +134,7 @@ it('rejects a marked actor whose persisted bot profile disagrees with its activa
 it('derives coding subjects from the actual owning task and requires reserved dev-scoped refs', async () => {
   const { ownerGrant } = await import('../../../test-fixtures/service-authority.js');
   const { sha256 } = await import('../test-fixtures/room-tasks.js');
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
     f.store.coding.atomic((tx) =>
       tx.putTask({
@@ -188,14 +191,17 @@ it('derives coding subjects from the actual owning task and requires reserved de
       ),
     };
     expect(
-      f.service.start({ ...input, mandate: { ...input.mandate, projectId: sha256('/fixture') } }),
+      f.service.startHosted({
+        ...input,
+        mandate: { ...input.mandate, projectId: sha256('/fixture') },
+      }),
     ).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
-    expect(f.service.start(input).ok).toBe(true);
+    expect(f.service.startHosted(input).ok).toBe(true);
     f.store.coding.atomic((tx) => {
       const task = tx.task('coding')!;
       tx.putTask({ ...task, status: 'cancelled' });
     });
-    expect(f.service.start({ ...input, requestId: 'cancelled-coding' })).toMatchObject({
+    expect(f.service.startHosted({ ...input, requestId: 'cancelled-coding' })).toMatchObject({
       ok: false,
       error: { code: 'approval_required' },
     });
@@ -204,9 +210,9 @@ it('derives coding subjects from the actual owning task and requires reserved de
   }
 });
 it('refuses legacy turns and preserves old uncertainty admission semantics', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const started = f.service.start(f.input);
+    const started = f.service.startHosted(f.input);
     if (!started.ok) throw Error('start');
     const actor = await attachRoomActor(f, started.value);
     const marked = f.store.conversations.atomic((tx) => tx.chatTurn(actor.turnId))!;
@@ -220,14 +226,14 @@ it('refuses legacy turns and preserves old uncertainty admission semantics', asy
         { kind: 'message', toBotId: 'b', text: 'legacy' },
       ).ok,
     ).toBe(false);
-    expect(f.service.start({ ...f.input, requestId: 'after-uncertainty' })).toMatchObject({
+    expect(f.service.startHosted({ ...f.input, requestId: 'after-uncertainty' })).toMatchObject({
       ok: false,
       error: { code: 'recovery_required' },
     });
     f.store.conversations.atomic((tx) =>
       tx.putChatTurn({ ...turn, id: 'legacy', taskRunId: 'tr_legacy', status: 'accepted' }),
     );
-    expect(f.service.start({ ...f.input, requestId: 'after-accepted' })).toMatchObject({
+    expect(f.service.startHosted({ ...f.input, requestId: 'after-accepted' })).toMatchObject({
       ok: false,
       error: { code: 'room_busy' },
     });
@@ -238,9 +244,9 @@ it('refuses legacy turns and preserves old uncertainty admission semantics', asy
   }
 });
 it('treats a missing queued recipient pin as unknown transfer evidence', () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     f.db!.exec('DROP TRIGGER ocean_room_task_immutable');
     f.db!.prepare(

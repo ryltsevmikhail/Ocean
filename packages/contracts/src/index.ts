@@ -39,3 +39,5 @@ export * from './local-model-execution-validate.js';
 
 export * from './local-services.js';
 export * from './local-service-views.js';
+
+export * from './local-runtime-room-tasks.js';

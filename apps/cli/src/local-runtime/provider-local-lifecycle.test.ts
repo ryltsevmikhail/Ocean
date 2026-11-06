@@ -187,9 +187,22 @@ it('keeps unsupported persisted local profiles out of the executable catalog', (
       ...input,
       localQualification: {
         ...qualification,
-        capabilities: { ...qualification.capabilities, tools: false },
+        capabilities: { ...qualification.capabilities, maxOutputTokens: 1 },
       },
     }),
   ).toEqual([]);
+  expect(f.reads()).toBe(0);
+});
+it('projects actual text-only tools=false qualification into the executable catalog', () => {
+  const f = setup();
+  expect(
+    f.factory.catalog({
+      ...input,
+      localQualification: {
+        ...qualification,
+        capabilities: { ...qualification.capabilities, tools: false },
+      },
+    }),
+  ).toMatchObject([{ capabilities: { tools: false } }]);
   expect(f.reads()).toBe(0);
 });

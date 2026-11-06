@@ -3,6 +3,7 @@ import {
   type PreparedTool,
   type ToolExecutorPort,
   type ToolInvocation,
+  type ToolDispatchGuard,
 } from '@runnets/application';
 import { checkedPath, blockedName, type WorkspaceBackend } from './backend.js';
 import { TOOL_DEFINITIONS } from './definitions.js';
@@ -64,7 +65,16 @@ export class WorkspaceTools implements ToolExecutorPort {
     this.#requireContainment = options.requireContainment === true;
   }
 
-  async prepare(call: ToolInvocation): Promise<PreparedTool> {
+  async prepare(
+    call: ToolInvocation,
+    signal?: AbortSignal,
+    guard?: ToolDispatchGuard,
+  ): Promise<PreparedTool> {
+    const authorize = async (activeSignal = signal, activeGuard = guard) => {
+      await activeGuard?.prepare?.();
+      if (activeSignal?.aborted || (activeGuard && !activeGuard.authorize()))
+        throw new ToolError('coding_denied', 'worktree access refused');
+    };
     if (
       this.#requireContainment &&
       (this.#backend.capabilities?.filesystemContainment !== true ||
@@ -83,9 +93,9 @@ export class WorkspaceTools implements ToolExecutorPort {
         title: `List ${path}`,
         kind: 'search',
         preview: path,
-        execute: async (signal) => {
-          signal.throwIfAborted();
-          const entries = await this.#backend.list(path);
+        execute: async (activeSignal, activeGuard = guard) => {
+          await authorize(activeSignal, activeGuard);
+          const entries = await this.#backend.list(path, activeSignal, activeGuard);
           return {
             isError: false,
             output: entries
@@ -96,7 +106,8 @@ export class WorkspaceTools implements ToolExecutorPort {
           };
         },
       };
-    const before = await this.#backend.read(path);
+    await authorize();
+    const before = await this.#backend.read(path, signal, guard);
     if (before !== null && Buffer.byteLength(before) > MAX_FILE)
       throw new ToolError('file_too_large', 'file exceeds 128 KiB');
     if (call.name === 'read_file') {
@@ -106,8 +117,8 @@ export class WorkspaceTools implements ToolExecutorPort {
         title: `Read ${path}`,
         kind: 'read',
         preview: path,
-        execute: (signal) => {
-          signal.throwIfAborted();
+        execute: async (activeSignal, activeGuard = guard) => {
+          await authorize(activeSignal, activeGuard);
           this.#read.set(path, before);
           return Promise.resolve({ isError: false, output });
         },

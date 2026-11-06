@@ -1,8 +1,13 @@
 import { expect, it } from 'vitest';
 import { RoomBroadcastService } from '@runnets/application';
-import { roomTasks, attachRoomActor, roomTaskCounts } from '../test-fixtures/room-tasks.js';
+import {
+  roomTasks,
+  hostedRoomTasks,
+  attachRoomActor,
+  roomTaskCounts,
+} from '../test-fixtures/room-tasks.js';
 it('preserves legacy broadcast and uncertain room holds before new starts', () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
     const broadcast = new RoomBroadcastService({
       store: f.store.conversations,
@@ -20,7 +25,10 @@ it('preserves legacy broadcast and uncertain room holds before new starts', () =
         text: 'finite',
       }).ok,
     ).toBe(true);
-    expect(f.service.start(f.input)).toMatchObject({ ok: false, error: { code: 'batch_open' } });
+    expect(f.service.startHosted(f.input)).toMatchObject({
+      ok: false,
+      error: { code: 'batch_open' },
+    });
     expect(f.db!.prepare('SELECT count(*) AS n FROM ocean_room_tasks').get()?.['n']).toBe(0);
   } finally {
     f.close();
@@ -44,7 +52,7 @@ it('fails closed on corrupt restore evidence while archived identical receipts s
 });
 it('keeps unaddressed notes and receipt-first legacy replay while fencing new direct execution', async () => {
   const { DirectChatService, TaskRunService } = await import('@runnets/application');
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
     const tasks = new TaskRunService({
       log: f.store.log,
@@ -68,7 +76,7 @@ it('keeps unaddressed notes and receipt-first legacy replay while fencing new di
         throw Error('no execution');
       },
     };
-    expect(f.service.start(f.input).ok).toBe(true);
+    expect(f.service.startHosted(f.input).ok).toBe(true);
     expect(chat.submit({ ...request, to: 'a', requestId: 'direct' })).toMatchObject({
       ok: false,
       error: { code: 'room_busy' },
@@ -82,9 +90,9 @@ it('keeps unaddressed notes and receipt-first legacy replay while fencing new di
   }
 });
 it('retains D cleanup holds after a root stop and review linkage, preventing a second slice', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value);
     const turn = f.store.conversations.atomic((tx) => tx.chatTurn(actor.turnId))!;
@@ -222,12 +230,12 @@ it('blocks fresh work after a valid restored snapshot marker while preserving or
 });
 
 it('isolates text-only recovery refusal from transfer policy and source review', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value);
-    expect(f.service.start({ ...f.input, requestId: 'eligible-start' }).ok).toBe(true);
+    expect(f.service.startHosted({ ...f.input, requestId: 'eligible-start' }).ok).toBe(true);
     expect(f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'eligible send' }).ok).toBe(
       true,
     );
@@ -255,7 +263,7 @@ it('isolates text-only recovery refusal from transfer policy and source review',
       ),
     ).not.toBeNull();
     const before = roomTaskCounts(f);
-    expect(f.service.start({ ...f.input, requestId: 'restricted-start' })).toMatchObject({
+    expect(f.service.startHosted({ ...f.input, requestId: 'restricted-start' })).toMatchObject({
       ok: false,
       error: { code: 'recovery_required' },
     });

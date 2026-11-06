@@ -208,3 +208,19 @@ it.each([
     ).at(-1),
   ).toMatchObject({ type: 'error', error: { dispatch: 'unknown' } });
 });
+it.each([false, 'throw'] as const)('vetoes trusted dispatch %s before inference', async (mode) => {
+  const f = fake();
+  const p = createAnthropicProvider({ apiKey: 'fixture', httpClient: f.http });
+  const events = await collect(
+    p.stream(
+      request({
+        authorizeDispatch: () => {
+          if (mode === 'throw') throw Error('veto');
+          return false;
+        },
+      }),
+    ),
+  );
+  expect(terminals(events)).toMatchObject([{ type: 'error', error: { dispatch: 'not_sent' } }]);
+  expect(f.calls).toHaveLength(0);
+});

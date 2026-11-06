@@ -30,8 +30,7 @@ import { assertRuntimeDrained } from './drain-supervision.js';
 import { RuntimeFinalization } from './finalization.js';
 import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
 import { LOCAL_BROADCAST_METHODS } from '@runnets/contracts';
-import { systemClock } from '@runnets/store';
-import { RuntimeBroadcasts } from './broadcast.js';
+import { hostRoomTasks, wakeRoomTasksAfter } from './host-room-tasks.js';
 import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
 import { settingsHosts } from './settings-hosts.js';
@@ -128,7 +127,9 @@ export async function startLocalRuntime(
       protocol: 1,
       profileId: paths.profileId,
       instanceId: randomUUID(),
-      capabilities: runtimeCapabilities(options.restore === true),
+      capabilities: runtimeCapabilities(options.restore === true).filter(
+        (c) => c !== 'room.tasks-v1' || !restored,
+      ),
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
@@ -137,21 +138,16 @@ export async function startLocalRuntime(
       runtime.openRoomRuns(),
       identity.instanceId,
     );
-    if (!runtime.broadcasts || !runtime.conversationStore) throw Error('durable_runtime_required');
-    const broadcasts = new RuntimeBroadcasts({
-      service: runtime.broadcasts,
-      execution: {
-        reviews: runtime.reviews,
-        tasks: runtime.service,
-        store: runtime.conversationStore,
-        clock: systemClock,
-        ...(runtime.grantedTools ? { grantedTools: runtime.grantedTools } : {}),
-      },
-      clock: systemClock,
-      resolver: provider.resolver,
-      ...(images === undefined ? {} : { images }),
-    });
-    turns.attachControllers((runId) => broadcasts.controllerFor(runId));
+    const { broadcasts, roomTasks } = hostRoomTasks(
+      runtime,
+      provider.resolver,
+      identity.instanceId,
+      images,
+      options.roomTaskCapacity,
+    );
+    turns.attachControllers(
+      (runId) => broadcasts.controllerFor(runId) ?? roomTasks.controllerFor(runId),
+    );
     let databaseClosed = false;
     const descriptor = {
       protocol: 1 as const,
@@ -182,6 +178,7 @@ export async function startLocalRuntime(
                 services,
                 runtime.services,
                 broadcasts,
+                roomTasks,
                 options.drain,
                 decisions,
                 panels,
@@ -242,7 +239,7 @@ export async function startLocalRuntime(
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
             return finalization.dispatch(method, params);
           const configured = settings.dispatch(method, params, detached);
-          if (configured) return configured;
+          if (configured) return wakeRoomTasksAfter(configured, method, roomTasks);
           if (method === 'turns.submit' || method === 'broadcasts.submit') {
             const code = desktopSubmitRefusal(
               runtime.desktopAssets!,
@@ -263,6 +260,8 @@ export async function startLocalRuntime(
             return panels.dispatch(method, params, detached);
           if (PROFILE_METHODS.some((m) => m === method))
             return profileCommand(runtime.conversations, reads, method, params, state !== 'ready');
+          if (method.startsWith('roomTasks.'))
+            return roomTasks.dispatch(method, params, detached, context);
           if (method.startsWith('decisions.') || method.startsWith('reviews.'))
             return decisions.dispatch(method, params, context);
           return turns.dispatch(method, params, detached, context);
@@ -275,6 +274,7 @@ export async function startLocalRuntime(
     checkRestoration();
     publication = publishEndpoint(endpoint, transport.socketFd, descriptor, proof);
     transport.activate();
+    if (!restored) roomTasks.start();
     return host;
   } catch (error) {
     try {

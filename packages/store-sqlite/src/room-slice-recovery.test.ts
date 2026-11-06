@@ -100,6 +100,7 @@ it.each(['yield', 'final', 'result', 'response'] as const)(
         f.close();
         closed = true;
         reopened = openSqliteStore({ path });
+        reopened.bindRoomHost({ ownerId: 'owner', epochId: null }, { origin: null, active: null });
         const tasks = new TaskRunService({
           log: reopened.log,
           clock: f.deps.clock,

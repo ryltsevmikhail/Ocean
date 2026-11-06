@@ -1,4 +1,11 @@
-import { codingGrant } from './coding-grant-admission.js';
+import type { RoomPhysicalScope } from './room-task-authority.js';
+import {
+  claimCodingRead,
+  type CodingReadRequest,
+  type CodingReadPreview,
+} from './coding-read-admission.js';
+import { type ToolEffectAdmission } from '@runnets/domain';
+import { codingGrant, codingRoomBasis, codingRoomBasisMatches } from './coding-grant-admission.js';
 import {
   codingApprovalMatches,
   validCodingApprovalBinding,
@@ -13,22 +20,33 @@ import {
 } from '@runnets/domain';
 
 export interface CodingApprovalTransaction {
+  claimRead?(request: CodingReadRequest, admission: ToolEffectAdmission, at: number): boolean;
+  readClaimed?(request: CodingReadRequest, admission: ToolEffectAdmission, at: number): boolean;
+  settleRead?(
+    request: CodingReadRequest,
+    outcome: 'completed' | 'failed' | 'uncertain' | 'not_started',
+  ): void;
+  roomScope?(runId: string, at: number, selection?: true): RoomPhysicalScope | false | null;
   projectId?(root: string): string;
   grants?(): readonly OwnerScopeGrant[];
   grantCalls?(run: string, id: string): number;
-  claimed?(value: CodingApproval): boolean;
+  claimed?(value: CodingApproval, at?: number): boolean;
   worktree?(id: string): CodingWorktree | null;
   task?(id: string): CodingTask | null;
   participates?(workspaceId: string, roomId: string, botId: string): boolean;
   approval(id: string): CodingApproval | null;
   putApproval(value: CodingApproval): void;
   /** Creates the durable dispatch claim in this same transaction. */
-  claimApprovalOperation(approval: CodingApproval): boolean;
+  claimApprovalOperation(approval: CodingApproval, at?: number): boolean;
 }
 export interface CodingApprovalStore {
   atomic<T>(work: (tx: CodingApprovalTransaction) => T): T;
 }
 export interface CodingApprovalOwnerPort {
+  decideRead?(
+    preview: CodingReadPreview,
+    current: () => Promise<boolean>,
+  ): Promise<'allow-once' | 'deny' | 'cancel'>;
   decide(
     preview: CodingApproval,
     current?: () => Promise<boolean>,
@@ -53,6 +71,14 @@ export class CodingApprovalService {
   constructor(deps: CodingApprovalDependencies) {
     this.deps = deps;
   }
+  claimRead(
+    request: CodingReadRequest,
+    owner: CodingApprovalOwnerPort,
+    signal: AbortSignal,
+    live: () => Promise<boolean>,
+  ) {
+    return claimCodingRead(this.deps, request, owner, signal, live);
+  }
   request(
     id: string,
     binding: CodingApprovalBinding,
@@ -73,7 +99,10 @@ export class CodingApprovalService {
     if (this.deps.restored) return codingFailure('recovery_required');
     return this.deps.store.atomic((tx) => {
       const ref = guarded ? codingGrant(tx, input, preview, this.deps.grantOwnerId, now) : null;
+      const roomBasis = codingRoomBasis(tx, input, preview, now);
+      if (roomBasis === false || (roomBasis && !guarded)) return codingFailure('coding_denied');
       const approval: CodingApproval = {
+        ...(roomBasis ? { roomBasis: roomBasis.basis } : {}),
         ...(guarded ? { guardedDispatch: true as const } : {}),
         ...(ref ? { grantReference: ref } : {}),
         id,
@@ -185,6 +214,13 @@ export class CodingApprovalService {
             approval.grantReference,
           )) ||
         !this.deps.admit(binding, tx, approval) ||
+        !codingRoomBasisMatches(
+          tx,
+          binding,
+          approval.preview,
+          this.deps.now(),
+          approval.roomBasis,
+        ) ||
         !codingApprovalMatches(
           approval.binding,
           binding,
@@ -194,7 +230,8 @@ export class CodingApprovalService {
         )
       )
         return codingFailure('approval_required');
-      if (!tx.claimApprovalOperation(approval)) return codingFailure('recovery_required');
+      if (!tx.claimApprovalOperation(approval, this.deps.now()))
+        return codingFailure('recovery_required');
       const consumed: CodingApproval = { ...approval, status: 'consumed' };
       tx.putApproval(consumed);
       return ok(consumed);
@@ -209,8 +246,9 @@ export class CodingApprovalService {
         a.status === 'consumed' &&
         a.guardedDispatch === true &&
         a.authorityId === this.deps.authorityId &&
-        tx.claimed?.(a) === true &&
+        tx.claimed?.(a, this.deps.now()) === true &&
         this.deps.admit(binding, tx, a) &&
+        codingRoomBasisMatches(tx, binding, a.preview, this.deps.now(), a.roomBasis, true) &&
         codingApprovalMatches(a.binding, binding, a.createdAt, a.expiresAt, this.deps.now()) &&
         (!a.grantReference ||
           !!codingGrant(

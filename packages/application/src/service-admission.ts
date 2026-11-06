@@ -72,7 +72,9 @@ export class ServiceCallAdmissionService {
     let prepared = this.options.store.atomic((tx) => {
       const p = prepare(tx, r, this.options);
       if (typeof p === 'string' || p.confirmationRequired) return p;
-      return tx.claim(r, canonicalJson([r, p.admission]), p.admission) ? p : 'claim_refused';
+      return tx.claim(r, canonicalJson([r, p.admission]), p.admission, this.options.now())
+        ? p
+        : 'claim_refused';
     });
     if (typeof prepared === 'string') return { code: prepared, outcome: null };
     if (prepared.confirmationRequired) {
@@ -83,7 +85,9 @@ export class ServiceCallAdmissionService {
         if (typeof current === 'string') return current;
         r = current.request;
         const p = current.prepared;
-        return tx.claim(r, canonicalJson([r, p.admission]), p.admission) ? p : 'claim_refused';
+        return tx.claim(r, canonicalJson([r, p.admission]), p.admission, this.options.now())
+          ? p
+          : 'claim_refused';
       });
       if (typeof prepared === 'string') return { code: prepared, outcome: null };
     }

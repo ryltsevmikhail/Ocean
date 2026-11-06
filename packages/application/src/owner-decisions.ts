@@ -17,6 +17,7 @@ export type DecisionOutcome =
   'allowed' | 'denied' | 'cancelled' | 'expired' | 'invalidated' | 'interrupted';
 export interface OwnerDecision extends OwnerDecisionRef {
   readonly kind:
+    | 'project-read'
     | 'service-call'
     | 'write'
     | 'test'

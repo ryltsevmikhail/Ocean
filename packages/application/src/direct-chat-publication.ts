@@ -37,11 +37,12 @@ export async function recoverChats(
   tasks: TaskRunService,
   clock: Clock,
   reviews?: Pick<ChatReviewService, 'review'>,
+  sha256?: (text: string) => string,
 ): Promise<void> {
   const turns = store.atomic((tx) => tx.chatTurns());
   for (const turn of turns) {
     if (turn.roomDelivery) {
-      await repairRoomHandoff({ store, tasks, clock }, turn.id);
+      await repairRoomHandoff({ store, tasks, clock, ...(sha256 ? { sha256 } : {}) }, turn.id);
       continue;
     }
     // A queued broadcast child was never dispatched; batch recovery owns its state.

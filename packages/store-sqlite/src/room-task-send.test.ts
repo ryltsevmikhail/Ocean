@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import { roomTasks, attachRoomActor } from '../test-fixtures/room-tasks.js';
+import { hostedRoomTasks, attachRoomActor } from '../test-fixtures/room-tasks.js';
 it('publishes a peer message from a real claimed delivery and settled persisted Core attempt', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value);
     expect(
@@ -23,9 +23,9 @@ it('publishes a peer message from a real claimed delivery and settled persisted 
   }
 });
 it('retains A attribution for two peer publications then permits exactly one ordinary final reply', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value);
     for (const callId of [actor.callId, actor.callId + '2'])
@@ -69,9 +69,9 @@ it('retains A attribution for two peer publications then permits exactly one ord
   }
 });
 it('rejects extra hidden/symbol model fields and self-targets before writing', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       request = { kind: 'message', toBotId: 'b', text: 'hello' };
@@ -92,9 +92,9 @@ it('rejects extra hidden/symbol model fields and self-targets before writing', a
 it.each(['body', 'scope'] as const)(
   'keeps backed peer %s immutable on SQL update',
   async (field) => {
-    const f = roomTasks();
+    const f = hostedRoomTasks();
     try {
-      const start = f.service.start(f.input);
+      const start = f.service.startHosted(f.input);
       if (!start.ok) throw Error('start');
       const actor = await attachRoomActor(f, start.value);
       const sent = f.service.send(actor, { kind: 'message', toBotId: 'b', text: 'original' });

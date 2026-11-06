@@ -10,8 +10,8 @@ import {
 } from '@runnets/application';
 import { claimFixture } from './finalization-claims.js';
 export const projectId = (root: string) => createHash('sha256').update(root).digest('hex');
-export function consumerFixture() {
-  const f = claimFixture();
+export function consumerFixture(workspaceId?: string) {
+  const f = claimFixture(workspaceId);
   const b: CodingTask = {
     ...f.task,
     id: 'task-b',

@@ -1,9 +1,11 @@
+import type { RoomTaskRootView } from './room-task-host.js';
 import type { CommandReceipt } from './ports.js';
 import type {
   ChatTurn,
   Command,
   TaskRunEvent,
   CodingTask,
+  CodingWorktree,
   ModelExecutionIdentity,
   OwnerGrantReference,
   OwnerPermission,
@@ -13,6 +15,7 @@ import type {
   TaskRunState,
 } from '@runnets/domain';
 import type { ModelConnectionRecord } from './model-connection-ports.js';
+export type RoomHostScope = Readonly<{ ownerId: string; epochId: string | null }>;
 export type RoomTaskMandate = Readonly<{
   projectId: string | null;
   codingTaskId: string | null;
@@ -41,6 +44,7 @@ type TaskRow = Readonly<{
 export type RoomTaskRoot = TaskRow &
   Readonly<{
     kind: 'root';
+    hostScope?: RoomHostScope | null;
     parentId: null;
     assigneeBotId: null;
     lastDeliverySeq: 0;
@@ -84,6 +88,12 @@ export type RoomRunEvidence =
       headEvent: TaskRunEvent;
     }>;
 export interface RoomTaskTransaction {
+  sourceTurn(id: string): ChatTurn | null;
+  hostScope(): RoomHostScope | null;
+  authorizeModel(runId: string, at: number): boolean;
+  roots(): readonly RoomTaskRoot[];
+  projection(rootId: string): RoomTaskRootView | null;
+  counts(rootId: string): RoomTaskRootView['counts'];
   delivery(id: string): RoomDeliveryRecord | null;
   inputs(taskId: string): readonly RoomDeliveryRecord[];
   tasks(rootId: string): readonly RoomTaskRecord[];
@@ -104,6 +114,7 @@ export interface RoomTaskTransaction {
   grant(id: string): OwnerScopeGrant | null;
   modelConnection(id: string): ModelConnectionRecord | null;
   codingTask(id: string): CodingTask | null;
+  codingWorktree(id: string): CodingWorktree | null;
   restored(): boolean;
   roomHold(roomId: string): boolean;
   pendingTransfer(roomId: string): boolean;

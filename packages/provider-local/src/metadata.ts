@@ -60,7 +60,6 @@ export function qualifyMetadata(
     caps.length > 32 ||
     caps.some((v: unknown) => !bounded(v, 64)) ||
     !caps.includes('completion') ||
-    !caps.includes('tools') ||
     caps.includes('vision')
   )
     refuse('unsupported local capabilities');
@@ -93,7 +92,7 @@ export function qualifyMetadata(
     backendVersion: version['version'],
     configuredContextTokens: 4096,
     capabilities: {
-      tools: true,
+      tools: caps.includes('tools'),
       streaming: true,
       inputModalities: ['text'],
       contextTokens: 4096,

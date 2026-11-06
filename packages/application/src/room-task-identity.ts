@@ -4,7 +4,7 @@ import type { ConversationTransaction } from './conversation-ports.js';
 import { validModelConnectionEndpoint } from './model-connection-input.js';
 /** Project configured metadata only. Credentials, providers and deadlines are inaccessible. */
 export function roomTaskIdentity(
-  tx: ConversationTransaction,
+  tx: Pick<ConversationTransaction, 'roomTasks' | 'modelBinding'>,
   bot: Bot,
 ): Extract<ModelExecutionIdentity, { source: 'connection' }> | null {
   const b = tx.modelBinding(bot.id),

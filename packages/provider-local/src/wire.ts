@@ -15,7 +15,13 @@ function content(message: ChatMessage): string {
   return text;
 }
 /** IDs remain Ocean authority; the native initial profile correlates a unique name per round. */
-export function buildRequestBody(request: ModelRequest): string {
+export function buildRequestBody(request: ModelRequest, tools = true): string {
+  if (
+    !tools &&
+    (request.tools !== undefined ||
+      request.messages.some((m) => m.role === 'tool' || m.toolCalls !== undefined))
+  )
+    refuse('text-only local tools unavailable');
   if (request.model !== MODEL) refuse('unsupported local model');
   const max = request.maxTokens ?? 512;
   if (!Number.isSafeInteger(max) || max < 1 || max > 512) refuse('invalid local output bound');

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { roomTasks } from '../test-fixtures/room-tasks.js';
+import { roomTasks, hostedRoomTasks } from '../test-fixtures/room-tasks.js';
 it('commits an inert owner root, sibling tasks, message, deliveries and exact receipt', () => {
   const f = roomTasks();
   try {
@@ -121,7 +121,7 @@ it('validates exact bounded intents before receipts, preserving opaque text and 
 it('accepts stored-workspace hash subjects and preserves both selected refs after revocation', async () => {
   const { ownerGrant } = await import('../../../test-fixtures/service-authority.js');
   const { sha256, attachRoomActor } = await import('../test-fixtures/room-tasks.js');
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
     for (const id of ['grant-one', 'grant-two'])
       f.store.serviceAuthority.atomic((tx) =>
@@ -151,20 +151,20 @@ it('accepts stored-workspace hash subjects and preserves both selected refs afte
       ),
     };
     expect(
-      f.service.start({
+      f.service.startHosted({
         ...input,
         requestId: 'bad-project',
         mandate: { ...input.mandate, projectId: sha256('/elsewhere') },
       }),
     ).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
-    const started = f.service.start(input);
+    const started = f.service.startHosted(input);
     if (!started.ok) throw Error('grant start');
     const actor = await attachRoomActor(f, started.value);
     f.store.serviceAuthority.atomic((tx) => {
       const old = tx.grant('grant-one')!;
       tx.putGrant({ ...old, revision: 2, state: 'revoked' }, 1);
     });
-    expect(f.service.start({ ...input, requestId: 'stale' })).toMatchObject({
+    expect(f.service.startHosted({ ...input, requestId: 'stale' })).toMatchObject({
       ok: false,
       error: { code: 'approval_required' },
     });

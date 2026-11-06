@@ -1,3 +1,4 @@
+import { localRoomTasksClient, type LocalRoomTasksClient } from './local-room-tasks-client.js';
 import { localServiceClient, type LocalServiceClient } from './local-service-client.js';
 import {
   localModelConnectionsClient,
@@ -20,6 +21,7 @@ import {
   LOCAL_SERVICE_CONFIRMATIONS,
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_ADDRESSED_HISTORY,
+  LOCAL_ROOM_TASKS,
   isLocalRuntimeIdentity,
   isLocalReceiptQuery,
   isLocalRunQuery,
@@ -45,6 +47,7 @@ import { localBroadcastClient, type LocalBroadcastClient } from './local-broadca
 import { localPluginClient, type LocalPluginClient } from './local-plugin-client.js';
 export interface LocalRuntimeClient
   extends
+    LocalRoomTasksClient,
     LocalServiceClient,
     LocalModelConnectionsClient,
     LocalRestoreClient,
@@ -162,6 +165,7 @@ async function connectDescriptor(
         LOCAL_SERVICE_CONFIRMATIONS,
         LOCAL_SERVICE_AUTHORITY,
         LOCAL_ADDRESSED_HISTORY,
+        LOCAL_ROOM_TASKS,
       ],
     });
     if (
@@ -177,6 +181,7 @@ async function connectDescriptor(
       throw Error('plugin_runtime_upgrade_required');
     return {
       identity,
+      ...localRoomTasksClient(peer.request.bind(peer), identity),
       ...localServiceClient(peer.request.bind(peer), identity),
       ...localModelConnectionsClient(peer.request.bind(peer), identity),
       ...localRestoreClient(peer.request.bind(peer)),

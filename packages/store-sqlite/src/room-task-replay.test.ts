@@ -2,19 +2,24 @@ import { expect, it } from 'vitest';
 import { Worker } from 'node:worker_threads';
 import { RoomTaskPersistence } from '@runnets/application';
 import { openSqliteStore } from './index.js';
-import { roomTasks, attachRoomActor, sha256, roomTaskCounts } from '../test-fixtures/room-tasks.js';
+import {
+  hostedRoomTasks,
+  attachRoomActor,
+  sha256,
+  roomTaskCounts,
+} from '../test-fixtures/room-tasks.js';
 it('rolls back start and delegate at the final receipt write, reopening with unchanged counters', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
     const path = String(f.db!.prepare('PRAGMA database_list').get()?.['file']);
     const before = roomTaskCounts(f);
     f.db!.exec(
       "CREATE TRIGGER reject_room_receipt BEFORE INSERT ON ocean_receipts BEGIN SELECT RAISE(ABORT,'receipt rollback'); END",
     );
-    expect(() => f.service.start(f.input)).toThrow('receipt rollback');
+    expect(() => f.service.startHosted(f.input)).toThrow('receipt rollback');
     expect(roomTaskCounts(f)).toEqual(before);
     f.db!.exec('DROP TRIGGER reject_room_receipt');
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       prior = roomTaskCounts(f);
@@ -43,9 +48,9 @@ it('rolls back start and delegate at the final receipt write, reopening with unc
   }
 });
 it('replays immutable receipts after wait, stop and sender roster removal', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       request = {
@@ -70,7 +75,7 @@ it('replays immutable receipts after wait, stop and sender roster removal', asyn
         ok: false,
         error: { code: 'request_conflict' },
       });
-    expect(f.service.start(f.input)).toEqual(start);
+    expect(f.service.startHosted(f.input)).toEqual(start);
     expect(roomTaskCounts(f)).toEqual(counts);
     const path = String(f.db!.prepare('PRAGMA database_list').get()?.['file']);
     const second = openSqliteStore({ path });
@@ -97,16 +102,16 @@ it('replays immutable receipts after wait, stop and sender roster removal', asyn
   }
 });
 it('rejects both cross-kind collisions without replacement keys or writes', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       request = { kind: 'message', toBotId: 'b', text: 'hello' };
     const key =
       'room-agent/v1:' +
       sha256(JSON.stringify(['room-agent/v1', actor.turnId, actor.attemptId, actor.callId]));
-    expect(f.service.start({ ...f.input, requestId: key }).ok).toBe(true);
+    expect(f.service.startHosted({ ...f.input, requestId: key }).ok).toBe(true);
     const before = roomTaskCounts(f);
     expect(f.service.send(actor, request)).toMatchObject({
       ok: false,
@@ -120,7 +125,7 @@ it('rejects both cross-kind collisions without replacement keys or writes', asyn
       'room-agent/v1:' +
       sha256(JSON.stringify(['room-agent/v1', other.turnId, other.attemptId, other.callId]));
     const after = roomTaskCounts(f);
-    expect(f.service.start({ ...f.input, requestId: otherKey })).toMatchObject({
+    expect(f.service.startHosted({ ...f.input, requestId: otherKey })).toMatchObject({
       ok: false,
       error: { code: 'request_conflict' },
     });
@@ -130,7 +135,7 @@ it('rejects both cross-kind collisions without replacement keys or writes', asyn
   }
 });
 it('races identical starts in independent workers with bounded SQLite locking', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
     const path = String(f.db!.prepare('PRAGMA database_list').get()?.['file']);
     const source = `const {parentPort,workerData}=require('node:worker_threads');
@@ -169,7 +174,7 @@ it('races identical starts in independent workers with bounded SQLite locking', 
 
 it('replays a lost peer receipt after actual selected-grant revocation with an otherwise eligible actor', async () => {
   const { ownerGrant } = await import('../../../test-fixtures/service-authority.js');
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
     f.store.serviceAuthority.atomic((tx) =>
       tx.putGrant(
@@ -193,7 +198,7 @@ it('replays a lost peer receipt after actual selected-grant revocation with an o
         p.botId === 'b' ? { ...p, grantReferences: [{ grantId: 'replay-grant', revision: 1 }] } : p,
       ),
     };
-    const start = f.service.start(input);
+    const start = f.service.startHosted(input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       request = { kind: 'message', toBotId: 'b', text: 'committed before revocation' };
@@ -216,7 +221,7 @@ it('replays a lost peer receipt after actual selected-grant revocation with an o
     ).not.toBeNull();
     const before = roomTaskCounts(f);
     expect(f.service.send(actor, request)).toEqual(receipt);
-    expect(f.service.start(input)).toEqual(start);
+    expect(f.service.startHosted(input)).toEqual(start);
     expect(roomTaskCounts(f)).toEqual(before);
   } finally {
     f.close();

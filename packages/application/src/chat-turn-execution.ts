@@ -1,3 +1,4 @@
+import { releaseUnstartedRoomClaim, recordCancelledRoomTurn } from './room-task-cancellation.js';
 import { createChatCommand } from './commands.js';
 import { combineChatTools } from './chat-turn-tools.js';
 import { repairRoomHandoff } from './room-slice-publication.js';
@@ -63,13 +64,28 @@ export async function executeChatTurn(
   const { tasks, store, clock } = deps;
   let turn = input.turn;
   if (!!room !== !!turn.roomDelivery) throw Error('room execution marker mismatch');
-  if (room && (turn.codingTaskId !== undefined || !turn.activation || !input.provider))
-    throw Error('unsupported room scope');
+  if (room && (!turn.activation || !input.provider)) throw Error('unsupported room scope');
   const id = taskRunId(turn.taskRunId);
   let preparationStarted = false,
     preparationSettled = turn.codingTaskId === undefined;
   const cancelled = async () => {
-    if (room) return null;
+    if (room) {
+      if (!input.signal.aborted || !deps.sha256) return null;
+      const rootOwner = store.atomic((tx) => {
+        const task = tx.roomTasks?.task(turn.roomDelivery!.taskId);
+        const root = task && tx.roomTasks?.task(task.rootId);
+        return root?.kind === 'root' ? root.rootPayload.ownerId : null;
+      });
+      if (
+        !rootOwner ||
+        !(await releaseUnstartedRoomClaim(
+          { ...deps, sha256: deps.sha256, ownerId: rootOwner },
+          turn.id,
+        ))
+      )
+        return null;
+      return store.atomic((tx) => tx.chatTurn(turn.id));
+    }
     if (!(await cancelBeforeDispatch(tasks, turn, input.signal))) return null;
     const next = { ...turn, status: 'cancelled' as const };
     updateChat(store, turn, next);
@@ -82,7 +98,13 @@ export async function executeChatTurn(
     if (early) return early;
     preparationStarted = turn.codingTaskId !== undefined;
     const tools = room
-      ? combineChatTools(room.tools)
+      ? turn.activation!.capabilities.tools
+        ? combineChatTools(
+            room.tools,
+            turn.codingTaskId ? await deps.codingTools?.forTurn(turn, input.signal) : undefined,
+            await deps.grantedTools?.forTurn(turn, input.signal),
+          )
+        : undefined
       : await prepareChatTools(deps, turn, input.signal);
     if (tools && tools.cleanupConfirmed !== true) throw Error('preparation cleanup unknown');
     preparationSettled = true;
@@ -125,6 +147,15 @@ export async function executeChatTurn(
     else updateChat(store, turn, dispatched);
     turn = dispatched;
     const turnInput: TurnInput = {
+      ...(room
+        ? {
+            authorizeModelDispatch: () =>
+              store.atomic(
+                (tx) =>
+                  tx.roomTasks?.authorizeModel(turn.taskRunId, clock.now().getTime()) === true,
+              ),
+          }
+        : {}),
       // Room continuations never inherit tool authority from a legacy CLI or ACP session.
       tools,
       service: tasks,
@@ -153,6 +184,8 @@ export async function executeChatTurn(
     };
     const outcome = room ? await runTurn(turnInput, { turnId: turn.id }) : await runTurn(turnInput);
     if (room) {
+      if (outcome.kind === 'cancelled' && (await recordCancelledRoomTurn(deps, turn)))
+        return store.atomic((tx) => tx.chatTurn(turn.id))!;
       const published = await repairRoomHandoff(deps, turn.id);
       if (published) return published;
       const saved = store.atomic((tx) => tx.chatTurn(turn.id));

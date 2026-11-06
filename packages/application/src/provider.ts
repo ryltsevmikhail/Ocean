@@ -62,6 +62,8 @@ export interface ProviderModelInfo {
 }
 
 export interface ModelRequest {
+  /** Trusted runtime authority, checked immediately before actual inference dispatch. */
+  readonly authorizeDispatch?: () => boolean;
   readonly tools?: readonly ToolDefinition[];
   readonly model: string;
   readonly messages: readonly ChatMessage[];

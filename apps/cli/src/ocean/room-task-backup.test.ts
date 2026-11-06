@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { RoomTaskPersistence } from '@runnets/application';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import {
-  roomTasks,
+  hostedRoomTasks,
   attachRoomActor,
 } from '../../../../packages/store-sqlite/test-fixtures/room-tasks.js';
 import { backupProfile, restoreProfile } from './snapshots.js';
@@ -30,10 +30,10 @@ it('restores a source-deleted format2 D archive, replays start/peer receipts and
     destination = join(root, 'restored');
   mkdirSync(source, { mode: 0o700 });
   const path = join(source, 'runtime.sqlite'),
-    f = roomTasks(path);
+    f = hostedRoomTasks(path);
   let sourceOpen = true;
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       request = { kind: 'message', toBotId: 'b', text: 'archived peer text' };
@@ -46,7 +46,7 @@ it('restores a source-deleted format2 D archive, replays start/peer receipts and
     const manifest = await backupProfile(source, archive);
     expect(manifest).toMatchObject({
       format: 2,
-      summary: { schema: 28, messages: 2, unfinishedRuns: 1, heldRooms: 1 },
+      summary: { schema: 29, messages: 2, unfinishedRuns: 1, heldRooms: 1 },
     });
     const archiveDigest = digest(join(archive, 'runtime.sqlite'));
     expect(archiveDigest).toBe(manifest.sha256);
@@ -109,7 +109,7 @@ it('restores a source-deleted format2 D archive, replays start/peer receipts and
   }
 });
 
-it('restores a source-deleted genuine v27 format2 archive to v28 with inert receipt replay and holds', async () => {
+it('restores a source-deleted genuine v27 format2 archive to schema29 with inert receipt replay and holds', async () => {
   const { seed } =
     await import('../../../../packages/store-sqlite/test-fixtures/room-slices-v27.js');
   const { claimRoomDelivery } = await import('@runnets/application');
@@ -141,9 +141,16 @@ it('restores a source-deleted genuine v27 format2 archive to v28 with inert rece
     try {
       expect(
         restored.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-      ).toBe('28');
+      ).toBe('29');
       expect(store.restoration.origin()?.manifest).toEqual(manifest);
-      expect(rows(restored)).toEqual(original);
+      const initialMigrated = rows(restored);
+      initialMigrated.ocean_room_tasks = initialMigrated.ocean_room_tasks!.map(
+        ({ host_scope, ...old }) => {
+          expect(host_scope).toBeNull();
+          return old;
+        },
+      );
+      expect(initialMigrated).toEqual(original);
       const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
       const deps = {
         store: store.conversations,
@@ -227,7 +234,12 @@ it('restores a source-deleted genuine v27 format2 archive to v28 with inert rece
           String(child['id']),
         ),
       ).toEqual({ kind: 'held' });
-      expect(rows(restored)).toEqual(original);
+      const migrated = rows(restored);
+      migrated.ocean_room_tasks = migrated.ocean_room_tasks!.map(({ host_scope, ...old }) => {
+        expect(host_scope).toBeNull();
+        return old;
+      });
+      expect(migrated).toEqual(original);
       expect(
         store.conversations
           .atomic((tx) => tx.chatTurns())

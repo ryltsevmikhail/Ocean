@@ -12,8 +12,12 @@ export interface WorkspaceBackend {
     readonly processContainment: boolean;
     readonly confirmedTreeStop: boolean;
   };
-  read(path: string): Promise<string | null>;
-  list(path: string): Promise<readonly FileEntry[]>;
+  read(path: string, signal?: AbortSignal, guard?: ToolDispatchGuard): Promise<string | null>;
+  list(
+    path: string,
+    signal?: AbortSignal,
+    guard?: ToolDispatchGuard,
+  ): Promise<readonly FileEntry[]>;
   write(
     path: string,
     content: string,

@@ -1,6 +1,6 @@
 /** These qualifications launch the built normal entry point or a built-package child. */
 export const processCases = [
-  'apps/cli/src/local-runtime/*process*.test.ts',
+  'apps/cli/src/local-runtime/*process*.test.ts', // Includes room-tasks-process and room-task-failures-process.
   'apps/cli/src/local-runtime/restart-refusals.test.ts',
   'apps/cli/src/local-runtime/decision-{admission,persistence,review-conflicts,crash}.test.ts',
   'apps/cli/src/local-runtime/*native.test.ts',

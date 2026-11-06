@@ -112,7 +112,7 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
       .prepare(
         `SELECT d.decisionId AS id FROM ocean_owner_decisions d
       WHERE d.workspaceId=? AND d.roomId=? AND d.runId=? AND d.status='pending'
-      AND d.createdAt<=? AND d.expiresAt>? AND (d.kind='continue-text-only' OR EXISTS (
+      AND d.createdAt<=? AND d.expiresAt>? AND (d.kind IN ('continue-text-only','service-call','project-read') OR EXISTS (
         SELECT 1 FROM ocean_coding_approvals a WHERE a.id=d.decisionId AND
         json_extract(a.payload,'$.binding.workspaceId')=d.workspaceId AND
         json_extract(a.payload,'$.binding.roomId')=d.roomId AND json_extract(a.payload,'$.binding.runId')=d.runId AND

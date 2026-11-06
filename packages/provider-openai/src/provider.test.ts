@@ -178,3 +178,19 @@ it('sanitizes typed transport failures and never inherits a pre-send claim after
   expect(events.at(-1)).not.toMatchObject({ error: { message: 'private-key-and-transcript' } });
   expect(sends).toBe(1);
 });
+it.each([false, 'throw'] as const)('vetoes trusted dispatch %s before inference', async (mode) => {
+  const f = fake();
+  const p = createOpenAIProvider({ apiKey: 'fixture', httpClient: f.http });
+  const events = await collect(
+    p.stream(
+      request({
+        authorizeDispatch: () => {
+          if (mode === 'throw') throw Error('veto');
+          return false;
+        },
+      }),
+    ),
+  );
+  expect(terminals(events)).toMatchObject([{ type: 'error', error: { dispatch: 'not_sent' } }]);
+  expect(f.calls).toHaveLength(0);
+});

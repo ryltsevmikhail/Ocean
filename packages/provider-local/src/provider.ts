@@ -34,8 +34,13 @@ export function createLocalProvider(options: LocalProviderOptions): ProviderPort
     id: 'ollama',
     models: [MODEL],
     modelInfo: [{ id: MODEL, inputModalities: ['text'] }],
-    capabilities: { streaming: true, reasoning: false, usage: true, toolCalls: true },
-    requestBytes: (r) => Buffer.byteLength(buildRequestBody(r), 'utf8'),
+    capabilities: {
+      streaming: true,
+      reasoning: false,
+      usage: true,
+      toolCalls: q.capabilities.tools,
+    },
+    requestBytes: (r) => Buffer.byteLength(buildRequestBody(r, q.capabilities.tools), 'utf8'),
     async *stream(request): AsyncIterable<ProviderEvent> {
       let dispatched = false;
       const signals = [
@@ -45,14 +50,18 @@ export function createLocalProvider(options: LocalProviderOptions): ProviderPort
       const signal = AbortSignal.any(signals);
       try {
         if (signal.aborted) throw signal.reason;
-        const body = buildRequestBody(request);
+        const body = buildRequestBody(request, q.capabilities.tools);
         const current = await checkLocalModel({ endpoint, auth, httpClient: http }, signal);
         if (!sameLocalQualification(q, current))
           throw new ProviderError('invalid_request', 'local qualification drift', {
             dispatch: 'not_sent',
             retryable: false,
           });
-        if (signal.aborted) throw signal.reason;
+        if (signal.aborted || request.authorizeDispatch?.() === false || signal.aborted)
+          throw new ProviderError('invalid_request', 'model dispatch refused', {
+            dispatch: 'not_sent',
+            retryable: false,
+          });
         dispatched = true;
         const response = await withAbort(
           http.send({
@@ -75,6 +84,7 @@ export function createLocalProvider(options: LocalProviderOptions): ProviderPort
           abortableChunks(response.stream(), signal),
           request.messages.flatMap((m) => m.toolCalls?.map((c) => c.id) ?? []),
           signal,
+          q.capabilities.tools,
         );
       } catch (error) {
         const code = request.signal?.aborted

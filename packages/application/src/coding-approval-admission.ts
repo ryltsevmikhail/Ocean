@@ -1,4 +1,5 @@
-import { codingEffectAdmission } from './coding-grant-admission.js';
+import type { Clock } from './ports.js';
+import { codingEffectAdmission, codingRoomBasis } from './coding-grant-admission.js';
 import {
   canonicalJson,
   codingCapabilities,
@@ -12,14 +13,36 @@ import type { ToolJournalPort } from './tools.js';
 export function codingApprovalAdmission(
   binding: CodingApprovalBinding,
   tx: CodingApprovalTransaction,
-  deps: Readonly<{ ownerId: string; leases: ProjectLeasePort; journal: ToolJournalPort }>,
+  deps: Readonly<{
+    ownerId: string;
+    leases: ProjectLeasePort;
+    journal: ToolJournalPort;
+    clock?: Clock;
+  }>,
   approval?: CodingApproval,
 ): boolean {
+  const at = deps.clock?.now().getTime();
+  if (at === undefined) {
+    const scope = tx.roomScope?.(binding.runId, NaN);
+    if (scope !== null && scope !== undefined) return false;
+  }
+  const basis = codingRoomBasis(
+    tx,
+    binding,
+    approval?.preview ?? '',
+    at ?? Date.now(),
+    approval?.status === 'consumed',
+  );
+  if (
+    basis === false ||
+    (approval?.roomBasis && canonicalJson(approval.roomBasis) !== canonicalJson(basis?.basis))
+  )
+    return false;
   const task = tx.task?.(binding.taskId);
   const worktree = tx.worktree?.(binding.taskId);
   const evidence =
     approval?.guardedDispatch === true
-      ? codingEffectAdmission(tx, binding, approval.grantReference ?? null)
+      ? codingEffectAdmission(tx, binding, approval.grantReference ?? null, approval.roomBasis)
       : undefined;
   if (
     !task ||

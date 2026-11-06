@@ -63,6 +63,22 @@ export function createOpenAIProvider(options: OpenAIProviderOptions): ProviderPo
         timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
       ].filter((s): s is AbortSignal => s !== undefined);
       const signal = signals.length > 0 ? AbortSignal.any(signals) : undefined;
+      let authorized = false;
+      try {
+        authorized = request.authorizeDispatch?.() !== false;
+      } catch {
+        /* A veto proves no send. */
+      }
+      if (!authorized || signal?.aborted) {
+        yield {
+          type: 'error',
+          error: new ProviderError('invalid_request', 'model dispatch refused', {
+            dispatch: 'not_sent',
+            retryable: false,
+          }),
+        };
+        return;
+      }
       try {
         const response = await withAbort(
           http.send({

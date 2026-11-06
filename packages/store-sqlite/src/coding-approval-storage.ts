@@ -1,5 +1,11 @@
+import { roomHostPhysicalScope } from './room-host-command.js';
+import type { RoomHostBinding } from './room-host-storage.js';
 import { readToolAdmission, exactCodingReceipt } from './coding-journal-receipt.js';
-import { boundCodingEffect } from '@runnets/application';
+import {
+  boundCodingEffect,
+  codingRoomBasisMatches,
+  codingReadAdmission,
+} from '@runnets/application';
 import { digest } from './coding-claim-evidence.js';
 import { codingProjectId } from './service-run-scope.js';
 import { readAuthorityGrant } from './service-authority-rows.js';
@@ -10,6 +16,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { CodingApprovalStore, CodingApprovalTransaction } from '@runnets/application';
 import {
   assertCodingApprovalTransition,
+  canonicalJson,
   codingApprovalClaimKey,
   type CodingApproval,
 } from '@runnets/domain';
@@ -18,9 +25,15 @@ import { withImmediateTransaction } from './transaction.js';
 export class SqliteCodingApprovalStore implements CodingApprovalStore {
   readonly #db: DatabaseSync;
   readonly #journal: SqliteToolJournal;
-  constructor(db: DatabaseSync) {
+  readonly #host: RoomHostBinding;
+  constructor(
+    db: DatabaseSync,
+    journal = new SqliteToolJournal(db),
+    host: RoomHostBinding = () => null,
+  ) {
+    this.#host = host;
     this.#db = db;
-    this.#journal = new SqliteToolJournal(db);
+    this.#journal = journal;
   }
   atomic<T>(work: (tx: CodingApprovalTransaction) => T): T {
     const db = this.#db;
@@ -33,6 +46,8 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
         return value;
       };
       const tx: CodingApprovalTransaction = {
+        roomScope: (run, at, selection) =>
+          roomHostPhysicalScope(db, this.#host, run, at, selection),
         projectId: codingProjectId,
         grants: () =>
           db
@@ -40,7 +55,52 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
             .all()
             .map((r) => readAuthorityGrant(db, String(r['id']))!),
         grantCalls: (run, id) => this.#journal.grantCalls(run, id),
-        claimed: (a) => {
+        claimRead: (r, admission, at) => {
+          const p = codingReadAdmission(tx, r, at);
+          return (
+            !!p &&
+            canonicalJson(p.preview.effect) === canonicalJson(admission) &&
+            this.#journal.claimNow(
+              r.invocationId,
+              'coding_read',
+              { taskRunId: r.runId, attemptId: r.attemptId },
+              canonicalJson(r),
+              admission,
+              at,
+            )
+          );
+        },
+        readClaimed: (r, admission, at) => {
+          const p = codingReadAdmission(tx, r, at, true);
+          if (!p || canonicalJson(p.preview.effect) !== canonicalJson(admission)) return false;
+          const row = db
+            .prepare(
+              "SELECT admission,fingerprint FROM tool_invocations_v2 WHERE task_run_id=? AND attempt_id=? AND id=? AND tool='coding_read' AND outcome='started'",
+            )
+            .get(r.runId, r.attemptId, r.invocationId);
+          return (
+            !!row &&
+            row['fingerprint'] === digest(canonicalJson(r)) &&
+            canonicalJson(readToolAdmission(row['admission'])) === canonicalJson(admission) &&
+            !this.#journal
+              .inspectConflicts(admission)
+              .some(
+                (e) =>
+                  e.taskRunId !== r.runId || e.attemptId !== r.attemptId || e.id !== r.invocationId,
+              )
+          );
+        },
+        settleRead: (r, outcome) =>
+          this.#journal.settleNow(r.invocationId, outcome, {
+            taskRunId: r.runId,
+            attemptId: r.attemptId,
+          }),
+        claimed: (a, at) => {
+          if (at === undefined && tx.roomScope?.(a.binding.runId, NaN) !== null) return false;
+          if (
+            !codingRoomBasisMatches(tx, a.binding, a.preview, at ?? Date.now(), a.roomBasis, true)
+          )
+            return false;
           const b = a.binding;
           const row = db
             .prepare(
@@ -80,12 +140,23 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
             'INSERT INTO ocean_coding_approvals VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',
           ).run(value.id, JSON.stringify(value));
         },
-        claimApprovalOperation: (value) => {
+        claimApprovalOperation: (value, at) => {
+          if (at === undefined && tx.roomScope?.(value.binding.runId, NaN) !== null) return false;
           const stored = approval(value.id);
           if (
             !stored ||
             stored.status !== 'allowed' ||
             JSON.stringify(stored) !== JSON.stringify(value)
+          )
+            return false;
+          if (
+            !codingRoomBasisMatches(
+              tx,
+              value.binding,
+              value.preview,
+              at ?? Date.now(),
+              value.roomBasis,
+            )
           )
             return false;
           const key = codingApprovalClaimKey(value);
@@ -105,8 +176,14 @@ export class SqliteCodingApprovalStore implements CodingApprovalStore {
               { taskRunId: b.runId, attemptId: b.attemptId },
               JSON.stringify(value),
               value.guardedDispatch === true
-                ? boundCodingEffect(b, value.grantReference ?? null, codingProjectId(b.projectRoot))
+                ? boundCodingEffect(
+                    b,
+                    value.grantReference ?? null,
+                    codingProjectId(b.projectRoot),
+                    value.roomBasis,
+                  )
                 : undefined,
+              at,
             )
           )
             return false;

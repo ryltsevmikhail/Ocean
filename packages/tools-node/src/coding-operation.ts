@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import type { CodingApprovalBinding, CodingTask, CodingTestEvidence } from '@runnets/domain';
-import { ToolError, type PreparedCodingOperation, type ToolInvocation } from '@runnets/application';
+import {
+  ToolError,
+  type PreparedCodingOperation,
+  type ToolInvocation,
+  type ToolDispatchGuard,
+} from '@runnets/application';
 import { WorkspaceTools } from './executor.js';
 import {
   type SandboxCommandEvidence,
@@ -18,6 +23,8 @@ export type CodingOperationScope = Pick<
 
 /** Trusted host factory. Caller supplies the authoritative task and complete source snapshot port. */
 export interface CodingOperationInput {
+  readonly guard?: ToolDispatchGuard;
+  readonly signal?: AbortSignal;
   readonly task: CodingTask;
   readonly scope: CodingOperationScope;
   readonly approvalId: string;
@@ -53,10 +60,19 @@ async function prepareOperation(
   const snapshot = input.snapshot;
   const tools =
     sessionTools ??
-    new WorkspaceTools(await createSandboxBackend(sandbox, task.policy.testPresets, snapshot), {
-      requireContainment: true,
-    });
-  const tool = await tools.prepare(call);
+    new WorkspaceTools(
+      await createSandboxBackend(
+        sandbox,
+        task.policy.testPresets,
+        snapshot,
+        input.guard,
+        input.signal,
+      ),
+      {
+        requireContainment: true,
+      },
+    );
+  const tool = await tools.prepare(call, input.signal, input.guard);
   if (tool.kind !== 'edit' && tool.kind !== 'execute')
     throw new ToolError('coding_denied', 'approval factory accepts mutations and tests');
   const operation = tool.kind === 'edit' ? 'write' : 'test';
@@ -191,22 +207,41 @@ export async function createCodingOperationSession(
   )
     throw new ToolError('coding_denied', 'task session scope mismatch');
   const tools = new WorkspaceTools(
-    await createSandboxBackend(fixed.sandbox, fixed.task.policy.testPresets, fixed.snapshot),
+    await createSandboxBackend(
+      fixed.sandbox,
+      fixed.task.policy.testPresets,
+      fixed.snapshot,
+      input.guard,
+      input.signal,
+    ),
     { requireContainment: true },
   );
   return {
-    async read(call: ToolInvocation, signal: AbortSignal) {
+    async read(call: ToolInvocation, signal: AbortSignal, guard?: ToolDispatchGuard) {
       if (
         !fixed.task.policy.devCapabilities.includes('project_read') ||
         (call.name !== 'read_file' && call.name !== 'list_files')
       )
         throw new ToolError('coding_denied', 'task read capability required');
-      const prepared = await tools.prepare(call);
-      return prepared.execute(signal);
+      const prepared = await tools.prepare(call, signal, guard);
+      return prepared.execute(signal, guard);
     },
-    prepare(approvalId: string, call: ToolInvocation, attemptId = fixed.scope.attemptId) {
+    prepare(
+      approvalId: string,
+      call: ToolInvocation,
+      attemptId = fixed.scope.attemptId,
+      guard?: ToolDispatchGuard,
+      signal?: AbortSignal,
+    ) {
       return prepareOperation(
-        { ...fixed, approvalId, call, scope: { ...fixed.scope, attemptId, invocationId: call.id } },
+        {
+          ...fixed,
+          approvalId,
+          call,
+          ...(guard ? { guard } : {}),
+          ...(signal ? { signal } : {}),
+          scope: { ...fixed.scope, attemptId, invocationId: call.id },
+        },
         tools,
       );
     },

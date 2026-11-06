@@ -1,29 +1,29 @@
 import { expect, it } from 'vitest';
 import { canonicalJson } from '@runnets/domain';
-import { roomTasks, attachRoomActor } from '../test-fixtures/room-tasks.js';
-const contents = (f: ReturnType<typeof roomTasks>) =>
+import { hostedRoomTasks, attachRoomActor } from '../test-fixtures/room-tasks.js';
+const contents = (f: ReturnType<typeof hostedRoomTasks>) =>
   ['ocean_room_tasks', 'ocean_room_deliveries', 'ocean_messages', 'ocean_receipts'].map((table) =>
     f.db!.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
   );
 it.each(['start', 'send'] as const)(
   'refuses complete-key mixed message/root evidence on %s replay',
   async (mode) => {
-    const f = roomTasks();
+    const f = hostedRoomTasks();
     try {
-      const start = f.service.start(f.input);
+      const start = f.service.startHosted(f.input);
       if (!start.ok) throw Error('start');
       const actor = mode === 'send' ? await attachRoomActor(f, start.value) : null;
       const request = { kind: 'message', toBotId: 'b', text: 'peer' };
       const admitted = actor ? f.service.send(actor, request) : start;
       if (!admitted.ok) throw Error('admit');
-      const retry = () => (actor ? f.service.send(actor, request) : f.service.start(f.input));
+      const retry = () => (actor ? f.service.send(actor, request) : f.service.startHosted(f.input));
       expect(retry()).toEqual(admitted);
       const key = String(
         f
           .db!.prepare('SELECT request_key FROM ocean_room_deliveries WHERE message_id=?')
           .get(admitted.value.messageId)?.['request_key'],
       );
-      const other = f.service.start({ ...f.input, requestId: 'other', initialBotIds: ['c'] });
+      const other = f.service.startHosted({ ...f.input, requestId: 'other', initialBotIds: ['c'] });
       if (!other.ok) throw Error('other');
       f.store.conversations.atomic((tx) => {
         const rt = tx.roomTasks!,
@@ -58,11 +58,11 @@ it.each(['start', 'send'] as const)(
 it.each(['text', 'room', 'workspace'] as const)(
   'ties owner receipt replay to the bound %s facts',
   (field) => {
-    const f = roomTasks();
+    const f = hostedRoomTasks();
     try {
-      const admitted = f.service.start(f.input);
+      const admitted = f.service.startHosted(f.input);
       expect(admitted.ok).toBe(true);
-      expect(f.service.start(f.input)).toEqual(admitted);
+      expect(f.service.startHosted(f.input)).toEqual(admitted);
       f.store.conversations.atomic((tx) =>
         tx.putRoom({
           id: 'other-room',
@@ -95,7 +95,7 @@ it.each(['text', 'room', 'workspace'] as const)(
         input.requestId,
       );
       const before = contents(f);
-      expect(f.service.start(input)).toMatchObject({
+      expect(f.service.startHosted(input)).toMatchObject({
         ok: false,
         error: { code: 'request_conflict' },
       });
@@ -106,9 +106,9 @@ it.each(['text', 'room', 'workspace'] as const)(
   },
 );
 it('ties peer replay body to the bound request even when receipt and history agree', async () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const start = f.service.start(f.input);
+    const start = f.service.startHosted(f.input);
     if (!start.ok) throw Error('start');
     const actor = await attachRoomActor(f, start.value),
       request = { kind: 'message', toBotId: 'b', text: 'original' };
@@ -144,9 +144,9 @@ it('ties peer replay body to the bound request even when receipt and history agr
   }
 });
 it('refuses an owner target inconsistent with its room even in matching corrupted receipt/history', () => {
-  const f = roomTasks();
+  const f = hostedRoomTasks();
   try {
-    const admitted = f.service.start(f.input);
+    const admitted = f.service.startHosted(f.input);
     if (!admitted.ok) throw Error('start');
     // Simulate corrupt archived bytes; production identity updates must remain prohibited.
     f.db!.exec('DROP TRIGGER IF EXISTS ocean_message_immutable');
@@ -157,7 +157,7 @@ it('refuses an owner target inconsistent with its room even in matching corrupte
       "UPDATE ocean_receipts SET reply=json_set(reply,'$.data.targetBotId','a') WHERE request_id=?",
     ).run(f.input.requestId);
     const before = contents(f);
-    expect(f.service.start(f.input)).toMatchObject({
+    expect(f.service.startHosted(f.input)).toMatchObject({
       ok: false,
       error: { code: 'request_conflict' },
     });

@@ -1,3 +1,4 @@
+import type { ChatTurnExecutionDeps } from '@runnets/application';
 import type { RuntimeServices } from './runtime-services.js';
 import type { McpServiceTransportOptions } from '@runnets/integrations-mcp';
 import type { GrantedToolSource } from '@runnets/application';
@@ -47,10 +48,13 @@ import type {
   ConversationService,
   DirectChatService,
   RoomBroadcastService,
+  RoomTaskPersistence,
   ChatReviewService,
 } from '@runnets/application';
 
 export interface Runtime {
+  readonly codingTools?: NonNullable<ChatTurnExecutionDeps['codingTools']>;
+  readonly roomTasks?: RoomTaskPersistence;
   readonly services?: RuntimeServices;
   readonly grantedTools?: GrantedToolSource;
   readonly restored?: boolean;

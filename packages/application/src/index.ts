@@ -128,8 +128,28 @@ export { validRoomTaskIdentity } from './room-task-identity.js';
 export {
   claimRoomDelivery,
   recoverUnstartedRoomClaims,
+  unstartedRoomClaimRuns,
+  inspectUnstartedRoomClaim,
   type RoomDeliveryClaim,
   type RoomDeliveryClaimDeps,
 } from './room-delivery-claim.js';
 export { repairRoomHandoff, type RoomSlicePublicationDeps } from './room-slice-publication.js';
 export { recoverChats } from './direct-chat-publication.js';
+
+export type { RoomHostScope } from './room-task-records.js';
+
+export * from './room-task-host.js';
+
+export * from './room-task-authority.js';
+
+export * from './coding-read-admission.js';
+export {
+  selectedCodingBasis,
+  roomCodingPermits,
+  codingRoomBasis,
+  codingRoomBasisMatches,
+} from './coding-grant-admission.js';
+
+export { roomCompleteEvidence } from './room-slice-handoff.js';
+
+export { releaseUnstartedRoomClaim } from './room-task-cancellation.js';

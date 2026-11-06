@@ -39,7 +39,6 @@ export function localQualification(value: unknown): LocalModelQualification {
   if (
     q.modelId !== MODEL ||
     q.configuredContextTokens !== 4096 ||
-    !q.capabilities.tools ||
     !q.capabilities.streaming ||
     q.capabilities.inputModalities.length !== 1 ||
     q.capabilities.maxOutputTokens !== null ||

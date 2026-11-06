@@ -149,3 +149,29 @@ streams and mocked spawn outcomes are not evidence of real containment.
 See [coding tools](integration/coding-agent.md), [storage](integration/sqlite.md),
 [TUI](integration/tui.md), [domain model](domain-model.md),
 [state machines](state-machines.md) and [provenance](../NOTICE).
+
+## Owner room tasks in the local runtime
+
+The ordinary durable host serves the negotiated `room.tasks-v1` SDK surface
+(`roomTaskStart`, `roomTaskGet`, `roomTaskStop`, `roomTaskObserve`) alongside
+addressed history. A root records the owner's explicit participants, selected grant
+revisions and mandate before execution. Schema29 stamps new hosted roots with
+the current execution owner and epoch. Application-only starts and migrated roots
+remain inert; replay returns the original IDs without enrolling or waking them.
+
+The runtime runs each accepted slice through the shared chat engine. Delegation
+closes the current slice without a final answer; a proved child final creates one
+attributed return delivery for a fresh parent slice. Each slice uses its bot's
+frozen provider identity and a fresh deadline. Qualified text-only local models
+receive no tool schemas. Current authority is checked again at model and physical
+effect boundaries. Service and coding claims retain their existing journals,
+selected per-subject grant basis and limits. Owner confirmation is required only
+where that scope explicitly requires it, including exact worktree observations.
+
+Root views expose bounded metadata and signed instance/scope cursors. Stop commits
+a root fence before aborting and joining jobs; disconnect only detaches a reader.
+Unknown effects stay held and are never retried from missing responses.
+
+These source and synthetic-transport qualifications do not enable an installed
+release. Native containment/restart cases, real cloud/local mixed execution and
+installed-client gates remain separate production work.

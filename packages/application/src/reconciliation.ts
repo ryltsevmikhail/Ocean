@@ -17,6 +17,7 @@ export interface RuntimeRecovery {
 export async function reconcileInterrupted(
   service: TaskRunService,
   tools: ToolJournalPort,
+  exemptUnstarted?: (id: TaskRunId) => boolean,
 ): Promise<RuntimeRecovery> {
   // A committed claim without a settlement is evidence of possible execution, never of no launch.
   for (const effect of await tools.pending()) {
@@ -26,6 +27,7 @@ export async function reconcileInterrupted(
   for (const id of await service.listTaskRuns()) {
     let state = await service.state(id);
     if (state.status === 'absent' || isTerminal(state.status)) continue;
+    if (exemptUnstarted?.(id) === true) continue;
     if (state.status !== 'cancelling' && state.status !== 'reconciling') {
       const result = await executeStep(
         service,

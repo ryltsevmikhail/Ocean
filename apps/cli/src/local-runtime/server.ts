@@ -11,6 +11,7 @@ import {
 import {
   isLocalRuntimeRequest,
   LOCAL_MODEL_METHODS,
+  LOCAL_ROOM_TASKS,
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
   LOCAL_SERVICE_CONFIRMATIONS,
@@ -89,6 +90,10 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
           models: features.includes(LOCAL_MODEL_CONNECTIONS),
           serviceConfirmations: features.includes(LOCAL_SERVICE_CONFIRMATIONS),
           addressedHistory: features.includes(LOCAL_ADDRESSED_HISTORY),
+          roomTasks:
+            features.includes(LOCAL_ROOM_TASKS) &&
+            features.includes(LOCAL_ADDRESSED_HISTORY) &&
+            operations.identity.capabilities.includes(LOCAL_ROOM_TASKS),
         });
         authenticated = true;
         clearTimeout(handshakeTimeout);
@@ -101,6 +106,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             services,
             context.serviceConfirmations,
             context.addressedHistory,
+            context.roomTasks,
           ),
         });
         return;
@@ -125,6 +131,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             services,
             context.serviceConfirmations,
             context.addressedHistory,
+            context.roomTasks,
           ),
         });
         return;
@@ -141,6 +148,10 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             reject('stop_incomplete');
             socket.end();
           });
+        return;
+      }
+      if (method.startsWith('roomTasks.') && !context.roomTasks) {
+        reject('client_upgrade_required');
         return;
       }
       if (method.startsWith('service.') && !services) {

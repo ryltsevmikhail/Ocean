@@ -1,3 +1,4 @@
+import type { RoomHostBinding } from './room-host-storage.js';
 import { roomTaskStorage } from './room-task-storage.js';
 import { taskRunId } from '@runnets/domain';
 import { committedTaskVersion } from './event-log.js';
@@ -26,8 +27,13 @@ export class SqliteConversationStore implements ConversationStore {
   readonly #db: DatabaseSync;
   readonly #legacyKey: (id: string) => ConversationReceipt | null;
   readonly #legacySchema: boolean;
-  constructor(db: DatabaseSync, options: { readonly legacySchema?: true } = {}) {
+  readonly #host: RoomHostBinding;
+  constructor(
+    db: DatabaseSync,
+    options: { readonly legacySchema?: true; readonly roomHost?: RoomHostBinding } = {},
+  ) {
     this.#db = db;
+    this.#host = options.roomHost ?? (() => null);
     this.#legacyKey = legacyReviewKey(db);
     this.#legacySchema = options.legacySchema === true;
   }
@@ -68,7 +74,7 @@ export class SqliteConversationStore implements ConversationStore {
     return withImmediateTransaction(db, () =>
       work({
         ...chatStorage(db),
-        ...(current ? { roomTasks: roomTaskStorage(db) } : {}),
+        ...(current ? { roomTasks: roomTaskStorage(db, this.#host) } : {}),
         ...(current
           ? {
               chatFailureEvidence: (id: string) => {
@@ -222,6 +228,9 @@ export class SqliteConversationStore implements ConversationStore {
             !('kind' in reply) ||
             typeof reply.kind !== 'string' ||
             ![
+              'room_task_state',
+              'room_task_fence',
+              'room_task_stop',
               'workspace',
               'bot',
               'bound_bot',

@@ -1,3 +1,4 @@
+import type { RoomHostBinding } from './room-host-storage.js';
 /**
  * Durable event log.
  *
@@ -53,11 +54,14 @@ export class SqliteEventLog implements EventLogPort {
   readonly #db: DatabaseSync;
   readonly #ids: IdGenerator;
 
-  constructor(db: DatabaseSync, ids: IdGenerator) {
+  constructor(db: DatabaseSync, ids: IdGenerator, host: RoomHostBinding = () => null) {
     this.#db = db;
     this.#ids = ids;
-    this.commands = sqliteCommands(db, (command, version, drafts, meta) =>
-      this.#appendWithin(command.taskRunId, version, drafts, meta),
+    this.commands = sqliteCommands(
+      db,
+      (command, version, drafts, meta) =>
+        this.#appendWithin(command.taskRunId, version, drafts, meta),
+      host,
     );
   }
 

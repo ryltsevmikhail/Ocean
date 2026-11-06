@@ -1,4 +1,6 @@
-import { roomSliceAuthority } from './room-delivery-evidence.js';
+import { admitRoomCount, repeatedRoomExchange } from './room-task-authority.js';
+import { freezeRoomTask } from './room-task-host.js';
+import { roomLocalAuthority } from './room-task-authority.js';
 import type { RoomHandoff } from '@runnets/domain';
 import {
   canonicalJson,
@@ -39,7 +41,11 @@ function origin(f: RoomTaskOriginFacts, actor: RoomTaskActor): RoomDeliveryOrigi
     callId: actor.callId,
   };
 }
-type HandoffSend = { readonly receipt: RoomTaskReceipt; readonly proof: RoomHandoff | null };
+type HandoffSend = {
+  readonly receipt: RoomTaskReceipt;
+  readonly proof: RoomHandoff | null;
+  readonly fresh?: boolean;
+};
 export function persistRoomTaskSend(
   d: RoomTaskPersistenceDeps,
   actor: RoomTaskActor,
@@ -118,10 +124,16 @@ export function persistRoomTaskSend(
         return conversationFailure('approval_required');
       const { task, root, input, turn, liveRun } = facts;
       if (
-        handoff &&
-        (!roomSliceAuthority(tx, root, task, d.clock.now().getTime(), d.sha256) ||
-          !turn.activation ||
-          d.clock.now().getTime() >= Date.parse(turn.activation.deadlineAt))
+        !root.hostScope ||
+        canonicalJson(root.hostScope) !== canonicalJson(rt.hostScope()) ||
+        rt.restored() ||
+        tx.roomPolicy(task.roomId)?.mode === 'text_only'
+      )
+        return conversationFailure('recovery_required');
+      if (
+        !roomLocalAuthority(tx, root, task, d.sha256) ||
+        !turn.activation ||
+        (handoff && d.clock.now().getTime() >= Date.parse(turn.activation.deadlineAt))
       )
         return conversationFailure('recovery_required');
       const evidence = tx.chatFailureEvidence?.(actor.taskRunId);
@@ -151,6 +163,18 @@ export function persistRoomTaskSend(
         return conversationFailure('provider_unavailable');
       const transfer = admitRoomModelTransfer(tx, room.id, identity);
       if (!transfer.ok) return transfer;
+      if (
+        !admitRoomCount(rt.counts(root.id), 'tool_calls') ||
+        repeatedRoomExchange(tx, root, turn.bot.id, request)
+      ) {
+        freezeRoomTask(
+          tx,
+          root,
+          rt.counts(root.id).toolCalls >= 64 ? 'tool_limit' : 'duplicate_exchange',
+          d.sha256,
+        );
+        return conversationFailure('room_busy');
+      }
       const message = {
         id: d.nextId(),
         workspaceId: task.workspaceId,
@@ -225,7 +249,7 @@ export function persistRoomTaskSend(
         seq: message.seq,
         deliveries: [{ botId: request.toBotId, taskId: child.id, deliveryId: delivery.id }],
       };
-      return handoff ? ok({ receipt, proof }) : ok(receipt);
+      return handoff ? ok({ receipt, proof, fresh: true }) : ok(receipt);
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'revision_conflict')

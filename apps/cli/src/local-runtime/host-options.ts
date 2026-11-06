@@ -24,6 +24,8 @@ export interface LocalRuntimeHost {
   stop(): Promise<LocalRuntimeStop>;
 }
 export interface LocalRuntimeHostOptions {
+  /** Trusted fixture scheduling override; never accepted from socket input. */
+  readonly roomTaskCapacity?: 1;
   readonly serviceTransportOptions?: RuntimeOptions['serviceTransportOptions'];
   readonly profile: string;
   readonly restore?: boolean;

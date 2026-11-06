@@ -25,5 +25,5 @@ it('keeps full current identity distinct from the negotiated RC2 identity', () =
   expect(clientIdentity(identity, true, true, true, true).capabilities).not.toContain(
     LOCAL_ADDRESSED_HISTORY,
   );
-  expect(clientIdentity(identity, true, true, true, true, true)).toEqual(identity);
+  expect(clientIdentity(identity, true, true, true, true, true, true)).toEqual(identity);
 });

@@ -97,6 +97,13 @@ export function roomTasks(requestedPath?: string) {
   };
 }
 
+/** Explicit executable host fixture; ordinary roomTasks() admissions stay inert. */
+export function hostedRoomTasks(path?: string) {
+  const f = roomTasks(path);
+  f.store.bindRoomHost({ ownerId: 'owner', epochId: null }, { origin: null, active: null });
+  return f;
+}
+
 /** Test-only attachment of a real queued input to a real committed settled Core attempt. */
 export async function attachRoomActor(
   f: ReturnType<typeof roomTasks>,
@@ -157,7 +164,12 @@ export async function attachRoomActor(
       {
         conversationId: conversationId('cv_room'),
         workspaceId: workspaceId('ws_ws_fixture'),
-        parentTaskRunId: null,
+        parentTaskRunId: f.store.conversations.atomic((tx) => {
+          const input = tx.roomTasks!.delivery(delivery.deliveryId)!;
+          const edge = input.kind === 'result' ? tx.roomTasks!.delivery(input.causeId) : input;
+          const source = edge?.sourceTurnId && tx.chatTurn(edge.sourceTurnId);
+          return source ? taskRunId(source.taskRunId) : null;
+        }),
         model: 'one',
         policyId: 'pl_fixture',
         budget: unlimitedBudget(),

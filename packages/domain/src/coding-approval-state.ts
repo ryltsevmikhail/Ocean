@@ -1,10 +1,12 @@
-import type { CodingApproval } from './coding-approval.js';
+import { validCodingGrantBasis, type CodingApproval } from './coding-approval.js';
 
 /** Storage adapters enforce immutable previews and irreversible decisions. */
 export function assertCodingApprovalTransition(
   previous: CodingApproval | null,
   next: CodingApproval,
 ): void {
+  if (next.roomBasis !== undefined && !validCodingGrantBasis(next.roomBasis))
+    throw Error('invalid room basis');
   if (!previous) {
     if (next.status !== 'pending') throw Error('approval must start pending');
     return;

@@ -132,6 +132,16 @@ export function roomTaskSliceStorage(
           db.prepare('SELECT 1 FROM tool_invocations_v2 WHERE task_run_id=? LIMIT 1').get(id)
         )
           return null;
+        if (
+          db
+            .prepare(
+              `SELECT 1 FROM ocean_receipts r WHERE
+          (json_extract(r.reply,'$.kind')='message' AND json_extract(r.reply,'$.data.turnId')=(SELECT id FROM ocean_chat_turns WHERE task_run_id=?))
+          OR (json_extract(r.reply,'$.kind')='room_task_state' AND CASE WHEN json_valid(r.binding) THEN json_extract(r.binding,'$[1].taskRunId') END=?) LIMIT 1`,
+            )
+            .get(id, id)
+        )
+          return null;
         const events = eventsFor(db, id);
         if (events.length === 0) {
           if (receipt.value !== null) return null;
