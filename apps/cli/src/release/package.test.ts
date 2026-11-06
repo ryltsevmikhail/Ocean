@@ -56,6 +56,14 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   // Internal planning/session documents stay out of the installed product.
   expect(names.filter((name) => name.startsWith('docs/superpowers/'))).toEqual([]);
   expect(names).toContain('docs/ocean/production.md');
+  for (const name of ['tools-node', 'application', 'domain', 'contracts']) {
+    expect(names).toContain('node_modules/@runnets/' + name + '/dist/index.d.ts');
+  }
+  expect(names).toContain('node_modules/@runnets/tools-node/dist/local-service-client.d.ts');
+  expect(names).toContain('node_modules/@runnets/contracts/dist/local-services.d.ts');
+  expect(
+    names.filter((name) => /(?:\.test\.|integrations-executor|\/plugin-transport\.)/.test(name)),
+  ).toEqual([]);
   expect(names).toContain('docs/integration/local-runtime.md');
   // The tsc output of the adapter is replaced by the bundle, never shipped beside it.
   expect(names).not.toContain(ADAPTER + 'dist/transport.js');

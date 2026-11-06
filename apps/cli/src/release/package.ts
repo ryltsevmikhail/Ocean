@@ -30,7 +30,7 @@ const ADAPTER_DIRECTORY = ADAPTER_SOURCE_DIR.split('/').at(-1) ?? '';
  * Compiled test helpers (`*fixture*`, `*-cleanup*`) live beside product modules in
  * `dist` but are imported by tests only and are never installed.
  */
-const TEST_ONLY_MODULE = /(?:^|\/)[^/]*(?:fixture|cleanup)[^/]*\.js$/i;
+const TEST_ONLY_MODULE = /(?:^|\/)[^/]*(?:fixture|cleanup|\.test)[^/]*(?:\.js|\.d\.ts)$/i;
 
 /**
  * Internal planning/session documents are committed for the repository, not for an
@@ -180,10 +180,13 @@ export async function packageRelease(
         if (entry.isDirectory()) {
           if (entry.name !== 'release')
             copy(join(directory, entry.name), relative + entry.name + '/');
-        } else if (entry.isFile() && entry.name.endsWith('.js')) {
+        } else if (
+          entry.isFile() &&
+          (entry.name.endsWith('.js') || (name !== 'cli' && entry.name.endsWith('.d.ts')))
+        ) {
           if (
             TEST_ONLY_MODULE.test(relative + entry.name) ||
-            (name === 'cli' && relative + entry.name === 'plugin-transport.js')
+            (name === 'cli' && /^plugin-transport\.(?:js|d\.ts)$/.test(relative + entry.name))
           )
             continue;
           add(

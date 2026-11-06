@@ -1190,7 +1190,7 @@ D–H remain ordered after C; this checkpoint does not complete the release.
 **Files:** existing CLI catalog-lifetime test and fixtures; current service-turn
 projection/admission tests only if an actual failing regression requires a fix;
 existing MCP session/transport owner-refresh scheduler if a normal admission RED
-shows a dropped eligible hint; existing release/native fixtures and implementation-
+shows a dropped eligible hint; existing release packager/tests/native fixtures and implementation-
 status docs. No SDK removal in this task. Preserve historical tests and migration/
 archive handling until18.6.2.
 
@@ -1232,7 +1232,10 @@ unchanged. No raw secrets in logs, argv, model context, SQLite or Git.
       successful installation). Package a private prerelease archive, record source
       revision, SHA256/inventory and install into a disposable prefix. Check actual
       installed CLI runtime start/status/stop, offline CLI/TUI/ACP and current public
-      client connection/history/owner reads. Reuse existing packaging/tamper checks;
+      client connection/history/owner reads. Verify the advertised public client types
+      resolve from installed bare imports; ship emitted first-party declarations if
+      the archive advertises them, retaining product exclusions and the bundled MCP
+      adapter's explicit JS-only contract. Reuse existing packaging/tamper checks;
       no change to released installs, real profiles, launchers or user units.
 - [ ] **Qualify production MCP through that installation.** Use the installed sole
       host, saved owner settings and public client. A scripted ProviderPort is fine
