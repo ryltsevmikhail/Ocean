@@ -1359,6 +1359,138 @@ Minors/Rulings, current native/restore/device/release gates. Full A–H goal rem
 - [ ] Проверить общий бюджет/цикл/stop; параллельные разные ресурсы не блокируются,
       один worktree координируется. Legacy unknown без scope не разблокировать автоматически.
 
+### D delivery sequence
+
+Reuse the current engine, TaskRun, SQLite, receipts and runtime scheduler. One
+owner-authored root holds the mandate/budget; bot tasks are its initial children.
+There is no implicit leader or authority derived from recipient order, and no Team
+entity. Owner root start plus selected room members authorizes local communication.
+Selected C grant references authorize external operations only after the current
+mandate/ancestor/executor intersection; zero references never grants external I/O.
+Do not add a separate communication permission/editor just to talk within this root.
+
+19.1 delivers a pure addressing projection/decision.19.2 adds durable tasks/delivery,
+then the common engine/host, recovery and shared budget through independently tested
+leaves expanded against accepted interfaces.19.3 proves actual managed workspace
+independence, including startup/idle writers, before D is accepted. No second loop,
+broker, generic workflow/identity framework or E/G UI expansion.
+
+### Task 19.1: Pure bot-task addressing and stable operation identity
+
+**Files:** create `packages/domain/src/room-task.ts`, `room-delivery.ts` and
+`room-delivery.test.ts`; modify domain `index.ts`; document the narrow implemented
+scope in `docs/ocean/platform-stage-d.md`. No application/store/adapter/client change.
+
+**Interfaces:** readonly `RoomTaskAddress` projects only addressing facts:
+`id, workspaceId, roomId, rootId, parentId, assigneeBotId:string`,
+`members:readonly string[]`, `grantReferences:readonly OwnerGrantReference[]`,
+`status:'ready'|'waiting'|'paused'|'completed'|'stopped'`, `lastDeliverySeq:number`.
+Only bot tasks enter it: id differs from rootId, parentId is present and nonself;
+parent may be the owner root or a delegating bot task. Actual persisted joins,
+full mandate/budget, revisions and current grant authority belong to19.2.
+Members is a dense unique1..32 bot-ID ceiling containing the assignee; grant refs
+are dense0..32, valid current C reference shapes and unique by grantId. Use
+`validOwnerGrantReference` from existing `owner-scope-grant.ts`. Empty refs allow
+only local communication under owner root, never external authority. Cursor is a
+safe integer>=0. These are projections, not grants or a complete persistence schema.
+
+`RoomDeliveryAddress` has readonly string fields
+`id, workspaceId, roomId, rootId, toTaskId, recipientBotId, causeId, requestKey,
+messageId`, nullable string `fromTaskId, sourceTurnId, senderBotId`,
+`kind:'start'|'message'|'delegate'|'result'` and positive room history `seq:number`.
+This projects deliveries to bot tasks. Owner start has null source/sender/fromTask;
+other kinds refer to their causal bot turn/task. A result to an initial owner root
+is progress/publication, not a delivery that wakes a root bot. No runtime validator
+or persisted receipt format is frozen for this type in19.1.
+
+`RoomAgentRequest` is exactly `{kind:'message'|'delegate',toBotId:string,text:string}`.
+Trusted `RoomDeliveryOrigin` is `{task:RoomTaskAddress,botId:string,turnId:string,
+deliveryId:string,attemptId:string,callId:string}`. Source callId is the engine's
+round-qualified invocation ID from tool-round.ts, not raw model JSON. Data IDs use
+existing validConversationText UTF-8 validation with128-byte bound; this compound
+callId has512-byte bound so valid attempt+round+provider IDs are not truncated.
+Text uses the existing16384-byte bound. Current membership is a dense unique array
+of0..32 valid bot IDs; an empty current list makes a valid old route ineligible.
+
+Export `decideRoomAddress(origin:RoomDeliveryOrigin,request:unknown,
+currentMemberIds:readonly string[]):Result<RoomAddressDecision>`; the readonly
+result is `{senderBotId,recipientBotId,text,kind,requestKey,binding}` with kind
+message|delegate. Return err(DomainError.invalidArgument(...)) for malformed JSON
+data/projection/membership; err(DomainError.invariant(...)) for otherwise valid
+ineligible routing; ok on success. Do not throw domain errors as control flow.
+Require ready task, origin bot equal assignee, different sender/recipient, both
+selected and current members. No model asserted sender/root/grants/result/wake.
+Key is exactly `canonicalJson(['room-agent/v1',turnId,attemptId,callId])`;
+binding exactly `canonicalJson([workspaceId,roomId,rootId,task.id,deliveryId,
+botId,kind,toBotId,text])`. Preserve text, do not normalize the receipt payload.
+Later durable receipt lookup precedes fresh routing checks and may hash this
+internal key using the existing trusted SHA256 port; it cannot repeat execution.
+This pure decision performs no identity allocation, authority grant, I/O or state mutation.
+
+- [ ] **RED addressing behavior.** Add positive A→B message/delegate cases with
+      zero and multiple refs; assert derived sender and exact key/binding, stable
+      replay identity, changed text/recipient/kind changes binding only, distinct
+      room bindings. Include compound callId>128<=512 and exact UTF-8 boundaries.
+      Add a minimal temporary contract stub if needed to make positive cases fail
+      behaviorally; report missing-export RED separately, not as per-case behavior.
+- [ ] **Implement the minimal decision.** Reuse existing Result/ok/err, canonical
+      JSON, Unicode text and C grant-reference guards. Validate plain request with
+      exact own keys, bounded dense arrays, IDs/refs/cursor and actor eligibility.
+      No new validator/policy framework, schema, engine, capability or endpoint.
+- [ ] **GREEN refusals and immutability.** Reject forged sender/root/grants/result,
+      missing/extra keys, malformed/empty/oversized/NUL/surrogate text/IDs, sparse or
+      duplicate/oversized members/refs, bad reference revision, null/self parent,
+      owner root presented as bot, unsafe/negative cursor. Reject current removal,
+      outsider, self, stale assignee and waiting/paused/completed/stopped routes as
+      ineligible when otherwise well shaped. Accept parent=root and parent=bot.
+      Prove inputs unchanged; no mocks that merely refuse everything.
+- [ ] **Verify and report.** Run owning domain RED→GREEN and strict test typing;
+      root pnpm check/build/format:check once on final source through private runner,
+      source<=300. Update implemented/planned docs and commit exact owned paths.
+      Obtain independent task review before19.2 detail. No native/live/key requests
+      or repeated C matrices: this does not yet execute or persist autonomous tasks.
+
+### Task 19.2: Durable team work through the common engine and server
+
+Expand the next persistence leaf after19.1 acceptance. One root coordination row,
+one bot task per owner-selected initial assignee, one shared user message/receipt
+and one inbox/outbox delivery row per target; source author is runtime-authored.
+Owner-start edges use mandate plus recipient selected grants; bot-originated edges
+also inherit every actual delegating ancestor under that ancestor's own subject.
+Never wake an independent broader task from a peer message or discard revoked refs.
+Keep old taskId=coding semantics/direct room holds/finite broadcast and migrations
+byte-safe. Adapt the actual history constraints that presently require bot author
+and target to match and a single message per turn. Receipts precede wake; replay
+and altered payload differ. Actual joins/state/current authority, not19.1's shape
+projection, authorize action. Restore/quarantine remains binding.
+
+Then add host send/delegate/state tools to the existing executeChatTurn/runTurn;
+durable delegation yields without a held Promise, transaction or execution slot.
+Finalize only proven local steps; unknown model/effect never replays. Results wake
+only recorded parents and publish once; per-delivery state preserves earlier queued
+messages while matching results unblock waits. Freeze B's per-bot identity and
+current privacy/current grant checks at the actual dispatch boundary. Owner stop
+fences all future starts, client disconnect leaves runtime alive. Root shared limits
+start at2 concurrent/32 total bot slices/64 provider starts/64 tools; use existing
+budget reservations, unknown usage never zero. Pause before third identical
+sender/recipient/kind/trimmed-NFC-text handoff without verified new result, once.
+Exercise one-slot A→B→A, unrelated task progress, both mixed-provider outages,
+privacy/revoke/stop/budget/receipt/restart races; qualify real mixed providers
+separately. Detailed interfaces follow the accepted earlier leaf, not guesses.
+
+### Task 19.3: Qualify independent managed service workspaces
+
+Reuse actual enrollment, verified sandbox bind descriptors, session supervision and
+existing resource conflict predicate. Connection names/fake IDs/path inequality are
+not containment evidence. Missing/stale proof and old unscoped unknown stay
+conservative. Fence stdio launch/refresh and already-active/idle writers as well as
+tool dispatch: server JS can mutate before its first call. Choose the smallest
+footprint representation after actual enforcement proof, no identity registry.
+Normal-host A mutates then loses its reply; after restart proven disjoint B works,
+while same/nested/alias A via another connection remains blocked, including startup
+writes. Same worktree remains coordinated. Native Linux proof and real mixed/live
+gates remain distinct from unit/SQLite/root tests. Do not accept D until proved.
+
 ## Task 20: E. Графический чат ботов — приоритет 1
 
 **Files:** текущий `apps/desktop/src/ui` и протокольные адаптеры Desktop;
