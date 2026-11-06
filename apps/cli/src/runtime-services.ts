@@ -9,6 +9,7 @@ import {
   publishServiceCatalogRefresh,
   currentServiceCatalog,
   type Clock,
+  type ServiceCallConfirmationPort,
   type ServiceAuthorityStorePort,
   type ServiceAuthorityTransaction,
   type ConversationStore,
@@ -32,6 +33,7 @@ export interface RuntimeServices {
   drain(): Promise<'settled' | 'uncertain'>;
 }
 export interface RuntimeServicesInput {
+  readonly confirmation?: ServiceCallConfirmationPort | undefined;
   readonly profile: string;
   readonly store: {
     readonly serviceAuthority: ServiceAuthorityStorePort;
@@ -163,6 +165,7 @@ export function composeRuntimeServices(input: RuntimeServicesInput): RuntimeServ
     transport,
     now,
     restored: input.restored,
+    confirmation: input.confirmation,
   });
   return {
     owner: new ServiceOwnerSettings({

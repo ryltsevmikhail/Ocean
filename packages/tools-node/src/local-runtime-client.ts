@@ -16,6 +16,7 @@ import {
   LOCAL_RUNTIME_MAX_WAIT_MS,
   LOCAL_PLUGIN_SESSION_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
+  LOCAL_SERVICE_CONFIRMATIONS,
   isLocalRuntimeIdentity,
   isLocalReceiptQuery,
   isLocalRunQuery,
@@ -151,7 +152,11 @@ async function connectDescriptor(
   try {
     const identity = await peer.request('hello', {
       ...descriptor,
-      clientFeatures: [LOCAL_PLUGIN_SESSION_AUTHORITY, LOCAL_MODEL_CONNECTIONS],
+      clientFeatures: [
+        LOCAL_PLUGIN_SESSION_AUTHORITY,
+        LOCAL_MODEL_CONNECTIONS,
+        LOCAL_SERVICE_CONFIRMATIONS,
+      ],
     });
     if (
       !isLocalRuntimeIdentity(identity) ||

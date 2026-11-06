@@ -67,7 +67,14 @@ it.each([
       } else await expect(connected).rejects.toThrow('plugin_runtime_upgrade_required');
       expect(methods).toEqual(['hello']);
       expect(hellos).toEqual([
-        { ...descriptor, clientFeatures: ['plugin.session-authority-v1', 'model.connections-v1'] },
+        {
+          ...descriptor,
+          clientFeatures: [
+            'plugin.session-authority-v1',
+            'model.connections-v1',
+            'decisions.service-v1',
+          ],
+        },
       ]);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));

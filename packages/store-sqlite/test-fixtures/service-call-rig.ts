@@ -26,7 +26,9 @@ afterEach(() => {
 export function rig(
   invoke: ServiceCallTransportPort['invoke'],
   deadlineMs = 2000,
-  options: Partial<Pick<ServiceCallAdmissionOptions, 'classify' | 'credentialContinuous'>> = {},
+  options: Partial<
+    Pick<ServiceCallAdmissionOptions, 'classify' | 'credentialContinuous' | 'confirmation'>
+  > = {},
   file = false,
 ) {
   const dir = file ? mkdtempSync(join(tmpdir(), 'ocean-call-')) : null;

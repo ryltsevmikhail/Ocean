@@ -1,3 +1,4 @@
+import type { DecisionOutcome } from './owner-decisions.js';
 import type {
   EffectResourceScope,
   OwnerScopeGrant,
@@ -34,7 +35,22 @@ export interface ServiceCallInvocation {
 export interface ServiceCallTransportPort {
   invoke(input: ServiceCallInvocation): Promise<ServicePluginInvokeOutcome>;
 }
+/** Exact semantic facts only; metadata lifetime fields never confer permission. */
+export interface ServiceCallConfirmation {
+  readonly request: Omit<ServiceCallRequest, 'catalogId'>;
+  readonly configuration: ServiceConnection['configuration'];
+  readonly definition: ServiceToolDefinition;
+  readonly effect: ToolEffectAdmission;
+}
+export interface ServiceCallConfirmationPort {
+  confirm(
+    operation: ServiceCallConfirmation,
+    signal: AbortSignal,
+    current: () => Promise<boolean>,
+  ): Promise<DecisionOutcome>;
+}
 export interface ServiceCallAdmissionOptions {
+  readonly confirmation?: ServiceCallConfirmationPort | undefined;
   readonly store: ServiceAuthorityStorePort;
   readonly transport: ServiceCallTransportPort;
   readonly restored: boolean;

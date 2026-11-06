@@ -2,6 +2,8 @@ import type {
   ChatReviewService,
   CodingApprovalOwnerPort,
   OwnerDecisionStore,
+  ServiceCallConfirmation,
+  DecisionOutcome,
 } from '@runnets/application';
 import { RuntimeOwnerDecisions } from '@runnets/application';
 import type { ChatTurn } from '@runnets/domain';
@@ -14,6 +16,7 @@ import {
   isLocalRoomListQuery,
   isReviewChunkQuery,
 } from '@runnets/contracts';
+import { LEGACY_WIRE_CONTEXT, type RuntimeWireContext } from './client-compatibility.js';
 import { digest, ownerPreview } from './decision-preview.js';
 import { RuntimeReviews } from './reviews.js';
 import type { RuntimeReply } from './queries.js';
@@ -33,6 +36,7 @@ const errors = new Set([
   'decision_persistence_failed',
   'decision_pending',
   'approval_required',
+  'service_confirmation_upgrade_required',
 ]);
 export class RuntimeDecisions {
   readonly owner: RuntimeOwnerDecisions;
@@ -42,6 +46,38 @@ export class RuntimeDecisions {
   constructor(store: OwnerDecisionStore, reviews: ChatReviewService, now: () => number = Date.now) {
     this.owner = new RuntimeOwnerDecisions(store, now);
     this.reviews = new RuntimeReviews(reviews, this.owner);
+  }
+  async service(
+    operation: ServiceCallConfirmation,
+    signal: AbortSignal,
+    current: () => Promise<boolean>,
+  ): Promise<DecisionOutcome> {
+    if (this.#draining) return 'cancelled';
+    const r = operation.request,
+      preview = ownerPreview(operation),
+      createdAt = this.owner.now();
+    return this.owner.open(
+      {
+        workspaceId: r.workspaceId,
+        roomId: r.roomId,
+        runId: r.taskRunId,
+        decisionId:
+          'service-' +
+          digest(
+            JSON.stringify([r.workspaceId, r.roomId, r.taskRunId, r.attemptId, r.invocationId]),
+          ),
+        kind: 'service-call',
+        version: 1,
+        status: 'pending',
+        bindingDigest: digest(preview),
+        previewLength: preview.length,
+        createdAt,
+        expiresAt: createdAt + 300000,
+      },
+      preview,
+      signal,
+      current,
+    );
   }
   coding(turn: ChatTurn, signal: AbortSignal): CodingApprovalOwnerPort {
     return {
@@ -81,16 +117,29 @@ export class RuntimeDecisions {
       },
     };
   }
-  dispatch(method: string, p: Record<string, unknown>): Promise<RuntimeReply> {
+  dispatch(
+    method: string,
+    p: Record<string, unknown>,
+    context = LEGACY_WIRE_CONTEXT,
+  ): Promise<RuntimeReply> {
     if (!['reviews.get', 'reviews.continue', 'decisions.resolve'].includes(method))
-      return this.#dispatch(method, p);
+      return this.#dispatch(method, p, context);
     if (this.#draining) return Promise.resolve({ error: { code: 'runtime_draining' } });
-    const job = this.#dispatch(method, p);
+    const job = this.#dispatch(method, p, context);
     this.#inFlight.add(job);
     void job.finally(() => this.#inFlight.delete(job));
     return job;
   }
-  async #dispatch(method: string, p: Record<string, unknown>): Promise<RuntimeReply> {
+  async #dispatch(
+    method: string,
+    p: Record<string, unknown>,
+    context: RuntimeWireContext,
+  ): Promise<RuntimeReply> {
+    const compatible = (card: ReturnType<RuntimeOwnerDecisions['get']>) => {
+      if (card.kind === 'service-call' && !context.serviceConfirmations)
+        throw Error('service_confirmation_upgrade_required');
+      return card;
+    };
     try {
       switch (method) {
         case 'decisions.list':
@@ -98,15 +147,15 @@ export class RuntimeDecisions {
             return {
               result: this.owner.store
                 .list(p, p.after ?? '', p.limit ?? 50)
-                .map((c) => this.owner.get(c)),
+                .map((c) => compatible(this.owner.get(c))),
             };
           break;
         case 'decisions.get':
-          if (isDecisionRef(p)) return { result: this.owner.get(p) };
+          if (isDecisionRef(p)) return { result: compatible(this.owner.get(p)) };
           break;
         case 'decisions.preview':
           if (isDecisionChunkQuery(p)) {
-            const card = this.owner.get(p);
+            const card = compatible(this.owner.get(p));
             if (p.offset > card.previewLength) throw Error('invalid_params');
             return {
               result: {
@@ -119,6 +168,7 @@ export class RuntimeDecisions {
           break;
         case 'decisions.resolve':
           if (isDecisionReply(p)) {
+            compatible(this.owner.get(p));
             const card = await this.owner.resolve(p, p.bindingDigest, p.expectedVersion, p.choice);
             return { result: card };
           }

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { LOCAL_PLUGIN_SESSION_AUTHORITY } from '@runnets/contracts';
+import { LOCAL_PLUGIN_SESSION_AUTHORITY, LOCAL_SERVICE_CONFIRMATIONS } from '@runnets/contracts';
 import { connectLocalRuntime, readLocalRuntimeDescriptor } from '@runnets/tools-node';
 import { isLocalRuntimeIdentity as rc2Accepts } from '../../test-fixtures/rc2-runtime-contract.js';
 import { openOceanProfile } from '../ocean/profile.js';
@@ -61,6 +61,9 @@ it('negotiates plugin-free RC2 hello/status and refuses plugin calls before disp
   expect(
     (hello?.result as { capabilities: string[] }).capabilities.some((c) => c.startsWith('plugin.')),
   ).toBe(false);
+  expect((hello?.result as { capabilities: string[] }).capabilities).not.toContain(
+    LOCAL_SERVICE_CONFIRMATIONS,
+  );
   expect(plugin?.error?.code).toBe('plugin_runtime_upgrade_required');
   expect(future?.error?.code).toBe('method_not_found');
   expect(dispatch).not.toHaveBeenCalled();
@@ -70,6 +73,7 @@ it('current client advertises authority support and keeps plugin transport', asy
   const client = await connectLocalRuntime({ profile });
   try {
     expect(client.identity.capabilities).toContain(LOCAL_PLUGIN_SESSION_AUTHORITY);
+    expect(client.identity.capabilities).toContain(LOCAL_SERVICE_CONFIRMATIONS);
     expect((await client.status()).capabilities).toEqual(client.identity.capabilities);
     const dispatch = vi.spyOn(RuntimePlugins.prototype, 'dispatch');
     await client.pluginCatalog({});
@@ -94,4 +98,19 @@ it('unknown bounded features do not enable plugin operations', async () => {
   ]);
   expect(rc2Accepts(hello?.result)).toBe(true);
   expect(plugin?.error?.code).toBe('plugin_runtime_upgrade_required');
+});
+it('negotiates service confirmations independently of plugin, model and service settings support', async () => {
+  const { descriptor, raw } = await fixture();
+  const [hello, status] = await raw({
+    ...descriptor,
+    clientFeatures: [LOCAL_SERVICE_CONFIRMATIONS],
+  });
+  const capabilities = (hello?.result as { capabilities: string[] }).capabilities;
+  expect(capabilities).toContain(LOCAL_SERVICE_CONFIRMATIONS);
+  expect(
+    capabilities.some(
+      (c) => c.startsWith('plugin.') || c.startsWith('service.') || c === 'model.connections-v1',
+    ),
+  ).toBe(false);
+  expect(status?.result).toMatchObject({ ...(hello?.result as object), state: 'ready' });
 });

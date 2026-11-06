@@ -9,6 +9,7 @@ import type { GrantedToolSource } from '@runnets/application';
  */
 
 import type {
+  ServiceCallConfirmationPort,
   ConversationStore,
   DesktopAssetStore,
   ImageAssetResolverPort,
@@ -98,6 +99,7 @@ export interface Runtime {
   close(): void;
 }
 export interface RuntimeOptions {
+  readonly serviceConfirmation?: ServiceCallConfirmationPort | undefined;
   readonly serviceTransportOptions?: Omit<McpServiceTransportOptions, 'refreshNeeded'> | undefined;
   /** Runtime image authority factory; the store exists only after composition. */
   readonly imageResolver?: (store: DesktopAssetStore) => ImageAssetResolverPort;

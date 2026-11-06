@@ -30,7 +30,12 @@ export function definition(version: string): Tool {
     },
   };
 }
-export async function httpFixture(name: string, evidenceDir?: string, catalogTtlMs = 0) {
+export async function httpFixture(
+  name: string,
+  evidenceDir?: string,
+  catalogTtlMs = 0,
+  onCall?: () => void,
+) {
   const rows: string[] = [];
   const authorizations: { method: string; authorization: string }[] = [];
   const headers: string[] = [];
@@ -99,6 +104,7 @@ export async function httpFixture(name: string, evidenceDir?: string, catalogTtl
         rows.push(method);
         authorizations.push({ method, authorization: String(req.headers.authorization ?? '') });
         if (method === 'tools/call') {
+          onCall?.();
           if (evidenceDir)
             appendFileSync(join(evidenceDir, 'dispatches'), 'send\n', { flush: true });
           stats.calls++;

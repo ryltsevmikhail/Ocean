@@ -13,6 +13,7 @@ import {
   LOCAL_MODEL_METHODS,
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
+  LOCAL_SERVICE_CONFIRMATIONS,
   type LocalRuntimeDescriptor,
   type LocalRuntimeIdentity,
   type LocalRuntimeStatus,
@@ -83,12 +84,21 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
         }
         plugins = supportsPlugins(features);
         services = features.includes(LOCAL_SERVICE_AUTHORITY);
-        context = Object.freeze({ models: features.includes(LOCAL_MODEL_CONNECTIONS) });
+        context = Object.freeze({
+          models: features.includes(LOCAL_MODEL_CONNECTIONS),
+          serviceConfirmations: features.includes(LOCAL_SERVICE_CONFIRMATIONS),
+        });
         authenticated = true;
         clearTimeout(handshakeTimeout);
         writeLocalRuntimeFrame(socket, {
           id,
-          result: clientIdentity(operations.identity, plugins, context.models, services),
+          result: clientIdentity(
+            operations.identity,
+            plugins,
+            context.models,
+            services,
+            context.serviceConfirmations,
+          ),
         });
         return;
       }
@@ -105,7 +115,13 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
       if (method === 'status') {
         writeLocalRuntimeFrame(socket, {
           id,
-          result: clientIdentity(operations.status(), plugins, context.models, services),
+          result: clientIdentity(
+            operations.status(),
+            plugins,
+            context.models,
+            services,
+            context.serviceConfirmations,
+          ),
         });
         return;
       }

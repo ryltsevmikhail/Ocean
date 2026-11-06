@@ -1,3 +1,8 @@
+import {
+  LOCAL_MODEL_METHODS,
+  LOCAL_SERVICE_METHODS,
+  LOCAL_PROVIDER_METHODS,
+} from '@runnets/contracts';
 import { RuntimeServiceSettings } from './services.js';
 /**
  * Host composition for runtime-owned settings surfaces.
@@ -62,10 +67,21 @@ export function settingsHosts(input: SettingsHostsInput) {
   });
   if (!input.runtime.conversationStore) throw Error('durable_runtime_required');
   const models = provider.modelSettings(input.runtime.conversationStore, input.runtime.service);
+  const services = new RuntimeServiceSettings(input.runtime.services.owner);
   return {
     provider,
     plugins,
     models,
-    services: new RuntimeServiceSettings(input.runtime.services.owner),
+    services,
+    dispatch(method: string, params: Record<string, unknown>, detached: AbortSignal) {
+      if (LOCAL_SERVICE_METHODS.some((m) => m === method))
+        return services.dispatch(method, params, detached);
+      if (LOCAL_MODEL_METHODS.some((m) => m === method))
+        return models.dispatch(method, params, detached);
+      if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
+        return provider.settings.dispatch(method, params, detached);
+      if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
+      return null;
+    },
   };
 }

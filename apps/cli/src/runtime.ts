@@ -120,6 +120,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       ...(options.pluginEnv === undefined ? {} : { env: options.pluginEnv }),
     });
     const services = composeRuntimeServices({
+      confirmation: options.serviceConfirmation,
       profile: dirname(dbPath),
       store,
       clock: deps.clock,

@@ -5,7 +5,6 @@ import {
   desktopImageResolver,
 } from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
-import { LOCAL_MODEL_METHODS, LOCAL_SERVICE_METHODS } from '@runnets/contracts';
 import { LOCAL_RESTORE_METHODS } from '@runnets/contracts';
 import { profileCommand } from './profile-commands.js';
 import { PROFILE_METHODS } from '@runnets/contracts';
@@ -30,7 +29,6 @@ import { listenLocalRuntime } from './server.js';
 import { assertRuntimeDrained } from './drain-supervision.js';
 import { RuntimeFinalization } from './finalization.js';
 import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
-import { LOCAL_PROVIDER_METHODS } from '@runnets/contracts';
 import { LOCAL_BROADCAST_METHODS } from '@runnets/contracts';
 import { systemClock } from '@runnets/store';
 import { RuntimeBroadcasts } from './broadcast.js';
@@ -62,6 +60,9 @@ export async function startLocalRuntime(
   const runtime = openOceanProfile(paths.profile, false, {
     ...(options.pluginTransport === undefined ? {} : { pluginTransport: plugin.transport }),
     serviceTransportOptions: options.serviceTransportOptions,
+    serviceConfirmation: {
+      confirm: (operation, signal, current) => decisions.service(operation, signal, current),
+    },
     pluginEnv: plugin.env,
     pluginMutationsAllowed: options.restore !== true,
     requireUnpublished: false,
@@ -95,7 +96,7 @@ export async function startLocalRuntime(
     if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
       throw Error('durable_runtime_required');
     const restored = options.restore === true || runtime.restored === true;
-    const { provider, plugins, models, services } = settingsHosts({
+    const settings = settingsHosts({
       profile: paths.profile,
       runtime,
       env: process.env,
@@ -108,6 +109,7 @@ export async function startLocalRuntime(
       credentialDir: options.credentialDir,
       providerHttpClient: options.providerHttpClient,
     });
+    const { provider, plugins, models, services } = settings;
     plugin.connections(runtime.plugins?.connections);
     const finalization = new RuntimeFinalization(
       runtime.finalization,
@@ -239,13 +241,8 @@ export async function startLocalRuntime(
             return { error: { code: 'restore_restricted' } };
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
             return finalization.dispatch(method, params);
-          if (LOCAL_SERVICE_METHODS.some((m) => m === method))
-            return services.dispatch(method, params, detached);
-          if (LOCAL_MODEL_METHODS.some((m) => m === method))
-            return models.dispatch(method, params, detached);
-          if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
-            return provider.settings.dispatch(method, params, detached);
-          if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
+          const configured = settings.dispatch(method, params, detached);
+          if (configured) return configured;
           if (method === 'turns.submit' || method === 'broadcasts.submit') {
             const code = desktopSubmitRefusal(
               runtime.desktopAssets!,
@@ -267,7 +264,7 @@ export async function startLocalRuntime(
           if (PROFILE_METHODS.some((m) => m === method))
             return profileCommand(runtime.conversations, reads, method, params, state !== 'ready');
           if (method.startsWith('decisions.') || method.startsWith('reviews.'))
-            return decisions.dispatch(method, params);
+            return decisions.dispatch(method, params, context);
           return turns.dispatch(method, params, detached, context);
         },
         status: () => host.status(),
