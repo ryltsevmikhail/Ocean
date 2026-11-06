@@ -23,7 +23,7 @@ export function malformed(root: string, mode: string) {
   const identities = {
     '@modelcontextprotocol/client': '2.4.0',
     '@modelcontextprotocol/core': '2.4.0',
-    'bundler#rolldown': '1.2.16',
+    'bundler#rolldown': mode === 'outer-bundler' ? '9.9.9' : '1.2.16',
   };
   const record = {
     format: mode === 'format' ? 2 : 1,

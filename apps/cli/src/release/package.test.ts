@@ -241,7 +241,7 @@ it('the emitted standalone rejects self-consistent modern policy omissions/drift
     join(root, 'artifact'),
   );
   expect(existsSync(release.archive)).toBe(true);
-  for (const mode of ['absent', 'format', 'pins', 'identities', 'bundler']) {
+  for (const mode of ['absent', 'format', 'pins', 'identities', 'bundler', 'outer-bundler']) {
     const artifact = malformed(root, mode),
       prefix = join(root, 'prefix-' + mode);
     expect(

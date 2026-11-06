@@ -89,10 +89,9 @@ function manifestOf(files: Map<string, { body: Buffer; mode: number }>): Release
   return m;
 }
 function validateBundle(
-  m: ReleaseManifest,
+  { bundle: b }: ReleaseManifest,
   files: Map<string, { body: Buffer; mode: number }>,
 ): void {
-  const b = m.bundle;
   const present = [...files.keys()].some((name) => name.startsWith(MCP_ROOT));
   if (b === undefined) {
     if (present) throw Error('invalid_manifest');
@@ -112,7 +111,8 @@ function validateBundle(
     typeof b.files[b.entry] !== 'string' ||
     (modern
       ? b.identities['@modelcontextprotocol/client'] !== '2.4.0' ||
-        b.identities['@modelcontextprotocol/core'] !== '2.4.0'
+        b.identities['@modelcontextprotocol/core'] !== '2.4.0' ||
+        b.identities['bundler#rolldown'] !== '1.2.16'
       : typeof b.identities['@executor-js/sdk'] !== 'string') ||
     !files.has(base + 'package.json') ||
     !files.has(base + 'LICENSE')

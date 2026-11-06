@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { installArchive } from './installer.js';
-it.each(['absent', 'format', 'pins', 'identities', 'bundler'])(
+it.each(['absent', 'format', 'pins', 'identities', 'bundler', 'outer-bundler'])(
   'rejects self-consistent modern %s policy drift before installation writes',
   (mode) => {
     const root = mkdtempSync(join(tmpdir(), 'mcp-install-policy-'));
