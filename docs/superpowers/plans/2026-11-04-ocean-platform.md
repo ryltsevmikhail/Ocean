@@ -2848,8 +2848,10 @@ only after actual evidence; retained B results do not qualify E candidate bytes.
 
 ## Task 21: F. Приёмка и выпуск приоритета 1
 
-- [ ] Обновить полную карту требований и release ledger. Устранить применимый
+- [x] Обновить полную карту требований и release ledger. Устранить применимый
       долг test typing; ни удаление SDK, ни docs-only commit не закрывают его автоматически.
+      [Карта выпуска](../../ocean/platform-stage-f.md) принята на `f7d5d63`;
+      строгие графы проверили все 1712 TypeScript-файлов и 34 Vue-компонента.
 - [ ] Frozen revision: `pnpm check`, `pnpm build`, `pnpm format:check` — exit 0.
       Затем native/source-preset shards и лимиты; прежние 2 GiB/256/60 s/32 KiB
       считаются ограничениями текущих presets, не всей автономной задачи.
