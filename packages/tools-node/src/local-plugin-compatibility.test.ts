@@ -141,6 +141,7 @@ it.each([
             'room.addressed-history-v1',
             'room.tasks-v1',
             'room.task-list-v1',
+            'coding.workspace-v1',
           ],
         },
       ]);

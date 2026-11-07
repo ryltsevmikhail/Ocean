@@ -2,6 +2,7 @@ import {
   LOCAL_MODEL_CONNECTIONS,
   LOCAL_ROOM_TASKS,
   LOCAL_ROOM_TASK_LIST,
+  LOCAL_CODING_WORKSPACE,
   LOCAL_ADDRESSED_HISTORY,
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_SERVICE_CONFIRMATIONS,
@@ -22,7 +23,7 @@ import {
 } from '@runnets/contracts';
 
 /** Authenticated method capability list; order starts with the identity probe contract. */
-export function runtimeCapabilities(restore: boolean): readonly string[] {
+export function runtimeCapabilities(restore: boolean, restored = restore): readonly string[] {
   return [
     'status',
     'stop',
@@ -42,7 +43,7 @@ export function runtimeCapabilities(restore: boolean): readonly string[] {
     LOCAL_SERVICE_AUTHORITY,
     LOCAL_SERVICE_CONFIRMATIONS,
     LOCAL_ADDRESSED_HISTORY,
-    ...(restore ? [] : [LOCAL_ROOM_TASKS, LOCAL_ROOM_TASK_LIST]),
+    ...(restored ? [] : [LOCAL_ROOM_TASKS, LOCAL_ROOM_TASK_LIST, LOCAL_CODING_WORKSPACE]),
     ...(restore ? LOCAL_SERVICE_READ_METHODS : LOCAL_SERVICE_METHODS),
     ...(restore ? LOCAL_BROADCAST_READ_METHODS : LOCAL_BROADCAST_METHODS),
     ...(restore ? [] : LOCAL_FINALIZATION_METHODS),

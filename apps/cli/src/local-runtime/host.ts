@@ -5,20 +5,24 @@ import {
   desktopImageResolver,
 } from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
-import { LOCAL_RESTORE_METHODS } from '@runnets/contracts';
+import {
+  isCodingWorkspaceRead,
+  LOCAL_RESTORE_METHODS,
+  LOCAL_BROADCAST_METHODS,
+  LOCAL_FINALIZATION_METHODS,
+  LOCAL_RUNTIME_MAX_WAIT_MS,
+  PROFILE_METHODS,
+  type LocalRuntimeIdentity,
+  type LocalRuntimeStatus,
+  type LocalRuntimeStop,
+} from '@runnets/contracts';
 import { profileCommand } from './profile-commands.js';
-import { PROFILE_METHODS } from '@runnets/contracts';
+import { projectsRead } from './projects-read.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { closeSync } from 'node:fs';
 import { recoverEndpoint, publishEndpoint } from './endpoint.js';
 import { profileKey, type EndpointLayout } from './endpoint-files.js';
 import type { ImageAssetResolverPort } from '@runnets/application';
-import { LOCAL_RUNTIME_MAX_WAIT_MS } from '@runnets/contracts';
-import type {
-  LocalRuntimeIdentity,
-  LocalRuntimeStatus,
-  LocalRuntimeStop,
-} from '@runnets/contracts';
 import { localRuntimePaths } from '@runnets/tools-node';
 import { CodingPanelQueries } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
@@ -28,8 +32,6 @@ import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
 import { assertRuntimeDrained } from './drain-supervision.js';
 import { RuntimeFinalization } from './finalization.js';
-import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
-import { LOCAL_BROADCAST_METHODS } from '@runnets/contracts';
 import { hostRoomTasks, wakeRoomTasksAfter } from './host-room-tasks.js';
 import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
@@ -127,9 +129,7 @@ export async function startLocalRuntime(
       protocol: 1,
       profileId: paths.profileId,
       instanceId: randomUUID(),
-      capabilities: runtimeCapabilities(options.restore === true).filter(
-        (c) => !['room.tasks-v1', 'room.task-list-v1'].includes(c) || !restored,
-      ),
+      capabilities: runtimeCapabilities(options.restore === true, restored),
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
@@ -237,6 +237,8 @@ export async function startLocalRuntime(
             return restoration.dispatch(method, params);
           if (options.restore && !maintenanceRead(method))
             return { error: { code: 'restore_restricted' } };
+          if (isCodingWorkspaceRead(method))
+            return projectsRead(paths.profile, reads, method, params, state !== 'ready');
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
             return finalization.dispatch(method, params);
           const configured = settings.dispatch(method, params, detached);

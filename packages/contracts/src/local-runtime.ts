@@ -1,6 +1,7 @@
 /** Independent local-runtime v1 wire contract; deliberately separate from ACP. */
 export const LOCAL_RUNTIME_PROTOCOL = 1 as const;
 export const LOCAL_RUNTIME_MAX_FRAME = 2 * 1024 * 1024;
+export const LOCAL_RUNTIME_MAX_CAPABILITIES = 81;
 export const LOCAL_RUNTIME_MAX_PAGE = 200;
 export const LOCAL_RUNTIME_MAX_WAIT_MS = 30_000;
 export interface LocalRuntimeIdentity {
@@ -55,7 +56,7 @@ export function isLocalRuntimeIdentity(value: unknown): value is LocalRuntimeIde
     typeof value['instanceId'] === 'string' &&
     /^[a-f0-9-]{36}$/.test(value['instanceId']) &&
     Array.isArray(value['capabilities']) &&
-    value['capabilities'].length <= 80 &&
+    value['capabilities'].length <= LOCAL_RUNTIME_MAX_CAPABILITIES &&
     value['capabilities'].every((c) => typeof c === 'string' && c.length > 0 && c.length <= 64) &&
     value['capabilities'][0] === 'status' &&
     value['capabilities'][1] === 'stop'

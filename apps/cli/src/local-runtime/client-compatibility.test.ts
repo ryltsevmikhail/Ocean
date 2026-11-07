@@ -86,7 +86,7 @@ it('current client advertises authority support and keeps plugin transport', asy
     expect(client.identity.capabilities).toContain(LOCAL_SERVICE_CONFIRMATIONS);
     expect(client.identity.capabilities).toContain('room.addressed-history-v1');
     expect(client.identity.capabilities.slice(0, 2)).toEqual(['status', 'stop']);
-    expect(client.identity.capabilities.length).toBeLessThanOrEqual(80);
+    expect(client.identity.capabilities.length).toBeLessThanOrEqual(81);
     expect((await client.status()).capabilities).toEqual(client.identity.capabilities);
     const dispatch = vi.spyOn(RuntimePlugins.prototype, 'dispatch');
     await client.pluginCatalog({});

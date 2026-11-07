@@ -50,25 +50,42 @@ if (mode === 'sdk') {
   const features =
     mode === 'rc2'
       ? undefined
-      : mode === 'a3'
-        ? ['plugin.session-authority-v1']
-        : mode === 'model'
-          ? ['model.connections-v1']
-          : ['future.fixture-v99'];
+      : mode === 'v1.1'
+        ? [
+            'plugin.session-authority-v1',
+            'model.connections-v1',
+            'decisions.service-v1',
+            'service.authority-v2',
+            'room.addressed-history-v1',
+            'room.tasks-v1',
+            'room.task-list-v1',
+          ]
+        : mode === 'workspace'
+          ? ['coding.workspace-v1']
+          : mode === 'a3'
+            ? ['plugin.session-authority-v1']
+            : mode === 'model'
+              ? ['model.connections-v1']
+              : ['future.fixture-v99'];
   identity = (await raw('hello', {
     ...d,
     ...(features ? { clientFeatures: features } : {}),
   })) as LocalRuntimeIdentity;
-  if ((mode === 'rc2' || mode === 'unknown') && !rc2(identity))
-    throw Error('frozen_identity_refused');
+  const legacyIdentity = (value: unknown) =>
+    mode === 'v1.1'
+      ? Array.isArray((value as LocalRuntimeIdentity).capabilities) &&
+        (value as LocalRuntimeIdentity).capabilities.length <= 80
+      : mode === 'rc2' || mode === 'unknown'
+        ? rc2(value)
+        : true;
+  if (!legacyIdentity(identity)) throw Error('frozen_identity_refused');
   client = {
     ...localRoomClient(raw, identity),
     ...localProfileClient(raw),
     close: () => socket.destroy(),
     status: async () => {
       const value = await raw('status', {});
-      if ((mode === 'rc2' || mode === 'unknown') && !rc2(value))
-        throw Error('frozen_status_refused');
+      if (!legacyIdentity(value)) throw Error('frozen_status_refused');
       return value as Awaited<ReturnType<LocalRuntimeClient['status']>>;
     },
   };

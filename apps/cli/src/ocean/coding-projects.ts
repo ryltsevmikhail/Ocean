@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { CodingProjectSummary } from '@runnets/contracts';
 import type { CodingTestPreset } from '@runnets/domain';
 import { validateMounts, type SandboxOptions } from '@runnets/tools-node';
 import { canonicalWorkspace, profileDirectory } from './profile.js';
@@ -11,7 +12,7 @@ export interface RegisteredCodingProject {
   readonly dependencyProjectRoot?: string;
   readonly mounts: NonNullable<SandboxOptions['mounts']>;
 }
-export async function validateCodingProject(value: unknown): Promise<RegisteredCodingProject> {
+function parseCodingProject(value: unknown): RegisteredCodingProject {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw Error('invalid project configuration');
   const p = value as Record<string, unknown>;
@@ -65,21 +66,40 @@ export async function validateCodingProject(value: unknown): Promise<RegisteredC
   const project = structuredClone(value) as RegisteredCodingProject;
   const root = canonicalWorkspace(project.root);
   if (root !== project.root) throw Error('canonical project root required');
+  return project;
+}
+export async function validateCodingProject(value: unknown): Promise<RegisteredCodingProject> {
+  const project = parseCodingProject(value);
   await validateMounts(project.mounts, project.dependencyProjectRoot);
   return project;
+}
+function readConfiguredCodingProjects(directory: string): RegisteredCodingProject[] {
+  const path = join(directory, 'coding-projects.json');
+  if (!lstatSync(path, { throwIfNoEntry: false })) return [];
+  assertPrivate(path, false);
+  const raw = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+  if (!Array.isArray(raw) || raw.length > 100) throw Error('invalid project registry');
+  const projects = raw.map(parseCodingProject);
+  if (new Set(projects.map((p) => p.id)).size !== projects.length)
+    throw Error('duplicate project ID');
+  return projects;
 }
 export async function readCodingProjects(
   profile?: string,
 ): Promise<readonly RegisteredCodingProject[]> {
-  const path = join(profileDirectory(profile), 'coding-projects.json');
-  if (!existsSync(path)) return [];
-  assertPrivate(path, false);
-  const raw = JSON.parse(readFileSync(path, 'utf8')) as unknown;
-  if (!Array.isArray(raw) || raw.length > 100) throw Error('invalid project registry');
-  const projects = await Promise.all(raw.map(validateCodingProject));
-  if (new Set(projects.map((p) => p.id)).size !== projects.length)
-    throw Error('duplicate project ID');
+  const projects = readConfiguredCodingProjects(profileDirectory(profile));
+  await Promise.all(projects.map((p) => validateMounts(p.mounts, p.dependencyProjectRoot)));
   return projects;
+}
+/** Discover configured projects without qualifying their sandbox dependencies. */
+export function readCodingProjectSummaries(profile: string): readonly CodingProjectSummary[] {
+  const directory = profileDirectory(profile);
+  assertPrivate(directory, true);
+  return readConfiguredCodingProjects(directory).map(({ id, root, testPresets }) => ({
+    id,
+    root,
+    presetIds: testPresets.map((p) => p.id),
+  }));
 }
 export async function registerCodingProject(
   profile: string | undefined,

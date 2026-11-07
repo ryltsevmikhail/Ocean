@@ -195,7 +195,7 @@ it.runIf(process.platform === 'linux')(
       for (const p of [modern, legacy, unknown]) {
         const capabilities = p.info.identity.capabilities;
         expect(capabilities.slice(0, 2)).toEqual(['status', 'stop']);
-        expect(capabilities.length).toBeLessThanOrEqual(p === modern ? 80 : 64);
+        expect(capabilities.length).toBeLessThanOrEqual(p === modern ? 81 : 64);
         expect(capabilities.includes('room.addressed-history-v1')).toBe(p === modern);
         expect(await p.call('status')).toMatchObject({ capabilities });
         expect(await p.call('history', { ...scope, limit: 2 })).toEqual(expected.slice(0, 2));

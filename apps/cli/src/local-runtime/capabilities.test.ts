@@ -40,6 +40,6 @@ describe('runtime capabilities', () => {
 it('negotiates one room task feature only on an ordinary host', () => {
   expect(runtimeCapabilities(false)).toContain('room.tasks-v1');
   expect(runtimeCapabilities(false).filter((s) => s.startsWith('roomTasks.'))).toEqual([]);
-  expect(runtimeCapabilities(false).length).toBeLessThanOrEqual(80);
+  expect(runtimeCapabilities(false).length).toBeLessThanOrEqual(81);
   expect(runtimeCapabilities(true)).not.toContain('room.tasks-v1');
 });

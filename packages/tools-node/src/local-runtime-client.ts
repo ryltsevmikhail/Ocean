@@ -1,4 +1,5 @@
 import { localRoomTasksClient, type LocalRoomTasksClient } from './local-room-tasks-client.js';
+import { localProjectClient, type LocalProjectClient } from './local-project-client.js';
 import { localServiceClient, type LocalServiceClient } from './local-service-client.js';
 import {
   localModelConnectionsClient,
@@ -23,6 +24,7 @@ import {
   LOCAL_ADDRESSED_HISTORY,
   LOCAL_ROOM_TASKS,
   LOCAL_ROOM_TASK_LIST,
+  LOCAL_CODING_WORKSPACE,
   isLocalRuntimeIdentity,
   isLocalReceiptQuery,
   isLocalRunQuery,
@@ -49,6 +51,7 @@ import { localPluginClient, type LocalPluginClient } from './local-plugin-client
 export interface LocalRuntimeClient
   extends
     LocalRoomTasksClient,
+    LocalProjectClient,
     LocalServiceClient,
     LocalModelConnectionsClient,
     LocalRestoreClient,
@@ -168,6 +171,7 @@ async function connectDescriptor(
         LOCAL_ADDRESSED_HISTORY,
         LOCAL_ROOM_TASKS,
         LOCAL_ROOM_TASK_LIST,
+        LOCAL_CODING_WORKSPACE,
       ],
     });
     if (
@@ -184,6 +188,7 @@ async function connectDescriptor(
     return {
       identity,
       ...localRoomTasksClient(peer.request.bind(peer), identity),
+      ...localProjectClient(peer.request.bind(peer), identity),
       ...localServiceClient(peer.request.bind(peer), identity),
       ...localModelConnectionsClient(peer.request.bind(peer), identity),
       ...localRestoreClient(peer.request.bind(peer)),
