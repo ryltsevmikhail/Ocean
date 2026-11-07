@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
 import {
+  isCodingChangesetCapture,
+  isCodingChangesetRead,
+  isCodingChangesetSummary,
+  isCodingChangesetDiff,
+  type CodingChangesetCapture,
+  type CodingChangesetRead,
+  type CodingChangesetSummary,
+  type CodingChangesetDiff,
   isCodingTaskPrepare,
   isCodingTaskPreparation,
   type CodingTaskPrepare,
@@ -20,9 +28,12 @@ import {
   type CodingTasksPage,
   type LocalRuntimeIdentity,
 } from '@runnets/contracts';
+import { readPanelChunks } from './local-panel-client.js';
 import { validatedParams } from './local-room-client.js';
 
 export interface LocalProjectClient {
+  captureCodingChangeset(input: CodingChangesetCapture): Promise<CodingChangesetSummary>;
+  readCodingChangeset(input: CodingChangesetRead): Promise<CodingChangesetDiff>;
   prepareCodingTask(input: CodingTaskPrepare): Promise<CodingTaskPreparation>;
   reserveCodingTask(input: CodingTaskReserve): Promise<CodingTaskReservation>;
   listCodingProjects(input: CodingProjectsList): Promise<CodingProjectsPage>;
@@ -49,7 +60,7 @@ function matchesPage(
   );
 }
 export function localProjectClient(
-  send: (method: string, params: unknown) => Promise<unknown>,
+  send: (method: string, params: unknown, timeout?: number) => Promise<unknown>,
   identity: LocalRuntimeIdentity,
 ): LocalProjectClient {
   const requireFeature = () => {
@@ -57,6 +68,33 @@ export function localProjectClient(
       throw Error('client_upgrade_required');
   };
   return {
+    async captureCodingChangeset(input) {
+      requireFeature();
+      const q = validatedParams(input, isCodingChangesetCapture);
+      const v = await send('coding.changesets.capture', q, 30000);
+      if (
+        !isCodingChangesetSummary(v) ||
+        v.workspaceId !== q.workspaceId ||
+        v.roomId !== q.roomId ||
+        v.taskId !== q.taskId
+      )
+        throw Error('invalid_frame');
+      return v;
+    },
+    async readCodingChangeset(input) {
+      requireFeature();
+      const q = validatedParams(input, isCodingChangesetRead);
+      const v: unknown = JSON.parse(await readPanelChunks(send, 'coding.changesets.read', q));
+      if (
+        !isCodingChangesetDiff(v) ||
+        v.workspaceId !== q.workspaceId ||
+        v.roomId !== q.roomId ||
+        v.taskId !== q.taskId ||
+        v.hash !== q.hash
+      )
+        throw Error('invalid_frame');
+      return v;
+    },
     async prepareCodingTask(input) {
       requireFeature();
       const q = validatedParams(input, isCodingTaskPrepare);

@@ -15,6 +15,7 @@ import {
   LOCAL_ROOM_TASK_LIST,
   LOCAL_CODING_WORKSPACE,
   isCodingWorkspaceRead,
+  isCodingChangesetMethod,
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
   LOCAL_SERVICE_CONFIRMATIONS,
@@ -173,6 +174,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
       }
       if (
         (isCodingWorkspaceRead(method) ||
+          isCodingChangesetMethod(method) ||
           method === 'coding.tasks.reserve' ||
           method === 'coding.tasks.prepare') &&
         !context.codingWorkspace

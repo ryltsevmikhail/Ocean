@@ -71,6 +71,24 @@ The preparation implementation at `b0f6dec` passed independent review and
 root check/build/format (4,226 source and 199 process tests). Native/GUI and live
 provider qualification remain separate.
 
+## Implemented: capture and read an immutable diff
+
+A client with `coding.workspace-v1` can use
+`captureCodingChangeset({ workspaceId, roomId, taskId, requestId, expectedPolicyVersion })`
+(`coding.changesets.capture`) to save the task's current dev worktree snapshot.
+The runtime resolves the project and dev scope from stored records. The
+explicit capture needs no separate confirmation. The response contains the
+scope, hash, base commit, before and after tree hashes, and file count.
+
+Use `readCodingChangeset({ workspaceId, roomId, taskId, hash })`
+(`coding.changesets.read`) to read that metadata and its unified diff through
+the existing bounded chunk protocol. Repeating the same capture request
+returns the original snapshot even after worktree edits or a runtime restart.
+Use a new request ID to capture a fresh snapshot. Changed bindings and
+unauthorized scopes refuse. Capture leaves the Git worktree and source
+checkout unchanged; it does not run a model or apply the diff.
+`coding.diff` continues to provide the existing live preview and history.
+
 ## Planned
 
 Remaining owner operations, the separate project window and its installed acceptance

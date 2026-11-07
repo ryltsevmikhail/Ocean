@@ -23,7 +23,10 @@ export function memoryCodingArtifacts(state: CodingArtifactState): CodingArtifac
         throw Error('Immutable worktree');
       state.worktrees.set(value.taskId, structuredClone(value));
     },
-    changeset: (id) => state.changesets.get(id) ?? null,
+    changeset: (id, taskId) => {
+      const snapshot = state.changesets.get(id);
+      return snapshot && (taskId === undefined || snapshot.taskId === taskId) ? snapshot : null;
+    },
     latestChangeset: (taskId) =>
       [...state.changesets.values()].filter((v) => v.taskId === taskId).at(-1) ?? null,
     putChangeset: (value) => {

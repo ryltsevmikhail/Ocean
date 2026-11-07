@@ -21,7 +21,7 @@ import { recoverEndpoint, publishEndpoint } from './endpoint.js';
 import { profileKey, type EndpointLayout } from './endpoint-files.js';
 import type { ImageAssetResolverPort } from '@runnets/application';
 import { localRuntimePaths } from '@runnets/tools-node';
-import { CodingPanelQueries } from './coding-panel.js';
+import { CodingPanelQueries, isCodingPanelMethod } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
 import { RuntimeTurns } from './turns.js';
@@ -254,13 +254,7 @@ export async function startLocalRuntime(options: LocalRuntimeHostOptions) {
           if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
             return broadcasts.dispatch(method, params, detached);
           if (method === 'desktop.assets') return desktop(params, state !== 'ready');
-          if (
-            method === 'coding.panel' ||
-            method === 'coding.diff' ||
-            method === 'coding.show' ||
-            method === 'coding.inspect-apply'
-          )
-            return panels.dispatch(method, params, detached);
+          if (isCodingPanelMethod(method)) return panels.dispatch(method, params, detached);
           if (PROFILE_METHODS.some((m) => m === method))
             return profileCommand(runtime.conversations, reads, method, params, state !== 'ready');
           if (method.startsWith('roomTasks.'))

@@ -260,7 +260,7 @@ export class CodingChangesetService {
   read(access: CodingAccess, hash: string): CodingResult<Changeset> {
     return this.#deps.store.atomic((tx) => {
       const task = this.#task(tx, access, true),
-        snapshot = tx.changeset(hash);
+        snapshot = task ? tx.changeset(hash, task.id) : null;
       return task && snapshot?.taskId === task.id ? ok(snapshot) : codingFailure('coding_denied');
     });
   }

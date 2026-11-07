@@ -39,8 +39,13 @@ export function changesetStorage(db: DatabaseSync): CodingArtifactTransaction {
         .get(taskId);
       return row ? changesetStorage(db).changeset(String(row['hash'])) : null;
     },
-    changeset: (hash) => {
-      const row = db.prepare('SELECT * FROM ocean_changesets WHERE hash=?').get(hash);
+    changeset: (hash, taskId) => {
+      const row =
+        taskId === undefined
+          ? db.prepare('SELECT * FROM ocean_changesets WHERE hash=?').get(hash)
+          : db
+              .prepare('SELECT * FROM ocean_changesets WHERE hash=? AND task_id=?')
+              .get(hash, taskId);
       if (!row) return null;
       const value = JSON.parse(String(row['payload'])) as Changeset;
       const { id, hash: stored, ...payload } = value;
