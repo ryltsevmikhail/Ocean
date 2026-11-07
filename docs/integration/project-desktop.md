@@ -23,12 +23,6 @@ The implementation at `c438756` passed independent review and root
 check/build/format (4,198 source and 187 process tests). The process tests use
 two SDK clients and an owner restart.
 
-## Planned
-
-Remaining owner operations, the separate project window and its installed acceptance
-follow in the [project Desktop plan](../superpowers/plans/2026-11-07-ocean-project-desktop.md).
-The published Ocean 1.1.0 bot Desktop stays on its own release revision.
-
 ## Implemented: reserve with an owner decision
 
 The negotiated SDK now exposes `reserveCodingTask` (`coding.tasks.reserve`).
@@ -49,4 +43,11 @@ changes or restart; changed inputs conflict. Disconnect leaves the runtime job
 running. Shutdown cancels pending decisions and joins active jobs. Restart
 retires pending cards and never resumes or retries an allowed unknown operation.
 Clients without `coding.workspace-v1` cannot see or resolve setup cards.
-Preparation, review/apply routing, and the separate project window remain planned.
+The reserve-only implementation at `7eaa1c1` passed independent review and
+root check/build/format (4,212 source and 193 process tests).
+
+## Planned
+
+Remaining owner operations, the separate project window and its installed acceptance
+follow in the [project Desktop plan](../superpowers/plans/2026-11-07-ocean-project-desktop.md).
+The published Ocean 1.1.0 bot Desktop stays on its own release revision.

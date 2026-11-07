@@ -63,10 +63,13 @@ Accepted after independent review at `c438756`: root check/build/format 0
 
 ## 22.2 — Route exact owner operations through the same runtime
 
-- [ ] Reuse `CodingTaskService.start` and `CodingChangesetService.prepare`
-      as separate owner decisions, with registered project selection and
-      explicit dev/review room + bot IDs. Reuse runtime `turns.submit` with
-      `taskId` for dev; preserve room-run receipts, observation and cancellation.
+- [x] Reuse `CodingTaskService.start` for an exact owner decision, registered
+      project selection and explicit dev/review room + bot IDs. Accepted
+      independently at `7eaa1c1`; root check/build/format passed (4,212 source
+      and 193 process tests).
+- [ ] Reuse `CodingChangesetService.prepare` for a separate exact owner
+      decision and a verified worktree result. Reuse runtime `turns.submit`
+      with `taskId` for dev, including receipts, observation and cancellation.
 - [ ] Use the current preview read and explicit immutable capture, then
       `CodingReviewService.request/dispatch` on the exact hash via the assigned
       bot's current authorized binding and existing review-only provider path.
