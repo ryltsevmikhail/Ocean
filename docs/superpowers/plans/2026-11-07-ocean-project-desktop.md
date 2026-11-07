@@ -72,14 +72,17 @@ Accepted after independent review at `c438756`: root check/build/format 0
       `b0f6dec`; root check/build/format passed (4,226 source and 199 process
       tests). Ready reads are bounded and joined on stop.
 - [ ] Reuse runtime `turns.submit` with `taskId` for dev, including receipts,
-      observation and cancellation.
+      observation and cancellation. The runtime path already exists; wire it
+      into the project client in 22.3 and verify it installed in 22.4.
 - [x] Expose explicit immutable capture and exact-hash diff reading through
       the existing changeset service and bounded chunk protocol. Accepted
       independently at `0c8d5e4`; root check/build/format passed (4,227 source
       and 202 process tests).
-- [ ] Use `CodingReviewService.request/dispatch` on the selected immutable
+- [x] Use `CodingReviewService.request/dispatch` on the selected immutable
       hash via the assigned bot's current authorized binding and existing
       review-only provider path. Present review state and tests, including stale status.
+      Accepted independently at `4ac81a6`; root check/build/format passed
+      (4,227 source and 210 process tests).
 - [ ] Route apply to the existing apply service with exact base, changeset and
       review. Use the runtime's durable owner cards and existing operation
       receipts/journal for result reads. Show a decision result separately

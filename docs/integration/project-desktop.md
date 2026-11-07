@@ -94,6 +94,32 @@ check/build/format (4,227 source and 202 process tests). Built SDK tests use
 two clients and a disposable Git repository to verify that exact-hash reads
 return the saved bytes after edits and restart.
 
+## Implemented: owner-approved review of one snapshot
+
+Use `requestCodingReview({ workspaceId, roomId, taskId, requestId, hash })`
+(`coding.reviews.request`) with the task's assigned review room and the selected
+immutable hash. The pending `project-setup` card binds the snapshot, test
+evidence, assigned bot and model. The owner can inspect and resolve it with
+the existing decision API. The runtime rechecks that binding and the room's
+transfer policy before dispatch. Review uses one metered model request with
+the immutable artifact and evidence, without tools or room history.
+
+Repeat the same request to read its current status and recorded verdict.
+Changed inputs conflict. The test status describes whether the recorded
+evidence matches the snapshot; it does not claim that those tests passed.
+The `stale` flag compares stored task and evidence facts. Apply will check
+the live trees separately. A verdict has no authority to apply changes.
+
+Closing the client leaves the review with the runtime. Restart preserves
+recorded verdicts and unknown outcomes without restarting the model call.
+Shutdown waits for active work and distinguishes a settled request from an
+unknown external outcome. Older peers cannot see the new review operation.
+
+The implementation at `4ac81a6` passed independent review and root
+check/build/format (4,227 source and 210 process tests). The first full check
+hit a timeout in an unchanged SQLite race test; that test passed in isolation,
+and an unchanged full rerun passed. Provider tests used scripted responses.
+
 ## Planned
 
 Remaining owner operations, the separate project window and its installed acceptance
