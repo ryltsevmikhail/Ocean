@@ -62,26 +62,21 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   if (mode === 'ephemeral') return createEphemeralRuntime(options);
   if (runtimeIncomplete(dirname(dbPath))) throw new Error('recovery_required');
   const release = ownSqliteRuntime(dbPath, options.requireUnpublished);
+  let opened: ReturnType<typeof openSqliteStore> | undefined;
   try {
-    const store = openSqliteStore({ path: dbPath });
+    const store = (opened = openSqliteStore({ path: dbPath }));
     const active = store.rebind.active(),
       origin = store.restoration.origin();
-    let restored: boolean;
-    try {
-      restored = restoredRuntimeAdmission(dirname(dbPath), origin, options.restoredAccess, active);
-    } catch (error) {
-      store.close();
-      throw error;
-    }
-    try {
-      if (!restored)
-        store.maintainDesktopBinding((binding, inventory) =>
-          prepareDesktopBindingUpgrade(binding, inventory, dirname(dbPath)),
-        );
-    } catch (error) {
-      store.close();
-      throw error;
-    }
+    const restored = restoredRuntimeAdmission(
+      dirname(dbPath),
+      origin,
+      options.restoredAccess,
+      active,
+    );
+    if (!restored)
+      store.maintainDesktopBinding((binding, inventory) =>
+        prepareDesktopBindingUpgrade(binding, inventory, dirname(dbPath)),
+      );
     const service = serviceOver(store.log, store.dedup, true, options.clock);
     const images = options.imageResolver?.(store.desktopAssets);
     const deps = {
@@ -275,6 +270,11 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       },
     };
   } catch (error) {
+    try {
+      opened?.close();
+    } catch {
+      // Preserve the construction error.
+    }
     release();
     throw error;
   }

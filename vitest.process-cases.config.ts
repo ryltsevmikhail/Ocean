@@ -13,6 +13,7 @@ export const processCases = [
   'apps/cli/src/ocean/room-tui-{process,coding-native}.test.ts',
   'packages/tools-node/src/coding-asset{,-restore}-native.test.ts',
   'packages/tools-node/src/coding-dependency-native.test.ts',
+  'packages/tools-node/src/managed-workspace-late-native.test.ts',
   'packages/tools-node/src/desktop-assets-native.test.ts',
   'packages/tools-node/src/local-runtime-types.test.ts',
   'packages/store-sqlite/src/room-task-replay.test.ts',

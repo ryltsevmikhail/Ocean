@@ -29,7 +29,15 @@ export async function serviceOwnerPeer(profile: string, modern = true) {
       waiting.set(id, { resolve, reject });
       writeLocalRuntimeFrame(socket, { id, method, params });
     });
-  await request('hello', { ...descriptor, clientFeatures: modern ? ['service.authority-v2'] : [] });
+  try {
+    await request('hello', {
+      ...descriptor,
+      clientFeatures: modern ? ['service.authority-v2'] : [],
+    });
+  } catch (error) {
+    socket.destroy();
+    throw error;
+  }
   return {
     request,
     close: () => {
