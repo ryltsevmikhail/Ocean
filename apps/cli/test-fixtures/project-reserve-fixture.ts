@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { child } from './model-process-rpc.ts';
+// eslint-disable-next-line no-restricted-imports -- Test fixture composes the same CLI package's runtime.
 import { createRuntime } from '../src/runtime.js';
 import type { ConversationCommand } from '@runnets/application';
 export async function reserveFixture() {
