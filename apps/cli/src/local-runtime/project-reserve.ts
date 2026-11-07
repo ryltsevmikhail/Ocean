@@ -178,11 +178,11 @@ export class RuntimeProjectReserve {
                       this.#prepare.current(prepare, authorized),
                     ),
                 })
-              : await this.#review!.run(review!, this.#closing.signal, confirm);
-          if (!result.ok) {
-            if (review && result.error.code === 'recovery_required') this.#failure = true;
-            acknowledge({ error: { code: result.error.code } });
-          } else if (!review) {
+              : await this.#review!.run(review!, this.#closing.signal, confirm, () => {
+                  this.#failure = true;
+                });
+          if (!result.ok) acknowledge({ error: { code: result.error.code } });
+          else if (!review) {
             const previous = await existing();
             acknowledge(previous ? { result: previous } : { error: { code: 'request_conflict' } });
           }

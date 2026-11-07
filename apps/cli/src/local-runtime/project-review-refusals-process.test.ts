@@ -151,10 +151,7 @@ it.each(['binding', 'evidence'] as const)(
           ...(change === 'evidence' ? { stale: true, tests: 'changed' } : {}),
         });
       expect(calls(f)).toEqual([]);
-      expect(await a.call('stop')).toMatchObject({
-        state: 'stop_incomplete',
-        outcome: 'uncertain',
-      });
+      expect(await a.call('stop')).toMatchObject({ state: 'stopped', outcome: 'complete' });
     } finally {
       await f.close();
     }

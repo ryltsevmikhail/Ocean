@@ -200,14 +200,21 @@ it('joins an active review on stop and persists uncertainty without claiming can
     const stopping = host.call('stop');
     await expect.poll(() => host.call('status')).toMatchObject({ state: 'draining' });
     // Keep the adapter inside its iterator until shutdown has begun.
-    await host.call('release');
+    await host.call('release-unknown');
     expect(await stopping).toMatchObject({ state: 'stop_incomplete', outcome: 'uncertain' });
+    expect(readFileSync(join(f.directory, 'review-stop-signal'), 'utf8')).toBe('true');
     const db = new DatabaseSync(join(f.directory, 'runtime.sqlite'), { readOnly: true });
     try {
       const row = db
         .prepare('SELECT payload FROM ocean_coding_review_requests WHERE id=?')
         .get(decision.decisionId);
       expect(JSON.parse(String(row?.['payload']))).toMatchObject({ status: 'uncertain' });
+      const settlement = db
+        .prepare("SELECT payload FROM events WHERE type='attempt.model_request_settled'")
+        .get();
+      expect(JSON.parse(String(settlement?.['payload']))).toMatchObject({
+        completion: { kind: 'unknown' },
+      });
       expect(
         db
           .prepare('SELECT id FROM ocean_coding_review_verdicts WHERE request_id=?')

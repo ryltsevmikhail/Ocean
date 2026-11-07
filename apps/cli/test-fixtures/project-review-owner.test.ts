@@ -9,6 +9,7 @@ const [, , profile, mode] = process.argv;
 let unblock: (() => void) | undefined;
 let waiting: Promise<void> | undefined;
 let beforeSend = false;
+let transportUnknown = false;
 const review = JSON.stringify({
   verdict: 'changes_requested',
   summary: 'Review of the captured artifact',
@@ -68,6 +69,12 @@ const provider: ProviderPort = {
       throw new ProviderError('invalid_request', 'refused', { dispatch: 'not_sent' });
     record({ messages: request.messages, tools: request.tools ?? [] });
     if (!beforeSend) await waiting;
+    if (transportUnknown) {
+      writeFileSync(join(profile!, 'review-stop-signal'), String(request.signal?.aborted === true));
+      throw new ProviderError('cancelled', 'scripted transport stopped with outcome unknown', {
+        dispatch: 'unknown',
+      });
+    }
     yield { type: 'text_delta', text: review };
     yield { type: 'usage', usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } };
     yield { type: 'completed', stopReason: 'stop', rawStopReason: 'stop' };
@@ -94,8 +101,10 @@ serve((method) => {
     waiting = new Promise((resolve) => {
       unblock = resolve;
     });
-  } else if (method === 'release') unblock?.();
-  else if (method === 'stop') return host.stop();
+  } else if (method === 'release' || method === 'release-unknown') {
+    transportUnknown = method === 'release-unknown';
+    unblock?.();
+  } else if (method === 'stop') return host.stop();
   else if (method === 'status') return host.status();
   else throw Error('unknown fixture method');
   return null;

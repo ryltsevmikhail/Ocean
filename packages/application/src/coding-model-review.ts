@@ -1,5 +1,6 @@
 import {
   conversationId,
+  isTerminal,
   workspaceId,
   unlimitedBudget,
   type TaskRunId,
@@ -58,6 +59,8 @@ export type ModelCodingReviewerDeps = Readonly<{
   signal: AbortSignal;
   activation?: ModelActivationSnapshot;
   authorizeModelDispatch?: () => boolean;
+  /** Live host supervision only. The review still requires a valid recorded verdict. */
+  onSettled?: () => void;
   emit: (update: TurnUpdate) => void;
 }>;
 export class ModelCodingReviewer implements CodingReviewerPort {
@@ -105,6 +108,14 @@ export class ModelCodingReviewer implements CodingReviewerPort {
         { role: 'user', content: JSON.stringify(input) },
       ],
     });
+    if (deps.onSettled && result.kind !== 'uncertain') {
+      const state = await deps.tasks.state(id);
+      if (state.status !== 'absent' && isTerminal(state.status)) {
+        const execution = state.modelExecution;
+        const completion = execution?.lastRequest.settlement?.completion;
+        if (execution === null || (completion && completion.kind !== 'unknown')) deps.onSettled();
+      }
+    }
     if (result.kind !== 'completed' || result.stopReason !== 'end_turn')
       throw Error('review model outcome unavailable');
     return parseCodingReviewResponse(result.text);

@@ -203,20 +203,18 @@ export class ProjectReview {
     q: CodingReviewQuery,
     signal: AbortSignal,
     confirm: (value: unknown, current: () => Promise<boolean>) => Promise<boolean>,
+    uncertain: () => void,
   ) {
     const service = this.runtime.codingReview;
     if (!service) return codingFailure('coding_denied');
     const ref = reviewReference(q);
-    const admitted = this.#activation(q);
+    const admitted = this.#activation(q).safe;
     let preview: ReviewPreview | undefined;
     const owner: CodingReviewOwnerPort = {
       confirm: async ({ request }) => {
-        if (
-          request.reviewerBotId !== admitted.safe.reviewerBotId ||
-          request.reviewRoomId !== q.roomId
-        )
+        if (request.reviewerBotId !== admitted.reviewerBotId || request.reviewRoomId !== q.roomId)
           return false;
-        const pin = this.#preview(q, request.binding, admitted.safe);
+        const pin = this.#preview(q, request.binding, admitted);
         preview = pin;
         return confirm(pin, () => Promise.resolve(this.#current(q, pin) !== null));
       },
@@ -229,7 +227,8 @@ export class ProjectReview {
     const pin = preview!;
     const activation = this.#current(q, pin);
     if (!activation || signal.aborted) return codingFailure('project_changed');
-    return service.dispatch(
+    let settled = false;
+    const result = await service.dispatch(
       ref.decisionId,
       new ModelCodingReviewer({
         tasks: this.runtime.service,
@@ -239,6 +238,9 @@ export class ProjectReview {
         nextRunId: () => taskRunId('tr_' + randomUUID().replaceAll('-', '')),
         signal,
         emit: () => {},
+        onSettled: () => {
+          settled = true;
+        },
         authorizeModelDispatch: () => {
           if (signal.aborted || !this.#current(q, pin)) return false;
           const card = this.owner.store.find(ref);
@@ -246,6 +248,8 @@ export class ProjectReview {
         },
       }),
     );
+    if (!result.ok && result.error.code === 'recovery_required' && !settled) uncertain();
+    return result;
   }
 }
 
