@@ -152,6 +152,9 @@ it('shares one bounded job budget across reserve and prepare', async () => {
     expect(
       await f.lane.dispatch({ ...f.input, requestId: 'other', taskId: 'other' }),
     ).toMatchObject({ result: { status: 'pending' } });
+    expect(await f.lane.dispatch(f.q, false, 'prepare')).toMatchObject({
+      result: { status: 'pending' },
+    });
     expect(await f.lane.dispatch({ ...f.q, requestId: 'third' }, false, 'prepare')).toEqual({
       error: { code: 'query_limit' },
     });
@@ -162,6 +165,80 @@ it('shares one bounded job budget across reserve and prepare', async () => {
         .match(/^worktree /gm),
     ).toHaveLength(1);
   } finally {
+    await f.close();
+  }
+});
+
+it('bounds ready-result verification before Git I/O', async () => {
+  const f = await setup();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const pending: Promise<unknown>[] = [];
+  try {
+    expect(
+      (await f.runtime.codingChanges.prepare(f.access, { confirm: async () => true })).ok,
+    ).toBe(true);
+    const read = f.runtime.codingChanges.prepared.bind(f.runtime.codingChanges);
+    let calls = 0;
+    f.runtime.codingChanges.prepared = async (access) => {
+      if (++calls <= 2) await gate;
+      return read(access);
+    };
+    pending.push(f.lane.dispatch(f.q, false, 'prepare'));
+    pending.push(f.lane.dispatch({ ...f.q, requestId: 'second' }, false, 'prepare'));
+    pending.push(f.lane.dispatch(f.q, false, 'prepare'));
+    const changed = await f.lane.dispatch(
+      { ...f.q, roomId: f.input.reviewRoomId },
+      false,
+      'prepare',
+    );
+
+    expect(await f.lane.dispatch({ ...f.q, requestId: 'third' }, false, 'prepare')).toEqual({
+      error: { code: 'query_limit' },
+    });
+    release();
+    expect(await pending[2]).toEqual(await pending[0]);
+    expect(changed).toEqual({ error: { code: 'request_conflict' } });
+  } finally {
+    release();
+    await Promise.all(pending);
+    await f.close();
+  }
+});
+it('joins ready-result verification on drain and returns no success after closing', async () => {
+  const f = await setup();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let pending: Promise<unknown> | undefined;
+  let stopping: Promise<unknown> | undefined;
+  try {
+    expect(
+      (await f.runtime.codingChanges.prepare(f.access, { confirm: async () => true })).ok,
+    ).toBe(true);
+    const read = f.runtime.codingChanges.prepared.bind(f.runtime.codingChanges);
+    f.runtime.codingChanges.prepared = async (access) => {
+      await gate;
+      return read(access);
+    };
+    pending = f.lane.dispatch(f.q, false, 'prepare');
+    let settled = false;
+    stopping = f.lane.drain().then((result) => {
+      settled = true;
+      return result;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(settled).toBe(false);
+    release();
+    expect(await pending).toEqual({ error: { code: 'runtime_draining' } });
+    expect(await stopping).toBe('settled');
+  } finally {
+    release();
+    await pending;
+    await stopping;
     await f.close();
   }
 });

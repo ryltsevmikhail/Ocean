@@ -4,6 +4,7 @@ import {
   isCodingTaskPrepare,
   type CodingTaskReserve,
   type CodingTaskPrepare,
+  type CodingTaskPreparation,
 } from '@runnets/contracts';
 import type { Runtime } from '../runtime.js';
 import { digest, ownerPreview } from './decision-preview.js';
@@ -35,6 +36,13 @@ const reference = (q: CodingTaskReserve) => {
 /** One bounded setup lane for reserve and prepare. Durable cards never reinstall continuations. */
 export class RuntimeProjectReserve {
   readonly #jobs = new Map<string, Job>();
+  readonly #reads = new Map<
+    string,
+    {
+      binding: string;
+      value: Promise<CodingTaskPreparation | null>;
+    }
+  >();
   readonly #closing = new AbortController();
   #failure = false;
   readonly #reserve: ProjectReservation;
@@ -74,9 +82,9 @@ export class RuntimeProjectReserve {
         reserve
           ? this.#reserve.existing(reserve, (id) => this.#jobs.has(id))
           : this.#prepare.existing(prepare!, (id) => this.#jobs.has(id));
-      const previous = await existing();
-      if (previous) return { result: previous };
+      const previous = prepare ? await this.#read(prepare) : await existing();
       if (this.#closing.signal.aborted) throw Error('runtime_draining');
+      if (previous) return { result: previous };
       const active = this.#jobs.get(ref.decisionId);
       if (active) {
         if (active.binding !== binding) throw Error('request_conflict');
@@ -154,6 +162,24 @@ export class RuntimeProjectReserve {
       return this.#error(error);
     }
   }
+  /** Read slots are separate so pending owner jobs cannot starve their result reads. */
+  async #read(q: CodingTaskPrepare): Promise<CodingTaskPreparation | null> {
+    const key = prepareReference(q).decisionId,
+      binding = ownerPreview(q);
+    const active = this.#reads.get(key);
+    if (active) {
+      if (active.binding !== binding) throw Error('request_conflict');
+      return active.value;
+    }
+    if (this.#reads.size >= 2) throw Error('query_limit');
+    const read = this.#prepare.existing(q, (id) => this.#jobs.has(id));
+    this.#reads.set(key, { binding, value: read });
+    try {
+      return await read;
+    } finally {
+      this.#reads.delete(key);
+    }
+  }
   #error(error: unknown): RuntimeReply {
     return {
       error: {
@@ -167,6 +193,7 @@ export class RuntimeProjectReserve {
   async drain(): Promise<'settled' | 'uncertain'> {
     this.#closing.abort();
     await Promise.all([...this.#jobs.values()].map((j) => j.done));
+    await Promise.allSettled([...this.#reads.values()].map((r) => r.value));
     return this.#failure ? 'uncertain' : 'settled';
   }
 }
