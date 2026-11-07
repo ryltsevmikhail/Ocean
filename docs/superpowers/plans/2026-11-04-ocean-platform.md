@@ -2901,7 +2901,9 @@ only after actual evidence; retained B results do not qualify E candidate bytes.
 применение. Точные operation approvals остаются там, где их требует политика
 владельца; автономная работа в назначенном worktree не требует каждого окна.
 Критерий: полный dev → review → apply, stale changeset отказ, restart и два
-клиента, без дублирования runtime. Конкретные UI-файлы — в плане G после F.
+клиента, без дублирования runtime. [План G](2026-11-07-ocean-project-desktop.md):
+сначала чтение через SDK, затем точные операции владельца, отдельный GUI и
+установленная приёмка.
 
 ## Task 23: H. Два TUI — позднее
 
