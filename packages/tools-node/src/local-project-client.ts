@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 import {
   CODING_REVIEW_REQUEST,
+  CODING_APPLY_REQUEST,
+  isCodingApplyQuery,
+  isCodingApplyStatus,
+  type CodingApplyQuery,
+  type CodingApplyStatus,
   isCodingReviewQuery,
   isCodingReviewStatus,
   type CodingReviewQuery,
@@ -37,6 +42,7 @@ import { readPanelChunks } from './local-panel-client.js';
 import { validatedParams } from './local-room-client.js';
 
 export interface LocalProjectClient {
+  applyCodingChangeset(input: CodingApplyQuery): Promise<CodingApplyStatus>;
   requestCodingReview(input: CodingReviewQuery): Promise<CodingReviewStatus>;
   captureCodingChangeset(input: CodingChangesetCapture): Promise<CodingChangesetSummary>;
   readCodingChangeset(input: CodingChangesetRead): Promise<CodingChangesetDiff>;
@@ -74,6 +80,30 @@ export function localProjectClient(
       throw Error('client_upgrade_required');
   };
   return {
+    async applyCodingChangeset(input) {
+      requireFeature();
+      const q = validatedParams(input, isCodingApplyQuery);
+      const v = await send(CODING_APPLY_REQUEST, q, 30000);
+      const id =
+        'coding-apply-' +
+        createHash('sha256')
+          .update(JSON.stringify([q.workspaceId, q.requestId]))
+          .digest('hex');
+      if (
+        !isCodingApplyStatus(v) ||
+        v.decision.workspaceId !== q.workspaceId ||
+        v.decision.roomId !== q.roomId ||
+        v.decision.runId !== id ||
+        v.decision.decisionId !== id ||
+        (v.receipt &&
+          (v.receipt.taskId !== q.taskId ||
+            v.receipt.expectedBase !== q.expectedBase ||
+            v.receipt.changesetHash !== q.changesetHash ||
+            v.receipt.reviewRequestId !== q.reviewRequestId))
+      )
+        throw Error('invalid_frame');
+      return v;
+    },
     async requestCodingReview(input) {
       requireFeature();
       const q = validatedParams(input, isCodingReviewQuery);

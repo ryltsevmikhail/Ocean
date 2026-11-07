@@ -47,3 +47,4 @@ export * from './local-project-reserve.js';
 export * from './local-project-prepare.js';
 export * from './local-project-changeset.js';
 export * from './local-project-review.js';
+export * from './local-project-apply.js';

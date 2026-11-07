@@ -107,15 +107,31 @@ export async function codingRead(
   return { ...result.value, workspaceId: q.workspaceId, roomId };
 }
 
-/** Resolve the current owner/dev scope from the task and bound workspace records. */
-export function codingSnapshotAccess(
-  runtime: Runtime,
-  q: LocalCodingPanel & { expectedPolicyVersion?: number },
-): CodingAccess {
+type CodingOwnerRuntime = Pick<Runtime, 'coding' | 'conversationStore' | 'conversations'>;
+
+/** Resolve current owner/dev scope, independently of eligibility to start new work. */
+export function codingOwnerTask(runtime: CodingOwnerRuntime, q: LocalCodingPanel) {
   const selected = runtime.coding.inspect(q.workspaceId, q.taskId);
   if (!selected.ok) throw Error(selected.error.code);
   const task = selected.value;
   const workspace = runtime.conversationStore?.atomic((tx) => tx.workspace());
+  if (
+    workspace?.id !== q.workspaceId ||
+    workspace.root !== task.projectRoot ||
+    task.ownerRoomId !== q.roomId
+  )
+    throw Error('coding_denied');
+  const members = runtime.conversations.members(q.workspaceId, q.roomId);
+  if (!members.ok || !members.value.some((b) => b.id === task.devBotId))
+    throw Error('coding_denied');
+  return task;
+}
+
+export function codingSnapshotAccess(
+  runtime: CodingOwnerRuntime,
+  q: LocalCodingPanel & { expectedPolicyVersion?: number },
+): CodingAccess {
+  const task = codingOwnerTask(runtime, q);
   const access = {
     taskId: task.id,
     workspaceId: q.workspaceId,
@@ -125,17 +141,11 @@ export function codingSnapshotAccess(
     capability: 'project_read' as const,
   };
   if (
-    workspace?.id !== q.workspaceId ||
-    workspace.root !== task.projectRoot ||
-    task.ownerRoomId !== q.roomId ||
     (q.expectedPolicyVersion !== undefined && q.expectedPolicyVersion !== task.policyVersion) ||
     (!codingCapabilities(task, access).includes(access.capability) &&
       task.status !== 'finalizing' &&
       task.status !== 'finalized')
   )
-    throw Error('coding_denied');
-  const members = runtime.conversations.members(q.workspaceId, q.roomId);
-  if (!members.ok || !members.value.some((b) => b.id === access.botId))
     throw Error('coding_denied');
   return access;
 }

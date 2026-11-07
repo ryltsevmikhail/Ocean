@@ -3,7 +3,6 @@ import { runtimeDesktopAssets } from './desktop-assets.js';
 import { desktopSubmitRefusal, desktopImageResolver } from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
 import {
-  CODING_REVIEW_REQUEST,
   isCodingWorkspaceRead,
   LOCAL_RESTORE_METHODS,
   LOCAL_BROADCAST_METHODS,
@@ -29,7 +28,7 @@ import { RuntimeTurns } from './turns.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
 import { assertRuntimeDrained } from './drain-supervision.js';
-import { RuntimeProjectReserve } from './project-reserve.js';
+import { RuntimeProjectReserve, projectSetupOperation } from './project-reserve.js';
 import { RuntimeFinalization } from './finalization.js';
 import { hostRoomTasks, wakeRoomTasksAfter } from './host-room-tasks.js';
 import { runtimeCapabilities } from './capabilities.js';
@@ -236,11 +235,8 @@ export async function startLocalRuntime(options: LocalRuntimeHostOptions) {
             return restoration.dispatch(method, params);
           if (options.restore && !maintenanceRead(method))
             return { error: { code: 'restore_restricted' } };
-          if (method === CODING_REVIEW_REQUEST)
-            return reserve.dispatch(params, state !== 'ready', 'review');
-          if (method === 'coding.tasks.prepare')
-            return reserve.dispatch(params, state !== 'ready', 'prepare');
-          if (method === 'coding.tasks.reserve') return reserve.dispatch(params, state !== 'ready');
+          const setup = projectSetupOperation(method);
+          if (setup) return reserve.dispatch(params, state !== 'ready', setup);
           if (isCodingWorkspaceRead(method))
             return projectsRead(paths.profile, reads, method, params, state !== 'ready');
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))

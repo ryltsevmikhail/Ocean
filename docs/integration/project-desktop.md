@@ -120,8 +120,34 @@ check/build/format (4,227 source and 210 process tests). The first full check
 hit a timeout in an unchanged SQLite race test; that test passed in isolation,
 and an unchanged full rerun passed. Provider tests used scripted responses.
 
+## Implemented: apply one approved snapshot
+
+Use `applyCodingChangeset({ workspaceId, roomId, taskId, requestId,
+expectedBase, changesetHash, reviewRequestId })` (`coding.changesets.apply`)
+from the task's owner/dev room with `coding.workspace-v1`. For an SDK review,
+use the completed review's `decision.decisionId` as `reviewRequestId`. The
+review must approve that immutable hash, and the task's required passing
+test evidence must match the reviewed tree. The runtime checks the live Git
+base, source cleanliness and worktree tree hash when opening and resolving
+the separate apply card. The apply service rechecks before writing.
+
+The `project-setup` preview shows the source project root, expected base,
+changeset hash, file count and exact verdict identity and binding. Use the
+existing decision API to confirm it. The apply response keeps the decision
+separate from the effect: `completed` requires a recorded receipt, and an
+allowed card with no receipt is `unconfirmed`. The receipt includes file
+counts and an application ID for the existing `coding.inspect-apply` read.
+An interrupted or invalidated card records no application; an uncertain
+receipt or orphaned in-progress receipt reports `outcome_unknown`.
+
+Repeating the exact request reads the card and receipt without inspecting Git
+again. Changed inputs conflict. Disconnect detaches; shutdown joins the
+runtime job. Restart never resumes an approved operation or retries unknown
+effects. Native test presets, installed acceptance and the project window are
+separate stages.
+
 ## Planned
 
-Remaining owner operations, the separate project window and its installed acceptance
+The project window and its installed acceptance
 follow in the [project Desktop plan](../superpowers/plans/2026-11-07-ocean-project-desktop.md).
 The published Ocean 1.1.0 bot Desktop stays on its own release revision.

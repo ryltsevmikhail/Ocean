@@ -1,5 +1,9 @@
 import type { ProviderActivationPort, RuntimeOwnerDecisions } from '@runnets/application';
 import {
+  CODING_APPLY_REQUEST,
+  CODING_REVIEW_REQUEST,
+  isCodingApplyQuery,
+  type CodingApplyQuery,
   isCodingReviewQuery,
   type CodingReviewQuery,
   isCodingTaskReserve,
@@ -14,6 +18,7 @@ import type { RuntimeReply } from './queries.js';
 import { ProjectReservation } from './project-reservation.js';
 import { ProjectPreparation, prepareReference, preparePreview } from './project-prepare.js';
 import { ProjectReview, reviewReference } from './project-review.js';
+import { ProjectApply, applyReference } from './project-apply.js';
 type Job = { binding: string; acknowledged: Promise<RuntimeReply>; done: Promise<void> };
 const normalize = (q: CodingTaskReserve): CodingTaskReserve => ({
   workspaceId: q.workspaceId,
@@ -39,11 +44,45 @@ const normalizeReview = (q: CodingReviewQuery): CodingReviewQuery => ({
   requestId: q.requestId,
   hash: q.hash,
 });
+const normalizeApply = (q: CodingApplyQuery): CodingApplyQuery => ({
+  workspaceId: q.workspaceId,
+  roomId: q.roomId,
+  taskId: q.taskId,
+  requestId: q.requestId,
+  expectedBase: q.expectedBase,
+  changesetHash: q.changesetHash,
+  reviewRequestId: q.reviewRequestId,
+});
+type ProjectSetupOperation = 'reserve' | 'prepare' | 'review' | 'apply';
+export function projectSetupOperation(method: string): ProjectSetupOperation | undefined {
+  switch (method) {
+    case 'coding.tasks.reserve':
+      return 'reserve';
+    case 'coding.tasks.prepare':
+      return 'prepare';
+    case CODING_REVIEW_REQUEST:
+      return 'review';
+    case CODING_APPLY_REQUEST:
+      return 'apply';
+    default:
+      return undefined;
+  }
+}
+type ProjectRuntime = Pick<
+  Runtime,
+  | 'coding'
+  | 'codingChanges'
+  | 'conversations'
+  | 'conversationStore'
+  | 'codingReview'
+  | 'codingApply'
+  | 'service'
+>;
 const reference = (q: CodingTaskReserve) => {
   const key = 'reserve-' + digest(JSON.stringify([q.workspaceId, q.requestId]));
   return { workspaceId: q.workspaceId, roomId: q.ownerRoomId, runId: key, decisionId: key };
 };
-/** One bounded project lane for reserve, prepare and review. Durable cards never reinstall continuations. */
+/** One bounded project lane for reserve, prepare, review and apply. Durable cards never reinstall continuations. */
 export class RuntimeProjectReserve {
   readonly #jobs = new Map<string, Job>();
   readonly #reads = new Map<
@@ -58,23 +97,13 @@ export class RuntimeProjectReserve {
   readonly #reserve: ProjectReservation;
   readonly #prepare: ProjectPreparation;
   readonly #review: ProjectReview | undefined;
+  readonly #apply: ProjectApply;
   readonly profile: string;
-  readonly runtime: Pick<
-    Runtime,
-    'coding' | 'codingChanges' | 'conversations' | 'conversationStore' | 'codingReview' | 'service'
-  >;
+  readonly runtime: ProjectRuntime;
   readonly owner: RuntimeOwnerDecisions;
   constructor(
     profile: string,
-    runtime: Pick<
-      Runtime,
-      | 'coding'
-      | 'codingChanges'
-      | 'conversations'
-      | 'conversationStore'
-      | 'codingReview'
-      | 'service'
-    >,
+    runtime: ProjectRuntime,
     owner: RuntimeOwnerDecisions,
     resolver?: ProviderActivationPort,
   ) {
@@ -84,11 +113,12 @@ export class RuntimeProjectReserve {
     this.#reserve = new ProjectReservation(profile, runtime, owner);
     this.#prepare = new ProjectPreparation(runtime, owner);
     this.#review = resolver && new ProjectReview(runtime, owner, resolver);
+    this.#apply = new ProjectApply(runtime, owner);
   }
   async dispatch(
     params: Record<string, unknown>,
     draining = false,
-    operation: 'reserve' | 'prepare' | 'review' = 'reserve',
+    operation: ProjectSetupOperation = 'reserve',
   ): Promise<RuntimeReply> {
     try {
       if (draining || this.#closing.signal.aborted) throw Error('runtime_draining');
@@ -98,21 +128,27 @@ export class RuntimeProjectReserve {
         operation === 'prepare' && isCodingTaskPrepare(params) ? normalizePrepare(params) : null;
       const review =
         operation === 'review' && isCodingReviewQuery(params) ? normalizeReview(params) : null;
-      if (!reserve && !prepare && !review) throw Error('invalid_params');
+      const apply =
+        operation === 'apply' && isCodingApplyQuery(params) ? normalizeApply(params) : null;
+      if (!reserve && !prepare && !review && !apply) throw Error('invalid_params');
       if (review && !this.#review) throw Error('review_unavailable');
       const ref = reserve
           ? reference(reserve)
           : prepare
             ? prepareReference(prepare)
-            : reviewReference(review!),
-        binding = ownerPreview(reserve ?? prepare ?? review);
+            : review
+              ? reviewReference(review)
+              : applyReference(apply!),
+        binding = ownerPreview(reserve ?? prepare ?? review ?? apply);
       const activeJob = (id: string) => this.#jobs.has(id);
       const existing = () =>
         reserve
           ? this.#reserve.existing(reserve, activeJob)
           : prepare
             ? this.#prepare.existing(prepare, activeJob)
-            : this.#review!.existing(review!, activeJob);
+            : review
+              ? this.#review!.existing(review, activeJob)
+              : this.#apply.existing(apply!, activeJob);
       const previous = prepare ? await this.#read(prepare) : await existing();
       if (this.#closing.signal.aborted) throw Error('runtime_draining');
       if (previous) return { result: previous };
@@ -146,7 +182,9 @@ export class RuntimeProjectReserve {
           ? { status: 'pending', decision: card, task: null }
           : prepare
             ? { status: 'pending', decision: card, worktree: null }
-            : this.#review!.pending(card, value);
+            : review
+              ? this.#review!.pending(card, value)
+              : { state: 'pending', decision: card, receipt: null };
         opened = true;
         const wait = this.owner.open(
           card,
@@ -160,6 +198,9 @@ export class RuntimeProjectReserve {
       };
       const done = Promise.resolve()
         .then(async () => {
+          const uncertain = () => {
+            this.#failure = true;
+          };
           const result = reserve
             ? await (async () => {
                 const input = await this.#reserve.input(reserve);
@@ -178,11 +219,11 @@ export class RuntimeProjectReserve {
                       this.#prepare.current(prepare, authorized),
                     ),
                 })
-              : await this.#review!.run(review!, this.#closing.signal, confirm, () => {
-                  this.#failure = true;
-                });
+              : review
+                ? await this.#review!.run(review, this.#closing.signal, confirm, uncertain)
+                : await this.#apply.run(apply!, confirm, uncertain);
           if (!result.ok) acknowledge({ error: { code: result.error.code } });
-          else if (!review) {
+          else if (!review && !apply) {
             const previous = await existing();
             acknowledge(previous ? { result: previous } : { error: { code: 'request_conflict' } });
           }

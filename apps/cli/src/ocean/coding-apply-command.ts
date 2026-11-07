@@ -1,7 +1,7 @@
 import type { Runtime } from '../runtime.js';
 import { required, type OceanArguments } from './arguments.js';
 import { terminalCodingConfirm } from './coding-command.js';
-/** Only the owner CLI routes application; model toolsets never expose this operation. */
+/** The owner CLI uses the same apply service as the SDK; model toolsets never expose it. */
 export async function runCodingApplyCommand(
   runtime: Runtime,
   args: OceanArguments,
