@@ -2706,6 +2706,133 @@ UI-дизайн согласовывается отдельным подробн
 - [ ] Реальный установленный GUI: 1024/1280/1920, keyboard/focus, вложения,
       restart и reconnect. Screenshot/source test не заменяет запуск приложения.
 
+### Task 20.1: Discover room tasks through one negotiated server read
+
+**Files:** contracts `local-runtime-room-tasks.ts`, new
+`local-runtime-room-task-list.ts` and its tests; application
+`room-task-records.ts` (application-local read-port shapes); store
+`room-task-storage.ts`, new `room-task-list.ts` and tests; tools-node
+`local-runtime-client.ts`, `local-room-tasks-client.ts` and tests; CLI
+`local-runtime/{capabilities,client-compatibility,server,host,room-tasks}.ts`,
+existing negotiation/process fixtures and a focused room-task-list process test.
+Use public entry points and routine same-family splits only where the 300-line cap requires.
+
+**Interfaces:** add exactly one feature `LOCAL_ROOM_TASK_LIST = 'room.task-list-v1'`
+and RPC `roomTasks.list`, SDK `roomTaskList(input: RoomTaskList): Promise<RoomTaskListPage>`.
+`RoomTaskList` has `workspaceId`, `roomId`, optional positive safe `beforeSeq` and
+optional safe `limit` in 1–50 (default 50). Return `RoomTaskListPage` with echoed
+`workspaceId`, `roomId`, `roots`, `nextBeforeSeq: number | null`. Each summary has
+`rootId`, `startMessageId`, positive `startSeq`, `status`, `revision` and
+`authority: 'current' | 'historical'`; no prompt, grants or model secrets.
+Application read-port shapes remain local to application/domain, without a contracts import.
+
+- [ ] **RED:** pin exact closed DTOs, limit 1/50/51, exclusive descending cursor,
+      duplicate/out-of-order/foreign-scope replies; verify SDK rejects unsupported peers.
+      Store tests cover 51 roots with multiple initial siblings, exact pages, terminal/
+      paused/unbound roots, different room/owner, no writes or execution from listing.
+- [ ] **Implement:** bounded room/owner-filtered SQL over existing tables and canonical
+      position-zero start message evidence; never scan the scheduler's global `roots()`.
+      Return one entry per root, newest first. Fetch at most limit+1; when more exist,
+      `nextBeforeSeq` is the last returned start sequence, otherwise null. Owner comes
+      from the authenticated host. `current` requires the exact existing verified host
+      binding; old/unbound/foreign-host entries remain historical and are not adopted.
+      Unknown/foreign room follows existing scoped error behavior, not successful empty.
+- [ ] **Compatibility:** list requires negotiated `room.task-list-v1`, `room.tasks-v1`
+      and `room.addressed-history-v1`. Add only the one feature token: current normal
+      hello goes from 79 to 80, keeping the existing ceiling 80 and RC2 projection.
+      Suppress list on restore-mode hosts just like D execution. Preserve four existing
+      D methods, addressed-history compatibility, receipts and all effect/authority rules.
+- [ ] **GREEN/process:** real built owner and two independent public SDK peers: lose a
+      start ACK after durable commit, discover the same root without its receipt, restart
+      owner and discover it again; identical replay retains IDs and changed payload fails.
+      Listing changes neither provider/effect counters nor durable state. Old D peer still
+      supports ordinary chat; missing list support is explicit, not an empty task list.
+- [ ] Run focused regressions and root `pnpm check`, `pnpm build`, `pnpm format:check`
+      through the unchanged private runner, self-review, exact-path commit and task review.
+
+### Task 20.2: Connect the existing Desktop to team tasks
+
+**Files:** Desktop `protocol.ts`, `protocol-room.ts`, new `room-task-protocol.ts`,
+`host/room-task-client.ts`, thin `host/runtime-client.ts` dispatch; UI `Desktop.vue`,
+`room-feed.ts`, new `room-task-state.ts`, `RoomTasks.vue`, `RoomTaskStart.vue`;
+`RoomHistory.vue`, `RoomDetails.vue`, `RoomWork.vue`, `runtime-text.ts`,
+`PluginSettings.vue`, `ServiceDecisions.vue`, `service-decisions.ts` and focused tests.
+Keep existing `state.ts` below 300 lines by composing at its existing room/ref boundary.
+
+**Interfaces:** typed IPC `task-support/list/start/get/observe/stop`, fixed workspace
+`ws_ocean`, existing authenticated public SDK only. Reuse existing profile/instance
+write binding and renegotiate before dispatch. Do not expose a generic RPC escape hatch.
+SDK `roomTaskGet` assembles at most 512 rows; the socket guard accepts at most 50 per
+page. Define a separate closed assembled-view IPC guard (`nextPage:null`, at most 512
+validated strictly ordered unique rows); do not relax the existing wire-page guard.
+
+- [ ] **RED:** both IPC boundaries reject foreign/stale/oversized frames; accept a valid
+      51+ row assembled view. Pin room/selection/profile/instance epoch changes, held
+      responses, lost ACK exact-payload replay, downgrade, stale decision and stopped-root
+      cleanup truth. Ordinary drafts/file chips survive opening, cancelling and submitting
+      the separate task form. Addressed A→B differs from an ordinary self-targeted reply.
+- [ ] **Implement existing UI:** one keyboard-reachable “Задачи команды” room-header
+      entry and one dialog for the server index, selected root and “Новое поручение”.
+      Reuse current styling; keep direct/@bot/note/broadcast composer unchanged. The
+      separate task text field is explicitly text-only, UTF-8 limit 16384 bytes, no hidden
+      attachment envelope. Reuse per-bot cloud/local/model/capability and grant settings.
+- [ ] **Start:** explicit room participants and nonempty initial subset; bot IDs on wire,
+      handles in UI. Select optional current active room/bot service grants with exact
+      revisions, permissions, modes and limits. Mandate has null project/codingTask IDs;
+      conversation-only uses empty refs/permissions. No synthetic coding authority,
+      policy merging or auto-grant. Server remains authoritative for all eligibility.
+      Show actual root/message/delivery receipt; clear only task form after confirmation.
+      Lost ACK freezes exact payload/request ID; allow only explicit identical replay in
+      the same verified profile. No automatic writes/reconstructed draft on restart.
+- [ ] **Observe/read:** load server index on room open, explicit refresh and room watermark
+      changes; page older roots explicitly. One selected-root observer, short waits around
+      1s; watermark then full SDK get on snapshot/change/resync. Retry reads on changed
+      page revision, never expose partial rows as complete. Ignore late scoped responses;
+      stale/disconnected state disables writes without erasing chat. Historical roots and
+      unsupported peers stay read-only, not falsely empty or newly enrolled.
+- [ ] **Truth/decisions:** show assignee, peer wait, queued/held delivery, yielded slice,
+      actual result, unknown/authority/limit fence. Preserve `resultMessageId` in ordinary
+      run DTO; completed without a result is not “Ответил”. Root stop uses exact current
+      ready/paused revision and fresh request ID; receipt proves fence, not cleanup.
+      Lost ACK stays unconfirmed; stale revision visibly refuses without write retry.
+      Slice service decisions reuse exact room/run/ID/version/digest preview and resolve;
+      display “Устаревшее решение отклонено” on conflict. Other decision kinds remain
+      honest read-only with their supported owner-client route; project approvals stay G.
+- [ ] Run meaningful UI/bridge regressions and root gates via unchanged runner, self-review,
+      exact-path commit and independent task review. Native installed acceptance is 20.3.
+
+### Task 20.3: Qualify the installed bot GUI and two clients
+
+**Files:** focused `apps/desktop/qa/room-task-native.mjs` and same-family phase helpers
+under 300 lines as needed; reuse existing `model-native-session`, widths, current-window,
+client-handoff and asset/restart/lifecycle helpers. Add `docs/ocean/platform-stage-e.md`
+only after actual evidence; retained B results do not qualify E candidate bytes.
+
+- [ ] Build/install one frozen disposable candidate and pin CLI/SDK manifest, Desktop
+      executable/ASAR hashes and revision. Use two real packaged Electron processes with
+      separate fresh userData, one private profile/runtime and an independent installed
+      SDK peer. Deterministic loopback cloud/local/provider/service fixtures, no renderer
+      mocks, seeded DB, live-key requirement or protected installed/profile changes.
+- [ ] Through UI start one scoped text task, observe same root from second window without
+      receipt; verify delegation/wait/yield/result and actual history order. Show the same
+      confirmation twice: one accepted operation, stale second vote refused, effect count1.
+      Closing a window does not cancel. Restart/reconnect preserves IDs and no repeated
+      dispatch. Explicit stop distinguishes root fence from unresolved cleanup/unknown.
+- [ ] Check mixed bindings/auth-none local, revoked scope and unavailable local without
+      hidden cloud sends; unsupported peer leaves ordinary chat usable and tasks inert.
+      Preserve normal image/text/binary attachments/original export after restart; eligible
+      fixture receives exact image bytes, unsupported model rejects before send.
+- [ ] At measured 1024/1280/1920×800 verify controls/composer/drafts/chips fit, keyboard
+      access, Escape/focus return and unchanged Enter/Shift+Enter behavior. Independent
+      public reads and counters verify results; screenshots are supplemental evidence.
+- [ ] Reuse unchanged private runner with only explicitly passed, owned Wayland and
+      Hyprland command sockets as argv; map those endpoints into private runtime state,
+      never inherit real HOME/XDG/DBus/env or change system settings. Operate only checked
+      candidate PIDs/windows. Record exact commands, artifacts, limits and owned cleanup.
+      Missing compositor/geometry is an explicit native gap, not a passing source test.
+- [ ] Final root gates, independent task review, document actual implemented vs planned
+      E results and continue F. Do not claim stable or full A–H completion here.
+
 ## Task 21: F. Приёмка и выпуск приоритета 1
 
 - [ ] Обновить полную карту требований и release ledger. Устранить применимый
