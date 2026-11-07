@@ -183,6 +183,11 @@ does not submit again on its own. The project client uses the optional
 another task's turn before observing, cancelling or voting on the run.
 Older, unscoped lookups retain their behavior.
 
+The window at `3a4686b` passed independent review, root check/build/format
+(4,250 source and 219 process tests) and the Desktop bundle. The built renderer
+passed a 1024×768 browser smoke with a test bridge, including recovery after a
+lost acknowledgement and stale apply and decision refusal.
+
 Packaged GUI, native presets and the disposable installed workflow are still
 [acceptance work](../superpowers/plans/2026-11-07-ocean-project-desktop.md#224--installed-acceptance).
 The published Ocean 1.1.0 bot Desktop stays on its own release revision.

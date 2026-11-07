@@ -71,9 +71,9 @@ Accepted after independent review at `c438756`: root check/build/format 0
       decision and verified worktree result. Accepted independently at
       `b0f6dec`; root check/build/format passed (4,226 source and 199 process
       tests). Ready reads are bounded and joined on stop.
-- [ ] Reuse runtime `turns.submit` with `taskId` for dev, including receipts,
-      observation and cancellation. The runtime path already exists; wire it
-      into the project client in 22.3 and verify it installed in 22.4.
+- [x] Reuse runtime `turns.submit` with `taskId` for dev, including receipts,
+      observation and cancellation. Wired in 22.3 with a task-scoped receipt
+      lookup; verify the installed workflow in 22.4.
 - [x] Expose explicit immutable capture and exact-hash diff reading through
       the existing changeset service and bounded chunk protocol. Accepted
       independently at `0c8d5e4`; root check/build/format passed (4,227 source
@@ -97,18 +97,23 @@ Accepted after independent review at `c438756`: root check/build/format 0
 
 ## 22.3 — The project client
 
-- [ ] Add a distinct `--projects` entry point in `apps/desktop/src/host/main.ts`
+- [x] Add a distinct `--projects` entry point in `apps/desktop/src/host/main.ts`
       and separate `ProjectWorkspace.vue` renderer root. Reuse the existing
       IPC/SDK boundary and client recovery. Keep bot Desktop and project
       renderer state separate; provide separate user data for the two windows.
-- [ ] Reuse the existing design tokens, focus styles and scroll structure. Show
+- [x] Reuse the existing design tokens, focus styles and scroll structure. Show
       project/task picker, task chat and run status, diff and test evidence,
       review/verdict and exact confirmation/result. Keep all information usable
       at 1024 px. Empty catalog points to owner CLI setup; no new project
       permissions editor or Git client.
-- [ ] Component and bridge regressions for stale/error/loading/unsupported
+- [x] Component and bridge regressions for stale/error/loading/unsupported
       states, approval races, renderer restrictions, attach and resync. Run
       root gates, Desktop bundle and independent review.
+
+Accepted at `3a4686b` after independent review and scoped fixes. Root
+check/build/format passed (4,250 source and 219 process tests). The Desktop
+bundle emitted both pages; the built project renderer passed a 1024×768
+browser smoke with a test bridge. Packaged Electron and native gates follow.
 
 ## 22.4 — Installed acceptance
 
