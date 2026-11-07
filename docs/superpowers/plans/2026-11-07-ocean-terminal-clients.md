@@ -31,11 +31,11 @@ and [platform architecture](../../ocean/platform-architecture.md).
 
 ## 23.1a — Open a project task in the existing terminal chat
 
-- [ ] Add failing CLI/PTY tests for `ocean tui --projects [--profile PROFILE]`,
+- [x] Add failing CLI/PTY tests for `ocean tui --projects [--profile PROFILE]`,
       including unsupported runtime, empty catalog, selection, detach and old
       flags. In `apps/cli/src/ocean/arguments.ts` and `command.ts`, reject ambiguous
       `--projects` with `--room` or `--task` before touching the profile.
-- [ ] Add `apps/cli/src/ocean/project-tui.ts`: a bounded terminal chooser over
+- [x] Add `apps/cli/src/ocean/project-tui.ts`: a bounded terminal chooser over
       `listCodingProjects` and `listCodingTasks`. It selects a current task, reads
       its authoritative assignment and opens `runDirectTui` with that scope.
       Reuse `RoomConnection`, `RemoteChatRunBook`, the existing coding panel and
@@ -45,8 +45,12 @@ and [platform architecture](../../ocean/platform-architecture.md).
       offers the selected dev scope; room-wide broadcast and service settings
       remain in the bot TUI. Preserve legacy room behavior and detach semantics.
       No new runtime method.
-- [ ] Pass focused tests, exact root gates and independent review. Record commands
+- [x] Pass focused tests, exact root gates and independent review. Record commands
       and differences from the bot room mode in the integration docs.
+
+Accepted at `206eac6`: root check/build/format passed (4,269 source and 221
+process tests), including the built project PTY and legacy room PTYs. See the
+[terminal integration](../../integration/terminal-clients.md).
 
 ## 23.1b — Exact project operations from the terminal
 
@@ -62,6 +66,9 @@ and [platform architecture](../../ocean/platform-architecture.md).
 - [ ] Add tests for two peers, stale/unknown decisions, exact operation preview,
       replay of a result and no source write before approval. Use a disposable
       Git fixture and scripted model. Pass exact root gates and independent review.
+- [ ] Use the selected dev member's verified handle for chat addressing while
+      keeping its ID for receipt and authority checks. Cover an ordinary leading
+      `@handle` and the handle/ID collision found in 23.1a.
 
 ## 23.2 — Bot terminal entry
 
