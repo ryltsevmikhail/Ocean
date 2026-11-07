@@ -1,7 +1,8 @@
 # Platform stage D — bot tasks and communication
 
-Current source milestone: D19.2.5 is accepted at `0f7435b`. Native 19.3 and later
-GUI/release gates remain open. Earlier sections record their own historical boundaries.
+Current source/native milestone: D19.3 is accepted at `62bd51e` after independent
+review. Bot GUI and release stages E/F remain open. Earlier sections record their
+own historical revision boundaries.
 
 ## Implemented: D19.1 pure addressing contract
 
@@ -217,19 +218,17 @@ remain explicit opt-in qualifications. Scripted cloud/local 503 directions prese
 original pins and measured sends with no provider fallback. Built owner/two SDK peers,
 lost ACKs and marked SIGKILL recovery are source/process evidence, not native containment.
 
-## Remaining D acceptance and later client delivery
+## Later client delivery and release acceptance
 
-D and Task 19.2 still require 19.3 native managed-workspace proof: disjoint versus same,
-nested or alias roots, launch/refresh and already-active idle writers, and unknown
-write/restart behavior. Real mixed cloud/local routing/outages and native cleanup are
-separate gates. The bot GUI is stage E; installed artifacts, device identity, backup,
-live acceptance and release are stage F. No installed RC2 qualification is advanced by
-this source gate. Original ledger Minors/Rulings remain mandatory final-review inputs.
+Managed-workspace 19.3 qualification covers the boundaries below. The bot GUI is
+stage E; installed artifacts, device identity, backup, live workloads, broader native
+presets and release are stage F. Current source/native proof does not qualify the
+installed RC2. Original ledger Minors/Rulings remain mandatory final-review inputs.
 
 F review retains failed-start SQLite cleanup for malformed restore-origin data,
 unexpected claim diagnostics and the recorded historical read-path/test hygiene debt.
 
-## Implemented source candidate: D19.3 managed workspace boundaries
+## Implemented and qualified: D19.3 managed workspace boundaries
 
 The owning runtime now journals each explicitly persisted, pinned, writable stdio
 process before SDK launch. Metadata permission authorizes lifecycle writes only
@@ -263,10 +262,49 @@ and remain held even after independently observed cgroup retirement. Old unscope
 unknown effects still block all managed writers. No automatic expiry, retry or new
 lifecycle-resolution API is introduced.
 
-19.3 controller acceptance remains pending independent review and final frozen
-source/native evidence. Scripted normal-host Linux tests and actual kernel alias
-preflight tests are separate evidence classes. Real mixed cloud/local services,
-live providers, GUI, installed/device/backup and release gates remain later work.
+D19.3 is accepted at `62bd51e` after three correction rounds and independent
+scoped reviews. On frozen source, `pnpm check`, `pnpm build` and `pnpm format:check`
+exited 0: 4098 source and 173 process tests passed; 44 source and 58 process opt-in
+skips remain explicit. The separate 13-file native matrix passed 22 cases without
+skips. Those 22 exercise process opt-ins separately; they are not additional source
+tests. Task-owned group/PID-start retirement and temporary-profile cleanup were
+verified. Real live models, GUI, installed/device/backup and release remain later gates.
+
+Raw Linux names are checked without lossy decoding in host inventory and the
+inherited-fd bootstrap. Physical preparation uses asynchronous adapter I/O and one
+deadline; the existing per-session 16-call ceiling also bounds preparation before
+physical work. Cancelled callers retain reservations until actual unwind and all
+close attempts finish. Sealed business evidence is validated even if the binding
+or entire admission is replaced; malformed evidence remains globally conservative.
+
+Same-connection replacement at shared capacity joins the prior generation before
+reusing its slot. Reply loss fences the exact captured generation even during
+refresh/disconnect. Failed cleanup cannot skip settlement or retirement joining;
+post-claim preparation and predecessor close remain joined to their caller. Known
+operation results remain known, with a bounded unconfirmed-cleanup warning and no
+further automatic tool work. Unknown effects stay unknown. Public SDK lifecycle
+signals bound early EOF without an SDK fork or private-field patch.
+
+### Qualification limits retained for F
+
+The shared eight-slot native case uses seven real HTTP SDK sessions and one managed
+stdio session. Successful eight-stdio operation remains unqualified: the recorded
+eighth-session early systemd-run EOF has no established host-limit cause. Its hang
+is covered; eight-stdio qualification remains a mandatory F/release investigation.
+
+Directory-entry changes or new pending rows outside a captured proof can refuse
+preclaim conservatively. The native overlap case qualifies phased concurrent
+appends, not simultaneous preparation/admission. F must assess representative
+workload and latency. Kernel bind/import races qualify the actual adapter/bootstrap
+in owned namespaces; ordinary-host restart/idle cases have separate evidence.
+Positive partition remains limited to the same verified Btrfs boundary above.
+
+Reproduce the separate native matrix with disposable HOME/XDG/TMP and owned paths:
+
+```sh
+OCEAN_SANDBOX_NATIVE=1 pnpm exec vitest run --config vitest.process.config.ts \
+  apps/cli/src/local-runtime/managed-workspace{,-capacity,-concurrent,-eof,-expiry,-idle,-invalid,-late,-race,-refresh,-retirement,-stale,-topology}-native.test.ts
+```
 
 Managed stdio retains the existing metadata TTL (at most 60 seconds), 15-second
 discovery and 30-second business deadline. Its hard watchdog is 120 seconds;

@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`, локальное долговечное исполнение D19.2.4 — на `c3d7c21`, общий room-task host D19.2.5 — на `0f7435b` после двух раундов исправлений; нативная приёмка D19.3 и этапы E–H запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`, локальное долговечное исполнение D19.2.4 — на `c3d7c21`, общий room-task host D19.2.5 — на `0f7435b` после двух раундов исправлений; нативная приёмка D19.3 принята на `62bd51e` после трёх раундов исправлений и независимых ревью; этапы E–H запланированы.
 Долг сохранённых регрессий Executor закрыт в C18.6: чистые root gates прошли
 на квалифицированном `1f31974`; финальные проверки текущего выпуска остаются F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -2629,6 +2629,61 @@ Normal-host A mutates then loses its reply; after restart proven disjoint B work
 while same/nested/alias A via another connection remains blocked, including startup
 writes. Same worktree remains coordinated. Native Linux proof and real mixed/live
 gates remain distinct from unit/SQLite/root tests. Do not accept D until proved.
+
+#### Bounded implementation and native qualification
+
+Persist the complete lifetime of an explicitly enrolled writable stdio process in the
+existing effect journal before executable launch. Explicit current owner enrollment
+of a pinned program and verified bounded workspace, together with metadata permission,
+authorizes that process lifecycle; it never grants a model business authority. Old
+unbound rows stay inert. Use an internal typed identity disjoint from public/Core run
+IDs, without fabricating a Core run or adding a lease registry.
+
+Keep the hold through discovery, candidate, active idle state, calls and retirement.
+A business call may exclude only its own exact live generation's started lifetime
+claim after current proof checks. It cannot exclude other business claims or an
+uncertain lifetime. Refresh must retire and join the previous writable generation
+before starting a replacement. Post-send uncertainty removes writable readiness and
+joins retirement; business unknown remains unknown even after clean process retirement.
+Controlled lifecycle completion requires joined calls and confirmed whole-unit cleanup.
+Interrupted idle lifetimes remain uncertain; empty cgroups do not prove their effects.
+
+Managed stdio's hard watchdog is 120 seconds, allowing the existing catalog refresh
+TTL (at most 60 seconds), bounded discovery, admitted-call drain and retirement to
+complete normally. The old 60-second watchdog started before catalog activation and
+would otherwise interrupt a healthy session before its scheduled refresh. Normal
+refresh joins and settles the previous lifetime before replacement; actual watchdog
+loss remains uncertain. This does not change coding sandbox preset limits or permit
+business retries. Qualify healthy refresh beyond the old boundary and real watchdog
+expiry separately.
+
+The first positive partition is deliberately limited to roots on the same verified
+Linux Btrfs mount/subvolume, using the existing open-directory kernel anchor helper,
+actual sandbox bind descriptors and bounded mount-topology checks. Reopen saved roots
+and retain trusted witnesses through the atomic journal decision and final launch/send
+guard. Same, nested, aliased, replaced or ambiguously mounted roots conflict. Unsupported
+or stale partition evidence remains conservative; uncertain containment denies launch.
+No filesystem I/O occurs in pure domain logic or a SQLite write transaction. Mixed
+coding/managed scopes remain conflicting without compatible physical evidence.
+
+Native acceptance uses the ordinary built host, persisted owner enrollment and only
+disposable task-owned profiles, workspaces and exact transient units. Observe startup,
+wire, mutation and idle-descendant counters. After A mutates and loses its reply, kill
+and reopen the runtime: independently enrolled disjoint B with no unknown lifetime of
+its own must work, while same/nested/alias writers cannot start or repeat A. Cover the
+reverse ordering with an already-active idle writer, concurrent independent work,
+prelaunch identity/topology races and interrupted idle lifetime. Source and process
+fixtures prove ordering and journal behavior; actual Linux counters and cleanup evidence
+prove containment. Unsupported native cases remain explicit unqualified gates.
+
+19.3 принят на `62bd51e`: root check/build/format — exit 0, 4098 source и
+173 process прошли (44/58 настроенных opt-in пропусков); отдельная native-матрица —
+22 теста в 13 файлах без пропусков. Полные результаты и ограничения —
+[stage D](../../ocean/platform-stage-d.md). Для F остаются обязательными успешные
+8 stdio (сейчас shared8 доказан как 7 HTTP + 1 stdio), разбор необъяснённого EOF
+и workload/latency при консервативном preclaim отказе. Текущая приёмка не доказывает
+одновременную успешную подготовку независимых каталогов, GUI, installed/live или stable.
+Все отложенные Minor/Rulings остаются входом финального ревью F.
 
 ## Task 20: E. Графический чат ботов — приоритет 1
 
