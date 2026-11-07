@@ -27,6 +27,13 @@ export function runtimeDesktopAssets(store: DesktopAssetStore, profile: string, 
       if (!isDesktopCommand(params)) throw Error('invalid_params');
       const c = params;
       switch (c.op) {
+        case 'attach': {
+          const enrollment = store.operation('enrollment');
+          if (enrollment && enrollment.state !== 'completed')
+            throw Error('desktop_outcome_unknown');
+          if (!bound) throw Error('desktop_not_enrolled');
+          return { result: { op: c.op, ok: true } };
+        }
         case 'enroll':
           service.enroll(c.userData);
           return { result: { op: c.op, ok: true } };

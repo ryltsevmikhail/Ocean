@@ -3,19 +3,12 @@ import {
   LOCAL_ROOM_TASKS,
   LOCAL_ADDRESSED_HISTORY,
   LOCAL_ROOM_TASK_LIST,
-  LOCAL_ROOM_TASK_METHODS,
 } from '@runnets/contracts';
 import type { LocalRuntimeClient } from '@runnets/tools-node/local-runtime-client';
 import { dispatch } from './runtime-client.js';
 const binding = { profileId: 'a'.repeat(64), instanceId: '11111111-1111-4111-8111-111111111111' };
 const input = { workspaceId: 'ws_ocean', roomId: 'r', rootId: 'root' };
-const capabilities = [
-  LOCAL_ROOM_TASKS,
-  LOCAL_ADDRESSED_HISTORY,
-  LOCAL_ROOM_TASK_LIST,
-  ...LOCAL_ROOM_TASK_METHODS,
-  'roomTasks.list',
-];
+const capabilities = [LOCAL_ROOM_TASKS, LOCAL_ADDRESSED_HISTORY, LOCAL_ROOM_TASK_LIST];
 it('rejects stale identity and downgraded capabilities before a task mutation reaches the SDK', async () => {
   let writes = 0;
   const client = (identity: object) =>
@@ -92,5 +85,22 @@ it('accepts a complete SDK assembly of 51 rows while rejecting foreign, partial,
   ]) {
     reply = bad;
     await expect(dispatch(client, command)).rejects.toThrow('invalid_frame');
+  }
+});
+
+it('accepts the actual feature-only identity and refuses each missing negotiated feature', async () => {
+  const client = { identity: { ...binding, capabilities } } as unknown as LocalRuntimeClient;
+  await expect(dispatch(client, { op: 'task-support' })).resolves.toEqual({
+    ...binding,
+    supported: true,
+  });
+  for (const missing of capabilities) {
+    const old = {
+      identity: { ...binding, capabilities: capabilities.filter((c) => c !== missing) },
+    } as unknown as LocalRuntimeClient;
+    await expect(dispatch(old, { op: 'task-support' })).resolves.toEqual({
+      ...binding,
+      supported: false,
+    });
   }
 });

@@ -2,19 +2,14 @@ import {
   LOCAL_ROOM_TASKS,
   LOCAL_ROOM_TASK_LIST,
   LOCAL_ADDRESSED_HISTORY,
-  LOCAL_ROOM_TASK_METHODS,
 } from '@runnets/contracts';
 import type { LocalRuntimeClient } from '@runnets/tools-node/local-runtime-client';
 import { taskReplyMatches, type TaskCommand } from '../room-task-protocol.js';
 export async function dispatchRoomTask(client: LocalRuntimeClient, c: TaskCommand) {
   const { profileId, instanceId, capabilities } = client.identity;
-  const supported = [
-    LOCAL_ROOM_TASKS,
-    LOCAL_ROOM_TASK_LIST,
-    LOCAL_ADDRESSED_HISTORY,
-    ...LOCAL_ROOM_TASK_METHODS,
-    'roomTasks.list',
-  ].every((x) => capabilities.includes(x));
+  const supported = [LOCAL_ROOM_TASKS, LOCAL_ROOM_TASK_LIST, LOCAL_ADDRESSED_HISTORY].every((x) =>
+    capabilities.includes(x),
+  );
   if (c.op === 'task-support') return { profileId, instanceId, supported };
   if (!supported) throw Error('task_runtime_upgrade_required');
   if (c.binding.profileId !== profileId || c.binding.instanceId !== instanceId)
