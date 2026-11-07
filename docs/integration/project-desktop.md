@@ -146,6 +146,14 @@ runtime job. Restart never resumes an approved operation or retries unknown
 effects. Native test presets, installed acceptance and the project window are
 separate stages.
 
+The implementation at `e86394d` passed independent review and root
+check/build/format (4,227 source and 219 process tests). The first full check
+hit a timeout in an unchanged SQLite lifecycle test; the isolated test file
+and an unchanged full rerun passed. The disposable Git tests cover two peers,
+changed inputs, stale evidence and trees, and process kills before a claim
+and after file publication. A pre-claim read failure permits clean shutdown
+when the journal proves there is no outstanding effect.
+
 ## Planned
 
 The project window and its installed acceptance

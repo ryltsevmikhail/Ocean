@@ -83,17 +83,17 @@ Accepted after independent review at `c438756`: root check/build/format 0
       review-only provider path. Present review state and tests, including stale status.
       Accepted independently at `4ac81a6`; root check/build/format passed
       (4,227 source and 210 process tests).
-- [ ] Route apply to the existing apply service with exact base, changeset and
+- [x] Route apply to the existing apply service with exact base, changeset and
       review. Use the runtime's durable owner cards and existing operation
       receipts/journal for result reads. Show a decision result separately
       from the effect outcome. Carry no owner waiters across runtime restart;
-      preserve current interruption/unknown recovery. Add no generic operation
-      framework. Pin exact method DTOs and card types in the task brief after
-      22.1 establishes the negotiated read seam.
-- [ ] Regressions: scoped roles, exact one-time decisions across two clients,
+      preserve current interruption/unknown recovery. Accepted independently
+      at `e86394d`; root check/build/format passed (4,227 source and 219
+      process tests).
+- [x] SDK regressions: scoped roles, exact one-time decisions across two clients,
       identical request receipt and changed request refusal, stale review/apply,
-      durable committed recovery and unknown refusal, no bypass of sandbox or
-      write to source before allow. Root gates and independent review.
+      durable committed recovery and unknown refusal, and no source write before
+      allow. Native sandbox and installed behavior remain in 22.4.
 
 ## 22.3 — The project client
 
