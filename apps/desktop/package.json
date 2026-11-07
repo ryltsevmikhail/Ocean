@@ -11,7 +11,11 @@
   "dependencies": {
     "@runnets/tools-node": "workspace:*",
     "vue": "3.5.44",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@runnets/contracts": "workspace:*",
+    "@runnets/provider-openai": "workspace:*",
+    "@runnets/provider-anthropic": "workspace:*",
+    "@runnets/provider-deepseek": "workspace:*"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

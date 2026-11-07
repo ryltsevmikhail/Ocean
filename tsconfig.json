@@ -26,13 +26,22 @@
       "path": "packages/tools-node"
     },
     {
-      "path": "packages/integrations-executor"
+      "path": "packages/integrations-mcp"
     },
     {
       "path": "apps/cli"
     },
     {
       "path": "apps/desktop"
+    },
+    {
+      "path": "packages/provider-openai"
+    },
+    {
+      "path": "packages/provider-anthropic"
+    },
+    {
+      "path": "packages/provider-local"
     }
   ]
 }

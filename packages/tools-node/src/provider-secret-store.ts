@@ -154,6 +154,7 @@ function ensureDirectory(directory: string): void {
   if (inspectDirectory(directory) !== 'ok') throw Error('insecure_permissions');
 }
 function publish(directory: string, text: string): void {
+  if (Buffer.byteLength(text) > MAX_FILE_BYTES) throw Error('provider_write_failed');
   ensureDirectory(directory);
   const target = join(directory, PROVIDER_SECRET_FILE);
   const temp = join(directory, TEMP_PREFIX + randomBytes(12).toString('hex') + '.tmp');
@@ -180,6 +181,16 @@ function publish(directory: string, text: string): void {
     );
   }
 }
+/** Ordinary mutations may initialize absence, but never discard untrusted shared bytes. */
+function mutableSecrets(directory: string): Map<string, string> {
+  ensureDirectory(directory);
+  const file = inspectFile(join(directory, PROVIDER_SECRET_FILE));
+  if (file.kind === 'absent') return new Map<string, string>();
+  if (file.kind === 'insecure') throw Error('insecure_permissions');
+  const secrets = parseSecrets(file.text);
+  if (secrets === null) throw Error('provider_write_failed');
+  return secrets;
+}
 /**
  * Open the private store. Directory creation and publication happen only for an
  * explicit owner write; reads tolerate an absent store and never create files.
@@ -203,20 +214,14 @@ export function createProviderSecretStore(directory: string): ProviderSecretStor
     },
     write(ref: string, key: string): void {
       if (!validRef(ref) || !validKey(key)) throw Error('invalid_input');
-      ensureDirectory(directory);
-      const file = inspectFile(join(directory, PROVIDER_SECRET_FILE));
-      // An unreadable private file cannot be preserved; an explicit owner write replaces it.
-      const current = file.kind === 'ok' ? parseSecrets(file.text) : null;
-      const secrets = current ?? new Map<string, string>();
+      const secrets = mutableSecrets(directory);
       secrets.set(ref, key);
       publish(directory, serialize(secrets));
     },
     replace(previous: string | null, ref: string, key: string): void {
       if ((previous !== null && !validRef(previous)) || !validRef(ref) || !validKey(key))
         throw Error('invalid_input');
-      ensureDirectory(directory);
-      const file = inspectFile(join(directory, PROVIDER_SECRET_FILE));
-      const secrets = (file.kind === 'ok' ? parseSecrets(file.text) : null) ?? new Map();
+      const secrets = mutableSecrets(directory);
       // One publication carries both the removal and the new value: no second effect can fail.
       if (previous !== null) secrets.delete(previous);
       secrets.set(ref, key);
@@ -225,12 +230,7 @@ export function createProviderSecretStore(directory: string): ProviderSecretStor
     remove(ref: string): void {
       if (!validRef(ref)) throw Error('invalid_input');
       if (inspectDirectory(directory) === 'absent') return;
-      const file = inspectFile(join(directory, PROVIDER_SECRET_FILE));
-      if (file.kind === 'absent') return;
-      if (file.kind === 'insecure') throw Error('insecure_permissions');
-      const secrets = parseSecrets(file.text);
-      // Explicit removal of Ocean-managed values also clears an unreadable file.
-      const next = secrets ?? new Map<string, string>();
+      const next = mutableSecrets(directory);
       next.delete(ref);
       publish(directory, serialize(next));
     },

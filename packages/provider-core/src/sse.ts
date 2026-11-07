@@ -4,9 +4,8 @@
  * Reads an incremental text stream and yields complete events. Providers that
  * stream over SSE share this parser, so framing bugs are fixed once.
  *
- * Unlike a browser `EventSource`, a final event without a terminating blank
- * line is still dispatched: providers close the connection right after the
- * last frame, and dropping its usage or finish reason would corrupt a turn.
+ * Legacy callers may flush trailing data. Qualified adapters opt into bounded,
+ * terminated frames: an EOF fragment is never proof of completion.
  */
 
 export interface SseEvent {
@@ -40,22 +39,51 @@ function applyLine(line: string, state: SseState): SseEvent | null {
   return null;
 }
 
-export async function* parseSse(chunks: AsyncIterable<string>): AsyncIterable<SseEvent> {
+/** A framing failure, distinct from an iterator/transport failure. */
+export class SseError extends Error {}
+
+export interface SseOptions {
+  readonly requireTerminatedFrames?: boolean;
+  readonly maxFrameBytes?: number;
+}
+
+export async function* parseSse(
+  chunks: AsyncIterable<string>,
+  options: SseOptions = {},
+): AsyncIterable<SseEvent> {
   const state: SseState = { event: null, data: [] };
   let buffer = '';
+  let frameBytes = 0;
+  let highSurrogate = false;
+  const limit = options.maxFrameBytes ?? Infinity;
+  if (limit !== Infinity && (!Number.isSafeInteger(limit) || limit <= 0))
+    throw new Error('invalid SSE frame limit');
 
   for await (const chunk of chunks) {
-    buffer += chunk;
-    let newline = buffer.indexOf('\n');
-    while (newline >= 0) {
-      const line = buffer.slice(0, newline);
-      buffer = buffer.slice(newline + 1);
-      const event = applyLine(line, state);
+    // Scan before accumulation, including ignored fields/comments in the bound.
+    // A decoded transport chunk can contain arbitrarily many bounded frames.
+    for (const character of chunk) {
+      const code = character.charCodeAt(0);
+      const joinedSurrogate = highSurrogate && code >= 0xdc00 && code <= 0xdfff;
+      frameBytes += Buffer.byteLength(character, 'utf8') - (joinedSurrogate ? 2 : 0);
+      highSurrogate = character.length === 1 && code >= 0xd800 && code <= 0xdbff;
+      if (frameBytes > limit) throw new SseError('SSE frame exceeds limit');
+      if (character !== '\n') {
+        buffer += character;
+        continue;
+      }
+      const blank = buffer === '' || buffer === '\r';
+      const event = applyLine(buffer, state);
+      buffer = '';
+      if (blank) frameBytes = 0;
       if (event !== null) yield event;
-      newline = buffer.indexOf('\n');
     }
   }
 
+  if (options.requireTerminatedFrames === true) {
+    if (buffer !== '' || state.data.length > 0) throw new SseError('unterminated SSE frame');
+    return;
+  }
   if (buffer !== '') {
     const event = applyLine(buffer, state);
     if (event !== null) yield event;

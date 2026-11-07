@@ -1,4 +1,28 @@
-import { createEffectResolutions, unresolvedEffectSql } from './tool-effect-resolution.js';
+import { managedBusinessFingerprint } from './managed-journal-evidence.js';
+import { hasManagedMarkers } from '@runnets/domain';
+import {
+  serviceResourceFactsCurrent,
+  serviceResourceConflicts,
+  type ServiceResourceFacts,
+} from '@runnets/application';
+import {
+  MANAGED_LIFETIME_RUN,
+  MANAGED_LIFETIME_TOOL,
+  validManagedLifetime,
+  managedLifetimeFingerprint,
+} from '@runnets/domain';
+import { roomHostToolAllowed } from './room-host-command.js';
+import type { RoomHostBinding } from './room-host-storage.js';
+import { journalCodingApproval } from './coding-journal-receipt.js';
+import {
+  effectResourcesConflict,
+  validToolEffectAdmission,
+  type ToolEffectAdmission,
+} from '@runnets/domain';
+import { withImmediateTransaction } from './transaction.js';
+import { admissionColumn } from './tool-admission-schema.js';
+import { inspectPendingEffects } from './tool-journal-reads.js';
+import { createEffectResolutions } from './tool-effect-resolution.js';
 import type {
   ToolEffectContext,
   ToolEffectOutcome,
@@ -11,7 +35,9 @@ import { createHash } from 'node:crypto';
 /** Durable claims bind invocation identity to a run, attempt and immutable request. */
 export class SqliteToolJournal implements ToolJournalPort {
   readonly #db: DatabaseSync;
-  constructor(db: DatabaseSync) {
+  readonly #host: RoomHostBinding;
+  constructor(db: DatabaseSync, host: RoomHostBinding = () => null) {
+    this.#host = host;
     this.#db = db;
     db.exec(`CREATE TABLE IF NOT EXISTS tool_invocations_v1 (
       id TEXT PRIMARY KEY, tool TEXT NOT NULL,
@@ -22,6 +48,7 @@ export class SqliteToolJournal implements ToolJournalPort {
       attempt_id TEXT NOT NULL, fingerprint TEXT NOT NULL,
       outcome TEXT NOT NULL CHECK(outcome IN
         ('started', 'completed', 'failed', 'uncertain', 'not_started')),
+      ${admissionColumn},
       PRIMARY KEY(task_run_id, attempt_id, id)
     ) STRICT`);
     createEffectResolutions(db);
@@ -32,35 +59,115 @@ export class SqliteToolJournal implements ToolJournalPort {
     tool: string,
     context: ToolEffectContext,
     fingerprint: string,
+    admission?: ToolEffectAdmission,
   ): Promise<boolean> {
     await Promise.resolve();
-    return this.claimNow(id, tool, context, fingerprint);
+    return this.claimNow(id, tool, context, fingerprint, admission);
   }
   /** Synchronous admission for callers already inside the store transaction. */
-  claimNow(id: string, tool: string, context: ToolEffectContext, fingerprint: string): boolean {
-    if (context.taskRunId === '' || context.attemptId === '' || fingerprint === '')
-      throw new Error('tool claim requires run, attempt and request identity');
-    // Legacy claims lack scope and cannot safely be assigned or replayed.
-    if (this.#db.prepare('SELECT id FROM tool_invocations_v1 WHERE id = ?').get(id)) return false;
-    const result = this.#db
-      .prepare(
-        `INSERT INTO tool_invocations_v2
-      (id, tool, task_run_id, attempt_id, fingerprint, outcome)
-      SELECT ?, ?, ?, ?, ?, 'started'
-      WHERE NOT EXISTS (SELECT 1 FROM tool_invocations_v2 e
-        WHERE ${unresolvedEffectSql('e')})
-      AND NOT EXISTS (SELECT 1 FROM tool_invocations_v1
-        WHERE outcome IN ('started', 'uncertain'))
-      ON CONFLICT DO NOTHING`,
+  claimNow(
+    id: string,
+    tool: string,
+    context: ToolEffectContext,
+    fingerprint: string,
+    admission?: ToolEffectAdmission,
+    at?: number,
+    facts?: ServiceResourceFacts,
+  ): boolean {
+    if (!context.taskRunId || !context.attemptId || !fingerprint)
+      throw Error('tool claim requires run, attempt and request identity');
+    if (admission !== undefined && !validToolEffectAdmission(admission))
+      throw Error('invalid tool effect admission');
+    if (
+      (context.taskRunId.includes('\0') || tool.includes('\0')) &&
+      (!validManagedLifetime({ ...context, id, tool, ...(admission ? { admission } : {}) }) ||
+        context.taskRunId !== MANAGED_LIFETIME_RUN ||
+        tool !== MANAGED_LIFETIME_TOOL ||
+        fingerprint !==
+          managedLifetimeFingerprint({ ...context, id, tool, ...(admission ? { admission } : {}) }))
+    )
+      throw Error('invalid managed lifetime claim');
+    const insert = () => {
+      if (
+        this.#db
+          .prepare(
+            'SELECT 1 FROM tool_invocations_v2 WHERE task_run_id=? AND attempt_id=? AND id=?',
+          )
+          .get(context.taskRunId, context.attemptId, id)
       )
-      .run(
-        id,
-        tool,
-        context.taskRunId,
-        context.attemptId,
-        createHash('sha256').update(fingerprint).digest('hex'),
+        return false;
+      if (
+        admission &&
+        context.taskRunId !== MANAGED_LIFETIME_RUN &&
+        !serviceResourceFactsCurrent(this.inspectPending(), admission, facts)
+      )
+        return false;
+      if (!roomHostToolAllowed(this.#db, this.#host, context.taskRunId, at ?? NaN, admission))
+        return false;
+      if (
+        this.#db.prepare('SELECT id FROM tool_invocations_v1 WHERE id=?').get(id) ||
+        this.inspectPending().some((row) =>
+          admission ? serviceResourceConflicts(row, admission, facts) : true,
+        )
+      )
+        return false;
+      return (
+        this.#db
+          .prepare(
+            `INSERT INTO tool_invocations_v2(id,tool,task_run_id,attempt_id,fingerprint,outcome,admission)
+        VALUES(?,?,?,?,?,'started',?) ON CONFLICT DO NOTHING`,
+          )
+          .run(
+            id,
+            tool,
+            context.taskRunId,
+            context.attemptId,
+            admission && hasManagedMarkers(admission) && context.taskRunId !== MANAGED_LIFETIME_RUN
+              ? managedBusinessFingerprint({ ...context, id, tool }, admission, fingerprint)
+              : createHash('sha256').update(fingerprint).digest('hex'),
+            admission ? JSON.stringify(admission) : null,
+          ).changes === 1
       );
-    return result.changes === 1;
+    };
+    return this.#db.isTransaction ? insert() : withImmediateTransaction(this.#db, insert);
+  }
+  grantCalls(run: string, id: string): number {
+    const rows = this.#db
+      .prepare(
+        `SELECT id,tool,task_run_id,attempt_id,fingerprint,admission,
+      json_extract(admission,'$.grantReference.grantId') AS grant_id
+      FROM tool_invocations_v2 j WHERE
+      (task_run_id=? AND (json_extract(admission,'$.grantReference.grantId')=? OR tool IN ('coding_write','coding_test')))
+      OR EXISTS(SELECT 1 FROM json_each(j.admission,'$.binding.roomBasis') b
+        WHERE json_extract(b.value,'$.chargedRunId')=? AND json_extract(b.value,'$.grantId')=?)`,
+      )
+      .all(run, id, run, id);
+    return rows.filter((row) => {
+      const parsed: unknown = row['admission'] ? JSON.parse(String(row['admission'])) : null;
+      const binding =
+        parsed && typeof parsed === 'object' && 'binding' in parsed ? parsed.binding : null;
+      const basis =
+        binding && typeof binding === 'object' && 'roomBasis' in binding ? binding.roomBasis : null;
+      if (
+        Array.isArray(basis) &&
+        basis.some(
+          (b: { chargedRunId?: unknown; grantId?: unknown }) =>
+            b.chargedRunId === run && b.grantId === id,
+        )
+      )
+        return true;
+      const approval = journalCodingApproval(this.#db, row);
+      return (
+        row['task_run_id'] === run &&
+        (approval ? approval.grantReference?.grantId === id : row['grant_id'] === id)
+      );
+    }).length;
+  }
+  inspectConflicts(admission?: ToolEffectAdmission): readonly ToolEffectRecord[] {
+    return this.inspectPending().filter((r) => effectResourcesConflict(r.admission, admission));
+  }
+  conflicts(admission?: ToolEffectAdmission): Promise<readonly ToolEffectRecord[]> {
+    return Promise.resolve(this.inspectConflicts(admission));
   }
   /** Only a claimed invocation can acquire its first recorded outcome. */
   async settle(
@@ -137,43 +244,9 @@ export class SqliteToolJournal implements ToolJournalPort {
   }
   /** Same SQLite snapshot as the conversation acknowledgement transaction. */
   inspectPending(taskRunId?: string): readonly ToolEffectRecord[] {
-    const rows =
-      taskRunId === undefined
-        ? this.#db
-            .prepare(`SELECT e.* FROM tool_invocations_v2 e WHERE ${unresolvedEffectSql('e')}`)
-            .all()
-        : this.#db
-            .prepare(
-              `SELECT e.* FROM tool_invocations_v2 e WHERE e.task_run_id = ? AND ${unresolvedEffectSql('e')}`,
-            )
-            .all(taskRunId);
-    const records: ToolEffectRecord[] = rows.map((row) => ({
-      id: String(row['id']),
-      tool: String(row['tool']),
-      taskRunId: String(row['task_run_id']),
-      attemptId: String(row['attempt_id']),
-      fingerprint: String(row['fingerprint']),
-      outcome: row['outcome'] === 'started' ? 'started' : 'uncertain',
-    }));
-    if (taskRunId === undefined) {
-      const legacy = this.#db
-        .prepare(
-          `SELECT id, tool, outcome FROM tool_invocations_v1
-        WHERE outcome IN ('started', 'uncertain')`,
-        )
-        .all();
-      for (const row of legacy)
-        records.push({
-          id: String(row['id']),
-          tool: String(row['tool']),
-          taskRunId: '',
-          attemptId: '',
-          fingerprint: '',
-          outcome: row['outcome'] === 'started' ? 'started' : 'uncertain',
-        });
-    }
-    return records;
+    return inspectPendingEffects(this.#db, taskRunId);
   }
+
   /** A restart can only lower a started claim to uncertain; it never permits replay. */
   async recover(id: string, context: ToolEffectContext): Promise<void> {
     await Promise.resolve();

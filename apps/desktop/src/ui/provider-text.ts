@@ -61,13 +61,16 @@ export function providerKeyHint(
   key: string,
   savedKey: boolean,
   state?: ProviderStatus['state'],
+  code?: ProviderStatus['code'],
 ): string {
+  if (code === 'provider_secret_corrupt' || code === 'provider_secret_insecure')
+    return 'Приватное хранилище требует отдельного безопасного исправления. Повреждённые данные сохранены; повторный ввод ключа не исправляет хранилище.';
   if (key.trim() !== '')
     return savedKey
       ? 'Будет заменён сохранённый ключ Ocean.'
       : 'Ключ будет сохранён только локальным runtime.';
   if (state === 'unverified' && savedKey)
-    return 'Сохранённый ключ не удалось подтвердить. Введите ключ заново или удалите сохранённый ключ.';
+    return 'Сохранённый ключ не удалось подтвердить. Введите ключ заново явно, если действительная ссылка отсутствует.';
   if (savedKey) return 'Оставьте поле пустым, чтобы применить только выбранную модель.';
   return 'Введите ключ API, чтобы сохранить подключение.';
 }

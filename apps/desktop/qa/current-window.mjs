@@ -9,11 +9,26 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
+import { setTimeout as timer, clearTimeout } from 'node:timers';
 import { chromium } from 'playwright-core';
 import { windowEnv } from './owner.mjs';
 import { launchDesktopGroup } from './desktop-launcher.mjs';
-import { packageNative } from './package-native.mjs';
+import { packageNative, inspectPackage } from './package-native.mjs';
+import { saveProof } from './model-native-paths.mjs';
 import { closePage } from './window-close.mjs';
+export async function bounded(work, ms, description) {
+  let timeout;
+  try {
+    return await Promise.race([
+      work,
+      new Promise((_, reject) => {
+        timeout = timer(() => reject(Error(description + ' timed out')), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 export async function wait(condition, ms = 15000) {
   const until = Date.now() + ms;
   do {
@@ -23,11 +38,11 @@ export async function wait(condition, ms = 15000) {
   throw Error('qualification timeout');
 }
 export async function currentWindow(f, label, executable) {
-  const userData = join(f.root, 'desktop'),
+  const userData = f.desktopUserData ?? join(f.root, 'desktop'),
     portFile = join(userData, 'DevToolsActivePort');
   rmSync(portFile, { force: true });
   const env = {
-    ...windowEnv(f),
+    ...(f.windowEnv ?? windowEnv(f)),
     ...(executable
       ? {}
       : { NODE_OPTIONS: '--import=' + resolve('apps/desktop/qa/native-proof.mjs') }),
@@ -43,11 +58,33 @@ export async function currentWindow(f, label, executable) {
       '--ozone-platform=wayland',
     ],
     env,
+    { track: !!f.windowEnv },
   );
-  let log = '';
+  let log = '',
+    sinkError,
+    published = false,
+    retirement;
+  const dispose = () => (retirement ??= launcher.dispose());
+  function append(name, bytes) {
+    if (sinkError) return;
+    try {
+      (f.appendEvidence ?? appendFileSync)(join(f.root, name), bytes);
+    } catch (error) {
+      sinkError = error;
+      if (f.fail) f.fail(error);
+      else if (published)
+        void dispose().catch((cleanup) => {
+          error.cleanupError = cleanup;
+        });
+    }
+  }
+  function check() {
+    f.signal?.throwIfAborted();
+    if (sinkError) throw sinkError;
+  }
   const add = (b) => {
-    log += b;
-    appendFileSync(join(f.root, label + '.log'), b);
+    log = (log + b).slice(-65536);
+    append(label + '.log', b);
   };
   launcher.proc.stdout.on('data', add);
   launcher.proc.stderr.on('data', add);
@@ -75,8 +112,8 @@ export async function currentWindow(f, label, executable) {
         // be a live Desktop child and would fail an otherwise unrelated audit race.
         if (!pairs.length && cmd[0] === '') continue;
         if (!pairs.some(([key]) => key === 'HOME') && cmd[0]?.includes(' --type=')) {
-          appendFileSync(
-            join(f.root, 'children.jsonl'),
+          append(
+            'children.jsonl',
             JSON.stringify({ pid, cmd, env: {}, sandboxRewrittenProcEnvironment: pairs }) + '\n',
           );
           seen.add(pid);
@@ -84,8 +121,8 @@ export async function currentWindow(f, label, executable) {
         }
         const child = Object.fromEntries(pairs),
           selected = {};
-        appendFileSync(
-          join(f.root, 'children-observed.jsonl'),
+        append(
+          'children-observed.jsonl',
           JSON.stringify({
             pid,
             cmd: readFileSync('/proc/' + pid + '/cmdline', 'utf8').split('\0'),
@@ -107,8 +144,8 @@ export async function currentWindow(f, label, executable) {
         assert.ok([undefined, 'disabled:'].includes(child.DBUS_SESSION_BUS_ADDRESS));
         selected.DBUS_SESSION_BUS_ADDRESS = child.DBUS_SESSION_BUS_ADDRESS;
         assert.equal(child.DEEPSEEK_API_KEY, undefined);
-        appendFileSync(
-          join(f.root, 'children.jsonl'),
+        append(
+          'children.jsonl',
           JSON.stringify({
             pid,
             cmd: readFileSync('/proc/' + pid + '/cmdline', 'utf8').split('\0'),
@@ -122,22 +159,29 @@ export async function currentWindow(f, label, executable) {
     }
   }
   try {
+    if (f.windowEnv) {
+      saveProof(f.root, 'desktop-launch.json', launcher.launch);
+      if (launcher.launch.observation !== 'observed')
+        throw Error('Desktop launch identity ' + launcher.launch.observation);
+    }
     await wait(() => {
+      check();
       audit();
       if (launcher.proc.exitCode !== null || launcher.proc.signalCode !== null)
         throw Error('Desktop exited ' + log.slice(-4000));
       return existsSync(portFile);
     }, 60000);
     const [port] = readFileSync(portFile, 'utf8').split('\n');
-    const browser = await chromium.connectOverCDP('http://127.0.0.1:' + Number(port));
+    const browser = await chromium.connectOverCDP('http://127.0.0.1:' + Number(port), {
+      timeout: 15000,
+    });
     const page =
-      browser.contexts()[0].pages()[0] ?? (await browser.contexts()[0].waitForEvent('page'));
+      browser.contexts()[0].pages()[0] ??
+      (await browser.contexts()[0].waitForEvent('page', { timeout: 15000 }));
     page.setDefaultTimeout(15000);
-    page.on('pageerror', (error) =>
-      appendFileSync(join(f.root, 'page-errors.log'), String(error) + '\n'),
-    );
+    page.on('pageerror', (error) => append('page-errors.log', String(error) + '\n'));
     page.on('console', (msg) =>
-      appendFileSync(join(f.root, 'renderer-console.log'), msg.type() + ':' + msg.text() + '\n'),
+      append('renderer-console.log', msg.type() + ':' + msg.text() + '\n'),
     );
     audit();
     if (executable) await packageNative(f, () => log);
@@ -154,20 +198,53 @@ export async function currentWindow(f, label, executable) {
     assert.equal(preferences.sandbox, true);
     assert.equal(preferences.contextIsolation, true);
     assert.equal(preferences.nodeIntegration, false);
-    assert.equal(await page.evaluate(() => typeof globalThis.require), 'undefined');
+    assert.equal(
+      await bounded(
+        page.evaluate(() => typeof globalThis.require),
+        15000,
+        'renderer identity',
+      ),
+      'undefined',
+    );
+    check();
+    published = true;
     return {
       page,
+      pid: launcher.proc.pid,
+      records: launcher.records,
+      inspectMain: (expression) =>
+        inspectPackage(() => log, expression, undefined, {
+          signal: f.signal,
+          step: f.inspectorStep,
+        }),
       userData,
       async close() {
+        check();
         audit();
         await closePage(page);
         assert.equal(await launcher.waitForClose(), 0);
       },
-      dispose: () => launcher.dispose(),
+      async dispose() {
+        await dispose();
+        if (!f.fail && sinkError) throw sinkError;
+      },
     };
-  } catch (error) {
-    writeFileSync(join(f.root, label + '-failure.log'), String(error));
-    await launcher.dispose();
+  } catch (observed) {
+    const error = sinkError ?? f.signal?.reason ?? observed;
+    try {
+      await dispose();
+    } catch (cleanup) {
+      error.cleanupError = cleanup;
+    }
+    try {
+      writeFileSync(
+        join(f.root, label + '-failure.log'),
+        String(error) + (error.cleanupError ? '\ncleanup: ' + error.cleanupError : ''),
+      );
+    } catch (diagnostic) {
+      error.diagnosticError = diagnostic;
+    }
+    if (f.windowEnv) error.desktopRecords = launcher.records();
     throw error;
   }
 }

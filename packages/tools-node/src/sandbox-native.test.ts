@@ -232,13 +232,29 @@ describe.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE
         expect(timed.reason).toBe('timeout');
         expect(timed.cleanupConfirmed).toBe(true);
         const controller = new AbortController();
-        setTimeout(() => controller.abort(), 1000);
-        const cancelled = await runSandbox({
+        const active = join(root, 'active');
+        const pending = runSandbox({
           root,
           program: '/toolchain/node',
-          args: ['-e', 'setInterval(()=>{},100)'],
+          args: [
+            '-e',
+            "require('node:fs').writeFileSync('/workspace/active','ready');setInterval(()=>{},100)",
+          ],
           signal: controller.signal,
         });
+        // A visible service can still be verifying inputs before cgroup admission.
+        // Only an inside-worker marker proves this is cancellation of active code.
+        const deadline = Date.now() + 10_000;
+        let workerReady = false;
+        try {
+          while (!(await readFile(active, 'utf8').catch(() => null)) && Date.now() < deadline)
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          workerReady = (await readFile(active, 'utf8').catch(() => null)) === 'ready';
+        } finally {
+          controller.abort();
+        }
+        const cancelled = await pending;
+        expect(workerReady).toBe(true);
         expect(cancelled.reason).toBe('cancelled');
         expect(cancelled.cleanupConfirmed).toBe(true);
       } finally {

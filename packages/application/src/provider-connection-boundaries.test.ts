@@ -88,7 +88,7 @@ describe('provider connection boundaries', () => {
     f.secrets.writeFailure = null;
     const resumed = f.service.set(set);
     expect(resumed).toMatchObject({ source: 'saved', state: 'connected', revision: 1 });
-    expect((f.service.current() as { key: string }).key).toBe(set.key);
+    expect((f.service.current() as unknown as { key: string }).key).toBe(set.key);
     expect(f.secrets.writes).toHaveLength(1);
   });
 

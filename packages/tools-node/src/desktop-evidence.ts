@@ -3,6 +3,7 @@ import {
   checkDesktopAliasReceipt,
 } from './desktop-preparation-alias.js';
 import { createHash } from 'node:crypto';
+import { validDesktopBindingShape } from './desktop-identity.js';
 import {
   decodeDesktopAttachments,
   desktopRoom,
@@ -50,22 +51,7 @@ export function checkDesktopEvidence(
     )
       bad();
   }
-  const binding = inventory.binding!;
-  if (
-    typeof binding.profileId !== 'string' ||
-    !/^[a-f0-9]{64}$/.test(binding.profileId) ||
-    typeof binding.identity !== 'string' ||
-    !/^\d+(?::\d+){5}$/.test(binding.identity) ||
-    [binding.root, binding.originalRoot].some(
-      (p) =>
-        typeof p !== 'string' ||
-        p.length > 4096 ||
-        !p.startsWith('/') ||
-        p.includes('\0') ||
-        p.split('/').some((part) => part === '.' || part === '..'),
-    )
-  )
-    bad();
+  if (!validDesktopBindingShape(inventory.binding)) bad();
   if (!Array.isArray(inventory.uploads) || inventory.uploads.length > 10000) bad();
   for (const upload of inventory.uploads) {
     if (

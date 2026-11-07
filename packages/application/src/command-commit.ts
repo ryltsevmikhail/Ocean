@@ -10,6 +10,11 @@ import type { AppendMeta, CommandReceipt } from './ports.js';
 /** Read-only binding comparison accepts the original external ID before domain ID validation. */
 export type CommandLookup = Omit<AnyCommand, 'taskRunId'> & { readonly taskRunId: string };
 
+export interface CommandCommitResult {
+  readonly receipt: CommandReceipt;
+  readonly disposition: 'committed' | 'replayed';
+}
+
 /** Atomic command writes bind identity to the complete submitted request. */
 export interface CommandCommitPort {
   lookup(command: CommandLookup): Promise<Result<CommandReceipt | null>>;
@@ -19,6 +24,13 @@ export interface CommandCommitPort {
     drafts: readonly TaskRunEventDraft[],
     meta: AppendMeta,
   ): Promise<Result<CommandReceipt>>;
+  /** Freshness is decided inside the same atomic append-and-receipt boundary. */
+  commitWithDisposition?(
+    command: AnyCommand,
+    version: number,
+    drafts: readonly TaskRunEventDraft[],
+    meta: AppendMeta,
+  ): Promise<Result<CommandCommitResult>>;
 }
 
 /** Canonical request identity is independent of object key insertion order. */

@@ -1,0 +1,144 @@
+# Ocean Platform stable release ledger
+
+The [canonical platform plan](../superpowers/plans/2026-11-04-ocean-platform.md#task-21-f-приёмка-и-выпуск-приоритета-1)
+owns the order and acceptance of F. This intake uses the published E acceptance
+revision `b9f234d`. Stable release remains pending for Linux x86_64/Omarchy.
+
+## Accepted A–E evidence
+
+All evidence in this section is prior and applies to the revisions, environments
+and entry points documented for each stage.
+
+| Stage                                              | Accepted scope and evidence boundary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [A — Runtime and engine](platform-stage-a.md)      | One profile owner and one model → tool → model loop using provider APIs. The process fixtures excluded Codex/Claude CLI and covered durable admission, exact receipt replay and no redispatch of an uncertain effect. Independent processes covered detach, restart and restricted legacy wire compatibility. The old root run had known failures and did not exercise the installed GUI.                                                                                                                                                       |
+| [B — Model connections](platform-stage-b.md)       | Per-bot cloud/local bindings and durable activation, room transfer policy, negotiation, migration and Desktop settings. The runtime refuses unavailable local models without cloud fallback. OpenAI and Anthropic have fixture evidence and user-deferred live checks. Prior `28909ea` had a real CPU-only Ollama offline chat and scoped tool run plus mixed DeepSeek/local routing. That evidence predates D's autonomous cloud → local → cloud chain.                                                                                        |
+| [C — MCP and owner authority](platform-stage-c.md) | Production public MCP SDK, exact owner decisions, scoped trusted grants and coding consumers, migration without expanding legacy grants, and installed replacement of Executor. C18.6 ported the protected catalog regressions before retiring the old SDK and fixtures. Prior installed/live evidence includes one scoped GitHub read.                                                                                                                                                                                                         |
+| [D — Room tasks](platform-stage-d.md)              | Durable addressed messages, delegated execution through the shared engine, result delivery and recovery. D19.3 `62bd51e` covered the shared eight-slot bound with seven HTTP and one managed stdio session. Eight simultaneous stdio sessions remain unqualified and the early EOF cause is unresolved. Phased overlapping appends leave simultaneous preparation/admission and representative contention latency open. Adapter namespace and injected fault evidence has narrower scope than ordinary-host lifecycle or actual kernel failure. |
+| [E — Bot Desktop](platform-stage-e.md)             | Negotiated task discovery, paired windows and an independent SDK peer, exact one-vote/one-effect handling, old-peer chat, actual form geometry, and original exports after same-namespace restart. E20.3 product `c6f7cf8` and QA `b6e5f5a` qualify E. The earlier root gates and Desktop bundle on `c40b1e6` exited 0 (4,193 source and 174 process tests passed, 44 and 58 configured skips respectively). The installed checks used fixtures and retained the volatile socket namespace for the successful restart.                          |
+
+## Task 21 release evidence
+
+| Canonical gate                                                                         | Status and evidence still needed                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Requirements, ledger and strict test typing                                            | Intake recorded. Both current strict test graphs compiled and their file lists covered all 1,712 tracked TypeScript files, including 800 `*.test.ts`, 110 fixture/setup files and six TS configs, counted as disjoint categories. The existing Desktop production typecheck separately covered all 34 Vue components. The Node graph also reads built declarations for process fixtures. Existing TypeScript roots and compiler settings require no change.               |
+| Frozen root checks, native and source-preset shards                                    | Accepted for the bounded target in independent review. On `77295d7`, root check/build/format passed (4,185 source and 182 process tests; 44/58 configured skips). The complete 656-file cold union passed all 4,185 enabled cases using fresh corrected shards and explicitly byte-equivalent prior results from `50fb569`. The unchanged native selection passed 54 Btrfs source and 58 process tests on the earlier revision.                                           |
+| Independent runtime/authority/migration and whole-branch review                        | Accepted with bounded fixes. The review covered the complete `v1.0.0..11729d9` range by inventory and high-risk source paths. The fix wave closed runtime construction cleanup and the two named native test boundaries; `8bc6ff8` also prevents recovery after failed construction and makes the ordinary HTTP tests portable. Root check/build/format pass (4,188 source, 184 process; 44/58 skips). Remaining narrow limits and release qualification stay open below. |
+| Disposable install, migration, backup/restore, reboot/device identity, update/rollback | Accepted for the observed disposable Linux boundary at `7dbbf90` (rc.21). Real RC2 migrated 18→29; old execution refused, and a compatible backup restored to a separate schema18 profile on rollback. Installed CLI/TUI/ACP, authenticated Python socket, complete format-2 assets, lineage and exact owner rebind were exercised. Btrfs and endpoint limits are below.                                                                                                  |
+| Live cloud and MCP                                                                     | Installed rc.21: DeepSeek completed once and preserved the same receipt across runtime restart. GitHub MCP read issue #5 once after exact owner approval using the read-only Issues endpoint. The default GitHub catalog failed before business dispatch. OpenAI and Anthropic live are deferred. See the qualification scope below.                                                                                                                                      |
+| Real local and mixed autonomy                                                          | Native offline chat and one tool effect on Ollama 0.40.14; installed rc.22 completed DeepSeek → Ollama → DeepSeek, restarted, and returned the same receipt and result without redispatch. See the qualified scope below.                                                                                                                                                                                                                                                 |
+| Linux artifact, installed GUI and publication                                          | Pending. Bind the final Linux artifact, SHA-256, inventory, licenses and installed GUI evidence to the exact revision and verify the published bytes. E and RC2 evidence retains its original scope.                                                                                                                                                                                                                                                                      |
+
+Cold typecheck, lint and build passed at the existing 2 GiB/256-task/60 s/32 KiB
+preset limits; lint reached 2 GiB with no demonstrated memory margin. The retained
+tmpfs native run failed and does not qualify that substrate. A fresh instrumented
+run held eight real stdio sessions and refused the ninth, while the separate earlier
+eighth enrollment failed after startup with an uncertain outcome and unproved cause.
+Two 1 MiB workspaces overlapped final native preparation after staged initial claims;
+each dispatched one effect, both observed about 252 ms after release. The separate
+parallel initial-start attempt did not reach both barriers. This qualifies the staged
+workload only. Independent release review still owns these limitations.
+
+The installed Btrfs checks verified eligible legacy migration, exact preservation of
+historical ready lineage, mount namespace changes and copied-root refusal. A clean
+stop with a fresh runtime directory and a crash with the same namespace both allowed
+restart. After a crash and loss of volatile endpoint proof, in-place startup refused.
+Restoring a verified pre-failure backup into a separate quarantine and confirming an
+exact TTY rebind recovered the selected snapshot without replaying old effects. The
+original remained intact. Physical reboot and device reassignment were not performed;
+there is no automatic in-place repair or recovery of writes after the snapshot.
+See [the operator recovery procedure](operations.md#потеря-временного-доказательства-сокета).
+
+### Installed live qualification
+
+The installed `7dbbf90` candidate used a disposable profile and an explicit
+`deepseek-flash` connection. One metadata request and one inference request
+completed. The inference-start record was committed before dispatch. Submitting
+the same request before and after reopening the runtime and SQLite returned the
+same receipt and saved reply without another inference. The restart was within
+the test process; this check did not simulate a process crash.
+
+Through the same installed runtime and ordinary MCP transport, the
+[GitHub Issues read-only endpoint](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md)
+returned `ryltsevmikhail/Ocean#5` as closed after one exact owner approval.
+The default endpoint failed catalog discovery before any business call and
+remains unqualified. Across both configurations: eight metadata HTTP operations
+and one `tools/call`; no writes or unrelated repository requests. Separate
+loopback controls showed that changed operations could not reuse the approval
+and owner denials dispatched nothing. Ocean's generic HTTP connection does not
+enforce a GitHub repository allowlist. The scoped token was an input to the
+test; its account and permissions were not independently audited.
+
+The DeepSeek key and GitHub token stayed in memory via the existing credential
+ports; scans found no copies in the retained test files. The GitHub run used a
+synthetic model to request the exact read. OpenAI and Anthropic live were
+deferred by the owner. This result does not qualify those adapters against live
+services.
+
+### Native local model and mixed workflow
+
+The rc.21 offline probe used Ollama 0.40.14 and the pinned `qwen3:1.7b`
+artifact (2.0B GGUF, Q4_K_M). Five inference requests completed, including
+ordinary chat and one durably claimed tool effect with model continuation.
+The isolated network had only loopback; IPv4 and IPv6 egress probes failed.
+Actual allocation was context 4096 on CPU with zero VRAM. Charged memory
+peaked at 2,803,888,128 bytes without swap or OOM. First text / terminal
+latency was 2,981 / 3,400 ms cold and 788 / 1,373 ms warm. Cold means the
+backend had no loaded model, with the OS page cache retained.
+
+The offline supervisor's aggregate check remained nonzero because sampling
+missed the short-lived socket binder. All observed roles were in the private
+namespace and cleanup was confirmed. The offline evidence remains attributed
+to rc.21. The rc.22 payload comparison found the provider and engine bytes
+unchanged; the live test below exercises the changed room task code.
+
+On installed rc.22 (`3140f14`), DeepSeek delegated to Ollama, whose participant
+had `peerTools: false` and no other tool grants. Ollama returned an ordinary
+reply. The runtime delivered one result to DeepSeek, which resumed and
+completed the root. Physical inference calls: two DeepSeek and one Ollama;
+metadata requests: one and six respectively. With the same SQLite profile,
+the runtime closed and reopened in the test process. A separate SDK process
+reattached and read the same receipt, root and history with no redispatch.
+Changing the participant option under the same request ID conflicted.
+
+The two earlier mixed roots had incomplete outcomes. Their unknown model
+settlements were retained, and neither root was resumed. The successful case qualifies the explicitly restricted
+participant on this backend and model. It does not establish reliable peer tool
+selection for this small model when all tools are exposed.
+
+### Room task SDK option for mixed teams
+
+`roomTaskStart` accepts the optional literal `peerTools: false` on an individual
+`participants` entry. The runtime saves the option in the room task root and
+binds it to the start receipt. Changing it under the same request ID conflicts.
+The selected bot does not receive `room_state`, `room_send` or `room_delegate`,
+including when an unstarted claim is recovered. It can still answer delegated
+input, and the runtime delivers its completed reply to the delegating bot.
+Omission preserves the existing behavior. Other tool grants and coding authority
+keep their own checks. This option is available through the SDK; there is no GUI control.
+
+Earlier SDKs and runtimes reject requests with the new field. The current runtime
+reads existing roots with the field absent. An earlier runtime also rejects a
+saved root containing the new field, so rollback uses a compatible backup. Do
+not remove the field from a saved root to make it readable by an older runtime.
+The installed mixed workflow above exercised this option with real models.
+
+## Inherited v1.1 obligations
+
+The [v1.1 coding contract](v1.1.md) and its [Tasks 1–7](../superpowers/plans/2026-11-02-ocean-1.1.md)
+continue to apply. F uses the current runtime and carries their release obligations
+into the gates above.
+
+| v1.1 stage                   | Obligation retained in F                                                                                                                                                                                                                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 — Authority and leases     | Recheck task scope and project mutation leases across entry points, with legacy and restored authority kept inert until the required owner action.                                                                                                                                                              |
+| 2 — Worktrees and changesets | Recheck isolated worktrees, dirty/stale source refusal and complete immutable changesets, including new files and mode changes.                                                                                                                                                                                 |
+| 3 — Qualified worker         | Requalify filesystem, network and process boundaries, dependency visibility, preset bounds and whole-unit cleanup separately from simulated tests.                                                                                                                                                              |
+| 4 — Exact approvals          | Verify owner decisions bind the exact operation, scope, expiry and current authority before any effect. Migration preserves existing limits and stale or mismatched decisions refuse.                                                                                                                           |
+| 5 — Chat tools               | Preserve the shared runtime paths for direct/group coding tasks, explicit task grants, claim-before-effect ordering, no replay of uncertain effects and compatible CLI/TUI/ACP.                                                                                                                                 |
+| 6 — Review and apply         | Preserve exact changeset/test evidence, advisory read-only review, stale review refusal and explicit owner application against the unchanged base.                                                                                                                                                              |
+| 7 — Recovery and release     | Verify interrupted operations stay held, asset-complete format-2 backup and inert restore/rebind, legacy text compatibility, and the installed dev → test → seeded review finding → repair → fresh review → owner apply workflow with current evidence. The prior live RC run is evidence for its own artifact. |
+
+G is the priority-2 project GUI after F, reusing the existing project, worktree,
+changeset, review and apply services. H is the later project and bot TUI work.
+F retains compatibility for the existing commands and ACP.

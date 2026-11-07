@@ -1,3 +1,10 @@
+import type { RoomHostBinding } from './room-host-storage.js';
+import { roomTaskStorage } from './room-task-storage.js';
+import { taskRunId } from '@runnets/domain';
+import { committedTaskVersion } from './event-log.js';
+import { inspectPendingEffects } from './tool-journal-reads.js';
+import { roomModelPolicyStorage } from './room-model-policy-storage.js';
+import { validRoomModelPolicy } from '@runnets/domain';
 import { legacyReviewKey } from './owner-decisions.js';
 import type {
   ConversationReceipt,
@@ -13,28 +20,48 @@ import { withImmediateTransaction } from './transaction.js';
 import { botRow, messageRow, roomRow, workspaceRow } from './conversation-rows.js';
 import { readText } from './rows.js';
 import { SCHEMA_VERSION } from './schema.js';
+import { insertLegacyModelBinding, modelBindingStorage } from './model-binding-storage.js';
 
 /** SQLite writes and request receipts commit under one immediate write lock. */
 export class SqliteConversationStore implements ConversationStore {
   readonly #db: DatabaseSync;
   readonly #legacyKey: (id: string) => ConversationReceipt | null;
-  constructor(db: DatabaseSync) {
+  readonly #legacySchema: boolean;
+  readonly #host: RoomHostBinding;
+  constructor(
+    db: DatabaseSync,
+    options: { readonly legacySchema?: true; readonly roomHost?: RoomHostBinding } = {},
+  ) {
     this.#db = db;
+    this.#host = options.roomHost ?? (() => null);
     this.#legacyKey = legacyReviewKey(db);
+    this.#legacySchema = options.legacySchema === true;
   }
   /** Pre-migration fixtures stay readable; the broadcast surface is current-schema only. */
   #broadcastSurface() {
     const row = this.#db.prepare("SELECT value FROM meta WHERE key='schema_version'").get();
     const version = Number(row?.['value']);
-    return Number.isSafeInteger(version) && version < SCHEMA_VERSION
-      ? null
-      : broadcastStorage(this.#db);
+    return Number.isSafeInteger(version) && version < 16 ? null : broadcastStorage(this.#db);
   }
 
   /** Roll back profile, room, history and sequence allocation if any receipt write fails. */
   atomic<T>(work: (transaction: ConversationTransaction) => T): T {
     const db = this.#db,
       legacyKey = this.#legacyKey;
+    const version = Number(
+      db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
+    );
+    const current = version === SCHEMA_VERSION;
+    if (
+      !current &&
+      !(
+        this.#legacySchema &&
+        Number.isSafeInteger(version) &&
+        version >= 1 &&
+        version < SCHEMA_VERSION
+      )
+    )
+      throw Error('unsupported_schema');
     const decodeRoom = (row: Record<string, unknown>) =>
       roomRow(
         row,
@@ -47,7 +74,40 @@ export class SqliteConversationStore implements ConversationStore {
     return withImmediateTransaction(db, () =>
       work({
         ...chatStorage(db),
+        ...(current ? { roomTasks: roomTaskStorage(db, this.#host) } : {}),
+        ...(current
+          ? {
+              chatFailureEvidence: (id: string) => {
+                if (!db.isTransaction) return null;
+                return {
+                  taskVersion: committedTaskVersion(db, taskRunId(id)),
+                  relatedPendingEffects: inspectPendingEffects(db).filter(
+                    (e) => e.taskRunId === id || e.taskRunId === '',
+                  ).length,
+                };
+              },
+            }
+          : {}),
         ...reviewStorage(db),
+        ...(current
+          ? roomModelPolicyStorage(db)
+          : {
+              roomModelPolicy: () => null,
+              putRoomModelPolicy: () => {
+                throw Error('unsupported_schema');
+              },
+            }),
+        ...(current
+          ? modelBindingStorage(db)
+          : {
+              modelBinding: () => null,
+              replaceBot: () => {
+                throw Error('unsupported_schema');
+              },
+              putModelBinding: () => {
+                throw Error('unsupported_schema');
+              },
+            }),
         ...(() => {
           const broadcasts = this.#broadcastSurface();
           if (broadcasts === null)
@@ -99,6 +159,7 @@ export class SqliteConversationStore implements ConversationStore {
             b.model,
             b.profileVersion,
           );
+          if (current) insertLegacyModelBinding(db, b);
         },
         room(id) {
           const row = db.prepare('SELECT * FROM ocean_rooms WHERE id=?').get(id);
@@ -122,6 +183,12 @@ export class SqliteConversationStore implements ConversationStore {
           );
           for (const id of r.kind === 'direct' ? [r.botId] : r.botIds)
             db.prepare('INSERT INTO ocean_members VALUES(?,?,?)').run(r.workspaceId, r.id, id);
+          if (current)
+            roomModelPolicyStorage(db).putRoomModelPolicy({
+              roomId: r.id,
+              cloudTransfer: 'allow',
+              revision: 1,
+            });
         },
         history: (roomId, after, limit) =>
           db
@@ -159,10 +226,23 @@ export class SqliteConversationStore implements ConversationStore {
             reply === null ||
             typeof reply !== 'object' ||
             !('kind' in reply) ||
-            !['workspace', 'bot', 'room', 'message', 'turn', 'review', 'review_request'].includes(
-              String(reply.kind),
-            ) ||
-            !('data' in reply)
+            typeof reply.kind !== 'string' ||
+            ![
+              'room_task_state',
+              'room_task_fence',
+              'room_task_stop',
+              'workspace',
+              'bot',
+              'bound_bot',
+              'room_model_policy',
+              'room',
+              'message',
+              'turn',
+              'review',
+              'review_request',
+            ].includes(reply.kind) ||
+            !('data' in reply) ||
+            (reply.kind === 'room_model_policy' && !validRoomModelPolicy(reply.data))
           )
             throw new Error('Invalid conversation receipt');
           return { binding: readText(row, 'binding'), reply } as ConversationReceipt;

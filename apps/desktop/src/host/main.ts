@@ -90,7 +90,7 @@ async function open() {
       try {
         profileAssets(userData, profile, client.identity.profileId);
         const attachmentClient = new DesktopAttachmentClient(client);
-        await attachmentClient.enroll(userData);
+        await attachmentClient.connect(userData);
         const media = new AttachmentHost(attachmentClient, win, rooms);
         if (asset.success) return { version: 1, ok: true, data: await media.handle(asset.data) };
         if (!parsed.success) return failure('invalid_request');

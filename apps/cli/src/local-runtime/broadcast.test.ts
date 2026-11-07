@@ -1,3 +1,4 @@
+import type { ProviderPort } from '@runnets/application';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { afterEach, expect, it } from 'vitest';
 import {
@@ -247,7 +248,7 @@ it('refuses only the child whose model the active provider cannot serve', async 
   const vendor = await vendorFixture();
   const profile = await broadcastProfile(['deepseek-flash', 'deepseek-v4-pro']);
   let calls = 0;
-  const provider = {
+  const provider: ProviderPort = {
     id: 'deepseek',
     models: ['deepseek-flash'],
     capabilities: { streaming: true, reasoning: false, usage: true },

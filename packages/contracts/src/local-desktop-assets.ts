@@ -15,6 +15,7 @@ export interface LocalDesktopPreparation {
   readonly prepared: string;
 }
 export type LocalDesktopCommand =
+  | { readonly op: 'attach' }
   | { readonly op: 'enroll'; readonly userData: string }
   | {
       readonly op: 'begin';
@@ -42,7 +43,7 @@ export type LocalDesktopCommand =
       readonly messageId?: string;
     };
 export type LocalDesktopReply =
-  | { readonly op: 'enroll' | 'begin'; readonly ok: true }
+  | { readonly op: 'attach' | 'enroll' | 'begin'; readonly ok: true }
   | { readonly op: 'chunk'; readonly offset: number }
   | { readonly op: 'commit'; readonly info: LocalDesktopAttachment }
   | {
@@ -89,6 +90,8 @@ export function isDesktopCommand(v: unknown): v is LocalDesktopCommand {
   if (!record(v)) return false;
   const exact = (keys: string) => Object.keys(v).sort().join() === keys.split(',').sort().join();
   switch (v['op']) {
+    case 'attach':
+      return exact('op');
     case 'enroll':
       return (
         exact('op,userData') && text(v['userData'], 4096) && String(v['userData']).startsWith('/')
@@ -138,6 +141,8 @@ export function isDesktopCommand(v: unknown): v is LocalDesktopCommand {
 export function isDesktopReply(v: unknown): v is LocalDesktopReply {
   if (!record(v)) return false;
   switch (v['op']) {
+    case 'attach':
+      return Object.keys(v).sort().join() === 'ok,op' && v['ok'] === true;
     case 'enroll':
     case 'begin':
       return v['ok'] === true;

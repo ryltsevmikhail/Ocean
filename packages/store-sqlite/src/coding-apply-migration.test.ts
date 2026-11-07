@@ -1,3 +1,4 @@
+import { omitModelConnectionSchema } from '../test-fixtures/model-schema.js';
 import { DatabaseSync } from 'node:sqlite';
 import { expect, it } from 'vitest';
 import { SCHEMA_VERSION, initializeSchema } from './schema.js';
@@ -6,6 +7,7 @@ it('migrates schema 9 application receipts atomically and refuses a missing curr
   const db = new DatabaseSync(':memory:');
   try {
     initializeSchema(db);
+    omitModelConnectionSchema(db);
     db.exec(
       "DROP TABLE ocean_desktop_operations; DROP TABLE ocean_desktop_uploads; DROP TABLE ocean_desktop_adopted; DROP TABLE ocean_owner_decisions; DROP TABLE ocean_coding_applications; DROP TABLE ocean_profile_rebinds; DROP TABLE ocean_rebind_observations; DROP TABLE ocean_execution_epoch; DROP TABLE ocean_restore_origins; DROP TABLE ocean_restore_origin; DROP TABLE ocean_retired_epochs; UPDATE meta SET value='9' WHERE key='schema_version'",
     );

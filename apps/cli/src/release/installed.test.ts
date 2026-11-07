@@ -1,3 +1,4 @@
+import { omitRoomTaskSchema } from '../../../../packages/store-sqlite/test-fixtures/room-task-v26.js';
 /**
  * Installed-tree rehearsals on disposable prefixes.
  *
@@ -8,6 +9,7 @@
  * rollback with profile bytes untouched, and that the installed tree loads and
  * qualifies the bundled adapter without enabling real plugin execution.
  */
+import { SCHEMA_VERSION } from '@runnets/store-sqlite';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -65,7 +67,7 @@ it('installs into a private disposable prefix and passes the installed offline s
   };
   expect(manifest.version).toBe('1.1.0-rc.2');
   expect(manifest.revision).toMatch(/^[a-f0-9]{40}$/);
-  expect(manifest.bundle.identities['@executor-js/sdk']).toBe('1.6.11');
+  expect(manifest.bundle.identities['@modelcontextprotocol/client']).toBe('2.4.0');
   expect(cli(target, ['--version']).stdout.trim()).toBe('ocean 1.1.0-rc.2');
   const doctor = call(target, ['doctor']);
   expect(doctor.code).toBe(0);
@@ -97,7 +99,12 @@ it('migrates a schema-14 RC1-shaped profile and restores an RC1-era format-2 bac
     `INSERT INTO ocean_messages (id, workspace_id, room_id, seq, author, target_bot_id, body, created_at, author_bot_id, turn_id)
      VALUES ('rc1-message','ws_ocean',?,1,'user',?,'RC1-era message','2026-11-01T00:00:00.000Z',NULL,NULL)`,
   ).run(roomId, botId);
-  db.exec(`DROP TABLE IF EXISTS ocean_provider_receipts;
+  omitRoomTaskSchema(db);
+  db.exec(`DROP TABLE IF EXISTS ocean_room_model_policies;
+    DROP TABLE IF EXISTS ocean_bot_model_bindings;
+    DROP TABLE IF EXISTS ocean_model_connection_receipts;
+    DROP TABLE IF EXISTS ocean_model_connections;
+    DROP TABLE IF EXISTS ocean_provider_receipts;
     DROP TABLE IF EXISTS ocean_provider_connections;
     UPDATE meta SET value='14' WHERE key='schema_version';`);
   db.close();
@@ -118,7 +125,7 @@ it('migrates a schema-14 RC1-shaped profile and restores an RC1-era format-2 bac
   try {
     expect(
       restoredDb.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('18');
+    ).toBe(String(SCHEMA_VERSION));
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_rooms').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_bots').get()?.['n']).toBe(1);
     expect(restoredDb.prepare('SELECT count(*) AS n FROM ocean_messages').get()?.['n']).toBe(1);
@@ -154,7 +161,7 @@ it('upgrades and rolls back between disposable versions without touching profile
   const before = sha256(readFileSync(database));
   const installed = join(target.prefix, 'lib/ocean/releases/1.1.0-rc.2');
   expect(
-    readdirSync(join(installed, 'node_modules/@runnets/integrations-executor/dist')).some(
+    readdirSync(join(installed, 'node_modules/@runnets/integrations-mcp/dist')).some(
       (name) => name === 'bundle-integrity.json',
     ),
   ).toBe(true);
@@ -192,43 +199,22 @@ it('upgrades and rolls back between disposable versions without touching profile
 
 const bundleProbe = `
 const m = await import(process.argv[1]);
-const base = { tenantId: 'probe-tenant', subjectId: 'probe-subject', allowedOrigins: ['http://127.0.0.1:1'] };
-const refused = await m.ExecutorServicePluginTransport.open(base).then(() => 'opened').catch((e) => e.reason);
-const transport = await m.ExecutorServicePluginTransport.open({ ...base, enableExecution: true });
-const status = transport.qualification();
-await transport.close();
-console.log(JSON.stringify({ exports: Object.keys(m).sort(), refused, status: { qualified: status.qualified, mode: status.integrityMode, chunks: status.bundleFileCount, digest: transport.status().installedChunkSha256 } }));
+const transport = m.createMcpServiceTransport({});
+console.log(JSON.stringify({ exports: Object.keys(m).sort(), cleanup: await transport.close() }));
 `;
-it('the installed tree loads and qualifies the bundled adapter without plugin execution', () => {
+it('the installed tree imports the single MCP adapter without node_modules or discovery', () => {
   const target = privateInstall(root, 'bundle');
   install(target, artifact);
   const entry = join(
     target.prefix,
-    'lib/ocean/current/node_modules/@runnets/integrations-executor/dist/index.js',
+    'lib/ocean/current/node_modules/@runnets/integrations-mcp/dist/index.js',
   );
   const output = execFileSync(process.execPath, ['--input-type=module', '-e', bundleProbe, entry], {
     encoding: 'utf8',
     env: { ...target.env },
   });
-  const proof = JSON.parse(output.trim()) as {
-    exports: string[];
-    refused: string;
-    status: { qualified: boolean; mode: string; chunks: number; digest: string };
-  };
-  expect(proof.exports).toEqual([
-    'ExecutorPluginSetup',
-    'ExecutorServicePluginTransport',
-    'ExecutorSetupError',
-    'ExecutorTransportOpenError',
-    'PINNED_IDENTITIES',
-  ]);
-  // No product path enables execution; catalog discovery/invoke are never called.
-  expect(proof.refused).toBe('execution_not_enabled');
-  expect(proof.status).toEqual({
-    qualified: true,
-    mode: 'bundle',
-    chunks: expect.any(Number) as unknown as number,
-    digest: '6d3d22c97454dde48daacce07d901b174a642a480efee0b8c73fe31aa6d3a0b9',
+  expect(JSON.parse(output.trim())).toEqual({
+    exports: ['createMcpServiceTransport'],
+    cleanup: { status: 'never_started' },
   });
-  expect(proof.status.chunks).toBeGreaterThan(10);
 });

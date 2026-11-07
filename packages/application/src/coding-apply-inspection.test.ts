@@ -12,7 +12,11 @@ it('inspects exact owner-bound receipt while held without changing it, settling 
     status: 'uncertain',
     files: [{ path: 'file', status: 'uncertain' }],
   };
-  const changeset = {
+  const changeset: Changeset = {
+    id: 'changeset',
+    beforeTreeHash: 'before',
+    afterTreeHash: 'after',
+    diff: '-before\n+after',
     taskId: 'task',
     hash: 'hash',
     baseCommit: 'base',
@@ -23,7 +27,7 @@ it('inspects exact owner-bound receipt while held without changing it, settling 
         after: { sha256: 'after', mode: '100644', text: 'after' },
       },
     ],
-  } as Changeset;
+  };
   const task = {
     id: 'task',
     workspaceId: 'workspace',

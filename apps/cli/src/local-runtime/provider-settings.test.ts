@@ -1,3 +1,4 @@
+import type { ProviderPort } from '@runnets/application';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -251,7 +252,7 @@ it('reports an injected provider as the read-only session activation', async () 
   const vendor = await vendorFixture();
   const profile = await privateRoot();
   vi.stubEnv('DEEPSEEK_API_KEY', 'sk-fixture-environment-key');
-  const injected = {
+  const injected: ProviderPort = {
     id: 'deepseek',
     models: ['deepseek-flash'],
     capabilities: { streaming: true, reasoning: false, usage: true },

@@ -8,6 +8,9 @@
 
 import {
   ProviderError,
+  withAbort,
+  abortableChunks,
+  readBoundedText,
   fetchHttpClient,
   type HttpClient,
   type ModelInputModality,
@@ -105,24 +108,31 @@ export async function probeDeepSeekModels(options: ModelProbeOptions): Promise<M
   // An owner-triggered check cancelled before dispatch is cancelled, not a deadline or a pass.
   if (callerCancelled(options.signal))
     return { outcome: 'cancelled', httpStatus: null, models: [] };
-  const timeoutMs = Math.min(
-    Math.max(options.timeoutMs ?? MAX_MODEL_PROBE_MS, 1),
-    MAX_MODEL_PROBE_MS,
-  );
+  const requested = options.timeoutMs ?? MAX_MODEL_PROBE_MS;
+  const timeoutMs = Number.isSafeInteger(requested)
+    ? Math.min(Math.max(requested, 1), MAX_MODEL_PROBE_MS)
+    : MAX_MODEL_PROBE_MS;
   const timeout = AbortSignal.timeout(timeoutMs);
   const signal = combine(options.signal ?? null, timeout);
   const http = options.httpClient ?? fetchHttpClient;
   const origin = (options.baseUrl ?? DEEPSEEK_DEFAULT_ORIGIN).replace(/\/+$/, '');
   try {
-    const response = await http.send({
-      url: `${origin}${DEEPSEEK_MODELS_PATH}`,
-      method: 'GET',
-      headers: { authorization: `Bearer ${options.apiKey}`, accept: 'application/json' },
-      ...(signal === null ? {} : { signal }),
-    });
+    const response = await withAbort(
+      http.send({
+        url: `${origin}${DEEPSEEK_MODELS_PATH}`,
+        method: 'GET',
+        redirect: 'manual',
+        headers: { authorization: `Bearer ${options.apiKey}`, accept: 'application/json' },
+        ...(signal === null ? {} : { signal }),
+      }),
+      signal ?? undefined,
+    );
     if (!response.ok)
       return { outcome: outcomeFor(response.status), httpStatus: response.status, models: [] };
-    const body = await response.text();
+    const body = await readBoundedText(
+      abortableChunks(response.stream(), signal ?? undefined),
+      MAX_BODY,
+    );
     const models = body.length > MAX_BODY ? null : readModels(body);
     return models === null
       ? { outcome: 'server', httpStatus: response.status, models: [] }

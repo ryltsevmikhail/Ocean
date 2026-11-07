@@ -1,6 +1,17 @@
+import { migrateRoomHost } from './room-host-storage.js';
+import { migrateRoomTaskSlices, protectRoomTaskSlices } from './room-task-slice-schema.js';
+import { protectRoomTaskHistory } from './room-task-history-schema.js';
+import { ROOM_TASK_TABLES, migrateRoomTasks } from './room-task-schema.js';
+import { migrateServiceOwnerReceipts } from './service-owner-receipts.js';
+import { migrateToolAdmission } from './tool-admission-schema.js';
+import { SERVICE_AUTHORITY_TABLES, migrateServiceAuthority } from './service-authority-schema.js';
+import { migrateModelPendingRequests } from './model-pending-schema.js';
+import { migrateRoomModelPolicies } from './room-model-policy-schema.js';
+import { migrateModelQualifications } from './model-qualification-schema.js';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { migrateDesktopAssets } from './desktop-schema.js';
+import { MODEL_CONNECTION_TABLES, migrateModelConnections } from './model-connection-schema.js';
 import { CODING_APPLY_TABLES, migrateCodingApplications } from './coding-apply-schema.js';
 import { CODING_REVIEW_TABLES, migrateCodingReviews } from './coding-review-schema.js';
 import { CODING_APPROVAL_TABLES, migrateCodingApprovals } from './coding-approval-schema.js';
@@ -106,4 +117,29 @@ export function applyMigrations(
   else
     for (const table of PLUGIN_OPERATION_TABLES)
       if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 20) migrateModelConnections(db);
+  else
+    for (const table of MODEL_CONNECTION_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 21) migrateModelQualifications(db);
+  if (previousVersion < 22) migrateRoomModelPolicies(db);
+  else if (!existing.has('ocean_room_model_policies'))
+    throw Error('database schema is missing table ocean_room_model_policies');
+  if (previousVersion < 23) migrateModelPendingRequests(db);
+  if (previousVersion < 24) migrateServiceAuthority(db);
+  else
+    for (const table of SERVICE_AUTHORITY_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 26) migrateServiceOwnerReceipts(db);
+  else if (!existing.has('ocean_service_owner_receipts'))
+    throw Error('database schema is missing table ocean_service_owner_receipts');
+  if (previousVersion < 27) migrateRoomTasks(db);
+  else
+    for (const table of ROOM_TASK_TABLES)
+      if (!existing.has(table)) throw Error('database schema is missing table ' + table);
+  if (previousVersion < 28) migrateRoomTaskSlices(db);
+  if (previousVersion < 29) migrateRoomHost(db);
+  protectRoomTaskSlices(db);
+  protectRoomTaskHistory(db);
+  if (existing.has('tool_invocations_v2')) migrateToolAdmission(db, previousVersion);
 }

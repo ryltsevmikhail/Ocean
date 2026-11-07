@@ -6,3 +6,6 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Private agent reports and qualification evidence.
+.superpowers/

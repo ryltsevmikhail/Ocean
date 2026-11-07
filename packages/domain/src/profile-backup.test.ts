@@ -34,6 +34,41 @@ it('distinguishes a complete portable format2 identity from historical format1 m
   ).toBe(true);
   expect(validProfileBackupManifest({ ...body, format: 2 })).toBe(false);
 });
+it('accepts schema20 through schema29 backups while refusing unsupported future schemas', () => {
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 21 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 20 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 22 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 23 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 24 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 25 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 26 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 27 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 28 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 29 } })).toBe(
+    true,
+  );
+  expect(validProfileBackupManifest({ ...value, summary: { ...value.summary, schema: 30 } })).toBe(
+    false,
+  );
+});
 it('rejects coerced versions, unbounded counters, duplicate room positions and unknown format2 claims', () => {
   for (const malformed of [
     { ...value, format: '2' },

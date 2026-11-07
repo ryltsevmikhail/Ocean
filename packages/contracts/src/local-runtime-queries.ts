@@ -5,6 +5,8 @@ import {
 } from './local-runtime.js';
 import type { LocalRoomScope, LocalRunQuery, LocalRunSnapshot } from './local-runtime-turns.js';
 
+export const LOCAL_ADDRESSED_HISTORY = 'room.addressed-history-v1';
+
 export interface LocalPage<K> {
   readonly after?: K;
   readonly limit?: number;

@@ -76,7 +76,7 @@ export class RemotePlugins {
           ...connections.map(
             (connection) =>
               `connection ${connection.name} gen=${String(connection.generation)} ` +
-              `${connection.state} identity=${connection.identityLabel} ` +
+              `${connection.state} readiness=${connection.readiness} identity=${connection.identityLabel} ` +
               `credential=${connection.credentialReference}`,
           ),
         );
@@ -121,7 +121,7 @@ export class RemotePlugins {
               .map(
                 (connection) =>
                   `${connection.id} "${connection.name}" gen=${String(connection.generation)} ` +
-                  `${connection.state} endpoint=${connection.endpoint} ` +
+                  `${connection.state} readiness=${connection.readiness} endpoint=${connection.endpoint} ` +
                   `credential=${connection.credentialReference} ` +
                   `schema=${connection.schemaDigest === null ? 'none' : 'published'}`,
               )

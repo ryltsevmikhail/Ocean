@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { taskModelText } from './room-task-text.js';
 import type { Bot, Room, Run } from '../protocol.js';
 import Avatar from './Avatar.vue';
 import Glyph from './Glyph.vue';
@@ -26,12 +27,17 @@ defineEmits<{ close: [] }>();
     </div>
     <template v-if="members.length"
       ><h3>Боты · {{ members.length }}</h3>
-      <Member v-for="b in members" :key="b.id" :bot="b" />
+      <template v-for="b in members" :key="b.id"
+        ><Member :bot="b" /><small>{{ taskModelText(b) }}</small></template
+      >
     </template>
     <div v-if="room.kind === 'group'" class="info-card">
       <strong>Вы управляете диалогом</strong>
-      <p>Выберите адресата перед отправкой. В группе ход передаёте вы.</p>
+      <p>
+        Выберите адресата перед отправкой. В обычном разговоре ход передаёте вы. Для автономного
+        обмена откройте «Задачи команды».
+      </p>
     </div>
-    <RoomWork :key="room.id" :runs="runs" />
+    <RoomWork :key="room.id" :room-id="room.id" :runs="runs" />
   </aside>
 </template>

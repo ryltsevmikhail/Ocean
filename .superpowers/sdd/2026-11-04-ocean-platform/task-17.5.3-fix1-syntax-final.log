@@ -1,0 +1,4 @@
+{"argv": ["/home/ryltsevmg/.local/share/mise/installs/node/lts/bin/node", "--check", "/home/ryltsevmg/Projects/Ocean-stable/apps/desktop/qa/model-client-handoff-native.mjs"], "exit": 0, "output": "", "physicalLines": 277}
+{"argv": ["/home/ryltsevmg/.local/share/mise/installs/node/lts/bin/node", "--check", "/home/ryltsevmg/Projects/Ocean-stable/apps/desktop/qa/model-handoff-lifecycle.mjs"], "exit": 0, "output": "", "physicalLines": 51}
+{"argv": ["/home/ryltsevmg/.local/share/mise/installs/node/lts/bin/node", "--check", "/home/ryltsevmg/Projects/Ocean-stable/apps/desktop/qa/model-handoff-lifecycle.test.mjs"], "exit": 0, "output": "", "physicalLines": 199}
+{"command": "ast.parse", "path": "/home/ryltsevmg/Projects/Ocean-stable/apps/desktop/qa/model-handoff-tui.py", "exit": 0, "physicalLines": 94}

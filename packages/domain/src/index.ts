@@ -17,6 +17,7 @@ export * from './budget.js';
 export * from './side-effect.js';
 
 export * from './conversations.js';
+export * from './model-binding.js';
 
 export * from './image-content.js';
 
@@ -64,3 +65,32 @@ export * from './plugin-grant.js';
 export * from './plugin-operation.js';
 
 export * from './plugin-backup.js';
+
+export * from './model-capabilities.js';
+
+export * from './model-dispatch.js';
+export { decideModelDispatch } from './model-dispatch-decide.js';
+export { evolveModelDispatch } from './model-dispatch-evolve.js';
+
+export { copyActivation as copyModelActivationSnapshot } from './model-dispatch-validation.js';
+
+export * from './room-model-policy.js';
+
+export * from './service-connection.js';
+export * from './service-catalog.js';
+export * from './owner-scope-grant.js';
+export * from './effect-resource-scope.js';
+export * from './service-permissions.js';
+export * from './effect-resource-conflicts.js';
+
+export * from './service-owner-requests.js';
+export * from './service-owner-operations.js';
+
+export * from './room-delivery.js';
+export * from './room-task.js';
+
+export { validRoomAgentRequest, roomAgentRequestKey, roomAgentBinding } from './room-delivery.js';
+
+export * from './managed-workspace.js';
+
+export * from './managed-business.js';

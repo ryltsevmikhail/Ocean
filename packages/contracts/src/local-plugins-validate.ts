@@ -152,6 +152,7 @@ export function isLocalPluginConnectionView(value: unknown): value is LocalPlugi
     (value['identity'] === null || bounded(value['identity'], 256)) &&
     (value['identityLabel'] === 'verified' || value['identityLabel'] === 'unverified') &&
     (value['state'] === 'active' || value['state'] === 'disconnected') &&
+    ['ready', 'discovery_required', 'disconnected'].includes(String(value['readiness'])) &&
     position(value['generation']) &&
     Number(value['generation']) >= 1 &&
     (value['schemaDigest'] === null || sha(value['schemaDigest'])) &&

@@ -1,3 +1,4 @@
+import { omitModelConnectionSchema } from '../test-fixtures/model-schema.js';
 import { expect, it } from 'vitest';
 import type { CodingTask } from '@runnets/domain';
 import { openSqliteStore } from './store.js';
@@ -63,6 +64,7 @@ it('migrates a schema-13 coding table to 14 without changing any task row', () =
       JSON.stringify(task),
     );
     // Downgrade the table and version to their accepted schema-13 shape.
+    omitModelConnectionSchema(db);
     db.exec(`DROP TABLE ocean_coding_finalizations;
     CREATE TABLE ocean_coding_tasks_v13(
      id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL,project_root TEXT NOT NULL,

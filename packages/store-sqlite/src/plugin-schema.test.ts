@@ -1,3 +1,5 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
+import { omitModelConnectionSchema } from '../test-fixtures/model-schema.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -52,6 +54,8 @@ function downgradeTo16(path: string): void {
   const db = new DatabaseSync(path);
   try {
     for (const table of PLUGIN_TABLES) db.exec('DROP TABLE IF EXISTS ' + table);
+    omitModelConnectionSchema(db);
+    omitRoomTaskSchema(db);
     db.exec("UPDATE meta SET value='16' WHERE key='schema_version'");
   } finally {
     db.close();
@@ -77,10 +81,10 @@ function snapshot(path: string): {
 describe('plugin migration 17', () => {
   it('creates every authoritative plugin table at the current schema version', () => {
     const db = memory();
-    expect(SCHEMA_VERSION).toBe(18);
+    expect(SCHEMA_VERSION).toBe(29);
     expect(tables(db)).toEqual(expect.arrayContaining([...PLUGIN_TABLES]));
     expect(db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
-      '18',
+      String(SCHEMA_VERSION),
     );
     expect(Number(db.prepare('SELECT count(*) AS n FROM ocean_plugin_grants').get()?.['n'])).toBe(
       0,
@@ -103,7 +107,7 @@ describe('plugin migration 17', () => {
     expect(tables(migrated)).toEqual(expect.arrayContaining([...PLUGIN_TABLES]));
     expect(
       migrated.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('18');
+    ).toBe(String(SCHEMA_VERSION));
     expect(
       Number(migrated.prepare('SELECT count(*) AS n FROM ocean_plugin_grants').get()?.['n']),
     ).toBe(0);
@@ -122,7 +126,7 @@ describe('plugin migration 17', () => {
     const reopened = open(path);
     expect(
       reopened.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('18');
+    ).toBe(String(SCHEMA_VERSION));
   });
 
   it('rolls a failed migration back and lets the operator reopen after repair', () => {
@@ -134,6 +138,8 @@ describe('plugin migration 17', () => {
     const tamper = new DatabaseSync(path);
     try {
       for (const table of PLUGIN_TABLES) tamper.exec('DROP TABLE IF EXISTS ' + table);
+      omitModelConnectionSchema(tamper);
+      omitRoomTaskSchema(tamper);
       tamper.exec("UPDATE meta SET value='16' WHERE key='schema_version'");
       // A view with a plugin table's name makes the migration DDL fail inside its transaction.
       tamper.exec('CREATE VIEW ocean_plugin_grants AS SELECT 1 AS x');

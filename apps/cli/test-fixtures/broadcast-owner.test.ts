@@ -1,5 +1,9 @@
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule1 from '../src/local-runtime/host.js';
 // Synthetic broadcast owner for crash/restart qualification; launched with an isolated environment.
-import { startLocalRuntime } from '../dist/local-runtime/host.js';
+const { startLocalRuntime }: typeof SourceModule1 = await import(
+  String('../dist/local-runtime/host.js')
+);
 import { appendFileSync, writeSync } from 'node:fs';
 import type { ProviderPort } from '@runnets/application';
 

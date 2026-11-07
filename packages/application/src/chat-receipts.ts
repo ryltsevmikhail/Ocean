@@ -1,3 +1,4 @@
+import { roomFinalMessageMatches } from '@runnets/domain';
 import { taskRunId, type ChatTurn, type ConversationMessage } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
 import type { TaskRunService } from './service.js';
@@ -67,14 +68,53 @@ export async function readChatRun(
   const turn = store.atomic((tx) => {
     if (tx.workspace()?.id !== workspaceId) return null;
     const found = tx.roomChatRun(workspaceId, roomId, runId);
-    return found?.workspaceId === workspaceId &&
-      found.roomId === roomId &&
-      found.taskRunId === runId
-      ? found
-      : null;
+    if (
+      !found ||
+      found.workspaceId !== workspaceId ||
+      found.roomId !== roomId ||
+      found.taskRunId !== runId
+    )
+      return null;
+    if (
+      found.roomDelivery &&
+      found.status === 'completed' &&
+      found.roomSliceDisposition === undefined
+    ) {
+      let after = 0;
+      for (;;) {
+        const page = tx.history(roomId, after, 200),
+          final = page.find((m) => m.id === 'reply_' + found.id);
+        if (final || page.length < 200) {
+          if (!roomFinalMessageMatches(found, final)) throw Error('invalid room final');
+          break;
+        }
+        after = page.at(-1)!.seq;
+      }
+    }
+    return found;
   });
   if (!turn) return null;
+  const disposition: unknown = turn.roomSliceDisposition;
+  if (
+    disposition !== undefined &&
+    (disposition !== 'yielded' ||
+      !turn.roomDelivery ||
+      !turn.roomHandoff ||
+      turn.status !== 'completed' ||
+      turn.text !== '' ||
+      turn.preparedVersion !== null)
+  )
+    throw Error('invalid room disposition');
   const state = await tasks.state(taskRunId(runId));
+  if (
+    turn.roomDelivery &&
+    turn.status === 'completed' &&
+    turn.roomSliceDisposition === undefined &&
+    (state.status !== 'succeeded' ||
+      turn.preparedVersion === null ||
+      state.version !== turn.preparedVersion + 1)
+  )
+    throw Error('invalid room completion head');
   return {
     ...turnReceipt(turn),
     performerId: turn.bot.id,
@@ -86,6 +126,9 @@ export async function readChatRun(
           ? ('admitted_before_run' as const)
           : ('not_created' as const),
     version: state.version,
-    resultMessageId: turn.status === 'completed' ? 'reply_' + turn.id : null,
+    resultMessageId:
+      turn.status === 'completed' && turn.roomSliceDisposition !== 'yielded'
+        ? 'reply_' + turn.id
+        : null,
   };
 }

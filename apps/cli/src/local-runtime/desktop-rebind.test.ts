@@ -1,9 +1,27 @@
 import * as fs from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import type * as cp from 'node:child_process';
 import { execFileSync } from 'node:child_process';
 import { afterEach, expect, it, vi } from 'vitest';
-import { readDesktopBackupInventory } from '@runnets/store-sqlite';
+vi.mock('node:fs', async (original) => {
+  const a = await original<typeof fs>();
+  return {
+    ...a,
+    fstatSync: vi.fn(a.fstatSync),
+    lstatSync: vi.fn(a.lstatSync),
+    statSync: vi.fn(a.statSync),
+    statfsSync: vi.fn(a.statfsSync),
+    readFileSync: vi.fn(a.readFileSync),
+  };
+});
+vi.mock('node:child_process', async (original) => {
+  const a = await original<typeof cp>();
+  return { ...a, spawnSync: vi.fn(a.spawnSync) };
+});
+import { desktopBootSimulation } from '../../../../packages/tools-node/test-fixtures/desktop-boot.test.js';
+
+import { readDesktopBackupInventory, openSqliteStore } from '@runnets/store-sqlite';
 import { desktopRootIdentity, type LocalRuntimeClient } from '@runnets/tools-node';
 import { DesktopAttachmentClient, connectLocalRuntime } from '@runnets/tools-node';
 import { startLocalRuntime, type LocalRuntimeHost } from './host.js';
@@ -37,6 +55,7 @@ it('rebinds source-deleted Desktop storage to the verified new profile without r
   vi.stubEnv('XDG_RUNTIME_DIR', run);
   cleanups.push(() => fs.rmSync(root, { recursive: true, force: true }));
   const f = await codingDesktopFixture();
+  const boot = await desktopBootSimulation();
   cleanups.push(() => f.close());
   const selected = join(root, 'selected');
   execFileSync('/usr/bin/git', ['clone', '--no-hardlinks', '--quiet', f.project, selected], {
@@ -147,6 +166,7 @@ it('rebinds source-deleted Desktop storage to the verified new profile without r
   expect(result.state, result.reason ?? '').toBe('ready');
   await stop(host);
   host = undefined;
+  boot.reboot();
   host = await startLocalRuntime({ profile, provider: null });
   const c = await connectLocalRuntime({ profile });
   clients.push(c);
@@ -173,7 +193,8 @@ it('rebinds source-deleted Desktop storage to the verified new profile without r
     root: planned.root,
     originalRoot: oldOriginalRoot,
   });
-  expect(saved.binding!.identity).toBe(desktopRootIdentity(planned.root));
+  expect(saved.binding!.identity).not.toBe(desktopRootIdentity(planned.root));
+  expect(saved.binding!.identity).toMatch(/^linux-btrfs-v1:/);
   expect(saved.operations).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
@@ -194,4 +215,68 @@ it('rebinds source-deleted Desktop storage to the verified new profile without r
     true,
   );
   expect(fs.existsSync(join(profile, 'restore-guard.json'))).toBe(true);
+  const firstStore = openSqliteStore({ path: join(profile, 'runtime.sqlite') });
+  const readyRecord = structuredClone(firstStore.rebind.active()!);
+  firstStore.close();
+  const selected2 = join(root, 'selected-2');
+  execFileSync('/usr/bin/git', ['clone', '--no-hardlinks', '--quiet', selected, selected2], {
+    env: {
+      PATH: process.env['PATH'],
+      HOME: home,
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_TERMINAL_PROMPT: '0',
+    },
+  });
+  const successorArchive = join(root, 'successor-archive');
+  await backupProfile(profile, successorArchive);
+  fs.rmSync(profile, { recursive: true });
+  const successor = join(root, 'successor');
+  restoreProfile(successorArchive, successor);
+  fs.rmSync(successorArchive, { recursive: true });
+  host = await startLocalRuntime({ profile: successor, restore: true, provider: null });
+  const d = await connectLocalRuntime({ profile: successor });
+  clients.push(d);
+  const nextInspection = await d.inspectRestore({
+    requestId: 'successor-rebind',
+    workspaceId: 'ws_ocean',
+    roomId: f.room,
+    taskId: f.task.id,
+    projectRoot: selected2,
+    policy: f.task.policy,
+  });
+  const nextCard = await d.previewRestore(nextInspection.selection);
+  await d.resolveDecision({
+    workspaceId: nextCard.workspaceId,
+    roomId: nextCard.roomId,
+    runId: nextCard.runId,
+    decisionId: nextCard.decisionId,
+    bindingDigest: nextCard.bindingDigest,
+    choice: 'allow-once',
+    expectedVersion: nextCard.version,
+  });
+  let next = await d.restoreResult(nextInspection.selection);
+  const until = Date.now() + 30000;
+  while (!['ready', 'held', 'refused'].includes(next.state) && Date.now() < until) {
+    await new Promise((done) => setTimeout(done, 20));
+    next = await d.restoreResult(nextInspection.selection);
+  }
+  expect(next.state, next.reason ?? '').toBe('ready');
+  await stop(host);
+  host = undefined;
+  boot.reboot();
+  host = await startLocalRuntime({ profile: successor, provider: null });
+  const e = await connectLocalRuntime({ profile: successor });
+  clients.push(e);
+  expect((await new DesktopAttachmentClient(e).read(f.room, attachmentId)).data).toEqual(
+    desktopBytes,
+  );
+  await stop(host);
+  host = undefined;
+  const successorStore = openSqliteStore({ path: join(successor, 'runtime.sqlite') });
+  expect(successorStore.rebind.atomic((tx) => tx.record(readyRecord.requestId))).toEqual(
+    readyRecord,
+  );
+  successorStore.close();
+  await backupProfile(successor, join(root, 'third-archive'));
 }, 240000);

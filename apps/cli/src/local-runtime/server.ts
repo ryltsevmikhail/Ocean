@@ -3,7 +3,20 @@ import { type Socket } from 'node:net';
 import type { EndpointLayout } from './endpoint-files.js';
 import { bindListener } from './listener.js';
 import {
+  clientFeatures,
+  clientIdentity,
+  supportsPlugins,
+  type RuntimeWireContext,
+} from './client-compatibility.js';
+import {
   isLocalRuntimeRequest,
+  LOCAL_MODEL_METHODS,
+  LOCAL_ROOM_TASKS,
+  LOCAL_ROOM_TASK_LIST,
+  LOCAL_SERVICE_AUTHORITY,
+  LOCAL_MODEL_CONNECTIONS,
+  LOCAL_SERVICE_CONFIRMATIONS,
+  LOCAL_ADDRESSED_HISTORY,
   type LocalRuntimeDescriptor,
   type LocalRuntimeIdentity,
   type LocalRuntimeStatus,
@@ -29,6 +42,9 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
     clients.add(socket);
     const detached = new AbortController();
     let authenticated = false;
+    let plugins = false;
+    let services = false;
+    let context: RuntimeWireContext = Object.freeze({ models: false });
     let stopping = false;
     let pending = 0;
     const handshakeTimeout = setTimeout(() => socket.destroy(), 5000);
@@ -62,9 +78,46 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
           socket.end();
           return;
         }
+        const features = clientFeatures(params);
+        if (features === null) {
+          reject('invalid_params');
+          stopping = true;
+          socket.end();
+          return;
+        }
+        plugins = supportsPlugins(features);
+        services = features.includes(LOCAL_SERVICE_AUTHORITY);
+        context = Object.freeze({
+          models: features.includes(LOCAL_MODEL_CONNECTIONS),
+          serviceConfirmations: features.includes(LOCAL_SERVICE_CONFIRMATIONS),
+          addressedHistory: features.includes(LOCAL_ADDRESSED_HISTORY),
+          roomTaskList:
+            features.includes(LOCAL_ROOM_TASK_LIST) &&
+            features.includes(LOCAL_ROOM_TASKS) &&
+            features.includes(LOCAL_ADDRESSED_HISTORY) &&
+            operations.identity.capabilities.includes(LOCAL_ROOM_TASKS) &&
+            operations.identity.capabilities.includes(LOCAL_ROOM_TASK_LIST) &&
+            operations.identity.capabilities.includes(LOCAL_ADDRESSED_HISTORY),
+          roomTasks:
+            features.includes(LOCAL_ROOM_TASKS) &&
+            features.includes(LOCAL_ADDRESSED_HISTORY) &&
+            operations.identity.capabilities.includes(LOCAL_ROOM_TASKS),
+        });
         authenticated = true;
         clearTimeout(handshakeTimeout);
-        writeLocalRuntimeFrame(socket, { id, result: operations.identity });
+        writeLocalRuntimeFrame(socket, {
+          id,
+          result: clientIdentity(
+            operations.identity,
+            plugins,
+            context.models,
+            services,
+            context.serviceConfirmations,
+            context.addressedHistory,
+            context.roomTasks,
+            context.roomTaskList,
+          ),
+        });
         return;
       }
       if (!authenticated) {
@@ -78,7 +131,19 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
         return;
       }
       if (method === 'status') {
-        writeLocalRuntimeFrame(socket, { id, result: operations.status() });
+        writeLocalRuntimeFrame(socket, {
+          id,
+          result: clientIdentity(
+            operations.status(),
+            plugins,
+            context.models,
+            services,
+            context.serviceConfirmations,
+            context.addressedHistory,
+            context.roomTasks,
+            context.roomTaskList,
+          ),
+        });
         return;
       }
       if (method === 'stop') {
@@ -95,12 +160,32 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
           });
         return;
       }
+      if (method === 'roomTasks.list' && !context.roomTaskList) {
+        reject('client_upgrade_required');
+        return;
+      }
+      if (method.startsWith('roomTasks.') && !context.roomTasks) {
+        reject('client_upgrade_required');
+        return;
+      }
+      if (method.startsWith('service.') && !services) {
+        reject('service_runtime_upgrade_required');
+        return;
+      }
+      if (method.startsWith('plugin.') && !plugins) {
+        reject('plugin_runtime_upgrade_required');
+        return;
+      }
+      if (LOCAL_MODEL_METHODS.some((m) => m === method) && !context.models) {
+        reject('model_runtime_upgrade_required');
+        return;
+      }
       if (pending >= 128) {
         socket.destroy();
         return false;
       }
       try {
-        const reply = operations.dispatch(method, params, detached.signal);
+        const reply = operations.dispatch(method, params, detached.signal, context);
         if (reply instanceof Promise) {
           pending++;
           void reply

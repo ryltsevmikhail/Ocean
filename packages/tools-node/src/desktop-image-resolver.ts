@@ -26,7 +26,7 @@ import {
   type ImageResolveResult,
 } from '@runnets/application';
 import { desktopMetadata, desktopRead } from './desktop-file-store.js';
-import { desktopRootIdentity } from './desktop-assets.js';
+import { desktopBindingMatches, withDesktopRoot } from './desktop-root.js';
 import { parseImageHeader } from './image-header.js';
 
 /** Narrow durable read surface; implemented by the SQLite Desktop asset store. */
@@ -93,27 +93,29 @@ function resolveRequest(
     preparation.ids.some((id, index) => request.expected[index]?.id !== id)
   )
     return refused();
-  const images: ImagePart[] = [];
-  for (const [index, id] of preparation.ids.entries()) {
-    // Metadata binds every attachment; only actual images require the blob re-hash.
-    // Text snippets are baked into the persisted body at preparation time, so a
-    // later missing/replaced text or binary blob must not break the turn.
-    const metadata = desktopMetadata(binding, request.roomId, id);
-    if (metadata.sha256 !== request.expected[index]!.sha256) return refused();
-    if (metadata.kind !== 'image') continue;
-    const attachment = desktopRead(binding, request.roomId, id);
-    if (!validDesktopAttachment(attachment.info) || attachment.info.id !== id) return refused();
-    if (attachment.info.sha256 !== request.expected[index]!.sha256) return refused();
-    const part = imagePart(attachment.info, attachment.data, request.roomId);
-    if (part.kind === 'refused') return { ok: false, code: part.code };
-    if (part.kind === 'ok' && part.value !== null) images.push(part.value);
-  }
-  return { ok: true, images };
+  return withDesktopRoot(binding, (): ImageResolveResult => {
+    const images: ImagePart[] = [];
+    for (const [index, id] of preparation.ids.entries()) {
+      // Metadata binds every attachment; only actual images require the blob re-hash.
+      // Text snippets are baked into the persisted body at preparation time, so a
+      // later missing/replaced text or binary blob must not break the turn.
+      const metadata = desktopMetadata(binding, request.roomId, id);
+      if (metadata.sha256 !== request.expected[index]!.sha256) return refused();
+      if (metadata.kind !== 'image') continue;
+      const attachment = desktopRead(binding, request.roomId, id);
+      if (!validDesktopAttachment(attachment.info) || attachment.info.id !== id) return refused();
+      if (attachment.info.sha256 !== request.expected[index]!.sha256) return refused();
+      const part = imagePart(attachment.info, attachment.data, request.roomId);
+      if (part.kind === 'refused') return { ok: false, code: part.code };
+      if (part.kind === 'ok' && part.value !== null) images.push(part.value);
+    }
+    return { ok: true, images };
+  });
 }
 function bindingValid(binding: DesktopBinding, profile: string, profileId: string): boolean {
   if (binding.profileId !== profileId || !binding.root.startsWith(profile + '/')) return false;
   if (!/^desktop-[a-f0-9-]{36}\/tree$/.test(binding.root.slice(profile.length + 1))) return false;
-  return desktopRootIdentity(binding.root) === binding.identity;
+  return desktopBindingMatches(binding);
 }
 function preparationValid(preparation: DesktopPreparation, body: string): boolean {
   if (preparation.prepared !== body || sha256(body) !== preparation.digest) return false;

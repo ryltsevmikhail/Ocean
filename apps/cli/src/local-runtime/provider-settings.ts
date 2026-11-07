@@ -1,15 +1,21 @@
+import { modelSettingsHost } from './model-settings-host.js';
 /**
  * Host composition for provider settings.
  *
  * The CLI host owns credential resolution: it builds immutable DeepSeek
  * activations from a saved key or the environment, binds the bounded model
  * probe to the private credential store, and exposes one dispatch module over
- * the authenticated local-runtime socket. Keys never reach the wire.
+ * the authenticated local-runtime socket. Keys enter only authenticated owner requests; responses stay keyless.
  */
 
 import { createHash, randomUUID } from 'node:crypto';
 import {
   ProviderConnectionService,
+  type ConversationStore,
+  type TaskRunService,
+  ProviderActivationService,
+  injectedProviderActivation,
+  type ProviderActivationPort,
   requestCode,
   type ProviderConnectionStorePort,
   type ProviderCredential,
@@ -31,13 +37,15 @@ import {
   isLocalProviderSetRequest,
 } from '@runnets/contracts';
 import { createProviderSecretStore, providerCredentialDirectory } from '@runnets/tools-node';
+import type { HttpClient } from '@runnets/provider-core';
+import { createProviderActivationFactory } from './provider-activation-factory.js';
 import { PROVIDER_ENV_KEY } from '../engine/provider.js';
 import type { RuntimeReply } from './queries.js';
 
 export interface ProviderCredentialOptions {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Deterministic local transport seam for tests; never derived from wire input. */
-  readonly baseUrl?: string;
+  readonly httpClient?: HttpClient;
 }
 /** Adapter composition; only this module knows how a key becomes a provider snapshot. */
 export function createProviderCredentials(
@@ -66,7 +74,7 @@ function activation(
 ): ProviderCredential {
   const provider = new DeepSeekProvider({
     apiKey: key,
-    ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+    ...(options.httpClient === undefined ? {} : { httpClient: options.httpClient }),
   });
   return {
     source,
@@ -81,7 +89,7 @@ async function probe(
 ): Promise<ProviderProbeResult> {
   const result = await probeDeepSeekModels({
     apiKey: key,
-    ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+    ...(options.httpClient === undefined ? {} : { httpClient: options.httpClient }),
     signal,
   });
   const models = result.models.map((model) => model.id);
@@ -106,9 +114,19 @@ export class ProviderSettings {
   ): RuntimeReply | Promise<RuntimeReply> {
     switch (method) {
       case 'provider.status':
-        return isLocalProviderQuery(params)
-          ? { result: this.#service.status() }
-          : { error: { code: 'invalid_params' } };
+        if (!isLocalProviderQuery(params)) return { error: { code: 'invalid_params' } };
+        try {
+          return { result: this.#service.status() };
+        } catch (error) {
+          return {
+            error: {
+              code:
+                error instanceof Error && error.message === 'provider_unverified'
+                  ? 'provider_unverified'
+                  : 'runtime_failure',
+            },
+          };
+        }
       case 'provider.check':
         if (!isLocalProviderQuery(params)) return { error: { code: 'invalid_params' } };
         return this.#supervise(() => this.#service.check(detached));
@@ -167,31 +185,58 @@ export interface ProviderHostInput {
   readonly mutationsAllowed: boolean;
   readonly secretStore?: ProviderSecretStorePort;
   readonly credentialDir?: string;
-  readonly baseUrl?: string;
+  readonly httpClient?: HttpClient;
 }
-/** Compose the durable settings service and the activation getter for turn admission. */
+/** Compose durable settings and a local resolver passed unchanged into turn admission. */
 export function providerHostSettings(input: ProviderHostInput): {
   readonly settings: ProviderSettings;
-  readonly activation: () => ProviderPort | null;
+  readonly resolver: ProviderActivationPort;
+  readonly modelSettings: (
+    store: ConversationStore,
+    tasks: TaskRunService,
+  ) => ReturnType<typeof modelSettingsHost>;
 } {
   const secrets =
     input.secretStore ??
     createProviderSecretStore(input.credentialDir ?? providerCredentialDirectory(input.profile));
-  const service = new ProviderConnectionService({
-    store: input.store,
+  const connections = input.store.connections;
+  const factory = createProviderActivationFactory({
+    env: input.env,
+    ...(input.httpClient === undefined ? {} : { httpClient: input.httpClient }),
+  });
+  const shared = {
     secrets,
-    credentials: createProviderCredentials({
-      env: input.env,
-      ...(input.baseUrl === undefined ? {} : { baseUrl: input.baseUrl }),
-    }),
+    factory,
     clock: { now: () => new Date(input.now?.() ?? Date.now()) },
     nextId: () => randomUUID().replaceAll('-', ''),
-    sha256: (text) => createHash('sha256').update(text).digest('hex'),
+    sha256: (text: string) => createHash('sha256').update(text).digest('hex'),
     restored: input.restored,
     injected: input.injected,
     disabled: input.disabled,
     mutationsAllowed: input.mutationsAllowed,
+  };
+  const service = new ProviderConnectionService({
+    store: input.store,
+    credentials: createProviderCredentials({
+      env: input.env,
+      ...(input.httpClient === undefined ? {} : { httpClient: input.httpClient }),
+    }),
+    ...shared,
   });
-  service.initialize();
-  return { settings: new ProviderSettings(service), activation: service.activation() };
+  const resolver =
+    input.injected !== null || input.disabled
+      ? injectedProviderActivation(input.disabled ? null : input.injected)
+      : new ProviderActivationService({
+          connections,
+          secrets,
+          factory,
+          restored: input.restored,
+          disabled: input.disabled,
+        });
+  return {
+    settings: new ProviderSettings(service),
+    resolver,
+    modelSettings: (store, tasks) =>
+      modelSettingsHost({ ...shared, store: connections }, store, tasks),
+  };
 }

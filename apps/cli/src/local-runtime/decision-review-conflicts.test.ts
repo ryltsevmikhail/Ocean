@@ -254,7 +254,7 @@ it('independent SDK clients read the same winning vote after an intervening jour
   vi.stubEnv('XDG_RUNTIME_DIR', runDir);
   const db = new DatabaseSync(join(path, 'runtime.sqlite'));
   db.exec(`CREATE TRIGGER evidence_at_vote AFTER UPDATE OF status ON ocean_owner_decisions WHEN new.status='allowed' BEGIN
- INSERT INTO tool_invocations_v2 VALUES('fixture','private-tool','tr_foreign','fixture','fixture','started');END`);
+ INSERT INTO tool_invocations_v2(id,tool,task_run_id,attempt_id,fingerprint,outcome) VALUES('fixture','private-tool','tr_foreign','fixture','fixture','started');END`);
   db.close();
   const host = await startLocalRuntime({ profile: path, provider: null });
   const client = await connectLocalRuntime({ profile: path });

@@ -2,6 +2,7 @@ import {
   localRuntimeRecord,
   localPosition,
   localId,
+  LOCAL_ADDRESSED_HISTORY,
   isLocalRoomsQuery,
   isLocalRoomListQuery,
   isLocalHistoryQuery,
@@ -89,7 +90,7 @@ function observed(row: Row, q: LocalRoomScope): LocalObservedRun {
     invalid();
   return { ...row, pendingDecisionIds: row['pendingDecisionIds'] };
 }
-function message(row: Row, q: LocalRoomScope): LocalMessage {
+function message(row: Row, q: LocalRoomScope, addressedHistory = false): LocalMessage {
   const id = row['id'],
     seq = row['seq'],
     targetBotId = row['targetBotId'],
@@ -107,7 +108,12 @@ function message(row: Row, q: LocalRoomScope): LocalMessage {
     invalid();
   const bytes = Buffer.from(encoded, 'base64');
   if (bytes.length > 1048576 || bytes.toString('base64') !== encoded) invalid();
-  const body = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  let body: string;
+  try {
+    body = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    return invalid();
+  }
   const result = {
     workspaceId: q.workspaceId,
     roomId: q.roomId,
@@ -123,7 +129,8 @@ function message(row: Row, q: LocalRoomScope): LocalMessage {
     row['author'] === 'bot' &&
     localId(row['turnId']) &&
     localId(row['authorBotId']) &&
-    targetBotId === row['authorBotId']
+    localId(targetBotId) &&
+    (addressedHistory || targetBotId === row['authorBotId'])
   )
     return { ...result, author: 'bot', turnId: row['turnId'], authorBotId: row['authorBotId'] };
   return invalid();
@@ -173,7 +180,9 @@ export function localRoomClient(send: Send, identity: LocalRuntimeIdentity): Loc
     async history(input) {
       const q = validatedParams(input, isLocalHistoryQuery);
       return rows(await send('history.list', q), q.limit, (row, i) =>
-        row['seq'] === (q.after ?? 0) + i + 1 ? message(row, q) : invalid(),
+        row['seq'] === (q.after ?? 0) + i + 1
+          ? message(row, q, identity.capabilities.includes(LOCAL_ADDRESSED_HISTORY))
+          : invalid(),
       );
     },
     async listRuns(input) {

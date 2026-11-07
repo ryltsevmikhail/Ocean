@@ -30,5 +30,6 @@ export type {
   ProviderModelInfo,
   ModelInputModality,
   ProviderPort,
+  ProviderProbeResult,
   CollectedReply,
 } from '@runnets/application';

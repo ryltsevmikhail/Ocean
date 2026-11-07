@@ -34,6 +34,7 @@ const connection = {
   identity: 'octocat',
   identityLabel: 'verified' as const,
   state: 'active' as const,
+  readiness: 'ready' as const,
   generation: 2,
   schemaDigest: 'b'.repeat(64),
   tools: ['list_issues', 'issue_read'],

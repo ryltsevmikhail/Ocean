@@ -6,20 +6,21 @@ import type {
   ProviderCredential,
   ProviderCredentialPort,
   ProviderModelCapability,
-  ProviderPort,
   ProviderProbeResult,
   ProviderSecretRead,
   ProviderSecretStorePort,
 } from '../src/provider-connection-ports.js';
-import type { ProviderEvent } from '../src/provider.js';
+import { legacyFixtureStore } from './model-connection-store.js';
+import type { ProviderEvent, ProviderPort } from '../src/provider.js';
 
 export interface FakeStore extends ProviderConnectionStorePort {
   readonly rows: Map<string, ProviderConnectionRecord>;
   readonly receipts: Map<string, ProviderConnectionReceipt>;
 }
 export function fakeStore(): FakeStore {
-  const rows = new Map<string, ProviderConnectionRecord>();
-  const receipts = new Map<string, ProviderConnectionReceipt>();
+  const canonical = legacyFixtureStore();
+  const rows = canonical.rows;
+  const receipts = canonical.legacyReceipts;
   const clone = <T>(value: T): T => structuredClone(value);
   function put(record: ProviderConnectionRecord, expected: number | null): void {
     const current = rows.get(record.provider);
@@ -29,6 +30,7 @@ export function fakeStore(): FakeStore {
   return {
     rows,
     receipts,
+    connections: canonical.store,
     read: (provider) => {
       const row = rows.get(provider);
       return row === undefined ? null : clone(row);

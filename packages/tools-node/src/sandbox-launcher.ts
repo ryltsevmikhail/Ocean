@@ -1,3 +1,5 @@
+import type { ManagedWorkspace } from '@runnets/domain';
+import { managedWorkspaceBootstrap } from './managed-workspace-bootstrap.js';
 import { fingerprintTree, treeFingerprintScript } from './sandbox-tree.js';
 import { fingerprintFile } from './sandbox-mounts.js';
 import { lstat } from 'node:fs/promises';
@@ -7,10 +9,13 @@ import { lstat } from 'node:fs/promises';
 export async function sandboxLauncher(
   argv: readonly string[],
   expectedInputs: Readonly<Record<string, string>> = {},
+  stdioSignal?: AbortSignal,
+  managedWorkspace?: ManagedWorkspace,
 ): Promise<string> {
   const trees: Record<string, string> = {};
   const identities: Record<string, string[]> = {};
   for (let i = 0; i < argv.length; i++) {
+    stdioSignal?.throwIfAborted();
     if (argv[i] !== '--bind' && argv[i] !== '--ro-bind') continue;
     const source = argv[i + 1]!;
     if (source === '/dev/null') continue;
@@ -18,9 +23,12 @@ export async function sandboxLauncher(
     identities[source] = [stat.dev, stat.ino, stat.mode, stat.size, stat.mtimeNs, stat.ctimeNs].map(
       String,
     );
-    if (stat.isFile()) identities[source].push(await fingerprintFile(source));
-    if (stat.isDirectory() && source !== '/usr' && argv[i] === '--ro-bind')
+    if (stat.isFile()) identities[source].push(await fingerprintFile(source, stdioSignal));
+    if (stat.isDirectory() && source !== '/usr' && argv[i] === '--ro-bind') {
+      // Managed servers admit only regular-file inputs beyond the system tree.
+      if (stdioSignal) throw Error('unexpected stdio directory mount');
       trees[source] = fingerprintTree(source);
+    }
     const digest = stat.isFile() ? identities[source].at(-1) : trees[source];
     if (expectedInputs[source] !== undefined && digest !== expectedInputs[source])
       throw new Error('qualified sandbox input changed');
@@ -37,6 +45,7 @@ export async function sandboxLauncher(
     const fs=require('node:fs'), cp=require('node:child_process'),crypto=require('node:crypto'),os=require('node:os'),path=require('node:path');
     const argv=${JSON.stringify(argv)}, identities=${JSON.stringify(identities)}, descriptors=[];
     const trees=${JSON.stringify(trees)}, fingerprintTree=(${treeFingerprintScript});
+    ${managedWorkspace ? managedWorkspaceBootstrap(managedWorkspace) : 'const checkWorkspace=()=>{};'}
     const staged=[];
     process.once('exit',()=>{for(const dir of staged)fs.rmSync(dir,{recursive:true,force:true});});
     try {
@@ -45,6 +54,7 @@ export async function sandboxLauncher(
         if(argv[i+1]==='/dev/null') {i+=2;continue;}
         let fd=fs.openSync(argv[i+1],fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
         descriptors.push(fd);
+        checkWorkspace(fd,argv[i+1]);
         const stat=fs.fstatSync(fd,{bigint:true});
         const actual=[stat.dev,stat.ino,stat.mode,stat.size,stat.mtimeNs,stat.ctimeNs].map(String);
         if(stat.isFile()) {
@@ -89,7 +99,7 @@ export async function sandboxLauncher(
         argv[i+1]=String(descriptors.length+2);
         i+=2;
       }
-      const child=cp.spawn('/usr/bin/bwrap',argv,{
+      const child=cp.spawn(${JSON.stringify(managedWorkspace ? '/usr/bin/unshare' : '/usr/bin/bwrap')},${managedWorkspace ? "['--user','--map-root-user','--mount','--propagation','private','/usr/bin/bwrap',...argv]" : 'argv'},{
         env:process.env,stdio:['inherit','inherit','inherit',...descriptors],shell:false});
       child.on('error',()=>process.exit(127));
       child.on('exit',(code)=>process.exit(code??128));

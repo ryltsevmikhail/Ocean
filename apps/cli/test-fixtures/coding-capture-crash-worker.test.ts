@@ -1,3 +1,5 @@
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule1 from '../src/ocean/profile.js';
 // Halt the real changeset capture at a named durable boundary for the parent SIGKILL.
 import { writeSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
@@ -42,7 +44,7 @@ if (phase === 'scan') {
     return artifact;
   };
 }
-const { openOceanProfile } = await import('../dist/ocean/profile.js');
+const { openOceanProfile }: typeof SourceModule1 = await import(String('../dist/ocean/profile.js'));
 const runtime = openOceanProfile(profile, false);
 try {
   await runtime.ready;

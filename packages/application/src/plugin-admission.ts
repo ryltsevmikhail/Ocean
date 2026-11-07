@@ -23,7 +23,6 @@ import {
   SERVICE_PLUGIN_CALL_DEADLINE_MS,
   SERVICE_PLUGIN_MAX_REQUEST_BYTES,
   type ServicePluginInvokeOutcome,
-  type ServicePluginTarget,
   type ServicePluginTransportPort,
 } from './service-plugin-transport.js';
 import {
@@ -45,6 +44,7 @@ import type { ToolEffectContext } from './tools.js';
 import type { PluginGrantRecord } from '@runnets/domain';
 import { pluginJsonBytes, validServicePluginJson } from './plugin-json.js';
 import { settlePluginInvocation } from './plugin-admission-settlement.js';
+import { pluginConnectionTarget, pluginSessionReady } from './plugin-session-authority.js';
 
 type Admitted = {
   readonly admitted: true;
@@ -154,6 +154,8 @@ export class PluginCallAdmissionService {
       if (!declared) return { admitted: false, code: 'tool_not_declared' };
       if (!this.#credentials.available(connection.credentialReference))
         return { admitted: false, code: 'credential_unavailable' };
+      if (!pluginSessionReady(this.#transport, connection))
+        return { admitted: false, code: 'discovery_required' };
       const fingerprint = JSON.stringify([
         request.tool,
         repository,
@@ -222,11 +224,7 @@ export class PluginCallAdmissionService {
     request: PluginCallRequest,
     decision: Admitted,
   ): Promise<ServicePluginInvokeOutcome> {
-    const target: ServicePluginTarget = {
-      integrationId: decision.version.pluginId,
-      connectionId: decision.connection.id,
-      owner: 'user',
-    };
+    const target = pluginConnectionTarget(decision.connection);
     try {
       return await this.#transport.invoke(
         target,

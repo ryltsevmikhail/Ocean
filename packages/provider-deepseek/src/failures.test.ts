@@ -37,10 +37,10 @@ function fakeHttp(...scripts: readonly FakeScript[]): FakeHttp {
       next += 1;
       if (script.failWith !== undefined) throw script.failWith;
       const status = script.status ?? 200;
-      const chunks = script.chunks ?? [];
+      const chunks = script.chunks ?? (script.body === undefined ? [] : [script.body]);
       return {
         status,
-        ok: status < 400,
+        ok: status >= 200 && status < 300,
         text: async () => script.body ?? chunks.join(''),
         stream: () =>
           (async function* () {
@@ -169,7 +169,11 @@ describe('DeepSeekProvider failures', () => {
       request({ signal: controller.signal }),
     );
 
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(3);
+    expect(events[1]).toEqual({
+      type: 'usage_evidence',
+      evidence: { kind: 'unavailable', reason: 'interrupted' },
+    });
     expect(events[0]).toEqual({ type: 'text_delta', text: 'partial' });
     expect(errorOf(events).code).toBe('cancelled');
     expect(terminal(events)).toHaveLength(1);
@@ -197,4 +201,20 @@ describe('DeepSeekProvider metadata', () => {
     expect(target.models).toEqual(['custom-model']);
     expect(target.capabilities.streaming).toBe(true);
   });
+});
+it.each([false, 'throw'] as const)('vetoes trusted dispatch %s before inference', async (mode) => {
+  const http = fakeHttp();
+  const p = makeProvider(http);
+  const events = [];
+  for await (const event of p.stream({
+    model: MODEL,
+    messages: [{ role: 'user', content: 'hi' }],
+    authorizeDispatch: () => {
+      if (mode === 'throw') throw Error('veto');
+      return false;
+    },
+  }))
+    events.push(event);
+  expect(events).toMatchObject([{ type: 'error', error: { dispatch: 'not_sent' } }]);
+  expect(http.calls).toHaveLength(0);
 });

@@ -1,3 +1,7 @@
+import type { ChatTurnExecutionDeps } from '@runnets/application';
+import type { RuntimeServices } from './runtime-services.js';
+import type { McpServiceTransportOptions } from '@runnets/integrations-mcp';
+import type { GrantedToolSource } from '@runnets/application';
 /**
  * Public runtime contracts.
  *
@@ -6,6 +10,7 @@
  */
 
 import type {
+  ServiceCallConfirmationPort,
   ConversationStore,
   DesktopAssetStore,
   ImageAssetResolverPort,
@@ -43,10 +48,15 @@ import type {
   ConversationService,
   DirectChatService,
   RoomBroadcastService,
+  RoomTaskPersistence,
   ChatReviewService,
 } from '@runnets/application';
 
 export interface Runtime {
+  readonly codingTools?: NonNullable<ChatTurnExecutionDeps['codingTools']>;
+  readonly roomTasks?: RoomTaskPersistence;
+  readonly services?: RuntimeServices;
+  readonly grantedTools?: GrantedToolSource;
   readonly restored?: boolean;
   openRebindStore?(): ProfileRebindStore;
   readonly desktopAssets?: DesktopAssetStore;
@@ -93,6 +103,8 @@ export interface Runtime {
   close(): void;
 }
 export interface RuntimeOptions {
+  readonly serviceConfirmation?: ServiceCallConfirmationPort | undefined;
+  readonly serviceTransportOptions?: Omit<McpServiceTransportOptions, 'refreshNeeded'> | undefined;
   /** Runtime image authority factory; the store exists only after composition. */
   readonly imageResolver?: (store: DesktopAssetStore) => ImageAssetResolverPort;
   readonly codingWorktreeDirectory?: string;

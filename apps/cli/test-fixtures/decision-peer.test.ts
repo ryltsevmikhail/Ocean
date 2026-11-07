@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 export const decisionPeer =
-  (profile: string, runDirectory: string) => async (method: string, params: unknown) => {
+  (profile: string, runDirectory: string, path = process.env['PATH']) =>
+  async (method: string, params: unknown) => {
     const { stdout } = await promisify(execFile)(
       process.execPath,
       [
@@ -30,7 +31,7 @@ export const decisionPeer =
               'TMPDIR',
             ].map((key) => [key, process.env[key]]),
           ),
-          PATH: process.env['PATH'],
+          PATH: path,
           XDG_RUNTIME_DIR: runDirectory,
         },
       },

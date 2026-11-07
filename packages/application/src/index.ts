@@ -5,6 +5,8 @@ export * from './command-commit.js';
 export * from './provider.js';
 export * from './provider-admission.js';
 export * from './provider-connection-ports.js';
+export * from './model-connection-ports.js';
+export * from './model-connection-validation.js';
 export * from './provider-connection-resolution.js';
 export * from './provider-connection-request.js';
 export * from './provider-connection-state.js';
@@ -34,6 +36,7 @@ export * from './chat-review.js';
 
 export * from './coding-ports.js';
 export * from './coding-service.js';
+export * from './coding-resource-scope.js';
 
 export * from './changeset-ports.js';
 
@@ -76,3 +79,79 @@ export * from './plugin-operation-ports.js';
 export * from './plugin-operations.js';
 export * from './plugin-turn-tools.js';
 export * from './plugin-adapter-identity.js';
+
+export * from './model-connection-types.js';
+export * from './model-credential-ports.js';
+export * from './model-connections.js';
+export { modelPublicResult, readModelCheck } from './model-connection-results.js';
+
+export * from './bot-model-binding.js';
+
+export * from './model-activation-types.js';
+
+export * from './model-activation.js';
+export * from './model-dispatch.js';
+
+export * from './provider-activation.js';
+export * from './model-activation-snapshot.js';
+
+export { validModelConnectionEndpoint } from './model-connection-input.js';
+
+export * from './model-local-qualification.js';
+
+export * from './room-model-policy.js';
+
+export * from './model-pending-request.js';
+export * from './model-read-pages.js';
+export * from './model-connection-metadata.js';
+export * from './bot-model-binding-reads.js';
+export * from './model-execution-reads.js';
+
+export * from './service-authority-ports.js';
+
+export * from './owner-scope.js';
+export * from './service-admission-types.js';
+export * from './service-admission.js';
+export * from './service-catalog-policy.js';
+export { codingEffectAdmission, boundCodingEffect } from './coding-grant-admission.js';
+
+export * from './service-turn-tools.js';
+export { combineChatTools } from './chat-turn-tools.js';
+
+export * from './service-owner-receipt.js';
+export * from './service-owner-settings.js';
+export * from './room-task-records.js';
+export { RoomTaskPersistence, type RoomTaskPersistenceDeps } from './room-task-persistence.js';
+
+export { validRoomTaskIdentity } from './room-task-identity.js';
+
+export {
+  claimRoomDelivery,
+  recoverUnstartedRoomClaims,
+  unstartedRoomClaimRuns,
+  inspectUnstartedRoomClaim,
+  type RoomDeliveryClaim,
+  type RoomDeliveryClaimDeps,
+} from './room-delivery-claim.js';
+export { repairRoomHandoff, type RoomSlicePublicationDeps } from './room-slice-publication.js';
+export { recoverChats } from './direct-chat-publication.js';
+
+export type { RoomHostScope } from './room-task-records.js';
+
+export * from './room-task-host.js';
+
+export * from './room-task-authority.js';
+
+export * from './coding-read-admission.js';
+export {
+  selectedCodingBasis,
+  roomCodingPermits,
+  codingRoomBasis,
+  codingRoomBasisMatches,
+} from './coding-grant-admission.js';
+
+export { roomCompleteEvidence } from './room-slice-handoff.js';
+
+export { releaseUnstartedRoomClaim } from './room-task-cancellation.js';
+
+export * from './service-resource-evidence.js';

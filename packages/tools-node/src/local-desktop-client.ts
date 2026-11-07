@@ -27,6 +27,29 @@ export class DesktopAttachmentClient {
   constructor(client: LocalDesktopClient) {
     this.client = client;
   }
+  /** Attach to the owner's anchor; only a known unbound/older peer may enroll once. */
+  async connect(userData: string): Promise<void> {
+    let unbound = false;
+    try {
+      await this.client.desktopAssets({ op: 'attach' });
+      return;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !['desktop_not_enrolled', 'invalid_params'].includes(error.message)
+      )
+        throw error;
+      unbound = error.message === 'desktop_not_enrolled';
+    }
+    try {
+      await this.enroll(userData);
+    } catch (error) {
+      if (!unbound || !(error instanceof Error) || error.message !== 'desktop_binding_conflict')
+        throw error;
+      // Another authorized client may have won first enrollment; this is one read, never a write retry.
+      await this.client.desktopAssets({ op: 'attach' });
+    }
+  }
   async enroll(userData: string): Promise<void> {
     await this.client.desktopAssets({ op: 'enroll', userData });
   }

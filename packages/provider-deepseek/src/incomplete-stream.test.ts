@@ -26,7 +26,7 @@ describe('incomplete DeepSeek stream', () => {
   it('reports a stream with no finish reason and no [DONE] as an error, not a completion', async () => {
     const events = await collect(mapStream(stream([frame(text('Hel')), frame(text('lo'))])));
 
-    expect(events.slice(0, -1)).toEqual([
+    expect(events.filter((event) => event.type === 'text_delta')).toEqual([
       { type: 'text_delta', text: 'Hel' },
       { type: 'text_delta', text: 'lo' },
     ]);
@@ -90,12 +90,9 @@ describe('incomplete DeepSeek stream', () => {
     });
   });
 
-  it('still completes when [DONE] terminates a stream that carried no finish reason', async () => {
+  it('does not complete when DONE lacks a finish reason', async () => {
     const events = await collect(mapStream(stream([frame(text('a')), DONE])));
-
-    expect(events).toEqual([
-      { type: 'text_delta', text: 'a' },
-      { type: 'completed', stopReason: 'stop', rawStopReason: null },
-    ]);
+    expect(events.at(-1)?.type).toBe('error');
+    expect(events.some((event) => event.type === 'completed')).toBe(false);
   });
 });

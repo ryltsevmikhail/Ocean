@@ -1,5 +1,6 @@
+import { malformed } from '../../test-fixtures/mcp-malformed-archive.js';
 /**
- * Release packaging regressions for the pre-bundled Executor adapter.
+ * Release packaging regressions for the bundled public MCP adapter.
  *
  * These are process cases: they run after `pnpm build` and package real built
  * modules with real pinned identities. Assembly-only fixtures use a synthetic
@@ -13,14 +14,13 @@ import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 
 import { createArchive } from './archive.js';
-import { PINNED_SDK_CHUNK_SHA256, PINNED_PATCH_SHA256 } from './bundle.js';
+
 import { archiveFiles, installArchive, sha256 } from './installer.js';
 import { packageRelease } from './package.js';
 import {
   addReleaseRepoPackage,
   commitReleaseRepo,
   releaseRepo,
-  tamperReleaseRepoPatch,
   workspace,
 } from '../../test-fixtures/release-repo.js';
 
@@ -33,7 +33,7 @@ function temporary(label: string): string {
   roots.push(root);
   return root;
 }
-const ADAPTER = 'node_modules/@runnets/integrations-executor/';
+const ADAPTER = 'node_modules/@runnets/integrations-mcp/';
 
 it('ships the pinned adapter bundle with a verified manifest inventory', async () => {
   const root = temporary('package-bundle');
@@ -41,6 +41,7 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   const release = await packageRelease(repo, '1.1.0-rc.2', join(root, 'artifact'));
   const files = archiveFiles(readFileSync(release.archive));
   const names = [...files.keys()];
+  expect(names.filter((name) => name.includes('integrations-executor'))).toEqual([]);
   expect(names.filter((name) => name.endsWith('.map'))).toEqual([]);
   expect(names.filter((name) => name.includes('/node_modules/'))).toEqual([]);
   expect(names.filter((name) => name.includes('node_modules/.pnpm'))).toEqual([]);
@@ -55,6 +56,14 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   // Internal planning/session documents stay out of the installed product.
   expect(names.filter((name) => name.startsWith('docs/superpowers/'))).toEqual([]);
   expect(names).toContain('docs/ocean/production.md');
+  for (const name of ['tools-node', 'application', 'domain', 'contracts']) {
+    expect(names).toContain('node_modules/@runnets/' + name + '/dist/index.d.ts');
+  }
+  expect(names).toContain('node_modules/@runnets/tools-node/dist/local-service-client.d.ts');
+  expect(names).toContain('node_modules/@runnets/contracts/dist/local-services.d.ts');
+  expect(
+    names.filter((name) => /(?:\.test\.|integrations-executor|\/plugin-transport\.)/.test(name)),
+  ).toEqual([]);
   expect(names).toContain('docs/integration/local-runtime.md');
   // The tsc output of the adapter is replaced by the bundle, never shipped beside it.
   expect(names).not.toContain(ADAPTER + 'dist/transport.js');
@@ -62,7 +71,7 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   expect(names).toContain(ADAPTER + 'dist/bundle-integrity.json');
   expect(names).toContain(ADAPTER + 'package.json');
   expect(names).toContain(ADAPTER + 'LICENSE');
-  expect(names).toContain(ADAPTER + 'THIRD_PARTY_LICENSES/executor-MIT.txt');
+  expect(names).toContain(ADAPTER + 'THIRD_PARTY_LICENSES/modelcontextprotocol-client-LICENSE');
   // Only bundled .js chunks ship: the packaged manifest must not advertise d.ts
   // declaration files that the archive does not contain (RC2 final review M8).
   const adapterManifest = JSON.parse(
@@ -77,7 +86,7 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
   expect(adapterManifest.exports['.'].import).toBe('./dist/index.js');
   expect(adapterManifest.dependencies).toBeUndefined();
   const chunks = names.filter((name) => name.startsWith(ADAPTER + 'dist/'));
-  expect(chunks.length).toBeGreaterThan(10);
+  expect(chunks.length).toBeGreaterThan(1);
   const manifestBytes = files.get('manifest.json')?.body;
   expect(manifestBytes).toBeDefined();
   const manifest = JSON.parse(manifestBytes?.toString() ?? '') as {
@@ -92,15 +101,9 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
     };
   };
   expect(manifest.version).toBe('1.1.0-rc.2');
-  expect(manifest.bundle.adapter).toBe('@runnets/integrations-executor');
-  expect(manifest.bundle.identities['@executor-js/sdk']).toBe('1.6.11');
-  expect(manifest.bundle.identities['@effect/platform-node-shared']).toBe('4.0.0-beta.59');
-  expect(manifest.bundle.identities['@executor-js/sdk#dist/chunk-Q3W5ARXY.js']).toBe(
-    'sha256:' + PINNED_SDK_CHUNK_SHA256,
-  );
-  expect(manifest.bundle.identities['patch#patches/@executor-js__sdk@1.6.11.patch']).toBe(
-    'sha256:' + PINNED_PATCH_SHA256,
-  );
+  expect(manifest.bundle.adapter).toBe('@runnets/integrations-mcp');
+  expect(manifest.bundle.identities['@modelcontextprotocol/client']).toBe('2.4.0');
+  expect(manifest.bundle.identities['@modelcontextprotocol/core']).toBe('2.4.0');
   const integrity = files.get(ADAPTER + manifest.bundle.integrity)?.body;
   expect(integrity).toBeDefined();
   expect(sha256(integrity ?? Buffer.alloc(0))).toBe(manifest.bundle.integritySha256);
@@ -110,8 +113,6 @@ it('ships the pinned adapter bundle with a verified manifest inventory', async (
     pinnedPatchSha256: string;
     bundler: { name: string; version: string };
   };
-  expect(record.pinnedSdkChunkSha256).toBe(PINNED_SDK_CHUNK_SHA256);
-  expect(record.pinnedPatchSha256).toBe(PINNED_PATCH_SHA256);
   expect(record.bundler).toEqual({ name: 'rolldown', version: '1.2.16' });
   // The manifest bundle inventory is exactly the integrity inventory plus itself.
   const shipped = Object.keys(manifest.bundle.files).sort();
@@ -168,17 +169,34 @@ it('still refuses every other unpackaged runtime dependency, producing no archiv
   expect(existsSync(out)).toBe(false);
 });
 
-it('refuses to bundle when a pinned identity is deliberately drifted', async () => {
-  const root = temporary('package-identity');
-  const repo = releaseRepo(join(root, 'repo'));
-  tamperReleaseRepoPatch(repo);
-  commitReleaseRepo(repo, 'drift the pinned patch');
-  const out = join(root, 'artifact');
-  await expect(packageRelease(repo, '1.1.0-rc.2', out)).rejects.toThrow(
-    'pinned patch identity mismatch',
-  );
-  expect(existsSync(out)).toBe(false);
-});
+it.each(['resolution', 'integrity'])(
+  'refuses actual lock %s drift with importer and stale installed SDK intact',
+  async (mode) => {
+    const root = temporary('package-identity');
+    const repo = releaseRepo(join(root, 'repo'));
+    const original = readFileSync(join(repo, 'pnpm-lock.yaml'), 'utf8');
+    const drifted =
+      mode === 'resolution'
+        ? original.replace(
+            "'@modelcontextprotocol/client@2.4.0':",
+            "'@modelcontextprotocol/client@2.4.1':",
+          )
+        : original.replace(
+            /('@modelcontextprotocol\/core@2\.4\.0':\n {4}resolution: \{integrity: sha512-)([^}]+)/,
+            (_match, prefix: string, value: string) =>
+              prefix + (value[0] === 'A' ? 'B' : 'A') + value.slice(1),
+          );
+    expect(drifted).not.toBe(original);
+    expect(drifted).toContain("'@modelcontextprotocol/client':");
+    writeFileSync(join(repo, 'pnpm-lock.yaml'), drifted);
+    commitReleaseRepo(repo, 'drift actual locked identity');
+    const out = join(root, 'artifact');
+    await expect(packageRelease(repo, '1.1.0-rc.2', out)).rejects.toThrow(
+      'lockfile MCP identity mismatch',
+    );
+    expect(existsSync(out)).toBe(false);
+  },
+);
 
 it('installer refuses a manifest whose recorded bundle integrity disagrees with the shipped bytes', async () => {
   const root = temporary('package-manifest');
@@ -221,4 +239,36 @@ it('records the release revision and lockfile identity from the committed tree',
   ) as { revision: string; lockfileSha256: string };
   expect(manifest.revision).toBe(revision);
   expect(manifest.lockfileSha256).toBe(sha256(readFileSync(join(workspace, 'pnpm-lock.yaml'))));
+});
+
+it('the emitted standalone rejects self-consistent modern policy omissions/drift before writes', async () => {
+  const root = temporary('standalone-policy');
+  const release = await packageRelease(
+    releaseRepo(join(root, 'repo')),
+    '1.1.0-policy',
+    join(root, 'artifact'),
+  );
+  expect(existsSync(release.archive)).toBe(true);
+  for (const mode of ['absent', 'format', 'pins', 'identities', 'bundler', 'outer-bundler']) {
+    const artifact = malformed(root, mode),
+      prefix = join(root, 'prefix-' + mode);
+    expect(
+      () =>
+        execFileSync(
+          process.execPath,
+          [
+            join(root, 'artifact/ocean-install.mjs'),
+            '--archive',
+            artifact.archive,
+            '--sha256',
+            artifact.checksum,
+            '--prefix',
+            prefix,
+          ],
+          { stdio: 'pipe' },
+        ),
+      mode,
+    ).toThrow();
+    expect(existsSync(prefix), mode).toBe(false);
+  }
 });

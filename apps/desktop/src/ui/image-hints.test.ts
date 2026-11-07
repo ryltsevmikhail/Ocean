@@ -128,3 +128,30 @@ describe('Desktop image capability hints', () => {
     expect(hint).toContain('не принимает изображения');
   });
 });
+
+it('does not diagnose a negotiated local binding using the legacy model list', async () => {
+  const { modelSupport } = await import('./model-support.js');
+  modelSupport.value = true;
+  try {
+    const line = attachmentHint({
+      files: [{ kind: 'image', name: 'image' }],
+      members: [
+        {
+          id: 'local',
+          handle: 'local',
+          name: 'Local',
+          role: 'role',
+          provider: 'ollama',
+          model: 'qwen3:1.7b',
+        },
+      ],
+      group: false,
+      recipient: '',
+      broadcast: 'all',
+    });
+    expect(line).toContain('не подтверждена');
+    expect(line).not.toContain('не принимает');
+  } finally {
+    modelSupport.value = null;
+  }
+});

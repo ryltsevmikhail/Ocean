@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {connectLocalRuntime,localRuntimePaths} from '@runnets/tools-node';
+const phase=process.env.OCEAN_QA_PHASE,installed=process.env.OCEAN_QA_INSTALLED,profile=path.join(phase,'profile'),workspace=path.join(phase,'workspace');fs.mkdirSync(workspace);
+const argv=[path.join(installed,'launch.js'),'init','--workspace',workspace,'--profile',profile,'--json'];
+const result=JSON.parse(execFileSync(process.execPath,argv,{encoding:'utf8',timeout:15000}));
+const {startLocalRuntime}=await import('file://'+installed+'/apps/cli/dist/local-runtime/host.js');
+const host=await startLocalRuntime({profile}),client=await connectLocalRuntime({profile});
+let proof;
+try{proof={init:{argv,exit:0,result},identity:host.identity,status:await client.status(),uid:process.getuid(),netns:fs.readlinkSync('/proc/self/ns/net'),ancestorUIDs:Object.fromEntries(['/', '/home','/tmp',phase,process.env.XDG_RUNTIME_DIR].map(p=>[p,fs.statSync(p).uid]))};}
+finally{client.close();const stopped=await host.stop();await host.closed;proof={...proof,stopped,closed:true,socketClosed:!fs.existsSync(localRuntimePaths(profile).endpoint)};fs.writeFileSync(path.join(phase,'owner-preflight.json'),JSON.stringify(proof,null,2),{flag:'wx'});}
+assert.equal(proof.socketClosed,true);console.log(JSON.stringify(proof,null,2));

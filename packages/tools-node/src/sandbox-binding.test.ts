@@ -1,3 +1,4 @@
+import type { CodingTestPreset } from '@runnets/domain';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -13,7 +14,12 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
       await writeFile(join(root, '.git'), 'synthetic');
       const source = join(fixture, 'pnpm');
       await writeFile(source, '#!/usr/bin/sh\necho qualified\n', { mode: 0o755 });
-      const preset = { id: 'test', program: '/toolchain/pnpm/bin/pnpm', args: [], cwd: '.' };
+      const preset: CodingTestPreset = {
+        id: 'test',
+        program: '/toolchain/pnpm/bin/pnpm',
+        args: [],
+        cwd: '.',
+      };
       const backend = await createSandboxBackend(
         { root, mounts: [{ source, target: preset.program }] },
         [preset],

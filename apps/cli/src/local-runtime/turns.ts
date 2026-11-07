@@ -1,5 +1,10 @@
+import { LEGACY_WIRE_CONTEXT, type RuntimeWireContext } from './client-compatibility.js';
 import { CodingTurnRefusal } from '../coding-turn-factory.js';
-import type { DirectChatService, ProviderPort, RoomRuntimeRuns } from '@runnets/application';
+import type {
+  DirectChatService,
+  ProviderActivationPort,
+  RoomRuntimeRuns,
+} from '@runnets/application';
 import { isLocalReceiptQuery, isLocalTurnRequest } from '@runnets/contracts';
 
 import { RuntimeQueries, type RuntimeReply } from './queries.js';
@@ -15,20 +20,23 @@ export class RuntimeTurns {
   /** Broadcast children are owned by the broadcast runner, not by this session's jobs. */
   #external: ((runId: string) => AbortController | undefined) | null = null;
   readonly #chat: DirectChatService;
-  /** A getter, so each newly admitted turn captures the current immutable activation. */
-  readonly #provider: () => ProviderPort | null;
+  /** Passed unchanged; receipt-first admission owns the sole activation capture. */
+  readonly #resolver: ProviderActivationPort;
   constructor(
     chat: DirectChatService,
-    provider: ProviderPort | null | (() => ProviderPort | null),
+    resolver: ProviderActivationPort,
     runs: RoomRuntimeRuns,
     instance: string,
   ) {
     this.#runs = runs;
     this.#queries = new RuntimeQueries(runs, instance);
     this.#chat = chat;
-    this.#provider = typeof provider === 'function' ? provider : () => provider;
+    this.#resolver = resolver;
   }
 
+  get observers() {
+    return this.#queries.observers;
+  }
   attachControllers(resolve: (runId: string) => AbortController | undefined): void {
     this.#external = resolve;
   }
@@ -36,6 +44,7 @@ export class RuntimeTurns {
     method: string,
     params: Record<string, unknown>,
     detached: AbortSignal,
+    context: RuntimeWireContext = LEGACY_WIRE_CONTEXT,
   ): RuntimeReply | Promise<RuntimeReply> {
     switch (method) {
       case 'turns.submit': {
@@ -44,7 +53,7 @@ export class RuntimeTurns {
         const admitted = this.#chat.submit(
           {
             ...params,
-            provider: this.#provider(),
+            resolver: this.#resolver,
             signal: controller.signal,
             emit: () => {},
           },
@@ -96,6 +105,7 @@ export class RuntimeTurns {
           typeof params['runId'] === 'string'
             ? (this.#jobs.get(params['runId'])?.controller ?? this.#external?.(params['runId']))
             : undefined,
+          context,
         );
     }
   }

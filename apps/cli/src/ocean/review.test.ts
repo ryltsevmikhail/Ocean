@@ -90,9 +90,7 @@ it('TUI owner confirms the viewed run once, and the persisted mode survives reop
   const app = new TuiApp({
     input,
     output,
-    service: runtime.service,
-    provider: c.broken,
-    book: new ChatRunBook(runtime, c.room),
+    book: new ChatRunBook(runtime, c.room, c.broken),
   });
   try {
     await app.start();

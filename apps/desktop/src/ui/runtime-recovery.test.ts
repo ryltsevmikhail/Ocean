@@ -106,7 +106,7 @@ it('pages authoritative turn IDs and preserves the original draft across conflic
     state.room.value = { kind: 'direct', id: room.data.id, botId: bot.data.id };
     state.draft.value = 'original user content';
     phase = 'lost';
-    await expect(state.send()).rejects.toThrow('connection_closed');
+    await expect(state.send([])).rejects.toThrow('connection_closed');
     expect(original).toBeDefined();
     await other.submit({
       ...scope,
@@ -114,9 +114,9 @@ it('pages authoritative turn IDs and preserves the original draft across conflic
       text: 'independent conflicting content',
     });
     phase = 'normal';
-    await expect(state.send()).rejects.toThrow('request_conflict');
+    await expect(state.send([])).rejects.toThrow('request_conflict');
     phase = 'preparation';
-    await expect(state.send()).rejects.toThrow('attachment_unavailable');
+    await expect(state.send([])).rejects.toThrow('attachment_unavailable');
     expect(state.draft.value).toBe('original user content');
     expect(state.uncertain.value).toBe(true);
     expect(state.sent.value).toBe(0);
@@ -133,9 +133,24 @@ it('pages authoritative turn IDs and preserves the original draft across conflic
       db.prepare(
         "UPDATE ocean_chat_turns SET id='legacy_unequal',payload=json_set(payload,'$.id','legacy_unequal') WHERE id=?",
       ).run(first['id']!);
-      db.prepare("UPDATE ocean_messages SET turn_id='legacy_unequal' WHERE turn_id=?").run(
-        first['id']!,
-      );
+      // Seed the historical pair through inserts; current message facts cannot be updated.
+      const legacyMessages = db
+        .prepare('SELECT * FROM ocean_messages WHERE turn_id=?')
+        .all(first['id']!);
+      db.prepare('DELETE FROM ocean_messages WHERE turn_id=?').run(first['id']!);
+      for (const message of legacyMessages)
+        db.prepare('INSERT INTO ocean_messages VALUES(?,?,?,?,?,?,?,?,?,?)').run(
+          message['id']!,
+          message['workspace_id']!,
+          message['room_id']!,
+          message['seq']!,
+          message['author']!,
+          message['target_bot_id']!,
+          message['body']!,
+          message['created_at']!,
+          message['author_bot_id']!,
+          'legacy_unequal',
+        );
       db.exec('COMMIT');
     } finally {
       db.close();

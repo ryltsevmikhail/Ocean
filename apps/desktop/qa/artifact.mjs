@@ -17,7 +17,9 @@ import {
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import console from 'node:console';
+import { stageWorkspace } from './artifact-workspace.mjs';
 import { packager } from '@electron/packager';
+import { stageDesktopThirdPartyLicenses } from '../dist/types/artifact-licenses.js';
 
 const ELECTRON_VERSION = '45.2.1';
 const root = resolve(process.env.OCEAN_QA_PACKAGE_ROOT ?? '');
@@ -75,6 +77,7 @@ const stage = join(root, 'stage');
 mkdirSync(stage, { recursive: true, mode: 0o700 });
 cpSync('apps/desktop/dist', join(stage, 'dist'), { recursive: true });
 for (const name of ['LICENSE', 'NOTICE']) cpSync(name, join(stage, name));
+stageDesktopThirdPartyLicenses(resolve('apps/desktop'), stage);
 writeFileSync(
   join(stage, 'package.json'),
   JSON.stringify({
@@ -86,12 +89,7 @@ writeFileSync(
     license: desktop.license,
   }),
 );
-for (const name of ['tools-node', 'application', 'domain', 'contracts']) {
-  const target = join(stage, 'node_modules', '@runnets', name);
-  mkdirSync(target, { recursive: true, mode: 0o700 });
-  cpSync(join('packages', name, 'package.json'), join(target, 'package.json'));
-  cpSync(join('packages', name, 'dist'), join(target, 'dist'), { recursive: true });
-}
+stageWorkspace(stage);
 cpSync('apps/desktop/node_modules/zod', join(stage, 'node_modules', 'zod'), {
   recursive: true,
   dereference: true,
@@ -124,6 +122,8 @@ assert.ok(existsSync(asarPath), 'packaged ASAR is missing');
 const asar = asarInventory(asarPath);
 assert.ok(asar.names.includes('LICENSE'), 'ASAR is missing LICENSE');
 assert.ok(asar.names.includes('NOTICE'), 'ASAR is missing NOTICE');
+for (const name of ['vue-MIT.txt', 'zod-MIT.txt'])
+  assert.ok(asar.names.includes('THIRD_PARTY_LICENSES/' + name), 'ASAR is missing ' + name);
 assert.ok(asar.names.includes('dist/types/host/main.js'), 'ASAR is missing the main entry');
 for (const name of asar.names)
   assert.ok(!forbidden.test(name), 'ASAR ships forbidden entry ' + name);
@@ -150,7 +150,12 @@ const summary = {
     sha256: asar.sha256,
     size: asar.size,
     entries: asar.names.length,
-    licenses: ['LICENSE', 'NOTICE'],
+    licenses: [
+      'LICENSE',
+      'NOTICE',
+      'THIRD_PARTY_LICENSES/vue-MIT.txt',
+      'THIRD_PARTY_LICENSES/zod-MIT.txt',
+    ],
   },
   executable: 'OceanDesktop',
   inventory,

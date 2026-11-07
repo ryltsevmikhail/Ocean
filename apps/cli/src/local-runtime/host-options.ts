@@ -13,6 +13,7 @@ import type {
   LocalRuntimeStatus,
   LocalRuntimeStop,
 } from '@runnets/contracts';
+import type { HttpClient } from '@runnets/provider-core';
 import type { RuntimeOptions } from '../runtime.js';
 
 export interface LocalRuntimeHost {
@@ -23,6 +24,9 @@ export interface LocalRuntimeHost {
   stop(): Promise<LocalRuntimeStop>;
 }
 export interface LocalRuntimeHostOptions {
+  /** Trusted fixture scheduling override; never accepted from socket input. */
+  readonly roomTaskCapacity?: 1;
+  readonly serviceTransportOptions?: RuntimeOptions['serviceTransportOptions'];
   readonly profile: string;
   readonly restore?: boolean;
   /** Host-only composition. Providers and coding authority never arrive over the wire. */
@@ -36,8 +40,8 @@ export interface LocalRuntimeHostOptions {
   readonly providerSecretStore?: ProviderSecretStorePort;
   /** Explicit credential-directory override for fixtures; production is deterministic. */
   readonly credentialDir?: string;
-  /** Test-only deterministic vendor transport origin; never wire input. */
-  readonly providerBaseUrl?: string;
+  /** Test-only deterministic vendor transport client; never wire input. */
+  readonly providerHttpClient?: HttpClient;
   /** Test-only deterministic service-plugin transport (deterministic fixtures only). */
   readonly pluginTransport?: ServicePluginTransportPort;
   /** Test-only environment references for plugin credentials; defaults to `process.env`. */

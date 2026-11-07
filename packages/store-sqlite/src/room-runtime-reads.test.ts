@@ -143,3 +143,64 @@ it('hides abandoned never-dispatched children from run listings and lookups', ()
     db.close();
   }
 });
+
+it('keeps lifecycle status and full version while model journal events are the live head', () => {
+  const db = openDatabase(':memory:', 5000);
+  try {
+    db.exec(`INSERT INTO ocean_workspace VALUES(1,'ws','/fixture');
+      INSERT INTO ocean_bots VALUES('bot','ws','dev','Dev','role','test','test',1);
+      INSERT INTO ocean_rooms VALUES('room','ws','direct','bot',NULL);`);
+    const scope = { workspaceId: 'ws', roomId: 'room', runId: 'tr_one' };
+    const turn = {
+      ...scope,
+      id: 'turn',
+      taskRunId: 'tr_one',
+      status: 'dispatching',
+      bot: { id: 'bot' },
+      inboundMessageId: 'message',
+      requestId: 'request',
+    };
+    db.prepare('INSERT INTO ocean_chat_turns VALUES(?,?,?,?,?,?,NULL)').run(
+      'turn',
+      'ws',
+      'room',
+      'tr_one',
+      'dispatching',
+      JSON.stringify(turn),
+    );
+    const insert = db.prepare(
+      "INSERT INTO events VALUES('tr_one',?,?,'task_run',?,1,'t',NULL,'c','runtime','actor','internal',?)",
+    );
+    let sequence = 0;
+    const append = (type: string) => {
+      sequence++;
+      insert.run(
+        sequence,
+        'e' + sequence,
+        type,
+        JSON.stringify({ private: 'never serialize request/activation' }),
+      );
+    };
+    append('task_run.created');
+    append('attempt.started');
+    const reads = roomRuntimeReads(db);
+    for (const type of [
+      'attempt.model_request_started',
+      'attempt.model_request_settled',
+      'attempt.usage_recorded',
+    ]) {
+      append(type);
+      expect(reads.run(scope)).toMatchObject({ taskStatus: 'running', version: sequence });
+      expect([...reads.runs(scope, '', 50)]).toHaveLength(1);
+      expect(reads.events(scope, sequence - 1, 1)).toEqual([
+        { sequence, type, sensitivity: 'internal' },
+      ]);
+      expect(JSON.stringify(reads.run(scope))).not.toContain('private');
+    }
+    append('task_run.cancelling');
+    append('attempt.model_request_settled');
+    expect(reads.run(scope)).toMatchObject({ taskStatus: 'cancelling', version: sequence });
+  } finally {
+    db.close();
+  }
+});

@@ -12,9 +12,50 @@ OCEAN_DESKTOP_PROFILE=/absolute/private/profile pnpm --filter @ocean/desktop sta
 
 For an isolated window, append `--user-data-dir=/absolute/private/desktop` to the start command. Without an override Desktop selects `<userData>/conversation/profile`, the profile path of the imported client. It connects only. An absent profile requires explicit CLI initialization, an absent owner requires explicit start, and authentication or endpoint errors are shown in the window. The provider configuration belongs to the foreground owner. The profile panel shows its authenticated profile hash, instance UUID, protocol and state.
 
-The sandboxed renderer sends validated room and attachment commands to Electron main. Only the file-backed main frame of that window can invoke them. Main authenticates through the public `@runnets/tools-node/local-runtime-client` export and closes each bounded request connection when it finishes. Electron 45.2.1's embedded Node 24.22.1 was exercised with this client export on Linux. The owner and workspace build continue to use Node 26. The renderer receives no connection descriptor, provider configuration or arbitrary path/exec interface.
+The sandboxed renderer sends validated room and attachment commands to Electron main. Only the file-backed main frame of that window can invoke them. Main authenticates through the public `@runnets/tools-node/local-runtime-client` export and closes each bounded request connection when it finishes. Electron 45.2.1's embedded Node 24.22.1 was exercised with this client export on Linux. The owner and workspace build continue to use Node 26. The renderer receives no credentials, runtime socket descriptor or arbitrary path/exec interface. Settings receive only validated, keyless model-connection metadata.
 
 A send displays the durable message/run receipt as soon as the owner acknowledges it. A group note has no run. The window follows scoped room/run watermarks, pages committed history and runs using the authoritative turn ID (which need not match the run ID), and displays read failures separately from admission. An uncertain acknowledgement in a living window retains the original UUID, recipient, text and attachment IDs for the explicit retry button. Every automatic recovery success passes the original prepared content through binding-checked admission. The runtime operation store durably retains the prepared body, allowing an exact retry even when attachment bytes disappear. Missing or corrupt preparation evidence keeps the original UUID and draft unresolved; an identity-only owner receipt cannot establish content agreement. A preparation or admission binding conflict keeps that same pending command, including across later preparation failures. A first-attempt refusal such as `context_limit` leaves the draft and recipient editable. Reopening the room reads the owner's committed history and runs. Closing the window detaches. The cancel button identifies a run and version and requests cancellation against that binding. The run projection reports the actual outcome. Room tasks show performer and pending decision IDs. Inspect and vote on the complete operation in the room TUI or the public client example.
+
+### Negotiated connection and bot settings (source implementation)
+
+Desktop now uses the authenticated `model.connections-v1` capability for its
+connection settings. Safe older hosts retain the legacy provider form. An unsafe
+plugin host still refuses with `plugin_runtime_upgrade_required`; model settings
+never reconnect through a weaker handshake.
+
+The settings dialog reads all metadata pages without probing providers. New
+connection profiles propose Cloud/Local, provider, endpoint and default-model
+inputs; these suggestions do not establish runtime availability. The owner
+chooses auth explicitly, including keyless Local auth. Save, Check, Disconnect
+and saved-key removal are separate actions. Stored reference presence and old
+check/qualification records do not promise current health. Local readiness
+requires an explicit metadata Check; Desktop does not install a backend or model.
+
+Existing bots display their exact connection/model binding and profile version.
+Saving one binding affects that bot only. A connection default never rewrites
+bindings. Each new bot, including each missing Ocean Team member, requires an
+explicit connection and model choice on a capable host. Missing or retired
+bindings remain visible instead of selecting a replacement.
+
+Key fields clear before awaiting submission and on close, selection and auth
+changes. Uncertain outcomes retain only keyless original request identity. The
+owner refreshes metadata and explicitly finishes the original operation with
+its original method, UUID and revision guard, resupplying the same key when
+required. Historical missing-input recovery is refused when exact original
+input is unavailable. A separately advertised null-intent key repair is a new,
+explicit key-bearing canonical set at the observed revision. Revision conflicts
+refresh authority and require another explicit action; there is no blind retry.
+Disconnect does not cancel runs, prove cleanup or revoke a provider key.
+
+Run details lazily read scoped frozen model identity and usage evidence. Actual,
+estimated, unavailable, pending and unrecorded usage remain distinct. Unknown
+request counts stay unknown; known-token totals identify the run-ledger scope,
+including any legacy prefix. Desktop does not invent costs.
+
+This is source/IPC implementation with focused regression tests and desktop
+compiler/bundle verification. Native GUI interaction, installed-app acceptance
+and live cloud/local-provider qualification for these settings remain separate
+Task 17 gates; the historical GUI evidence below does not qualify this flow.
 
 ### Runtime-owned attachments
 

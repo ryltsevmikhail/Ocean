@@ -1,3 +1,7 @@
+import { DatabaseSync } from 'node:sqlite';
+import { join } from 'node:path';
+import { createProviderSecretStore } from '@runnets/tools-node';
+import type { ChatTurn } from '@runnets/domain';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
@@ -59,6 +63,16 @@ it('keeps an admitted turn on its captured key when the saved key rotates mid-fl
   expect(first.runId).not.toBeNull();
   await until(() => chat(f.vendor).length === 1, 'the admitted provider request');
   expect(chat(f.vendor)[0]?.authorization).toBe('Bearer ' + KEY_A);
+  expect(savedTurn(f, first.runId!).activation).toMatchObject({
+    identity: {
+      source: 'connection',
+      connectionId: 'legacy:deepseek',
+      connectionRevision: 1,
+      botProfileVersion: 1,
+      modelId: 'deepseek-flash',
+      endpoint: 'https://api.deepseek.com',
+    },
+  });
 
   // Rotation happens while the admitted turn is still inside its provider call.
   const rotated = await f.started.client.providerSet({
@@ -138,4 +152,86 @@ it('keeps the activated configuration across a runtime restart', async () => {
   const requests = chat(f.vendor);
   expect(requests).toHaveLength(1);
   expect(requests[0]?.authorization).toBe('Bearer ' + KEY_B);
+  expect(JSON.parse(requests[0]!.body)).toMatchObject({ model: 'deepseek-flash' });
+  expect(savedTurn(f, turn.runId!).activation).toMatchObject({
+    identity: {
+      modelId: 'deepseek-flash',
+      connectionRevision: 2,
+      endpoint: 'https://api.deepseek.com',
+    },
+  });
+});
+
+function savedTurn(f: Pick<Fixture, 'profile'>, runId: string): ChatTurn {
+  const db = new DatabaseSync(join(f.profile.profile, 'runtime.sqlite'), { readOnly: true });
+  try {
+    const row = db.prepare('SELECT payload FROM ocean_chat_turns WHERE task_run_id=?').get(runId);
+    return JSON.parse(String(row?.['payload'])) as ChatTurn;
+  } finally {
+    db.close();
+  }
+}
+it('replays and conflicts at the host boundary without reading broken saved credentials', async () => {
+  const vendor = await vendorFixture();
+  const profile = await privateRoot();
+  vi.stubEnv('DEEPSEEK_API_KEY', '');
+  const secrets = createProviderSecretStore(profile.credentialDir);
+  const started = await startProviderHost(profile, { baseUrl: vendor.url, secretStore: secrets });
+  cleanups.push(async () => {
+    await started.stop();
+    await vendor.close();
+    profile.dispose();
+  });
+  const f = { vendor, profile, started };
+  await started.client.providerSet({ requestId: 'set-a', key: KEY_A, model: 'deepseek-flash' });
+  const first = await submit(f, 'turn-replay');
+  await completedRun(started.client, profile, first.runId!);
+  const read = vi.spyOn(secrets, 'read').mockImplementation(() => {
+    throw Error('fixture unreadable secret');
+  });
+  expect(await submit(f, 'turn-replay')).toEqual(first);
+  await expect(
+    started.client.submit({
+      workspaceId: 'ws_ocean',
+      roomId: profile.roomId,
+      requestId: 'turn-replay',
+      text: 'changed',
+    }),
+  ).rejects.toThrow('request_conflict');
+  expect(read).not.toHaveBeenCalled();
+  await expect(submit(f, 'new-turn')).rejects.toThrow('provider_unavailable');
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(chat(vendor)).toHaveLength(1);
+});
+it('persists explicit injected hosts as source host without a fabricated connection identity', async () => {
+  const profile = await privateRoot();
+  const started = await startProviderHost(profile, {
+    baseUrl: '',
+    provider: {
+      id: 'deepseek',
+      models: ['deepseek-flash'],
+      capabilities: { streaming: true, reasoning: false, usage: true },
+      async *stream() {
+        yield { type: 'text_delta', text: 'injected answer' };
+        yield { type: 'usage', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
+        yield { type: 'completed', stopReason: 'stop', rawStopReason: 'stop' };
+      },
+    },
+  });
+  cleanups.push(async () => {
+    await started.stop();
+    profile.dispose();
+  });
+  const receipt = await started.client.submit({
+    workspaceId: 'ws_ocean',
+    roomId: profile.roomId,
+    requestId: 'injected',
+    text: 'hello',
+  });
+  await completedRun(started.client, profile, receipt.runId!);
+  expect(savedTurn({ profile }, receipt.runId!).activation?.identity).toEqual({
+    source: 'host',
+    providerId: 'deepseek',
+    modelId: 'deepseek-flash',
+  });
 });

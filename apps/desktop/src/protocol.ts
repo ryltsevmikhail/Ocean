@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import { isLocalProviderSetRequest, isLocalProviderRevisionRequest } from '@runnets/contracts';
+const providerRequestId = z
+  .string()
+  .max(128)
+  .refine((value) => value.trim() !== '');
+import { taskCommands, taskOutputs } from './room-task-protocol.js';
+import { serviceCommands, serviceOutputs } from './service-protocol.js';
+import { modelCommands, modelOutputs } from './model-protocol.js';
 import { pluginCommands, pluginOutputs } from './plugin-protocol.js';
 import { bot, message, pageSize, roomDto, run } from './protocol-room.js';
 export * from './protocol-room.js';
@@ -52,22 +60,28 @@ const baseCommands = [
   }),
   z.strictObject({ op: z.literal('provider') }),
   z.strictObject({ op: z.literal('provider-check') }),
-  z.strictObject({
-    op: z.literal('provider-set'),
-    requestId,
-    key: z.string().min(1).max(512).optional(),
-    model: value(256),
-  }),
-  z.strictObject({
-    op: z.literal('provider-disconnect'),
-    requestId,
-    expectedRevision: z.int().nonnegative(),
-  }),
-  z.strictObject({
-    op: z.literal('provider-remove-key'),
-    requestId,
-    expectedRevision: z.int().nonnegative(),
-  }),
+  z
+    .strictObject({
+      op: z.literal('provider-set'),
+      requestId: providerRequestId,
+      key: z.string().min(1).max(512).optional(),
+      model: z.string().min(1).max(256),
+    })
+    .refine(({ op: _op, ...input }) => isLocalProviderSetRequest(input)),
+  z
+    .strictObject({
+      op: z.literal('provider-disconnect'),
+      requestId: providerRequestId,
+      expectedRevision: z.int().nonnegative(),
+    })
+    .refine(({ op: _op, ...input }) => isLocalProviderRevisionRequest(input)),
+  z
+    .strictObject({
+      op: z.literal('provider-remove-key'),
+      requestId: providerRequestId,
+      expectedRevision: z.int().nonnegative(),
+    })
+    .refine(({ op: _op, ...input }) => isLocalProviderRevisionRequest(input)),
   z.strictObject({
     op: z.literal('broadcast'),
     requestId,
@@ -103,7 +117,13 @@ const baseCommands = [
     attachments: z.array(z.uuid()).max(4).optional(),
   }),
 ] as const;
-export const commands = z.discriminatedUnion('op', [...baseCommands, ...pluginCommands]);
+export const commands = z.discriminatedUnion('op', [
+  ...baseCommands,
+  ...pluginCommands,
+  ...modelCommands,
+  ...serviceCommands,
+  ...taskCommands,
+]);
 export type Command = z.infer<typeof commands>;
 const receipt = z.object({
   workspaceId: z.literal('ws_ocean'),
@@ -244,6 +264,9 @@ export const outputs = {
     check: providerCheckMetadata.extend({ persisted: z.boolean() }),
   }),
   ...pluginOutputs,
+  ...modelOutputs,
+  ...serviceOutputs,
+  ...taskOutputs,
 };
 export type ProfileReport = z.infer<typeof outputs.status>;
 export type ProviderStatus = z.infer<typeof providerStatus>;

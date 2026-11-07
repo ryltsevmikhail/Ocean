@@ -112,7 +112,7 @@ describe('provider credential store', () => {
       status: 'unverified',
       reason: 'provider_secret_corrupt',
     });
-    f.store.write(REF_A, KEY_A);
+    writeFileSync(file, JSON.stringify({ version: 1, secrets: { [REF_A]: { key: KEY_A } } }));
     chmodSync(file, 0o644);
     expect(f.store.read(REF_A)).toEqual({
       status: 'unverified',
@@ -155,14 +155,14 @@ describe('provider credential store', () => {
     expect(f.store.read(REF_B)).toEqual({ status: 'absent' });
   });
 
-  it('clears an unreadable private file only for an explicit removal', () => {
+  it('refuses removal of an unreadable shared file without replacing its bytes', () => {
     const f = fixture();
     f.store.write(REF_A, KEY_A);
     const file = join(f.directory, PROVIDER_SECRET_FILE);
     writeFileSync(file, 'broken', { mode: 0o600 });
-    f.store.remove(REF_A);
-    expect(f.store.read(REF_A)).toEqual({ status: 'absent' });
-    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ version: 1, secrets: {} });
+    expect(() => f.store.remove(REF_A)).toThrow('provider_write_failed');
+    expect(readFileSync(file, 'utf8')).toBe('broken');
+    expect(f.store.read(REF_A).status).toBe('unverified');
   });
 
   it('rejects references and values outside the bounded private format', () => {
@@ -186,3 +186,52 @@ describe('provider credential store', () => {
     expect(() => providerCredentialDirectory('/tmp/root/../profile')).toThrow('invalid_input');
   });
 });
+it('refuses capacity overflow before publication and atomically retires only the superseded service entry', () => {
+  const f = fixture();
+  f.store.write(REF_A, 'A'.repeat(512));
+  f.store.write(REF_B, KEY_A);
+  const file = join(f.directory, PROVIDER_SECRET_FILE);
+  const body = JSON.parse(readFileSync(file, 'utf8')) as {
+    version: number;
+    secrets: Record<string, { key: string }>;
+  };
+  let n = 0,
+    last = '';
+  while (Buffer.byteLength(JSON.stringify(body) + '\n') < 65000) {
+    last = 'psec_' + String(++n).padStart(32, '0');
+    body.secrets[last] = { key: 'P'.repeat(512) };
+  }
+  const bytes = Buffer.byteLength(JSON.stringify(body) + '\n');
+  if (bytes > 65536) body.secrets[last]!.key = 'P'.repeat(512 - (bytes - 65500));
+  writeFileSync(file, JSON.stringify(body) + '\n');
+  const original = readFileSync(file);
+  expect(() => f.store.write('psec_' + 'c'.repeat(32), 'C'.repeat(512))).toThrow(
+    'provider_write_failed',
+  );
+  expect(readFileSync(file)).toEqual(original);
+  expect(f.store.read(REF_B)).toEqual({ status: 'ok', key: KEY_A });
+  f.store.replace(REF_A, 'psec_' + 'c'.repeat(32), 'C'.repeat(512));
+  expect(f.store.read(REF_A)).toEqual({ status: 'absent' });
+  expect(f.store.read(REF_B)).toEqual({ status: 'ok', key: KEY_A });
+  expect(f.store.read('psec_' + 'c'.repeat(32))).toEqual({ status: 'ok', key: 'C'.repeat(512) });
+});
+it.each(['corrupt', 'oversized', 'insecure'])(
+  'ordinary mutations preserve %s shared private bytes',
+  (fault) => {
+    const f = fixture();
+    f.store.write(REF_A, KEY_A);
+    const file = join(f.directory, PROVIDER_SECRET_FILE);
+    if (fault === 'corrupt') writeFileSync(file, '{corrupt');
+    if (fault === 'oversized') writeFileSync(file, ' '.repeat(65537));
+    if (fault === 'insecure') chmodSync(file, 0o644);
+    const before = readFileSync(file);
+    for (const mutate of [
+      () => f.store.write(REF_B, 'synthetic'),
+      () => f.store.replace(REF_A, REF_B, 'synthetic'),
+      () => f.store.remove(REF_A),
+    ]) {
+      expect(mutate).toThrow();
+      expect(readFileSync(file)).toEqual(before);
+    }
+  },
+);

@@ -1,0 +1,55 @@
+import type { LocalModelConnectionMetadata, LocalRunModelExecution } from '@runnets/contracts';
+export const metadata = (): LocalModelConnectionMetadata => ({
+  connectionId: 'named',
+  providerId: 'deepseek',
+  kind: 'cloud',
+  endpoint: 'https://api.deepseek.com',
+  auth: 'api_key',
+  defaultModelId: 'deepseek-flash',
+  revision: 1,
+  configuration: { intent: 'active', savedKeyReferencePresent: true, configuredAfterRestore: true },
+  models: [],
+  lastCheck: null,
+  localQualification: null,
+  recovery: null,
+  writable: true,
+  restriction: null,
+});
+export const execution = (): LocalRunModelExecution => ({
+  version: 1,
+  workspaceId: 'workspace',
+  roomId: 'room',
+  runId: 'run',
+  runVersion: 6,
+  execution: {
+    identity: {
+      source: 'connection',
+      connectionId: 'named',
+      modelId: 'model',
+      providerId: 'provider',
+      connectionRevision: 1,
+      botProfileVersion: 1,
+      kind: 'local',
+    },
+    startedRequests: 1,
+    lastRequest: {
+      attemptId: 'attempt',
+      ordinal: 1,
+      startedAt: '2026-11-04T00:00:00Z',
+      settlement: {
+        finishedAt: '2026-11-04T00:00:01Z',
+        completion: { kind: 'unknown' },
+        usage: { kind: 'actual', tokens: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+      },
+    },
+    usage: {
+      scope: 'recorded_model_requests',
+      knownTokensScope: 'run_ledger_including_legacy_prefix',
+      knownTokens: 0,
+      estimatedTokens: 0,
+      unavailableRequests: 0,
+      requestCounts: { actual: 1, estimated: 0, unavailable: 0, pending: 0 },
+      completeness: 'complete',
+    },
+  },
+});

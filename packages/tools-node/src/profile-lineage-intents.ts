@@ -3,10 +3,10 @@ import { basename, join } from 'node:path';
 import type { ProfileIntentOutputKind, ProfileRebindRecord } from '@runnets/domain';
 import type { CodingAssetCapture } from './coding-asset-state.js';
 import { profileHash } from './profile-backup-output.js';
-import { captureCodingAssetTree } from './coding-asset-scan.js';
+import { captureAssetTreeAt, captureCodingAssetTree } from './coding-asset-scan.js';
 import { validateCodingAssetLinks } from './coding-asset-links.js';
 import { readLineageFile, type LineageFileCapture } from './profile-lineage-file.js';
-import { desktopRootIdentity } from './desktop-assets.js';
+import { desktopBindingMatches, withDesktopRoot } from './desktop-root.js';
 
 const DIRECTORY_OUTPUTS: readonly ProfileIntentOutputKind[] = [
   'materialization',
@@ -76,11 +76,7 @@ function verifyReadyOutput(
     )
       throw Error('unsupported_rebind_output');
   } else if (kind === 'desktop') {
-    if (
-      !result.desktop ||
-      result.desktop.root !== path ||
-      result.desktop.identity !== desktopRootIdentity(path)
-    )
+    if (!result.desktop || result.desktop.root !== path || !desktopBindingMatches(result.desktop))
       throw Error('unsupported_rebind_output');
   }
 }
@@ -185,7 +181,12 @@ function captureOutput(
     verifyFileContent(record, output.kind, file.bytes);
     return { ...output, presence: 'captured', file };
   }
-  const capture = captureCodingAssetTree(output.path, outputLimits, 'all');
+  const capture =
+    record.state === 'ready' && output.kind === 'desktop' && record.result?.desktop
+      ? withDesktopRoot(record.result.desktop, (held) =>
+          captureAssetTreeAt(output.path!, outputLimits, 'all', held.fd),
+        )
+      : captureCodingAssetTree(output.path, outputLimits, 'all');
   try {
     if (DIRECTORY_OUTPUTS.includes(output.kind)) validateCodingAssetLinks(capture.manifest);
   } catch {

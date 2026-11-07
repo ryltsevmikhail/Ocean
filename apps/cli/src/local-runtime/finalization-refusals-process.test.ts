@@ -33,14 +33,9 @@ it('refuses the full owner matrix and keeps two racing clients to one exact rele
     // Unresolved effect or pending work keeps the reservation.
     const db = new DatabaseSync(f.db);
     try {
-      db.prepare('INSERT INTO tool_invocations_v2 VALUES(?,?,?,?,?,?)').run(
-        'held-effect',
-        'command',
-        'run',
-        'attempt',
-        'fingerprint',
-        'started',
-      );
+      db.prepare(
+        'INSERT INTO tool_invocations_v2(id,tool,task_run_id,attempt_id,fingerprint,outcome) VALUES(?,?,?,?,?,?)',
+      ).run('held-effect', 'command', 'run', 'attempt', 'fingerprint', 'started');
     } finally {
       db.close();
     }

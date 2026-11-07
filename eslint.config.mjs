@@ -46,6 +46,7 @@ export default tseslint.config(
       'apps/desktop/vite.config.ts',
       'apps/desktop/qa/*.mjs',
       'examples/local-runtime-client.mjs',
+      'examples/local-service-owner-read.mjs',
       'eslint.config.mjs',
     ],
     ...tseslint.configs.disableTypeChecked,

@@ -1,3 +1,4 @@
+import { failedStartupDrain } from './service-drain.js';
 import {
   runtimeDesktopAssets,
   desktopSubmitRefusal,
@@ -28,10 +29,8 @@ import { listenLocalRuntime } from './server.js';
 import { assertRuntimeDrained } from './drain-supervision.js';
 import { RuntimeFinalization } from './finalization.js';
 import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
-import { LOCAL_PROVIDER_METHODS } from '@runnets/contracts';
 import { LOCAL_BROADCAST_METHODS } from '@runnets/contracts';
-import { systemClock } from '@runnets/store';
-import { RuntimeBroadcasts } from './broadcast.js';
+import { hostRoomTasks, wakeRoomTasksAfter } from './host-room-tasks.js';
 import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
 import { settingsHosts } from './settings-hosts.js';
@@ -58,10 +57,13 @@ export async function startLocalRuntime(
   let images: ImageAssetResolverPort | undefined;
   const plugin = await hostPluginSettings(options);
   const runtime = openOceanProfile(paths.profile, false, {
-    pluginTransport: plugin.transport,
+    ...(options.pluginTransport === undefined ? {} : { pluginTransport: plugin.transport }),
+    serviceTransportOptions: options.serviceTransportOptions,
+    serviceConfirmation: {
+      confirm: (operation, signal, current) => decisions.service(operation, signal, current),
+    },
     pluginEnv: plugin.env,
     pluginMutationsAllowed: options.restore !== true,
-    // This host alone validates and retires a surviving publication before serving.
     requireUnpublished: false,
     imageResolver: (store) =>
       (images = desktopImageResolver(store, paths.profile, paths.profileId)),
@@ -77,6 +79,7 @@ export async function startLocalRuntime(
   let publication: ReturnType<typeof publishEndpoint> | undefined;
   try {
     const recovery = await runtime.ready;
+    if (!options.restore && !runtime.restored) await runtime.services?.start();
     checkRestoration();
     const proof = runtime.openEndpointProof?.();
     if (!proof) throw Error('durable_runtime_required');
@@ -92,8 +95,7 @@ export async function startLocalRuntime(
     if (!runtime.finalization || !runtime.ownerId || !runtime.openRebindStore)
       throw Error('durable_runtime_required');
     const restored = options.restore === true || runtime.restored === true;
-    // Saved/environment credentials and plugin state are resolved by the runtime, never by a client.
-    const { provider, plugins } = settingsHosts({
+    const settings = settingsHosts({
       profile: paths.profile,
       runtime,
       env: process.env,
@@ -104,8 +106,9 @@ export async function startLocalRuntime(
       disabled: options.provider === null,
       providerSecretStore: options.providerSecretStore,
       credentialDir: options.credentialDir,
-      providerBaseUrl: options.providerBaseUrl,
+      providerHttpClient: options.providerHttpClient,
     });
+    const { provider, plugins, models, services } = settings;
     plugin.connections(runtime.plugins?.connections);
     const finalization = new RuntimeFinalization(
       runtime.finalization,
@@ -124,31 +127,28 @@ export async function startLocalRuntime(
       protocol: 1,
       profileId: paths.profileId,
       instanceId: randomUUID(),
-      capabilities: runtimeCapabilities(options.restore === true),
+      capabilities: runtimeCapabilities(options.restore === true).filter(
+        (c) => !['room.tasks-v1', 'room.task-list-v1'].includes(c) || !restored,
+      ),
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
       runtime.chat,
-      provider.activation,
+      provider.resolver,
       runtime.openRoomRuns(),
       identity.instanceId,
     );
-    if (!runtime.broadcasts || !runtime.conversationStore) throw Error('durable_runtime_required');
-    const broadcasts = new RuntimeBroadcasts({
-      service: runtime.broadcasts,
-      execution: {
-        tasks: runtime.service,
-        store: runtime.conversationStore,
-        clock: systemClock,
-        ...(runtime.pluginRuntime?.tools === null || runtime.pluginRuntime?.tools === undefined
-          ? {}
-          : { grantedTools: runtime.pluginRuntime.tools }),
-      },
-      clock: systemClock,
-      provider: provider.activation,
-      ...(images === undefined ? {} : { images }),
-    });
-    turns.attachControllers((runId) => broadcasts.controllerFor(runId));
+    const { broadcasts, roomTasks } = hostRoomTasks(
+      runtime,
+      provider.resolver,
+      identity.instanceId,
+      images,
+      options.roomTaskCapacity,
+      turns.observers,
+    );
+    turns.attachControllers(
+      (runId) => broadcasts.controllerFor(runId) ?? roomTasks.controllerFor(runId),
+    );
     let databaseClosed = false;
     const descriptor = {
       protocol: 1 as const,
@@ -176,13 +176,17 @@ export async function startLocalRuntime(
             await assertRuntimeDrained(
               [
                 turns,
+                services,
+                runtime.services,
                 broadcasts,
+                roomTasks,
                 options.drain,
                 decisions,
                 panels,
                 restoration,
                 finalization,
                 provider.settings,
+                models,
                 plugins,
               ],
               drainDeadlineMs,
@@ -227,7 +231,7 @@ export async function startLocalRuntime(
       {
         descriptor,
         identity,
-        dispatch: (method, params, detached) => {
+        dispatch: (method, params, detached, context) => {
           if (databaseClosed) return { error: { code: 'runtime_draining' } };
           if (LOCAL_RESTORE_METHODS.some((m) => m === method))
             return restoration.dispatch(method, params);
@@ -235,11 +239,8 @@ export async function startLocalRuntime(
             return { error: { code: 'restore_restricted' } };
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
             return finalization.dispatch(method, params);
-          if (LOCAL_PROVIDER_METHODS.some((m) => m === method))
-            return provider.settings.dispatch(method, params, detached);
-          if (method.startsWith('plugin.')) return plugins.dispatch(method, params);
-          // Prepared-attachment admission runs before any submit dispatch, including
-          // the broadcast runner: a mismatched marker must never commit a message.
+          const configured = settings.dispatch(method, params, detached);
+          if (configured) return wakeRoomTasksAfter(configured, method, roomTasks);
           if (method === 'turns.submit' || method === 'broadcasts.submit') {
             const code = desktopSubmitRefusal(
               runtime.desktopAssets!,
@@ -260,9 +261,11 @@ export async function startLocalRuntime(
             return panels.dispatch(method, params, detached);
           if (PROFILE_METHODS.some((m) => m === method))
             return profileCommand(runtime.conversations, reads, method, params, state !== 'ready');
+          if (method.startsWith('roomTasks.'))
+            return roomTasks.dispatch(method, params, detached, context);
           if (method.startsWith('decisions.') || method.startsWith('reviews.'))
-            return decisions.dispatch(method, params);
-          return turns.dispatch(method, params, detached);
+            return decisions.dispatch(method, params, context);
+          return turns.dispatch(method, params, detached, context);
         },
         status: () => host.status(),
         stop: () => host.stop(),
@@ -272,6 +275,7 @@ export async function startLocalRuntime(
     checkRestoration();
     publication = publishEndpoint(endpoint, transport.socketFd, descriptor, proof);
     transport.activate();
+    if (!restored) roomTasks.start();
     return host;
   } catch (error) {
     try {
@@ -287,7 +291,7 @@ export async function startLocalRuntime(
       }
     } finally {
       layout?.close();
-      runtime.close();
+      await failedStartupDrain(runtime, drainDeadlineMs);
     }
     throw error;
   }

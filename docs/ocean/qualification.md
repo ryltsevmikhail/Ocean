@@ -52,3 +52,183 @@ OCEAN_RC_INSTALL=/absolute/prefix/lib/ocean/releases/VERSION pnpm exec vitest ru
 Драйверы тестов и замороженные фикстуры читаются из checkout, но исполняемые модули перенаправляются только в установленный dist. Символическая ссылка current предварительно разрешается. Дочерние SIGKILL-процессы тоже используют установленные пакеты. Сборочный тест установщика выполняется отдельно в обычном pnpm check: он требует исходной fixture-сборки и не является прогоном установленного артефакта. Живые запросы в этот набор не входят; их результаты и измерения Q10/Q11 хранятся отдельно вне Git.
 
 Итог квалификации 2026-11-02: [RC 1.0.0-rc.3](rc.md). Q01–Q12 пройдены; точные хеши, измерения, границы и решение о выпуске приведены в записи.
+
+## 1.1: установленный кандидат Linux, Task 17.3
+
+Запись от 2026-11-05 относится к локальному квалификационному кандидату `1.1.0-rc.3`, исходная ревизия `ec1e5d59fc8f7bc08122f331d636c9ae0f1d031a`. Это вход для дальнейшей приёмки C/D/E/F, а не публикация стабильного выпуска. Матрица 1.0 выше сохраняет исторический стенд; текущая целевая платформа — Linux x86_64 / Omarchy на основном ноутбуке.
+
+Артефакты размещены в `/home/ryltsevmg/Projects/Ocean-artifacts/task-17.3-ec1e5d5`: CLI `cli/ocean-1.1.0-rc.3-linux-x64.tar.gz`, Desktop `desktop/artifact/OceanDesktop-linux-x64`. CLI SHA256: `933d0b3a535685a4606e92c91ecd970507e0d403002d2e348cfb2b304302556d`; Desktop ASAR SHA256: `96837046186d298fb6466e723ecba8c31c58dadf1e7925b26e8f0c66a660b06a`. CLI manifest содержит 693 записи; Desktop manifest содержит 72 файла, 294624575 байт. Полные инвентари и команды находятся рядом с артефактами. Отчёт и воспроизводимые драйверы — `.superpowers/sdd/2026-11-04-ocean-platform/task-17.3-*`.
+
+Кандидат собран в новом чистом worktree с Node `26.13.0`, pnpm `12.16.1`, неизменённым frozen lockfile и без загрузки зависимостей. Desktop использует проверенный официальный архив Electron `45.2.1`; системный Electron не использовался. В ASAR проверены полные MIT-тексты Vue `3.5.44` и Zod `4.6.7`, исходные LICENSE/NOTICE и лицензии Electron сохранены.
+
+Подтверждено на временном префиксе и синтетических профилях:
+
+- Установленные публичные импорты OpenAI, Anthropic и local разрешаются внутри префикса без NODE_PATH/NODE_OPTIONS; проверены 627 JS-модулей и 1752 статические/литеральные ссылки, включая относительные URL. Упакованный Executor отдельно квалифицирован в режиме bundle без discovery/invoke. Тестовые fixture/cleanup-модули не добавлялись.
+- CLI создаёт прямую и групповую комнаты, сохраняет историю, явно отказывает без провайдера; doctor, реальный PTY TUI, ACP stdio и аутентифицированный Python3 Unix socket работают на установленном коде с offline-портами.
+- Реальный архив RC2 ревизии `5e10ec32179063be78a55f6835866a1a864991ac` создаёт schema18. Кандидат мигрирует копию до schema23; старый бинарный код отказывает без изменения полного файлового инвентаря профиля. Переключение RC2 → RC3 → RC2 проверено только во временном префиксе; совместимая предмиграционная копия восстановлена в новый профиль RC2.
+- Исторический initializer `v1.0.0` ревизии `4417c38ae6c9474cb0c35e9d64ca7f327ac812bd` создаёт настоящий синтетический schema5-профиль; исходный backup-код создаёт format1. Установленный кандидат восстанавливает и мигрирует его до schema23, сохраняет историю и внешние ключи, оставляет исполнение ограниченным. Schema14/format2 проверен отдельно как дополнительный RC1-era сценарий.
+- Восстановленный профиль проходит CLI inspect/preview/confirm/result с настоящим TTY. До rebind обычный owner и изменения/turn в maintenance отклоняются. После owner-confirmed rebind обычный host разрешает явно переподключить одну OpenAI connection; Anthropic/local остаются inert. Ровно один новый запрос выполнен offline-портом; реальных запросов к поставщикам не было.
+- Установленный sandbox выполнил реальные test/typecheck/lint/build presets. Подтверждены ограничения cgroup 2 GiB / 256 процессов / 65 s, deadline 60 s, cap вывода 32768 байт, отмена активного worker и остановка detached-потомков. Ранняя отмена до проверенного admission сохраняет `cleanupConfirmed=false`, uncertain и запрет следующих операций; исчезновение внешнего cgroup не повышает это доказательство.
+
+Чистый root `pnpm check`: 3404 source tests passed / 44 skipped и 147 process tests passed / 35 skipped, aggregate strict/lint — 0; build и format — 0. Отдельно включённые Linux sandbox/Btrfs native gates: 84 passed / 0 failed / 0 skipped при двух worker. Сохранённые чужие catalog-тест и fixture отсутствуют в чистом worktree; этот результат не закрывает известный долг C: три catalog failure и два format-файла в рабочем checkout.
+
+Ограничения: metadata 11 пакетов всё ещё объявляют отсутствующие `.d.ts`; доказаны runtime-импорты, поддержка declaration-потребителей не заявлена. Реальные backend/веса/смешанные модели относятся к 17.4, Desktop GUI/Wayland и пользовательское взаимодействие — к 17.5. Live OpenAI/Anthropic не выполнялись. Установленные Ocean 1.0/RC2, реальные профили, ключи и службы не изменялись. Стабильный архив F должен быть заново собран после принятых изменений C/D/E.
+
+Коррекция доказательств Task17.3 (2026-11-05) сохраняет исходный артефакт `ec1e5d59fc8f7bc08122f331d636c9ae0f1d031a` без пересборки. Полная явная фиксация 165 файлов находится в `task-17.3-ec1e5d5/fix1/freeze-final`: raw SHA256 `evidence-inventory.json` — `e6753bfccdb01bdcf7b4ccb17718347beb405654deb1cbcbb70cf5faa79f300b`, raw SHA256 `seal.json` — `fceb6b3e54c20deefc4bd9698fd9ec850e4269bf7dbcd66fe02a7b9de9a28db5`. Seal отдельно связывает точную команду freeze, stdout/stderr, exit0 и inventory, без самохеширования. Зафиксированы фактическая TTY-карточка, журналы команд, исходные и текущие драйверы, точная копия shared runner и воспроизводимая зависимость; первоначальный 8e78-origin dependency copy подтверждён побайтным сравнением с новым ec1 staging.
+
+Исправленный qualification lifecycle ограничивает неудачный startup/stop, сохраняет исходную ошибку и проверяет завершение только своего PID/изолированной группы. Три failure-path проверки и семь проверок целостности evidence проходят. Повторный установленный rebind выполнен в новом временном профиле; продуктовые/native broad gates не повторялись. Post-freeze validation attestation raw SHA256 — `81e9d8c011e9e8ad9e89ede72f727c2d6160307665bd085a568a104b84bd46cd`. Поздний evidence/docs commit не изменяет исходную ревизию артефакта; принятие коррекции остаётся за независимым review.
+
+Коррекция2 Task17.3 ограничена qualification drivers: финализация отклоняет exit23/сигнал после stop-ack, а proof создаётся исключительно в новом каталоге rehearsal с защитой от overwrite/traversal/symlink. Семь lifecycle- и семь filesystem-контролей проходят; corrected installed rehearsal завершился exit0. Из-за ошибочно выполненного старого драйвера owned исходный proof временно перезаписан; исходные 13542 raw bytes восстановлены только после совпадения immutable SHA256, mode0644 сохранён, весь прежний165-file seal повторно проверен. Инцидент и случайный вывод сохранены в отчёте/fix2, продуктовый архив не менялся.
+
+Новая узкая фиксация `task-17.3-ec1e5d5/fix2/freeze-final` содержит69 файлов и ссылается на неизменённый fix1 seal: inventory raw SHA256 `d951ffd623ffa0a35740f697a35725dd7c74183564c58075c55ed52a44903f18`, seal raw SHA256 `36f9a9ddf6b8205fb3d3e8d66f81476c3cfe1a2076c8ca86a437dbc8340f7963`, validation attestation raw SHA256 `d0a9945ec48d88a7aab85c9ec85365ee4de94ace58b02bec41b467353806609f`. Ревизия исходного артефакта остаётся ec1e5d5; пересборки и broad gates для evidence-only коррекции не выполнялись, scoped review остаётся обязательным.
+
+Task17.3 принят на `652dd56` после повторного независимого ревью: N1/N2 закрыты,
+новых Critical/Important нет. Исходная ревизия продукта и хеши артефактов выше
+сохранены. Приёмка относится к установленному Linux-кандидату; 17.4 (native model
+и mixed DeepSeek), 17.5 (настоящий GUI) и финальный выпуск F остаются открытыми.
+
+## Task17.4: native local и mixed B (2026-11-05)
+
+Продуктовая ревизия `28909ea025c0ef46a7a1b4b539ca8a36c0e0bedc` исправляет только
+точную metadata-идентичность кандидата: тег остаётся `qwen3:1.7b`, фактический
+GGUF/Ollama сообщает `2.0B`/Q4_K_M. Полностью проверены manifest
+`8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7` и model-layer
+`3d0b790534fe4b79525fc3692950408dca41171676ed7e21db57af5c65ef6ab6`;
+311 tensor shapes дают 2,031,739,904 параметра, capacity40960. Новый архив CLI
+1475324 bytes SHA256 `6b41ce641fa470d55799883b959a0baf764f95f90db4a778f9eee8a23a782daa`
+установлен только в disposable prefix. Реальные релизы и профили не менялись.
+
+На Ollama0.40.14 в отдельном user/net/PID namespace и sparse filesystem fixture
+пройдены реальные cold/warm text, один harmless tool effect с durable claim до
+исполнения и model continuation, обычный owner/SDK/отдельный CLI, durable reopen.
+Это существующий engine/default fetch, без canned HTTP или второго agent loop.
+Фактические 6 inference-запросов: 5 полных native terminal и отдельный прерванный
+после первого text delta запрос, который сохраняет UNKNOWN и не повторяется.
+Остановленный endpoint отдельно даёт not_sent. Внутри только loopback,
+внешних IPv4/IPv6 routes нет, literal egress probes отказали; это не обещание
+произвольной filesystem-изоляции. `/usr` смонтирован read-only как системный
+toolchain; whole host root/home и реальные credentials/profiles не монтировались.
+
+Cold first-text/terminal2434.8/3122.9ms, warm1020.0/1785.0ms; cold означает новый
+backend без loaded model, без сброса OS page cache. Settings: thinkfalse,
+ctx4096/predict512; provider120s/metadata10s ceilings сохранены. Фактический
+CPU runner и `/api/ps` size_vram0/context4096 подтверждают CPU-only. При CPUQuota200%,
+MemoryMax3.5GiB/High3GiB/SwapMax0/TasksMax256 kernel charged peak составил
+2750685184 bytes; simultaneous RSS/PSS sampled maxima2405457920/2280729600.
+OOM и cgroup swap отсутствуют; cleanup подтверждён исчезновением scope и всех
+PID/starttime, закрытием socket. Peaks RSS/PSS являются sampled, не точным GPU/RAM
+benchmark.
+
+Только после sealed offline acceptance выполнена отдельная ONLINE mixed B:
+3 local и 7 настоящих DeepSeek inference requests, direct/addressed group,
+healthy broadcast, failed local child и независимо адресованные cloud children.
+Unaddressed sibling не запускается, fallback отсутствует; admitted identities и
+revisions сохранены. DeepSeek key использован только в памяти, без argv/env/logs
+или credential import; exact-key scan owned phase files не нашёл копий.
+OpenAI/Anthropic live **DEFERRED**, автономный A→B→A (D) и настоящий GUI17.5 не
+квалифицированы этим результатом.
+
+Ограничения сохранены: первый generic-tool native run неожиданно стал UNKNOWN
+без effect; полных causal bytes у раннего capture нет, причина не установлена.
+Два отдельных raw/native diagnostics совместимы с decoder; stream code не менялся.
+Успешная финальная fixture имеет явно scoped harmless tool instructions и новые
+profile/run IDs/token, прежний UNKNOWN не повторялся. Предыдущие setup/driver
+failures сохранены в отчёте; независимое ревью и три раунда исправлений обвязки
+закрыты на `de70683`. Продуктовая ревизия артефакта остаётся `28909ea`.
+Root3412 pass/3 protected catalog failures/44 skip, strict/lint/build/bundle0,
+affected built process21 pass; format остаётся с двумя protected C-файлами.
+Эти факты не закрывают C, D/E, родительский Task17 или финальный выпуск F.
+
+Итоговые существенные замечания Task17.4 закрыты независимым scoped review.
+Третий раунд: 51 проверка текущего кода обвязки, exit 0; старые три scope controls
+относятся только к `9966242`, без нового запуска. Новая цепочка 167 файлов:
+seal SHA256 `6ca7b21bb03eded061a21775c6b2c58ef4be8ec9f072adccdfac35c49d0b989c`,
+inventory `2cb13f79b960401ac26c06b096c9d243cb70a4842ea4a68bf76f6c7a740f7c67`,
+validation attestation `c7900fd600f4f1d5d399e3aa7284a508c31a1822c65f28438dc08d83b5d1ff30`.
+Предыдущие цепочки и артефакты сохранены. Ограничения fixture deadline и
+failed-launch command ledger остаются Minor для выпускного разбора.
+Шесть native submissions подтверждены wire witness; backend access log содержит
+пять завершённых строк, отдельный прерванный запрос не имеет completed access line.
+Установленный GUI настроек 17.5.1 принят на `ba92b56`; восстановление
+операций 17.5.2 принято на `69bdf1e`; совместная работа клиентов 17.5.3 принята на `67a7833`. Это не выпуск stable.
+
+### Установленный Desktop: настройки и размеры (17.5.1)
+
+Настоящий Electron45.2.1/Wayland: 51 подключение и 51 бот, точная привязка,
+создание бота/группы/команды, Local/auth-none и явная готовность. Нативные
+1024/1280/1920 × 800 подтверждены окном, compositor и renderer; composer доступен.
+Синтетический transport, без живых моделей/ключей. CLI/SDK `28909ea`, исправленный
+Desktop `8fd8c6c` (ASAR `c22f5deaea519cefa134b21432966c1154bdd4c839377d3145c0cd9cb5a00fb7`).
+
+Воспроизведение из корня: `node apps/desktop/qa/model-settings-native.mjs
+--installed-root <проверенный-prefix> --desktop <проверенный-OceanDesktop>
+--root <новый-прямой-потомок-Ocean-artifacts>`. Использовать отдельные профиль
+и каталог доказательств; старые результаты не перезаписывать. Сводка и ограничения
+— [этап B](platform-stage-b.md). Приёмка не заменяет 17.5.2–17.5.3 и выпуск F.
+
+### Установленный Desktop: восстановление и факты (17.5.2)
+
+Принят `69bdf1e`, без продуктовых изменений. Настоящий GUI/публичный runtime:
+потерянный ответ и точная квитанция, два клиента/конфликты, очистка ключа,
+контекст бота/профиля, usage и сохранённая модель уже принятого хода.
+Исторический поддерживаемый host `1a99fcb` и отказ unsafe RC2 проверены
+с отдельными совместимыми профилями. Это синтетическая квалификация;
+реальные модели остаются отдельными результатами 17.4.
+
+Драйверы `model-recovery-native.mjs`, `model-usage-native.mjs` принимают
+`--installed-root`, `--desktop`, `--root`; `model-legacy-native.mjs` дополнительно
+принимает `--historical-root` и `--unsafe-root`. Все находятся в `apps/desktop/qa`.
+Использовать свежие прямые дочерние каталоги Ocean-artifacts. Результаты корневых
+команд и ограничения доказательств — [этап B](platform-stage-b.md); зелёный
+check и выпуск stable не заявляются.
+
+### Установленные Desktop и TUI: общий runtime (17.5.3)
+
+На тех же артефактах CLI/SDK `28909ea` и Desktop `8fd8c6c` проверены закрытие
+окна и выход установленного TUI во время генерации. Отдельный процесс с
+установленным публичным SDK видит прежний runId; после снятия синтетической
+задержки записывается один ответ и один запрос провайдеру. Потеря уже
+зафиксированной chat-квитанции восстанавливается точным requestId через SDK
+и GUI; перезапуск runtime сохраняет историю и квитанцию без новой генерации.
+Disconnect и выход клиента не являются подтверждением отмены или cleanup.
+
+Проверены предпросмотр изображения до отправки и в истории, увеличение,
+текстовые/файловые карточки и экспорт четырёх оригиналов с совпадением SHA256.
+Ровно 10 MiB принимаются, больший файл и пятое вложение отклоняются видимым
+alert. История и оригиналы доступны после перезапуска. Выбор пути экспорта
+синтетический; чтение и запись выполняет настоящий packaged host. HTTP-ответы
+и vision routing также синтетические: понимание изображений живой моделью
+этим не доказано; фактические DeepSeek/local результаты остаются в 17.4.
+
+На Wayland/Electron45.2.1 нативные 1024/1280/1920 × 800 совпали с compositor
+и renderer. С открытыми сведениями, длинной историей/черновиком и четырьмя
+вложениями composer доступен; проверены фокус, Enter, Shift+Enter, Escape,
+alerts и сохранение прокрутки внизу после явного перехода к последнему сообщению.
+Сохранены неуспешные попытки обвязки и их ограничения cleanup. Продуктовых
+изменений и новой упаковки в 17.5.3 нет. Независимое ревью и финальные корневые
+команды выполняет controller; прежние три catalog failures и два format-файла C
+не объявляются исправленными. Это не выпуск stable и не завершение C–F.
+
+### Итог применимой приёмки B
+
+Native 17.5.3 и один scoped fix review приняты на `67a7833`: GUI/TUI detach,
+точная квитанция/один вызов модели, история и оригиналы после перезапуска,
+реальные размеры окна и управление с клавиатуры. Исправлены только QA-пути
+аварийной очистки и истечения срока; 31 покрывающая проверка прошла.
+Старые native-доказательства сохранены без повторного запуска.
+
+Root-команды на первой ревизии QA `d004d06`: check 1 (strict/lint 0,
+3412 source passes / 3 известных catalog failures / 44 skipped; process-фаза
+не достигнута), build 0, format 1 (2 защищённых файла). Новые focused-проверки
+относятся к `67a7833`; эти ревизии не смешиваются. Подробные ограничения
+— [этап B](platform-stage-b.md). Далее C; стабильный выпуск требует F.
+
+### C18.1: квалификация публичного MCP SDK
+
+Прототип принят на `79bbce9` после исправления срока жизни допуска одного
+вызова. 26 HTTP-тестов и два целевых stdio-запуска подтвердили отсутствие
+поздней отправки после not_started; post-send timeout остаётся uncertain.
+Сохранены шесть исходных native-сценариев и отдельный разрешённый GitHub read,
+относящиеся к `ff019f1`. Backend продукта не переключён, схемы/права не мигрировали.
+Глобальные catalog/format gate остаются открыты. Границы доказательств,
+команды и следующий этап — [прогресс C](platform-stage-c.md).

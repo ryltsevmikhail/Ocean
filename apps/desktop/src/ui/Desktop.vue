@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue';
+import RoomTasks from './RoomTasks.vue';
 import Avatar from './Avatar.vue';
 import Appearance from './Appearance.vue';
 import RoomDetails from './RoomDetails.vue';
@@ -14,7 +15,9 @@ import BroadcastPanel from './BroadcastPanel.vue';
 import ProviderSettings from './ProviderSettings.vue';
 import PluginSettings from './PluginSettings.vue';
 import { useDesktop } from './state.js';
+import { modelSupport } from './model-support.js';
 const {
+  tasks,
   runtimeReady,
   loading,
   sending,
@@ -73,8 +76,13 @@ onBeforeUnmount(() => {
 function created(roomId?: string) {
   void guard(() => refresh(roomId));
 }
+const plugins = ref<InstanceType<typeof PluginSettings>>();
 const profile = ref<InstanceType<typeof ProfilePanel>>();
 const roomManager = ref<InstanceType<typeof RoomManager>>();
+function startTeam() {
+  if (modelSupport.value === true) roomManager.value?.open('team');
+  else void guard(() => team());
+}
 </script>
 <template>
   <div class="shell" :class="{ 'with-details': details && room, 'show-rooms': roomList }">
@@ -139,10 +147,19 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
           <h1>{{ roomName(room) }}</h1>
         </div>
         <div class="top-tools">
+          <RoomTasks
+            v-if="room"
+            :state="tasks"
+            :members="members"
+            :history="history"
+            @services="plugins?.open()"
+          />
           <ProviderSettings :busy="busy || !runtimeReady" /><PluginSettings
+            ref="plugins"
             :busy="busy || !runtimeReady"
             :room="room"
             :bots="bots"
+            :runs="runs"
           />
           <button
             class="round"
@@ -171,13 +188,13 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
         :loading="loading"
         @refresh="guard(() => refresh())"
         @profile="profile?.open()"
-        @team="guard(team)"
+        @team="startTeam"
       />
       <button
         v-else-if="!rooms.some((r) => r.kind === 'group' && r.title === 'Ocean Team')"
         class="team-link"
         :disabled="busy || !runtimeReady"
-        @click="guard(team)"
+        @click="startTeam"
       >
         Создать Ocean Team
       </button>
@@ -236,5 +253,17 @@ const roomManager = ref<InstanceType<typeof RoomManager>>();
       @close="details = false"
     />
   </div>
-  <RoomManager ref="roomManager" :bots="bots" :busy="busy" @created="created" />
+  <RoomManager
+    ref="roomManager"
+    :bots="bots"
+    :busy="busy"
+    @created="created"
+    @team="(choices) => guard(() => team(choices))"
+  />
 </template>
+
+<style scoped>
+.top .room-chip {
+  max-width: calc(100% - 280px);
+}
+</style>

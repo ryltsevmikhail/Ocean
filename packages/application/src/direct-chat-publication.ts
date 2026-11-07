@@ -1,6 +1,9 @@
-import { taskRunId, type ChatTurn } from '@runnets/domain';
+import { repairRoomHandoff } from './room-slice-publication.js';
+import { taskRunId, type ConversationMessage, type ChatTurn } from '@runnets/domain';
 import type { ConversationStore } from './conversation-ports.js';
 import type { TaskRunService } from './service.js';
+import { publishKnownChatFailure } from './chat-known-failure.js';
+import type { ChatReviewService } from './chat-review.js';
 import type { Clock } from './ports.js';
 
 /** Publish only a proven succeeded task with its complete prepared response. */
@@ -19,18 +22,9 @@ export async function publishChat(
     if (current.continuationReviewId !== undefined)
       throw new Error('Reviewed turns cannot publish late output');
     if (current.status !== 'prepared') throw new Error('chat answer is not prepared');
-    tx.putMessage({
-      id: 'reply_' + turn.id,
-      workspaceId: turn.workspaceId,
-      roomId: turn.roomId,
-      seq: tx.nextSequence(turn.roomId),
-      author: 'bot',
-      authorBotId: turn.bot.id,
-      turnId: turn.id,
-      targetBotId: turn.bot.id,
-      body: current.text,
-      createdAt: clock.now().toISOString(),
-    });
+    tx.putMessage(
+      chatFinalMessage(current, tx.nextSequence(turn.roomId), clock.now().toISOString()),
+    );
     const completed = { ...current, status: 'completed' as const };
     tx.putChatTurn(completed);
     return completed;
@@ -42,11 +36,21 @@ export async function recoverChats(
   store: ConversationStore,
   tasks: TaskRunService,
   clock: Clock,
+  reviews?: Pick<ChatReviewService, 'review'>,
+  sha256?: (text: string) => string,
 ): Promise<void> {
   const turns = store.atomic((tx) => tx.chatTurns());
   for (const turn of turns) {
+    if (turn.roomDelivery) {
+      await repairRoomHandoff({ store, tasks, clock, ...(sha256 ? { sha256 } : {}) }, turn.id);
+      continue;
+    }
     // A queued broadcast child was never dispatched; batch recovery owns its state.
-    if (['queued', 'completed', 'failed', 'cancelled', 'uncertain'].includes(turn.status)) continue;
+    if (['queued', 'completed', 'failed', 'cancelled'].includes(turn.status)) continue;
+    if (await publishKnownChatFailure({ store, tasks, ...(reviews ? { reviews } : {}) }, turn)) {
+      continue;
+    }
+    if (turn.status === 'uncertain') continue;
     let state = await tasks.state(taskRunId(turn.taskRunId));
     if (
       turn.status === 'prepared' &&
@@ -70,9 +74,30 @@ export async function recoverChats(
     if (turn.status === 'prepared' && state.status === 'succeeded') {
       await publishChat(store, tasks, clock, turn);
     } else {
-      store.atomic((tx) =>
-        tx.putChatTurn({ ...turn, status: turn.status === 'accepted' ? 'failed' : 'uncertain' }),
-      );
+      store.atomic((tx) => {
+        if (JSON.stringify(tx.chatTurn(turn.id)) !== JSON.stringify(turn)) return;
+        tx.putChatTurn({ ...turn, status: turn.status === 'accepted' ? 'failed' : 'uncertain' });
+      });
     }
   }
+}
+
+/** One ordinary bot final shape, reused by room slices. */
+export function chatFinalMessage(
+  turn: ChatTurn,
+  seq: number,
+  createdAt: string,
+): ConversationMessage {
+  return {
+    id: 'reply_' + turn.id,
+    workspaceId: turn.workspaceId,
+    roomId: turn.roomId,
+    seq,
+    author: 'bot',
+    authorBotId: turn.bot.id,
+    turnId: turn.id,
+    targetBotId: turn.bot.id,
+    body: turn.text,
+    createdAt,
+  };
 }

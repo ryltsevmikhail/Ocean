@@ -1,5 +1,7 @@
+import { decodeChatTurn } from './chat-storage.js';
 import {
   STATUS_AFTER_EVENT,
+  roomFinalMessageMatches,
   type ChatTurnStatus,
   type TaskRunEventType,
   type Sensitivity,
@@ -9,6 +11,11 @@ import type { DatabaseSync } from 'node:sqlite';
 import { messageRow } from './conversation-rows.js';
 import { readInteger, readText, readNullableText } from './rows.js';
 
+// Null-status events advance version/accounting without changing lifecycle status.
+const STATUS_EVENT = `type NOT IN (${Object.entries(STATUS_AFTER_EVENT)
+  .filter(([, status]) => status === null)
+  .map(([type]) => `'${type}'`)
+  .join(',')})`;
 const VISIBLE_TURN = `COALESCE(json_extract(payload,'$.broadcast.abandoned'),0)=0`;
 const BOUND_TURN = `FROM ocean_chat_turns
       WHERE workspace_id=? AND room_id=? AND task_run_id=?
@@ -24,8 +31,8 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
     json_extract(payload,'$.binding.runId'), json_extract(payload,'$.binding.workspaceId'),
     json_extract(payload,'$.binding.roomId'),json_extract(payload,'$.binding.botId'),json_extract(payload,'$.binding.taskId'),json_extract(payload,'$.expiresAt'),id
   ) WHERE json_extract(payload,'$.status')='pending';
-  CREATE INDEX IF NOT EXISTS ocean_run_transitions ON events(aggregate_id, sequence)
-    WHERE type != 'attempt.usage_recorded';`);
+  CREATE INDEX IF NOT EXISTS ocean_run_status_events ON events(aggregate_id, sequence)
+    WHERE ${STATUS_EVENT};`);
   const checkRoom = ({ workspaceId, roomId }: Scope) => {
     if (
       !db
@@ -59,19 +66,29 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
   function run({ workspaceId, roomId, runId }: RunQuery): RoomRunState | null {
     const t = db
       .prepare(
-        `SELECT id,status,json_extract(payload,'$.inboundMessageId') AS message,
+        `SELECT *,json_extract(payload,'$.inboundMessageId') AS message,
       json_extract(payload,'$.requestId') AS request,json_extract(payload,'$.bot.id') AS bot,
       json_extract(payload,'$.codingTaskId') AS task ${BOUND_TURN}`,
       )
       .get(workspaceId, roomId, runId);
     if (!t) return null;
+    const decoded = decodeChatTurn(t);
+    if (
+      decoded.roomDelivery &&
+      decoded.status === 'completed' &&
+      decoded.roomSliceDisposition === undefined
+    ) {
+      const row = db.prepare('SELECT * FROM ocean_messages WHERE id=?').get('reply_' + decoded.id);
+      if (!roomFinalMessageMatches(decoded, row ? messageRow(row) : null))
+        throw Error('invalid room final');
+    }
     const turnId = readText(t, 'id'),
       performerId = readText(t, 'bot'),
       turnStatus = readText(t, 'status') as ChatTurnStatus;
     const version = headVersion(runId);
     const event = db
       .prepare(
-        "SELECT type FROM events WHERE aggregate_id=? AND type != 'attempt.usage_recorded' ORDER BY sequence DESC LIMIT 1",
+        `SELECT type FROM events WHERE aggregate_id=? AND ${STATUS_EVENT} ORDER BY sequence DESC LIMIT 1`,
       )
       .get(runId);
     const taskStatus = event
@@ -80,13 +97,22 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
         ? 'admitted_before_run'
         : 'not_created';
     if (!taskStatus || (!event && version !== 0)) throw Error('invalid_committed_state');
+    if (
+      decoded.roomDelivery &&
+      turnStatus === 'completed' &&
+      decoded.roomSliceDisposition === undefined &&
+      (taskStatus !== 'succeeded' ||
+        decoded.preparedVersion === null ||
+        version !== decoded.preparedVersion + 1)
+    )
+      throw Error('invalid room completion head');
     const task = readNullableText(t, 'task');
     const at = now();
     const pendingDecisionIds = db
       .prepare(
         `SELECT d.decisionId AS id FROM ocean_owner_decisions d
       WHERE d.workspaceId=? AND d.roomId=? AND d.runId=? AND d.status='pending'
-      AND d.createdAt<=? AND d.expiresAt>? AND (d.kind='continue-text-only' OR EXISTS (
+      AND d.createdAt<=? AND d.expiresAt>? AND (d.kind IN ('continue-text-only','service-call','project-read') OR EXISTS (
         SELECT 1 FROM ocean_coding_approvals a WHERE a.id=d.decisionId AND
         json_extract(a.payload,'$.binding.workspaceId')=d.workspaceId AND
         json_extract(a.payload,'$.binding.roomId')=d.roomId AND json_extract(a.payload,'$.binding.runId')=d.runId AND
@@ -109,7 +135,10 @@ export function roomRuntimeReads(db: DatabaseSync, now: () => number = Date.now)
       taskStatus,
       version,
       pendingDecisionIds,
-      resultMessageId: turnStatus === 'completed' ? 'reply_' + turnId : null,
+      resultMessageId:
+        turnStatus === 'completed' && decoded.roomSliceDisposition !== 'yielded'
+          ? 'reply_' + turnId
+          : null,
     };
   }
   function requireRun(query: RunQuery) {

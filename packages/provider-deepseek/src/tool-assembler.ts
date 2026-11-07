@@ -20,7 +20,15 @@ export class ToolAssembler {
         throw new Error('invalid tool index');
       }
       const previous = this.#calls.get(index) ?? { id: '', name: '', arguments: '' };
-      const fn = asRecord(call?.['function']);
+      const discriminator = call?.['type'];
+      const functionValue = call?.['function'];
+      const fn = asRecord(functionValue);
+      if (
+        (discriminator !== undefined && discriminator !== 'function') ||
+        (functionValue !== undefined && fn === null)
+      ) {
+        throw new Error('invalid tool function shape');
+      }
       const id = call?.['id'];
       const name = fn?.['name'];
       const args = fn?.['arguments'];

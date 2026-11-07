@@ -1,8 +1,17 @@
 # Architecture
 
-Ocean is an event-sourced TypeScript runtime with CLI, ACP and terminal hosts.
-Rust Runne is reference material, not a crate layout to reproduce. The desktop
-client is a separate project; this repository has no desktop or web UI dependencies.
+The current product architecture and priorities are specified in
+[Ocean platform architecture](ocean/platform-architecture.md), with its
+[implementation roadmap](superpowers/plans/2026-11-04-ocean-platform.md).
+Ocean has a shared local server and an in-repository Desktop client. Its own
+Ocean engine calls cloud and local model-provider APIs; Codex/Claude CLI engines are not
+part of the accepted direction.
+Each bot has its own model connection; mixed cloud/local teams share the same runtime.
+Local model servers own weights and CPU/GPU inference, not Ocean task authority.
+
+The sections below describe the **inherited runtime baseline**, not the complete
+current product. In particular, its original client-boundary and process-local
+history limitations do not describe the later shared-runtime/room implementation.
 
 ## 1. State ownership
 
@@ -97,7 +106,7 @@ PID liveness protects cooperating host ownership, not execution containment.
 Replay/checkpoints reconstruct TaskRun state. Reconciliation converts interrupted
 claims to unknown outcomes, marks unfinished tasks for review and never relaunches
 a provider or tool. A lost conversation is not resumed using empty history.
-TUI lists recovered tasks, ACP warns a fresh session, and `runne status` displays
+TUI lists recovered tasks, ACP warns a fresh session, and the CLI status command displays
 retained states/effect metadata. No automatic unknown-effect resolution exists.
 
 ## 8. Client boundary
@@ -140,3 +149,29 @@ streams and mocked spawn outcomes are not evidence of real containment.
 See [coding tools](integration/coding-agent.md), [storage](integration/sqlite.md),
 [TUI](integration/tui.md), [domain model](domain-model.md),
 [state machines](state-machines.md) and [provenance](../NOTICE).
+
+## Owner room tasks in the local runtime
+
+The ordinary durable host serves the negotiated `room.tasks-v1` SDK surface
+(`roomTaskStart`, `roomTaskGet`, `roomTaskStop`, `roomTaskObserve`) alongside
+addressed history. A root records the owner's explicit participants, selected grant
+revisions and mandate before execution. Schema29 stamps new hosted roots with
+the current execution owner and epoch. Application-only starts and migrated roots
+remain inert; replay returns the original IDs without enrolling or waking them.
+
+The runtime runs each accepted slice through the shared chat engine. Delegation
+closes the current slice without a final answer; a proved child final creates one
+attributed return delivery for a fresh parent slice. Each slice uses its bot's
+frozen provider identity and a fresh deadline. Qualified text-only local models
+receive no tool schemas. Current authority is checked again at model and physical
+effect boundaries. Service and coding claims retain their existing journals,
+selected per-subject grant basis and limits. Owner confirmation is required only
+where that scope explicitly requires it, including exact worktree observations.
+
+Root views expose bounded metadata and signed instance/scope cursors. Stop commits
+a root fence before aborting and joining jobs; disconnect only detaches a reader.
+Unknown effects stay held and are never retried from missing responses.
+
+These source and synthetic-transport qualifications do not enable an installed
+release. Native containment/restart cases, real cloud/local mixed execution and
+installed-client gates remain separate production work.

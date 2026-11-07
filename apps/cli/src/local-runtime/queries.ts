@@ -1,3 +1,4 @@
+import { LEGACY_WIRE_CONTEXT, type RuntimeWireContext } from './client-compatibility.js';
 import type { RoomRuntimeRuns } from '@runnets/application';
 import type { ConversationMessage } from '@runnets/domain';
 import {
@@ -48,6 +49,7 @@ const knownErrors = new Set([
   'terminal_state',
   'invalid_transition',
   'observation_closed',
+  'client_upgrade_required',
 ]);
 export class RuntimeQueries {
   readonly #service: RoomRuntimeRuns;
@@ -55,6 +57,9 @@ export class RuntimeQueries {
   constructor(service: RoomRuntimeRuns, instance: string) {
     this.#service = service;
     this.#observers = new RuntimeObservers(service.reads, instance);
+  }
+  get observers(): RuntimeObservers {
+    return this.#observers;
   }
   close() {
     this.#observers.close();
@@ -64,6 +69,7 @@ export class RuntimeQueries {
     params: Record<string, unknown>,
     detached: AbortSignal,
     controller?: AbortController,
+    context: RuntimeWireContext = LEGACY_WIRE_CONTEXT,
   ): RuntimeReply | Promise<RuntimeReply> {
     const reads = this.#service.reads;
     try {
@@ -79,12 +85,15 @@ export class RuntimeQueries {
             return { result: reads.members(params, params.after ?? '', params.limit ?? 50) };
           break;
         case 'history.list':
-          if (isLocalHistoryQuery(params))
-            return {
-              result: wirePage(
-                messages(reads.history(params, params.after ?? 0, params.limit ?? 50)),
-              ),
-            };
+          if (isLocalHistoryQuery(params)) {
+            const rows = Array.from(reads.history(params, params.after ?? 0, params.limit ?? 50));
+            if (
+              !context.addressedHistory &&
+              rows.some((m) => m.author === 'bot' && m.authorBotId !== m.targetBotId)
+            )
+              throw Error('client_upgrade_required');
+            return { result: wirePage(messages(rows)) };
+          }
           break;
         case 'runs.list':
           if (isLocalRoomListQuery(params))
@@ -113,7 +122,17 @@ export class RuntimeQueries {
                 workspaceId: params.workspaceId,
                 roomId: params.roomId,
                 runId: params.runId,
-                events: reads.events(params, params.after ?? 0, params.limit ?? 50),
+                events: reads.events(params, params.after ?? 0, params.limit ?? 50).map((event) =>
+                  !context.models &&
+                  (event.type === 'attempt.model_request_started' ||
+                    event.type === 'attempt.model_request_settled')
+                    ? {
+                        sequence: event.sequence,
+                        type: 'redacted' as const,
+                        sensitivity: 'restricted' as const,
+                      }
+                    : event,
+                ),
               },
             };
           break;

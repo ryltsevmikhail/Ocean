@@ -33,8 +33,10 @@ const MAINTENANCE_READS = new Set(
   `rooms.list rooms.members history.list runs.list runs.events runs.result runs.get
   receipts.get observe bots.list coding.show coding.diff coding.pending coding.panel
   decisions.list decisions.get decisions.preview decisions.resolve provider.status
+  service.connections service.grants service.receipt service.owner-operations
   plugin.catalog plugin.inspect plugin.connections plugin.access-list
   plugin.operations-list plugin.operation-show
+  modelConnections.list bots.listBound runs.modelExecution rooms.getModelPolicy
   broadcasts.get broadcasts.list`.split(/\s+/),
 );
 export function maintenanceRead(method: string): boolean {

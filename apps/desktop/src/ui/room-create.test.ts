@@ -45,3 +45,17 @@ it('keeps the current room when the dialog created a bot instead', async () => {
     model: 'deepseek-flash',
   });
 });
+
+it('uses an explicit negotiated binding for new bots without changing room behavior', async () => {
+  const bot = fakeCall({ id: 'created' });
+  await expect(
+    submitCreation(
+      { ...base, dialog: 'bot', binding: { connectionId: 'second', modelId: 'explicit' } },
+      bot.call,
+    ),
+  ).resolves.toBeNull();
+  expect(bot.calls.at(-1)).toMatchObject({
+    op: 'bot-bound-create',
+    input: { workspaceId: 'ws_ocean', binding: { connectionId: 'second', modelId: 'explicit' } },
+  });
+});

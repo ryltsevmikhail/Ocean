@@ -26,11 +26,21 @@ function oldProfile() {
   const ids = createDurableIdGenerator(db);
   const clock = { now: () => new Date('2026-11-02T00:00:00Z') };
   const tasks = new TaskRunService({ log: new SqliteEventLog(db, ids), clock, ids });
-  const store = new SqliteConversationStore(db);
+  const store = new SqliteConversationStore(db, { legacySchema: true });
   let id = 10;
   const nextId = () => String(++id).padStart(4, '0');
   const conversations = new ConversationService({ store, clock, nextId });
-  const chat = new DirectChatService({ store, tasks, clock, nextId });
+  // Synthetic historical execution supplies explicit pre-policy allow evidence only in this fixture.
+  const historical = {
+    atomic: <T>(work: Parameters<typeof store.atomic<T>>[0]): T =>
+      store.atomic((tx) =>
+        work({
+          ...tx,
+          roomModelPolicy: (roomId) => ({ roomId, cloudTransfer: 'allow', revision: 1 }),
+        }),
+      ),
+  };
+  const chat = new DirectChatService({ store: historical, tasks, clock, nextId });
   return { db, conversations, chat };
 }
 it('preserves M2 replies, turns, TaskRun events and exact retry identity when migrating 3→7', async () => {
@@ -84,6 +94,11 @@ it('preserves M2 replies, turns, TaskRun events and exact retry identity when mi
   expect(c.db.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value']).toBe(
     String(SCHEMA_VERSION),
   );
+  expect(new SqliteConversationStore(c.db).atomic((tx) => tx.roomModelPolicy('0002'))).toEqual({
+    roomId: '0002',
+    cloudTransfer: 'allow',
+    revision: 1,
+  });
   expect(snapshot()).toEqual(before);
   expect(c.db.prepare('SELECT review_id FROM ocean_chat_turns').get()?.['review_id']).toBeNull();
   expect(c.conversations.room('ws_test', '0002')).toEqual(room);

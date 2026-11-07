@@ -146,7 +146,8 @@ export async function runPluginCommand(
               `${connection.id} ${connection.name} ${connection.pluginId}@${connection.pluginVersion} ` +
               `gen=${String(connection.generation)} ${connection.state} ` +
               `identity=${connection.identityLabel} credential=${connection.credentialReference} ` +
-              `schema=${connection.schemaDigest ?? 'none'}`,
+              `schema=${connection.schemaDigest ?? 'none'} ` +
+              `readiness=${connection.readiness}`,
           ),
         );
       return { data: connections, code: 0 };

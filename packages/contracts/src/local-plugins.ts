@@ -6,6 +6,9 @@
  * expose only the environment variable NAME the owner configured.
  */
 
+/** Owners advertising this capability implement immutable credential/session binding. */
+export const LOCAL_PLUGIN_SESSION_AUTHORITY = 'plugin.session-authority-v1';
+
 export const LOCAL_PLUGIN_METHODS = [
   'plugin.catalog',
   'plugin.inspect',
@@ -89,6 +92,7 @@ export interface LocalPluginConnectionView {
   readonly identity: string | null;
   readonly identityLabel: LocalPluginIdentityLabel;
   readonly state: LocalPluginConnectionState;
+  readonly readiness: 'ready' | 'discovery_required' | 'disconnected';
   readonly generation: number;
   readonly schemaDigest: string | null;
   readonly tools: readonly string[];

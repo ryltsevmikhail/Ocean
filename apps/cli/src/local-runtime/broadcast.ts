@@ -17,16 +17,13 @@ import {
 import {
   admitBroadcastChild,
   executeChatTurn,
-  imageRefusalCode,
   nextBroadcastChild,
   pauseBroadcastIfUncertain,
-  providerAdmits,
-  refuseBroadcastChild,
   settleBroadcastBatch,
   type ChatTurnExecutionDeps,
   type Clock,
   type ImageAssetResolverPort,
-  type ProviderPort,
+  type ProviderActivationPort,
   type RoomBroadcastService,
 } from '@runnets/application';
 import type { RuntimeReply } from './queries.js';
@@ -35,8 +32,8 @@ export interface RuntimeBroadcastsOptions {
   readonly service: RoomBroadcastService;
   readonly execution: ChatTurnExecutionDeps;
   readonly clock: Clock;
-  /** Task 1 activation snapshot getter; captured once per dispatched child. */
-  readonly provider: () => ProviderPort | null;
+  /** Passed unchanged; queued-to-accepted admission captures each child activation. */
+  readonly resolver: ProviderActivationPort;
   /** Runtime image authority for frozen-context reconstruction and admission. */
   readonly images?: ImageAssetResolverPort | undefined;
 }
@@ -48,7 +45,7 @@ export class RuntimeBroadcasts {
   readonly #service: RoomBroadcastService;
   readonly #execution: ChatTurnExecutionDeps;
   readonly #clock: Clock;
-  readonly #provider: () => ProviderPort | null;
+  readonly #resolver: ProviderActivationPort;
   readonly #images: ImageAssetResolverPort | undefined;
   readonly #jobs = new Map<string, { controller: AbortController; settled: Promise<void> }>();
   readonly #children = new Map<string, AbortController>();
@@ -58,7 +55,7 @@ export class RuntimeBroadcasts {
     this.#service = options.service;
     this.#execution = options.execution;
     this.#clock = options.clock;
-    this.#provider = options.provider;
+    this.#resolver = options.resolver;
     this.#images = options.images;
   }
   dispatch(
@@ -132,17 +129,15 @@ export class RuntimeBroadcasts {
         if (signal.aborted) return;
         const next = nextBroadcastChild(this.#execution.store, batchId);
         if (next === null) return;
-        const provider = this.#provider();
-        if (!providerAdmits(provider, next.turn.bot)) {
-          refuseBroadcastChild(this.#execution.store, batchId, next.turn.id);
-          continue;
-        }
         const admitted = admitBroadcastChild(this.#execution.store, batchId, next.turn.id, {
           ...(this.#images === undefined ? {} : { images: this.#images }),
-          guard: (messages) => imageRefusalCode(provider, next.turn.bot.model, messages),
+          resolver: this.#resolver,
+          clock: this.#clock,
         });
         if (admitted.kind === 'closed') return;
         if (admitted.kind === 'refused') continue;
+        const activation = admitted.value.activation;
+        if (!activation) throw Error('missing committed activation capture');
         const child = new AbortController();
         const abortChild = () => child.abort();
         signal.addEventListener('abort', abortChild, { once: true });
@@ -152,7 +147,7 @@ export class RuntimeBroadcasts {
           const final = await executeChatTurn(this.#execution, {
             turn: admitted.value.turn,
             messages: admitted.value.messages,
-            provider,
+            provider: activation.provider,
             signal: child.signal,
             emit: () => {},
           });

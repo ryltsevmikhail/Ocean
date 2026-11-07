@@ -1,185 +1,79 @@
-/**
- * Deterministic packaging of the pinned Executor adapter.
- *
- * The release archive cannot ship `node_modules`: the adapter's Executor/Effect
- * dependency tree is pre-bundled with rolldown into code-split ESM chunks. Before
- * a single byte is emitted, the build asserts the exact identities the adapter
- * pins (patched SDK chunk, patch digest, lockfile `patch_hash`, plugin/effect
- * versions and bundler version) and refuses on any drift. It then fails closed
- * on unresolved external imports, missing pinned modules, emitted assets or
- * source maps, so the shipped `dist/**` is hermetic and reproducible.
- *
- * The build also emits `bundle-integrity.json`, the chunk digest inventory the
- * installed adapter verifies at admission (see
- * `packages/integrations-executor/src/bundle-integrity.ts`).
- */
-import { existsSync, readFileSync } from 'node:fs';
+/** The one production adapter: public MCP client, with bounded first-party externals. */
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { rolldown } from 'rolldown';
-
 import { sha256 } from './installer.js';
-
-/** Release-relative locations of the packaged adapter. */
-export const ADAPTER_PACKAGE = '@runnets/integrations-executor';
-export const ADAPTER_SOURCE_DIR = 'packages/integrations-executor';
+export const ADAPTER_PACKAGE = '@runnets/integrations-mcp';
+export const ADAPTER_SOURCE_DIR = 'packages/integrations-mcp';
 export const ADAPTER_ENTRY = 'dist/index.js';
 export const ADAPTER_INTEGRITY_FILE = 'bundle-integrity.json';
 export const ADAPTER_INTEGRITY_FORMAT = 1;
-
-/** Pinned versions asserted before bundling. */
-export const PINNED_VERSIONS = {
-  sdk: '1.6.11',
-  pluginOpenapi: '1.6.11',
-  pluginMcp: '1.6.11',
-  effect: '4.0.0-beta.59',
-  platformNodeShared: '4.0.0-beta.59',
-} as const;
-
-export const PINNED_SDK_CHUNK = 'dist/chunk-Q3W5ARXY.js';
-export const PINNED_SDK_CHUNK_SHA256 =
-  '6d3d22c97454dde48daacce07d901b174a642a480efee0b8c73fe31aa6d3a0b9';
-export const PINNED_PATCH_FILE = 'patches/@executor-js__sdk@1.6.11.patch';
-export const PINNED_PATCH_SHA256 =
-  'e1c1bfa9a41049321f45747f3ae8907d89604fca06872ec0a4871483db1b9fad';
-/** The lockfile must carry exactly this many `patch_hash` records for the pinned patch. */
-export const PINNED_PATCH_HASH_RECORDS = 5;
-
-/** The only external dependencies the bundled adapter may declare. */
-export const ADAPTER_DEPENDENCIES: Readonly<Record<string, string>> = {
-  '@effect/platform-node-shared': PINNED_VERSIONS.platformNodeShared,
-  '@executor-js/plugin-mcp': PINNED_VERSIONS.pluginMcp,
-  '@executor-js/plugin-openapi': PINNED_VERSIONS.pluginOpenapi,
-  '@executor-js/sdk': PINNED_VERSIONS.sdk,
-  '@runnets/application': 'workspace:*',
-  effect: PINNED_VERSIONS.effect,
-};
-
-/** Pinned bundler; the record proves which tool produced the chunks. */
 export const BUNDLER = { name: 'rolldown', version: '1.2.16' } as const;
-
-/** Versions of packages the release must resolve to the pinned identities. */
-const RESOLVED_PACKAGES = {
-  sdk: ['@executor-js/sdk', PINNED_VERSIONS.sdk],
-  pluginOpenapi: ['@executor-js/plugin-openapi', PINNED_VERSIONS.pluginOpenapi],
-  pluginMcp: ['@executor-js/plugin-mcp', PINNED_VERSIONS.pluginMcp],
-  effect: ['effect', PINNED_VERSIONS.effect],
-  platformNodeShared: ['@effect/platform-node-shared', PINNED_VERSIONS.platformNodeShared],
-} as const;
-
-/** The packaged bundle's chunk files and the identity table recorded in the manifest. */
+export const ADAPTER_DEPENDENCIES: Readonly<Record<string, string>> = {
+  '@modelcontextprotocol/client': '2.4.0',
+  '@runnets/application': 'workspace:*',
+  '@runnets/domain': 'workspace:*',
+  '@runnets/tools-node': 'workspace:*',
+};
+export const PINNED_LOCKFILE_SHA256 =
+  'e256cd1c328340ff2ce064001ef7ecc68efefb6ff570849c7633eda5e3a45878';
+export const PINNED_VERSIONS = { client: '2.4.0', core: '2.4.0' } as const;
 export interface AdapterBundle {
-  /** Package-relative path (`dist/...`) -> bytes. */
   readonly files: ReadonlyMap<string, Buffer>;
-  /** Package-relative path -> SHA-256 of the bytes. */
   readonly filesSha256: Readonly<Record<string, string>>;
   readonly integritySha256: string;
-  /** Pinned identity table for the release manifest. */
   readonly identities: Readonly<Record<string, string>>;
   readonly chunks: number;
   readonly bytes: number;
 }
-
-export interface ReleasePins {
-  readonly identities: Readonly<Record<string, string>>;
-  readonly patchHashRecords: number;
-}
-
-function readJson(path: string): Record<string, unknown> {
+const FIRST_PARTY = new Set(['@runnets/application', '@runnets/domain', '@runnets/tools-node']);
+function json(path: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
 }
-
-function jsonObject(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-}
-
-function packageVersion(directory: string, name: string): string {
-  const version = readJson(join(directory, 'package.json'))['version'];
-  if (typeof version !== 'string' || version === '')
-    throw new Error(`pinned dependency ${name} has no version`);
-  return version;
-}
-
-function fileDigest(path: string, what: string): string {
-  if (!existsSync(path)) throw new Error(`pinned ${what} is missing: ${path}`);
-  return sha256(readFileSync(path));
-}
-
-/**
- * Fail closed unless the installed tree and repository state are the exact
- * identities the qualified adapter pins. Returns the identity table that the
- * release manifest records.
- */
-export function assertPinnedBuildIdentities(root: string): ReleasePins {
-  const patchDigest = fileDigest(join(root, PINNED_PATCH_FILE), 'SDK patch file');
-  if (patchDigest !== PINNED_PATCH_SHA256)
-    throw new Error(
-      `pinned patch identity mismatch: expected ${PINNED_PATCH_SHA256}, observed ${patchDigest}`,
-    );
-  const lockfile = readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8');
-  // Capture the complete value to a delimiter, so a truncated/extra-suffixed
-  // identity cannot silently match the pinned prefix.
-  const patchHashes = [...lockfile.matchAll(/patch_hash=([^\s,)&]+)/g)].map(
-    (match) => match[1] ?? '',
-  );
-  if (patchHashes.length !== PINNED_PATCH_HASH_RECORDS)
-    throw new Error(
-      `lockfile must record exactly ${PINNED_PATCH_HASH_RECORDS} patch_hash identities for the Executor SDK patch; observed ${patchHashes.length}`,
-    );
-  for (const hash of patchHashes)
-    if (!/^[a-f0-9]{64}$/.test(hash))
-      throw new Error(`lockfile recorded a malformed patch_hash identity: ${hash}`);
-  const driftedHash = patchHashes.find((hash) => hash !== PINNED_PATCH_SHA256);
-  if (driftedHash !== undefined)
-    throw new Error(
-      `lockfile patch_hash identity mismatch: expected ${PINNED_PATCH_SHA256}, observed ${driftedHash}`,
-    );
-  const nodeModules = join(root, ADAPTER_SOURCE_DIR, 'node_modules');
-  const chunkDigest = fileDigest(
-    join(nodeModules, '@executor-js/sdk', PINNED_SDK_CHUNK),
-    'installed Executor SDK chunk',
-  );
-  if (chunkDigest !== PINNED_SDK_CHUNK_SHA256)
-    throw new Error(
-      `installed Executor SDK chunk identity mismatch: expected ${PINNED_SDK_CHUNK_SHA256}, observed ${chunkDigest}`,
-    );
-  for (const [pin, entry] of Object.entries(RESOLVED_PACKAGES)) {
-    const [name, expected] = entry;
-    const actual = packageVersion(join(nodeModules, name), name);
-    if (actual !== expected)
-      throw new Error(
-        `pinned version mismatch for ${pin}: expected ${expected}, observed ${actual}`,
-      );
-  }
-  const adapter = jsonObject(readJson(join(root, ADAPTER_SOURCE_DIR, 'package.json')));
-  const dependencies = jsonObject(adapter['dependencies']);
-  const declared = Object.entries(dependencies).sort(([a], [b]) => a.localeCompare(b));
-  const allowed = Object.entries(ADAPTER_DEPENDENCIES).sort(([a], [b]) => a.localeCompare(b));
+export function assertPinnedBuildIdentities(root: string) {
+  if (sha256(readFileSync(join(root, 'pnpm-lock.yaml'))) !== PINNED_LOCKFILE_SHA256)
+    throw Error('lockfile MCP identity mismatch');
+  const modules = join(root, ADAPTER_SOURCE_DIR, 'node_modules');
+  const client = realpathSync(join(modules, '@modelcontextprotocol/client'));
+  const core = realpathSync(join(dirname(dirname(client)), '@modelcontextprotocol/core'));
+  for (const [directory, version] of [
+    [client, '2.4.0'],
+    [core, '2.4.0'],
+    [join(root, 'node_modules/rolldown'), BUNDLER.version],
+  ])
+    if (json(join(directory!, 'package.json'))['version'] !== version)
+      throw Error('pinned version mismatch');
+  const dependencies = json(join(root, ADAPTER_SOURCE_DIR, 'package.json'))['dependencies'];
   if (
-    declared.length !== allowed.length ||
-    allowed.some(
-      ([name, expected], at) => declared[at]?.[0] !== name || declared[at]?.[1] !== expected,
-    )
+    JSON.stringify(Object.entries(dependencies as object).sort()) !==
+    JSON.stringify(Object.entries(ADAPTER_DEPENDENCIES).sort())
   )
-    throw new Error('adapter dependency set does not match the pinned packaging allowlist');
-  const bundler = packageVersion(join(root, 'node_modules', BUNDLER.name), BUNDLER.name);
-  if (bundler !== BUNDLER.version)
-    throw new Error(`bundler version mismatch: expected ${BUNDLER.version}, observed ${bundler}`);
-  return {
-    identities: Object.freeze({
-      '@executor-js/sdk': PINNED_VERSIONS.sdk,
-      '@executor-js/plugin-openapi': PINNED_VERSIONS.pluginOpenapi,
-      '@executor-js/plugin-mcp': PINNED_VERSIONS.pluginMcp,
-      effect: PINNED_VERSIONS.effect,
-      '@effect/platform-node-shared': PINNED_VERSIONS.platformNodeShared,
-      [`@executor-js/sdk#${PINNED_SDK_CHUNK}`]: `sha256:${PINNED_SDK_CHUNK_SHA256}`,
-      [`patch#${PINNED_PATCH_FILE}`]: `sha256:${PINNED_PATCH_SHA256}`,
-      'lockfile#patch_hash': `sha256:${PINNED_PATCH_SHA256}`,
-      [`bundler#${BUNDLER.name}`]: BUNDLER.version,
-    }),
-    patchHashRecords: patchHashes.length,
+    throw Error('adapter dependency set mismatch');
+  const identities: Record<string, string> = {
+    '@modelcontextprotocol/client': '2.4.0',
+    '@modelcontextprotocol/core': '2.4.0',
+    'bundler#rolldown': BUNDLER.version,
   };
+  for (const [name, directory, paths] of [
+    ['@modelcontextprotocol/client', client, ['dist/index.mjs', 'dist/stdio.mjs']],
+    ['@modelcontextprotocol/core', core, ['dist/index.mjs']],
+  ] as const)
+    for (const path of paths)
+      identities[name + '#' + path] = 'sha256:' + sha256(readFileSync(join(directory, path)));
+  // Fixed public SDK inputs; source/lock drift must be reviewed before changing these pins.
+  for (const [key, expected] of Object.entries(SDK_HASHES))
+    if (identities[key] !== 'sha256:' + expected) throw Error('pinned SDK identity mismatch');
+  return { identities: Object.freeze(identities) };
 }
+const SDK_HASHES: Readonly<Record<string, string>> = {
+  '@modelcontextprotocol/client#dist/index.mjs':
+    'b78923b9b9d342109f4fc2a03a9dcea7241fbb89bb2943ec4c9f05a23891b1cf',
+  '@modelcontextprotocol/client#dist/stdio.mjs':
+    'd44adf6ca40eb7a9cafb35dec9658de2b9e17c7dea6be01c06fb8e0d594dc211',
+  '@modelcontextprotocol/core#dist/index.mjs':
+    'b844a6f7626cd4f4456f3608e14176a2ccd50a66f0c19f73abb5c0b11b397165',
+};
 
 /** Build the adapter bundle after asserting every pinned identity. */
 export async function buildAdapterBundle(root: string): Promise<AdapterBundle> {
@@ -190,7 +84,7 @@ export async function buildAdapterBundle(root: string): Promise<AdapterBundle> {
   const build = await rolldown({
     input,
     platform: 'node',
-    external: (id) => id.startsWith('@runnets/'),
+    external: (id) => FIRST_PARTY.has(id),
     onLog: (level, log) => {
       diagnostics.push({ level, code: String(log.code ?? '') });
     },
@@ -241,18 +135,14 @@ export async function buildAdapterBundle(root: string): Promise<AdapterBundle> {
       if (!names.has(specifier)) external.add(specifier);
   }
   const unpackaged = [...external]
-    .filter((specifier) => !isBuiltin(specifier) && !specifier.startsWith('@runnets/'))
+    .filter((specifier) => !isBuiltin(specifier) && !FIRST_PARTY.has(specifier))
     .sort();
   if (unpackaged.length > 0)
     throw new Error('bundled adapter left unpackaged external imports: ' + unpackaged.join(', '));
-  for (const required of [
-    '@executor-js/sdk/',
-    '@executor-js/plugin-openapi/',
-    '@executor-js/plugin-mcp/',
-    'effect/',
-  ])
+  for (const required of ['@modelcontextprotocol/client/', '@modelcontextprotocol/core/'])
     if (![...moduleIds].some((id) => id.includes(required)))
-      throw new Error('bundled adapter did not include the pinned module ' + required.slice(0, -1));
+      throw new Error('bundled adapter did not include the pinned module ' + required);
+  for (const id of moduleIds) assertProductionModule(id);
   const chunkDigests = Object.fromEntries(
     [...files.keys()].sort().map((name) => [name.slice('dist/'.length), filesSha256[name] ?? '']),
   );
@@ -261,8 +151,7 @@ export async function buildAdapterBundle(root: string): Promise<AdapterBundle> {
       {
         format: ADAPTER_INTEGRITY_FORMAT,
         pinnedVersions: PINNED_VERSIONS,
-        pinnedSdkChunkSha256: PINNED_SDK_CHUNK_SHA256,
-        pinnedPatchSha256: PINNED_PATCH_SHA256,
+        identities: pins.identities,
         bundler: BUNDLER,
         files: chunkDigests,
       },
@@ -280,4 +169,14 @@ export async function buildAdapterBundle(root: string): Promise<AdapterBundle> {
     chunks: chunks.length,
     bytes,
   };
+}
+
+/** Check module identity; ancestor proof-directory names carry no production policy. */
+export function assertProductionModule(id: string): void {
+  if (
+    /(?:^|\/)(?:packages\/integrations-executor|node_modules\/(?:@runnets\/integrations-executor|@executor-js\/[^/]+|@modelcontextprotocol\/server|rolldown))(?:\/|$)|\/(?:qualification|prototype)[^/]*\.[cm]?[jt]s$|\/test-fixtures\/|\/[^/]*fixture[^/]*\.[cm]?[jt]s$/.test(
+      id,
+    )
+  )
+    throw Error('dev-only module in production bundle');
 }

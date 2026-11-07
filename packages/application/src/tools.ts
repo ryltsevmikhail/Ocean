@@ -1,3 +1,5 @@
+import type { ToolEffectAdmission } from '@runnets/domain';
+export type { ToolEffectAdmission } from '@runnets/domain';
 /** Application-owned tool admission: prepare, approve, claim, execute, record. */
 export interface ToolInvocation {
   readonly id: string;
@@ -15,14 +17,22 @@ export interface ToolResult {
   readonly uncertain?: boolean;
 }
 export type ToolKind = 'read' | 'search' | 'edit' | 'execute';
+export interface ToolDispatchGuard {
+  /** Repeatable preparation/snapshot check; never consumes dispatch authorization. */
+  inspect?(): boolean;
+  prepare?(): Promise<void>;
+  authorize(): boolean;
+}
 export interface PreparedTool {
   readonly title: string;
   readonly kind: ToolKind;
   readonly preview: string;
-  execute(signal: AbortSignal): Promise<ToolResult>;
+  execute(signal: AbortSignal, guard?: ToolDispatchGuard): Promise<ToolResult>;
 }
 export interface ToolExecutorPort {
   readonly definitions: readonly ToolSchema[];
+  /** Optional trusted host classification, independent of model annotations. */
+  classify?(call: ToolInvocation): ToolEffectAdmission;
   prepare(call: ToolInvocation): Promise<PreparedTool>;
 }
 export interface ToolPermissionPort {
@@ -39,18 +49,22 @@ export type ToolEffectOutcome = 'started' | 'completed' | 'failed' | 'uncertain'
 export interface ToolEffectRecord extends ToolEffectContext {
   readonly id: string;
   readonly tool: string;
+  readonly admission?: ToolEffectAdmission;
   readonly fingerprint: string;
   readonly outcome: ToolEffectOutcome;
 }
 export interface ToolJournalPort {
   /** Optional synchronous evidence for atomic operator reviews. */
   inspectPending?(): readonly ToolEffectRecord[];
+  inspectConflicts?(admission?: ToolEffectAdmission): readonly ToolEffectRecord[];
+  conflicts?(admission?: ToolEffectAdmission): Promise<readonly ToolEffectRecord[]>;
   /** Claim must commit before the external effect; false means never execute again. */
   claim(
     id: string,
     tool: string,
     context: ToolEffectContext,
     fingerprint: string,
+    admission?: ToolEffectAdmission,
   ): Promise<boolean>;
   settle(
     id: string,
@@ -111,7 +125,7 @@ export class ToolService {
         ? previous.result
         : Promise.resolve({ isError: true, output: 'invocation identity conflict' });
     }
-    if (this.#unresolved)
+    if (this.#unresolved && !(this.#executor.classify && this.#journal?.conflicts))
       return Promise.resolve({
         isError: true,
         uncertain: true,
@@ -136,9 +150,12 @@ export class ToolService {
     let claimAttempted = false;
     try {
       if (signal.aborted) throw new ToolError('cancelled', 'tool cancelled before execution');
-      // Check globally before preparation: a fresh run or invocation id cannot bypass
-      // a live/crashed claim, including legacy claims that have no trustworthy owner.
-      if (this.#journal !== undefined && (await this.#journal.pending()).length > 0)
+      // Unclassified executors and legacy claims still conflict globally before preparation.
+      const admission = structuredClone(this.#executor.classify?.(call));
+      if (
+        this.#journal !== undefined &&
+        (await (this.#journal.conflicts?.(admission) ?? this.#journal.pending())).length > 0
+      )
         return {
           isError: true,
           uncertain: true,
@@ -179,6 +196,7 @@ export class ToolService {
           call.name,
           context,
           JSON.stringify([call.name, call.arguments]),
+          admission,
         ))
       ) {
         return {

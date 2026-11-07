@@ -1,6 +1,6 @@
 import { lstat, realpath, readdir } from 'node:fs/promises';
 import { join, relative as pathRelative } from 'node:path';
-import { ToolError } from '@runnets/application';
+import { ToolError, type ToolDispatchGuard } from '@runnets/application';
 import { validateMounts, type SandboxMount } from './sandbox-mounts.js';
 import { blockedName } from './backend.js';
 import { WORKER_SYSTEM_TREES } from './worker-system-paths.js';
@@ -21,6 +21,7 @@ export interface SandboxRequest {
   readonly args: readonly string[];
   readonly cwd?: string;
   readonly signal?: AbortSignal;
+  readonly guard?: ToolDispatchGuard;
   /** Private input for the fixed filesystem worker. */
   readonly stdin?: string;
   readonly timeoutMs?: number;
@@ -40,22 +41,27 @@ export async function sandboxRoot(
   root: string,
   mounts: readonly SandboxMount[] = [],
   projectRoot?: string,
+  serviceWorkspace = false,
+  signal?: AbortSignal,
 ): Promise<void> {
+  signal?.throwIfAborted();
   if ((await realpath(root)) !== root || !(await lstat(root)).isDirectory())
     throw new ToolError('containment_unavailable', 'canonical task root required');
   await validateMounts(mounts, projectRoot);
   const pending = new Set(
     mounts.map((m) => m.target).filter((target) => target.startsWith('/workspace/')),
   );
-  pending.add('/workspace/.git');
+  if (!serviceWorkspace) pending.add('/workspace/.git');
   let count = 0;
   async function walk(directory: string): Promise<void> {
+    signal?.throwIfAborted();
     for (const entry of await readdir(directory, { withFileTypes: true })) {
+      signal?.throwIfAborted();
       if (++count > 50000) throw new ToolError('containment_unavailable', 'mount inventory limit');
       if (/^\.ocean-(?:recovery-|.*\.tmp$)/.test(entry.name))
         throw new ToolError('effect_uncertain', 'unreconciled filesystem worker artifacts');
       if (entry.name === '.git' && directory === root) {
-        if (!(await lstat(join(directory, entry.name))).isFile())
+        if (serviceWorkspace || !(await lstat(join(directory, entry.name))).isFile())
           throw new ToolError('containment_unavailable', 'linked worktree required');
         pending.delete('/workspace/.git');
         continue;
@@ -81,6 +87,7 @@ export async function sandboxRoot(
     }
   }
   await walk(root);
+  signal?.throwIfAborted();
   if (pending.size) throw new ToolError('containment_unavailable', 'missing worker mountpoint');
 }
 export function sandboxArgv(

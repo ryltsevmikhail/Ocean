@@ -17,6 +17,7 @@ export interface PluginConnectionView {
   readonly identity: string | null;
   readonly identityLabel: 'verified' | 'unverified';
   readonly state: 'active' | 'disconnected';
+  readonly readiness: 'ready' | 'discovery_required' | 'disconnected';
   readonly generation: number;
   readonly schemaDigest: string | null;
   readonly tools: readonly string[];
@@ -76,6 +77,7 @@ export function pluginConsentPrompt(connection: PluginConnectionRecord): string 
 export function pluginConnectionView(
   connection: PluginConnectionRecord,
   consented: boolean,
+  sessionReady = true,
 ): PluginConnectionView {
   return {
     id: connection.id,
@@ -89,6 +91,12 @@ export function pluginConnectionView(
     identity: connection.identity,
     identityLabel: pluginIdentityLabel(connection),
     state: connection.state,
+    readiness:
+      connection.state === 'disconnected'
+        ? 'disconnected'
+        : connection.schemaDigest !== null && sessionReady
+          ? 'ready'
+          : 'discovery_required',
     generation: connection.generation,
     schemaDigest: connection.schemaDigest,
     tools: (connection.tools ?? []).map((tool) => tool.name),

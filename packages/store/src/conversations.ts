@@ -1,23 +1,32 @@
 import { InMemoryOwnerDecisions, type MemoryDecisionRows } from './owner-decisions.js';
+import { InMemoryModelConnections, type MemoryModelConnections } from './model-connections.js';
+import { modelConnectionRecord, unconfiguredModelConnection } from '@runnets/application';
 import type {
   ConversationReceipt,
   ConversationStore,
   ConversationTransaction,
+  ModelConnectionStorePort,
+  ModelConnectionRecord,
+  ModelConnectionReceipt,
 } from '@runnets/application';
 import type {
   BroadcastBatch,
   ChatReview,
   RoomExecutionPolicy,
+  RoomModelPolicy,
   ChatTurn,
   Bot,
+  BotModelBinding,
   ConversationMessage,
   Room,
   Workspace,
 } from '@runnets/domain';
 
-interface State {
+interface State extends MemoryModelConnections {
+  bindings: Map<string, BotModelBinding>;
   decisions: MemoryDecisionRows;
   reviews: Map<string, ChatReview>;
+  modelPolicies: Map<string, RoomModelPolicy>;
   policies: Map<string, RoomExecutionPolicy>;
   turns: Map<string, ChatTurn>;
   workspace: Workspace | null;
@@ -32,11 +41,15 @@ function copyState({ decisions, ...conversation }: State): State {
   return { ...structuredClone(conversation), decisions: new Map(decisions) };
 }
 /** Detached transaction copies prevent caller mutation and roll back on failed commits. */
-export class InMemoryConversationStore implements ConversationStore {
+export class InMemoryConversationStore implements ConversationStore, ModelConnectionStorePort {
   #state: State = {
+    connections: new Map([['legacy:deepseek', unconfiguredModelConnection('deepseek')]]),
+    connectionReceipts: new Map(),
+    bindings: new Map(),
     decisions: new Map(),
     reviews: new Map(),
     policies: new Map(),
+    modelPolicies: new Map(),
     turns: new Map(),
     workspace: null,
     bots: new Map(),
@@ -49,6 +62,26 @@ export class InMemoryConversationStore implements ConversationStore {
   readonly ownerDecisions = new InMemoryOwnerDecisions(
     () => (this.#draft ?? this.#state).decisions,
   );
+  readonly modelConnections = new InMemoryModelConnections(() => this.#draft ?? this.#state);
+  list(): readonly ModelConnectionRecord[] {
+    return this.modelConnections.list();
+  }
+  read(id: string): ModelConnectionRecord | null {
+    return this.modelConnections.read(id);
+  }
+  put(record: ModelConnectionRecord, expected: number | null): void {
+    this.modelConnections.put(record, expected);
+  }
+  activate(
+    record: ModelConnectionRecord,
+    expected: number | null,
+    receipt: { readonly requestId: string; readonly value: ModelConnectionReceipt },
+  ): void {
+    this.modelConnections.activate(record, expected, receipt);
+  }
+  receipt(id: string): ModelConnectionReceipt | null {
+    return this.modelConnections.receipt(id);
+  }
 
   /** Publish the snapshot only after the whole synchronous transaction succeeds. */
   atomic<T>(work: (transaction: ConversationTransaction) => T): T {
@@ -56,6 +89,10 @@ export class InMemoryConversationStore implements ConversationStore {
     const state = copyState(this.#state);
     this.#draft = state;
     const tx: ConversationTransaction = {
+      roomModelPolicy: (id) => state.modelPolicies.get(id) ?? null,
+      putRoomModelPolicy: (p) => {
+        state.modelPolicies.set(p.roomId, p);
+      },
       review: (id) => state.reviews.get(id) ?? null,
       putReview: (r) => {
         if (state.reviews.has(r.id)) throw new Error('Duplicate review');
@@ -99,7 +136,43 @@ export class InMemoryConversationStore implements ConversationStore {
         ),
       putBot: (value) => {
         if (state.bots.has(value.id)) throw new Error('duplicate bot identity');
+        if (!value.model || value.model.includes('\0')) throw Error('invalid_model_binding');
         state.bots.set(value.id, value);
+        const placeholder = modelConnectionRecord(unconfiguredModelConnection(value.provider));
+        if (!state.connections.has(placeholder.connectionId))
+          state.connections.set(placeholder.connectionId, placeholder);
+        state.bindings.set(value.id, {
+          connectionId: placeholder.connectionId,
+          modelId: value.model,
+        });
+      },
+      replaceBot: (bot, expectedProfileVersion) => {
+        const previous = state.bots.get(bot.id);
+        if (
+          previous?.profileVersion !== expectedProfileVersion ||
+          previous.workspaceId !== bot.workspaceId ||
+          !Number.isSafeInteger(expectedProfileVersion) ||
+          expectedProfileVersion < 1 ||
+          !Number.isSafeInteger(bot.profileVersion) ||
+          bot.profileVersion !== expectedProfileVersion + 1
+        )
+          throw Error('bot_profile_version_conflict');
+        if ([...state.bots.values()].some((b) => b.id !== bot.id && b.handle === bot.handle))
+          throw Error('handle_taken');
+        state.bots.set(bot.id, bot);
+      },
+      modelBinding: (id) => state.bindings.get(id) ?? null,
+      putModelBinding: (id, binding) => {
+        if (!state.bots.has(id) || !state.connections.has(binding.connectionId))
+          throw Error('model_binding_reference');
+        if (
+          !binding.connectionId ||
+          !binding.modelId ||
+          binding.connectionId.includes('\0') ||
+          binding.modelId.includes('\0')
+        )
+          throw Error('invalid_model_binding');
+        state.bindings.set(id, binding);
       },
       rooms: () => [...state.rooms.values()],
       room: (id) => state.rooms.get(id) ?? null,
@@ -110,6 +183,11 @@ export class InMemoryConversationStore implements ConversationStore {
       putRoom: (value) => {
         if (state.rooms.has(value.id)) throw new Error('duplicate room identity');
         state.rooms.set(value.id, value);
+        state.modelPolicies.set(value.id, {
+          roomId: value.id,
+          cloudTransfer: 'allow',
+          revision: 1,
+        });
       },
       history: (roomId, after, limit) =>
         [...state.messages.values()]

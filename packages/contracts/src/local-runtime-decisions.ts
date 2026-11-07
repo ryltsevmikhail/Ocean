@@ -10,12 +10,20 @@ export const LOCAL_DECISION_METHODS = [
   'reviews.continue',
   'reviews.result',
 ] as const;
+export const LOCAL_SERVICE_CONFIRMATIONS = 'decisions.service-v1';
 export const PREVIEW_CHUNK = 32 * 1024;
 export interface LocalDecisionRef extends LocalRunQuery {
   readonly decisionId: string;
 }
 export interface LocalDecision extends LocalDecisionRef {
-  readonly kind: 'write' | 'test' | 'continue-text-only' | 'restore-rebind' | 'task-finalization';
+  readonly kind:
+    | 'project-read'
+    | 'service-call'
+    | 'write'
+    | 'test'
+    | 'continue-text-only'
+    | 'restore-rebind'
+    | 'task-finalization';
   readonly status:
     'pending' | 'allowed' | 'denied' | 'cancelled' | 'expired' | 'invalidated' | 'interrupted';
   readonly version: number;
@@ -105,9 +113,15 @@ export function isLocalDecision(v: unknown): v is LocalDecision {
       'previewLength',
       'bindingDigest',
     ]) &&
-    ['write', 'test', 'continue-text-only', 'restore-rebind', 'task-finalization'].some(
-      (k) => k === v['kind'],
-    ) &&
+    [
+      'project-read',
+      'service-call',
+      'write',
+      'test',
+      'continue-text-only',
+      'restore-rebind',
+      'task-finalization',
+    ].some((k) => k === v['kind']) &&
     bindingDigest(v['bindingDigest']) &&
     localPosition(v['previewLength']) &&
     localPosition(v['createdAt']) &&

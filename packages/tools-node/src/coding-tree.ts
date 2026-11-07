@@ -1,3 +1,4 @@
+import type { ToolDispatchGuard } from '@runnets/application';
 import { CodingArtifactError, type CodingFileMode } from '@runnets/domain';
 import { codingGit, codingPath, codingText } from './coding-git.js';
 export interface CodingTreeEntry {
@@ -11,9 +12,12 @@ export const TREE_BYTES = 33554432,
 export async function codingTree(
   root: string,
   commit: string,
+  guard?: ToolDispatchGuard,
 ): Promise<readonly CodingTreeEntry[]> {
   if (!/^[a-f0-9]{40,64}$/.test(commit)) throw new CodingArtifactError('worktree_unavailable');
-  const raw = codingText(await codingGit(root, ['ls-tree', '-rz', '--full-tree', commit]));
+  const raw = codingText(
+    await codingGit(root, ['ls-tree', '-rz', '--full-tree', commit], undefined, guard),
+  );
   const entries = raw
     .split('\0')
     .filter(Boolean)

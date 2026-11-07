@@ -1,0 +1,28 @@
+{
+  "name": "@runnets/integrations-mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./qualification": {
+      "types": "./dist/qualification.d.ts",
+      "import": "./dist/qualification.js"
+    }
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@runnets/application": "workspace:*",
+    "@runnets/domain": "workspace:*",
+    "@runnets/tools-node": "workspace:*"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "@runnets/store-sqlite": "workspace:*",
+    "rolldown": "1.2.16"
+  }
+}

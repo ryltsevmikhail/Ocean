@@ -1,0 +1,8 @@
+9a4ef7fa66d2786412172346eb247db30e579708bc676227d08d156bcf277df3  apps/desktop/qa/model-legacy-native.mjs
+4654408a06b81c818b93dbb04ac7b055eefe9f4ec91371c8231de089dfb30542  apps/desktop/qa/model-recovery-context.mjs
+be9ddee30958f868e84c3f6985470d402db885709e5591da874471511ceb2bf4  apps/desktop/qa/model-recovery-native.mjs
+08b9e8db952b29a79f7f9edb083f7dffc4762fbfacae4dab313dce17be06d41e  apps/desktop/qa/model-recovery-transport.mjs
+6df9a81f799c0cd680a11b699f4af20e1df90503b038737f86741fd7b5d573d2  apps/desktop/qa/model-recovery-transport.test.mjs
+73724f6adc755ee666cdd7ab1cdb32a6a8639eb0a1faab70987df51d85767517  apps/desktop/qa/model-usage-native.mjs
+d6ea013e8333688abb36e51c7a09922a077f5a1726f203258bc06f49e642c031  apps/cli/test-fixtures/github-session-rig.ts
+68f28f549e0713f5c21d47950b6db96babdb27a7b9264684268c571b7cde62a3  apps/cli/src/plugin-catalog-lifetime.test.ts

@@ -1,9 +1,11 @@
-import { ok, type ChatTurn, type ConversationResult } from '@runnets/domain';
+import { conversationFailure, ok, type ChatTurn, type ConversationResult } from '@runnets/domain';
 import {
   admitChat,
   type DirectChatRequest,
   type ChatAdmissionMode,
+  type ChatProviderSource,
 } from './direct-chat-admission.js';
+import type { ChatReviewService } from './chat-review.js';
 import { recoverChats } from './direct-chat-publication.js';
 import {
   executeChatTurn,
@@ -21,7 +23,11 @@ import {
   type RunQuery,
 } from './chat-receipts.js';
 export type { ChatAdmissionReceipt, ReceiptQuery, RunQuery } from './chat-receipts.js';
-export type { ChatAdmissionMode, DirectChatRequest } from './direct-chat-admission.js';
+export type {
+  ChatAdmissionMode,
+  DirectChatRequest,
+  ChatProviderSource,
+} from './direct-chat-admission.js';
 import type { ChatMessage, ProviderPort } from './provider.js';
 import type { TurnUpdate } from './turn-update.js';
 export { ChatPreparationRefusal } from './chat-preparation.js';
@@ -34,6 +40,8 @@ export interface RecordedRoomMessage {
 }
 export interface DirectChatDeps extends ConversationServiceDeps {
   readonly tasks: TaskRunService;
+  readonly sha256?: (text: string) => string;
+  readonly reviews?: Pick<ChatReviewService, 'review'>;
   readonly codingTools?: {
     /** Successful preparation must join its workers and prove their cleanup before returning. */
     forTurn(turn: ChatTurn, signal: AbortSignal): Promise<ChatCodingTools>;
@@ -43,14 +51,14 @@ export interface DirectChatDeps extends ConversationServiceDeps {
     forTurn(turn: ChatTurn, signal: AbortSignal): Promise<GrantedPluginTools | null>;
   };
 }
-export interface SubmitDirectInput extends DirectChatRequest {
-  readonly provider: ProviderPort | null;
-  readonly signal: AbortSignal;
-  readonly emit: (update: TurnUpdate) => void;
-}
-export interface SendDirectInput extends SubmitDirectInput {
+export type SubmitDirectInput = DirectChatRequest &
+  ChatProviderSource & {
+    readonly signal: AbortSignal;
+    readonly emit: (update: TurnUpdate) => void;
+  };
+export type SendDirectInput = SubmitDirectInput & {
   readonly onAdmitted?: (turn: ChatTurn) => void;
-}
+};
 /** One host-neutral direct dialogue path for CLI and TUI, reconstructed from committed history. */
 export class DirectChatService {
   readonly #deps: DirectChatDeps;
@@ -88,8 +96,10 @@ export class DirectChatService {
     completion: Promise<ChatTurn> | null;
     observed: ChatTurn | RecordedRoomMessage;
   }> {
+    if ('resolver' in submitted === 'provider' in submitted)
+      return conversationFailure('invalid_input');
     const input = { ...submitted };
-    const admitted = admitChat(this.#deps, input, input.provider, {
+    const admitted = admitChat(this.#deps, input, input, {
       mode,
       codingAvailable: this.#deps.codingTools !== undefined,
     });
@@ -107,31 +117,36 @@ export class DirectChatService {
         },
       });
     }
-    const { turn, fresh, messages } = admitted.value;
+    const admission = admitted.value;
+    const { turn, fresh, messages } = admission;
     onAdmitted?.(structuredClone(turn));
     return ok({
       receipt: chatReceipt(input.requestId, turn),
       observed: turn,
-      completion: fresh ? Promise.resolve().then(() => this.#execute(input, turn, messages)) : null,
+      completion: fresh
+        ? Promise.resolve().then(() => this.#execute(input, turn, messages, admission.provider))
+        : null,
     });
   }
   async #execute(
     input: SubmitDirectInput,
     turn: ChatTurn,
     messages: readonly ChatMessage[],
+    provider: ProviderPort,
   ): Promise<ChatTurn> {
     return executeChatTurn(
       {
         tasks: this.#deps.tasks,
         store: this.#deps.store,
         clock: this.#deps.clock,
+        ...(this.#deps.reviews === undefined ? {} : { reviews: this.#deps.reviews }),
         ...(this.#deps.codingTools === undefined ? {} : { codingTools: this.#deps.codingTools }),
         ...(this.#deps.grantedTools === undefined ? {} : { grantedTools: this.#deps.grantedTools }),
       },
       {
         turn,
         messages,
-        provider: input.provider,
+        provider,
         signal: input.signal,
         emit: input.emit,
       },
@@ -139,6 +154,12 @@ export class DirectChatService {
   }
   /** Requires exclusive host ownership. Never replays a provider or tool request. */
   recover(): Promise<void> {
-    return recoverChats(this.#deps.store, this.#deps.tasks, this.#deps.clock);
+    return recoverChats(
+      this.#deps.store,
+      this.#deps.tasks,
+      this.#deps.clock,
+      this.#deps.reviews,
+      this.#deps.sha256,
+    );
   }
 }

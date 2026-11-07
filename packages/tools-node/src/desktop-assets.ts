@@ -1,5 +1,6 @@
 import { desktopAliasGuards } from './desktop-preparation-alias.js';
 import * as fs from 'node:fs';
+import { withDesktopRoot } from './desktop-root.js';
 import { createHash } from 'node:crypto';
 import type { DesktopAssetInventory, CodingAssetManifest } from '@runnets/domain';
 import {
@@ -52,56 +53,55 @@ function freeze<T>(value: T): T {
 }
 export function captureDesktopAssets(input: DesktopAssetInventory): DesktopAssetCapture {
   const inventory = freeze(structuredClone(input));
-  if (
-    !inventory.binding ||
-    desktopRootIdentity(inventory.binding.root) !== inventory.binding.identity
-  )
-    throw Error('desktop_binding_mismatch');
-  const source = captureAssetTreeAt(
-    inventory.binding.root,
-    { bytes: 134217728, entries: 10000, depth: 3 },
-    'desktop',
-    undefined,
-    (metadata) => {
-      if (
-        Buffer.byteLength(
-          JSON.stringify({
-            format: 1,
-            inventory,
-            manifest: metadata.manifest,
-            hash: '0'.repeat(64),
-          }),
-        ) > 16777216
-      )
-        throw Error('desktop_inventory_limit');
-      const paths = new Set(metadata.manifest.entries.map((e) => e.path));
-      for (const m of inventory.messages)
-        if (!paths.has(m.roomId + '/' + m.requestId + '.json'))
-          throw Error('desktop_assets_missing');
-    },
-    undefined,
-    (metadata, candidates) => desktopAliasGuards(inventory, metadata, candidates),
-  );
-  const preparations = freeze(
-    checkDesktopEvidence(inventory, source.manifest, (path) => readDesktopSource(source, path)),
-  );
-  const fd = fs.openSync(
-    source.root,
-    fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW,
-  );
-  try {
-    checkAssetTreeAt(source, fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  const body = {
-    format: 1 as const,
-    inventory: structuredClone(inventory),
-    manifest: source.manifest,
-  };
-  const handle = freeze({ catalog: { ...body, hash: hash(body) } });
-  issued.set(handle, { source, digest: hash(handle), preparations });
-  return handle;
+  const binding = inventory.binding;
+  if (!binding) throw Error('desktop_binding_mismatch');
+  return withDesktopRoot(binding, (held) => {
+    const source = captureAssetTreeAt(
+      binding.root,
+      { bytes: 134217728, entries: 10000, depth: 3 },
+      'desktop',
+      held.fd,
+      (metadata) => {
+        if (
+          Buffer.byteLength(
+            JSON.stringify({
+              format: 1,
+              inventory,
+              manifest: metadata.manifest,
+              hash: '0'.repeat(64),
+            }),
+          ) > 16777216
+        )
+          throw Error('desktop_inventory_limit');
+        const paths = new Set(metadata.manifest.entries.map((e) => e.path));
+        for (const m of inventory.messages)
+          if (!paths.has(m.roomId + '/' + m.requestId + '.json'))
+            throw Error('desktop_assets_missing');
+      },
+      undefined,
+      (metadata, candidates) => desktopAliasGuards(inventory, metadata, candidates),
+    );
+    const preparations = freeze(
+      checkDesktopEvidence(inventory, source.manifest, (path) => readDesktopSource(source, path)),
+    );
+    const fd = fs.openSync(
+      source.root,
+      fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW,
+    );
+    try {
+      checkAssetTreeAt(source, fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    const body = {
+      format: 1 as const,
+      inventory: structuredClone(inventory),
+      manifest: source.manifest,
+    };
+    const handle = freeze({ catalog: { ...body, hash: hash(body) } });
+    issued.set(handle, { source, digest: hash(handle), preparations });
+    return handle;
+  });
 }
 export function checkDesktopCapture(capture: DesktopAssetCapture): void {
   const origin = issued.get(capture);

@@ -8,7 +8,7 @@ import { CodingApprovalService, dispatchCodingOperation } from '@runnets/applica
 import { openSqliteStore } from '@runnets/store-sqlite';
 export const hash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export function claimFixture() {
+export function claimFixture(workspaceId = 'ws') {
   const root = mkdtempSync(join(tmpdir(), 'ocean-claim-finalization-'));
   const path = join(root, 'runtime.sqlite');
   const store = openSqliteStore({ path });
@@ -19,9 +19,17 @@ export function claimFixture() {
     INSERT INTO ocean_rooms(id,workspace_id,kind,bot_id) VALUES
       ('room','ws','direct','dev'),('review-room','ws','direct','review');
     INSERT INTO ocean_members VALUES('ws','room','dev'),('ws','review-room','review');`);
+  if (workspaceId !== 'ws') {
+    db.exec('PRAGMA foreign_keys=OFF');
+    for (const table of ['ocean_workspace', 'ocean_bots', 'ocean_rooms', 'ocean_members'])
+      db.prepare(
+        `UPDATE ${table} SET ${table === 'ocean_workspace' ? 'id' : 'workspace_id'}=?`,
+      ).run(workspaceId);
+    db.exec('PRAGMA foreign_keys=ON');
+  }
   const task: CodingTask = {
     id: 'task',
-    workspaceId: 'ws',
+    workspaceId,
     projectRoot: '/project',
     worktreeRoot: '/worktree',
     baseCommit: 'a'.repeat(40),
@@ -52,7 +60,7 @@ export function claimFixture() {
     tx.putTask(task);
     tx.putWorktree({
       taskId: 'task',
-      workspaceId: 'ws',
+      workspaceId,
       root: '/worktree',
       projectRoot: '/project',
       baseCommit: task.baseCommit,
@@ -72,7 +80,7 @@ export function claimFixture() {
   function operation(operation: 'write' | 'test') {
     const id = 'approval-' + String(++sequence);
     const binding: CodingApprovalBinding = {
-      workspaceId: 'ws',
+      workspaceId,
       taskId: 'task',
       projectRoot: '/project',
       worktreeRoot: '/worktree',
@@ -167,6 +175,7 @@ export function claimFixture() {
     task,
     approvals,
     dispatch,
+    operation,
     holds,
     rows,
     approval,

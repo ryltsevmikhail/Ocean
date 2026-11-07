@@ -7,6 +7,7 @@
  * bounded model probe. Nothing here sees vendor wire shapes.
  */
 
+import type { LegacyModelConnectionStorePort } from './model-connection-ports.js';
 import type { ProviderPort } from './provider.js';
 
 export type ProviderConnectionSource = 'saved' | 'external' | 'injected' | 'none';
@@ -81,6 +82,7 @@ export interface ProviderConnectionReceipt {
 }
 /** Authoritative metadata store; CAS writes make stale owner intents explicit. */
 export interface ProviderConnectionStorePort {
+  readonly connections: LegacyModelConnectionStorePort;
   read(provider: string): ProviderConnectionRecord | null;
   /** Write only when the stored revision equals `expected` (null: no row yet). */
   put(record: ProviderConnectionRecord, expected: number | null): void;

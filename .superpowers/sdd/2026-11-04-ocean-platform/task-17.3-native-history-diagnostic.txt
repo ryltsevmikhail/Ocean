@@ -1,0 +1,10 @@
+import fs from 'node:fs';import path from 'node:path';import {codingWorkflowFixture} from './apps/cli/dist/ocean/coding-workflow-fixture.js';import {openSqliteStore} from './packages/store-sqlite/dist/index.js';
+const f=await codingWorkflowFixture('direct');
+const textProvider={id:'fixture',models:['fixture'],capabilities:{streaming:true,usage:true,reasoning:false,toolCalls:process.env.OCEAN_QA_TOOL_CAPABILITY==='1'},async *stream(){yield {type:'text_delta',text:'fixture history answer'};yield {type:'usage',usage:{inputTokens:1,outputTokens:1,totalTokens:2}};yield {type:'completed',stopReason:'stop',rawStopReason:'stop'};}};
+try{
+ fs.writeFileSync(path.join(f.worktree,'answer.txt'),'old frozen history\n');const artifact=await f.capture('history-changeset');const sent=await f.send('history-run',textProvider);
+ const snapshot=()=>{const s=openSqliteStore({path:path.join(f.directory,'runtime.sqlite')});try{return {holds:s.rebind.atomic(tx=>tx.holds()),pending:s.tools.inspectPending()};}finally{s.close();}};
+ const afterSend=snapshot();const requested=await f.runtime.codingReview.request({id:'review-history',workspaceId:'ws_ocean',taskId:'task',changesetHash:artifact.hash},{confirm:async()=>true});
+ const reviewed=await f.runtime.codingReview.dispatch('review-history',{review:async()=>({verdict:'changes_requested',findings:[{path:'answer.txt',side:'after',line:1,severity:'important',explanation:'Exact frozen review finding'}],summary:'Exact frozen review summary'})});
+ console.log(JSON.stringify({sent,taskState:await f.runtime.service.state(sent.value.taskRunId),afterSend,requested,reviewed,afterReview:snapshot()},null,2));
+}finally{f.close();}

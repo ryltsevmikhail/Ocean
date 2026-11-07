@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {fetchHttpClient} from '@runnets/provider-core';
+import {connectLocalRuntime,localRuntimePaths} from '@runnets/tools-node';
+const phase=process.env.OCEAN_QA_PHASE,installed=process.env.OCEAN_QA_INSTALLED,endpoint='http://127.0.0.1:11474';
+const {startLocalRuntime}=await import('file://'+installed+'/apps/cli/dist/local-runtime/host.js');
+const profile=path.join(phase,'profile'),workspace=path.join(phase,'workspace');fs.mkdirSync(workspace);
+const cli=execFileSync(process.execPath,[path.join(installed,'launch.js'),'init','--workspace',workspace,'--profile',profile,'--json'],{encoding:'utf8',timeout:15000});
+const proof={online:true,autonomyD:false,requests:[],runs:[],batches:[],cliInit:JSON.parse(cli),vendorsDeferred:['OpenAI','Anthropic']};
+const write=()=>fs.writeFileSync(path.join(phase,'mixed-proof.json'),JSON.stringify(proof,null,2),{mode:0o600});
+const {checkLocalModel}=await import('@runnets/provider-local');proof.localQualification=await checkLocalModel({endpoint,auth:{mode:'none'}},AbortSignal.timeout(10000));
+const secrets=new Map();const secretStore={read:ref=>secrets.has(ref)?{status:'ok',key:secrets.get(ref)}:{status:'absent'},write:(ref,key)=>{secrets.set(ref,key);},replace:(previous,ref,key)=>{if(previous)secrets.delete(previous);secrets.set(ref,key);},remove:ref=>{secrets.delete(ref);}};
+const counters=()=>Object.fromEntries(['http://127.0.0.1:11474','https://api.deepseek.com'].map(origin=>[origin,proof.requests.filter(r=>r.origin===origin&&r.inference).length]));
+const http={send:async request=>{
+ const url=new URL(request.url);assert.ok([endpoint,'https://api.deepseek.com'].includes(url.origin));
+ const inference=['/api/chat','/chat/completions'].includes(url.pathname),body=inference?JSON.parse(request.body):null;
+ proof.requests.push({origin:url.origin,path:url.pathname,method:request.method??'POST',inference,model:body?.model??null,...(url.origin===endpoint&&inference?{think:body.think,options:body.options}:{})});
+ write();return fetchHttpClient.send(request); // preserve URL/body/headers/signal/redirect and actual transport
+}};
+let key;
+const host=await startLocalRuntime({profile,providerSecretStore:secretStore,providerHttpClient:http}),client=await connectLocalRuntime({profile});
+async function until(read,predicate,ms=170000){const end=performance.now()+ms;while(performance.now()<end){const value=await read();if(predicate(value))return value;await new Promise(r=>setTimeout(r,50));}throw Error('bounded wait expired');}
+async function run(scope,requestId,text,expected='completed'){
+ const before=counters(),receipt=await client.submit({...scope,requestId,text});assert.ok(receipt.runId);
+ const query={...scope,runId:receipt.runId},run=await until(()=>client.getRun(query),r=>['completed','failed','cancelled','uncertain'].includes(r?.turnStatus));
+ const execution=await client.getRunModelExecution(query);const entry={requestId,scope,receipt,run,execution,result:await client.getResult(query),before,after:counters()};proof.runs.push(entry);write();assert.equal(run.turnStatus,expected);return entry;
+}
+try{
+ // Parse only the expected assignment. Never execute the file or export the key to env/argv.
+ const source=fs.readFileSync('/home/ryltsevmg/.config/ocean-rc/deepseek.env','utf8');
+ const assignments=source.split(/\r?\n/).filter(line=>/^\s*(?:export\s+)?DEEPSEEK_API_KEY\s*=/.test(line));assert.equal(assignments.length,1);
+ const match=assignments[0].match(/^\s*(?:export\s+)?DEEPSEEK_API_KEY\s*=\s*(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s#]+))\s*(?:#.*)?$/);assert.ok(match);key=match[1]??match[2]??match[3];assert.ok(key.length>0);
+ for(const descriptor of [{connectionId:'native',providerId:'ollama',kind:'local',endpoint,auth:'none',defaultModelId:'qwen3:1.7b'},
+ {connectionId:'deepseek',providerId:'deepseek',kind:'cloud',endpoint:'https://api.deepseek.com',auth:'api_key',defaultModelId:'deepseek-flash',key}]){
+ await client.setModelConnection({...descriptor,requestId:'set-'+descriptor.connectionId,expectedRevision:null});
+ assert.equal((await client.checkModelConnection({connectionId:descriptor.connectionId})).check.outcome,'ok');}
+ const bots=[],rooms=[];
+ for(const [handle,connectionId,modelId] of [['native','native','qwen3:1.7b'],['cloud','deepseek','deepseek-flash'],['silent','deepseek','deepseek-flash']]){
+ const bot=await client.createBoundBot({workspaceId:'ws_ocean',requestId:'bot-'+handle,handle,name:handle,role:'Synthetic B qualification; short answers only',binding:{connectionId,modelId}});bots.push(bot);
+ rooms.push((await client.openDirect({workspaceId:'ws_ocean',requestId:'room-'+handle,botId:bot.bot.id})).data.id);}
+ proof.bots=bots;proof.localQualificationArtifact='8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7';assert.equal(proof.localQualification.artifactDigest,proof.localQualificationArtifact);
+ const group=await client.createGroup({workspaceId:'ws_ocean',requestId:'mixed-group',title:'Synthetic native DeepSeek B',botIds:bots.map(b=>b.bot.id)}),scope={workspaceId:'ws_ocean',roomId:group.data.id};
+ await run({workspaceId:'ws_ocean',roomId:rooms[0]},'direct-local','Reply LOCAL_OK.');
+ await run({workspaceId:'ws_ocean',roomId:rooms[1]},'direct-cloud','Reply CLOUD_OK.');
+ const local=await run(scope,'group-local','@native Reply GROUP_LOCAL_OK.');assert.equal(local.after['https://api.deepseek.com'],local.before['https://api.deepseek.com']);
+ const cloud=await run(scope,'group-cloud','@cloud Reply GROUP_CLOUD_OK.');assert.equal(cloud.after[endpoint],cloud.before[endpoint]);assert.equal(cloud.after['https://api.deepseek.com']-cloud.before['https://api.deepseek.com'],1);
+ async function broadcast(requestId,failedLocal){
+ const batch=await client.broadcastSubmit({...scope,requestId,text:'Reply BROADCAST_OK.'});
+ const done=await until(()=>client.broadcastGet({...scope,batchId:batch.id}),b=>b.state==='completed');
+ const children=[];
+ for(const recipient of done.recipients){
+ assert.equal(recipient.state,failedLocal&&recipient.handle==='native'?'refused':'answered');
+ if(recipient.runId){const query={...scope,runId:recipient.runId};children.push({handle:recipient.handle,run:await client.getRun(query),execution:await client.getRunModelExecution(query),result:await client.getResult(query)});}}
+ proof.batches.push({requestId,batch:done,children,counters:counters()});write();
+ }
+ await broadcast('healthy-broadcast',false);proof.loaded=await fetch(endpoint+'/api/ps').then(r=>r.json());assert.equal(proof.loaded.models.length,1);assert.equal(proof.loaded.models[0].size_vram,0);
+ // Backend has no request in flight: stop only this phase's backend, then independently address children.
+ process.kill(Number(process.env.OCEAN_QA_BACKEND_PID),'SIGTERM');
+ await until(async()=>{try{await fetch(endpoint+'/api/version',{signal:AbortSignal.timeout(1000)});return false;}catch{return true;}},v=>v,5000);
+ const failed=await run(scope,'failed-local','@native Reply FAILED_LOCAL.','failed');assert.equal(failed.execution.execution.lastRequest.settlement.completion.kind,'not_sent');assert.deepEqual(failed.after,failed.before);
+ const independent=await run(scope,'independent-cloud','@cloud Reply INDEPENDENT_OK.');assert.equal(independent.after[endpoint],independent.before[endpoint]);assert.equal(independent.after['https://api.deepseek.com']-independent.before['https://api.deepseek.com'],1);
+ await broadcast('failed-local-broadcast',true);
+ proof.finalCounters=counters();assert.deepEqual(proof.finalCounters,{[endpoint]:3,'https://api.deepseek.com':7});
+ // Freeze and assert exact provider/connection/model admission identities, including every batch child.
+ const identities=proof.runs.concat(proof.batches.flatMap(b=>b.children)).map(r=>r.execution.execution?.identity);
+ assert.ok(identities.every(i=>i&&((i.providerId==='ollama'&&i.connectionId==='native'&&i.modelId==='qwen3:1.7b')||(i.providerId==='deepseek'&&i.connectionId==='deepseek'&&i.modelId==='deepseek-flash'))));proof.admittedIdentities=identities;
+ proof.loadedBeforeStop='CPU-only local model; runner and resources retained separately';
+}finally{
+ client.close();proof.hostStop=await host.stop();await host.closed;proof.ownerClosed=true;proof.runtimeEndpointExists=fs.existsSync(localRuntimePaths(profile).endpoint);write();
+ secrets.clear();
+ if(key){const bytes=Buffer.from(key);for(const file of fs.readdirSync(phase,{recursive:true}).map(x=>path.join(phase,x))){if(fs.statSync(file).isFile())assert.equal(fs.readFileSync(file).includes(bytes),false,'credential found in owned phase file');}proof.secretScan='exact in-memory key absent from every owned phase file';}
+ key=undefined;write();
+}
+console.log(JSON.stringify({online:true,finalCounters:proof.finalCounters,runs:proof.runs.map(r=>({id:r.requestId,status:r.run.turnStatus})),batches:proof.batches.map(b=>({id:b.requestId,recipients:b.batch.recipients.map(r=>({handle:r.handle,state:r.state}))})),secretScan:proof.secretScan,vendorsDeferred:proof.vendorsDeferred},null,2));

@@ -33,7 +33,16 @@
       "path": "../../packages/provider-deepseek"
     },
     {
-      "path": "../../packages/integrations-executor"
+      "path": "../../packages/provider-openai"
+    },
+    {
+      "path": "../../packages/provider-anthropic"
+    },
+    {
+      "path": "../../packages/provider-local"
+    },
+    {
+      "path": "../../packages/integrations-mcp"
     }
   ]
 }

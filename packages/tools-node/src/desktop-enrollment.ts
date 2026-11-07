@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { desktopBindingIdentity } from './desktop-root.js';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { DesktopAssetFiles, DesktopAdoptedPreparation } from '@runnets/application';
@@ -58,7 +59,7 @@ export function desktopAssetFiles(profile: string, profileId: string): DesktopAs
         binding = {
           profileId,
           root: join(destination, 'tree'),
-          identity: desktopRootIdentity(join(destination, 'tree')),
+          identity: desktopBindingIdentity(join(destination, 'tree')),
           originalRoot,
         };
       } else {
@@ -69,7 +70,7 @@ export function desktopAssetFiles(profile: string, profileId: string): DesktopAs
         binding = {
           profileId,
           root: join(destination, 'tree'),
-          identity: desktopRootIdentity(join(destination, 'tree')),
+          identity: desktopBindingIdentity(join(destination, 'tree')),
           originalRoot,
         };
       }

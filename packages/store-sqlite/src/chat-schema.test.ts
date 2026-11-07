@@ -21,7 +21,7 @@ function versionTwo() {
     "INSERT INTO ocean_messages VALUES('3','w','2',1,'user','1','saved in M1','2026-11-02T00:00:00Z')",
   );
   const s = new ConversationService({
-    store: new SqliteConversationStore(db),
+    store: new SqliteConversationStore(db, { legacySchema: true }),
     clock: { now: () => new Date('2026-11-02T00:00:00Z') },
     nextId: () => {
       throw new Error('read only fixture');

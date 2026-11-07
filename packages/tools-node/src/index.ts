@@ -165,3 +165,26 @@ export {
   type PluginBackupFile,
 } from './plugin-backup-files.js';
 export { localPluginClient, type LocalPluginClient } from './local-plugin-client.js';
+
+export { desktopBindingIdentity, desktopBindingMatches } from './desktop-root.js';
+export { desktopIdentityMode } from './desktop-identity.js';
+export { prepareDesktopBindingUpgrade } from './desktop-binding-upgrade.js';
+
+export {
+  localModelConnectionsClient,
+  type LocalModelConnectionsClient,
+} from './local-model-connections-client.js';
+
+export {
+  prepareManagedStdio,
+  type ManagedStdioRequest,
+  type ManagedStdioHandle,
+} from './managed-stdio.js';
+export type { LocalServiceClient } from './local-service-client.js';
+
+export * from './local-room-tasks-client.js';
+
+export { prepareManagedResourceEvidence } from './managed-resource-evidence.js';
+export { openManagedWorkspace, type ManagedWorkspaceWitness } from './managed-workspace.js';
+
+export { verifyManagedStdioEnrollments } from './managed-stdio-upgrade.js';

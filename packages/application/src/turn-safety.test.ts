@@ -4,6 +4,8 @@ import { InMemoryCommandDedup, InMemoryEventLog, SequentialIdGenerator } from '@
 import { TaskRunService } from './service.js';
 import { executeStep } from './commands.js';
 import { runTurn } from './turn.js';
+import { committedRoomDelegate } from './room-slice-handoff.js';
+import { harness, successes } from '../test-fixtures/room-slice-handoff.js';
 import { beginAttempt, cancelRun } from './lifecycle.js';
 import { ToolService } from './tools.js';
 import type { ProviderEvent, ProviderPort } from './provider.js';
@@ -42,7 +44,7 @@ for (const cancel of [false, true]) {
     const provider: ProviderPort = {
       id: 'fake',
       models: ['fake'],
-      capabilities: { streaming: true, reasoning: false, usage: true },
+      capabilities: { streaming: true, reasoning: false, usage: true, toolCalls: true },
       async *stream(): AsyncIterable<ProviderEvent> {
         dispatches++;
         yield { type: 'tool_call', call: { id: 'one', name: 'read', arguments: '{}' } };
@@ -214,4 +216,24 @@ it('preserves usage while a locally aborted provider has no remote completion ev
   expect((await h.service.events(h.id)).map((event) => event.type)).not.toContain(
     'task_run.cancelled',
   );
+});
+
+it('does not admit delegation when the synchronous pending notification aborts the turn', async () => {
+  const h = await harness(committedRoomDelegate);
+  const input = {
+    ...h.input,
+    emit: (update: Parameters<typeof h.input.emit>[0]) => {
+      if (update.sessionUpdate === 'tool_call' && update.status === 'pending') h.abort.abort();
+    },
+  };
+  const outcome = await runTurn(input, { turnId: 'turn_a' });
+  expect(h.invoked).toEqual([]);
+  expect(await successes(input)).toHaveLength(0);
+  expect(outcome.kind).toBe('cancelled');
+  expect(h.history.filter((message) => message.role === 'tool')).toEqual([
+    { role: 'tool', toolCallId: 'delegate', content: 'Not executed: turn cancelled' },
+    { role: 'tool', toolCallId: 'physical', content: 'Not executed: turn cancelled' },
+  ]);
+  expect(h.starts()).toBe(1);
+  expect(h.beforeComplete).not.toHaveBeenCalled();
 });

@@ -8,7 +8,7 @@ import { GitCodingWorktrees } from './coding-worktree.js';
 import { verifyReboundTree } from './profile-rebind-tree.js';
 import { privateAssetDirectory } from './coding-asset-io.js';
 import { readDesktopArchiveFile } from './desktop-archive-verify.js';
-import { desktopRootIdentity } from './desktop-assets.js';
+import { desktopBindingMatches, withDesktopRoot } from './desktop-root.js';
 import { scanAssetSource } from './coding-asset-source.js';
 import { CODING_ASSET_LIMITS } from './coding-asset-state.js';
 import { profileHash } from './profile-backup-output.js';
@@ -73,11 +73,15 @@ export class RestoredProfileFiles implements ProfileRebindFiles {
         expected.archiveHash !== source.catalog.desktop.hash ||
         binding.profileId !== preview.origin.profileId ||
         binding.root !== expected.root ||
-        binding.identity !== desktopRootIdentity(binding.root) ||
+        !desktopBindingMatches(binding) ||
         binding.originalRoot !== archived?.originalRoot ||
         binding.identity === archived?.identity ||
-        profileHash(scanAssetSource(binding.root, CODING_ASSET_LIMITS, 'desktop').manifest) !==
-          profileHash(source.catalog.desktop.manifest)
+        withDesktopRoot(binding, (held) =>
+          profileHash(
+            scanAssetSource(binding.root, CODING_ASSET_LIMITS, 'desktop', undefined, false, held.fd)
+              .manifest,
+          ),
+        ) !== profileHash(source.catalog.desktop.manifest)
       )
         throw Error('rebind_desktop_changed');
     } else if (preview.plan.desktop !== null || result.desktop !== null) {

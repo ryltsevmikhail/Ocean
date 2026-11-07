@@ -2,7 +2,12 @@ import { spawn } from 'node:child_process';
 import { expect, vi } from 'vitest';
 
 /** Only explicit fixture owners receive a deterministic provider. No inherited credentials. */
-export function acceptanceOwner(profile: string, run: string, scenario: string) {
+export function acceptanceOwner(
+  profile: string,
+  run: string,
+  scenario: string,
+  path = process.env['PATH'],
+) {
   const cli = ['apps/cli/dist/main.js', 'runtime', 'start', '--profile', profile, '--json'];
   const fixture = ['apps/cli/test-fixtures/local-runtime-turn-owner.test.ts', profile, scenario];
   const drop = ['lost', 'gap'].includes(scenario)
@@ -21,7 +26,7 @@ export function acceptanceOwner(profile: string, run: string, scenario: string) 
           'TMPDIR',
         ].map((key) => [key, process.env[key]]),
       ),
-      PATH: process.env['PATH'],
+      PATH: path,
       XDG_RUNTIME_DIR: run,
       OCEAN_TEST_LOG: profile + '/ack',
     },

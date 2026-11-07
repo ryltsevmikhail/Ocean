@@ -96,3 +96,27 @@ test('dispose awaits a pnpm-style child in another group of the owned session', 
     await group.dispose(1000);
   }
 });
+
+test('tracked immediate exit retains its own launch identity before the first poll', async () => {
+  const group = launchDesktopGroup('/usr/bin/false', [], {}, { track: true });
+  const initial = group.records();
+  try {
+    assert.equal(initial.length, 1);
+    assert.equal(initial[0].pid, group.proc.pid);
+    assert.equal(initial[0].session, group.proc.pid);
+    assert.match(initial[0].start, /^[1-9][0-9]*$/);
+    assert.equal(await group.waitForClose(), 1);
+    assert.deepEqual(group.records(), initial);
+    assert.equal(absent(initial[0].pid), true);
+  } finally {
+    await group.dispose();
+  }
+});
+
+test('failed spawn reports no PID and no observed identities', async () => {
+  const group = launchDesktopGroup('/missing/ocean-qa-executable', [], {}, { track: true });
+  assert.equal(group.launch.observation, 'no-pid');
+  assert.deepEqual(group.records(), []);
+  await assert.rejects(group.waitForClose(500), { code: 'ENOENT' });
+  await assert.rejects(group.dispose(500), { code: 'ENOENT' });
+});

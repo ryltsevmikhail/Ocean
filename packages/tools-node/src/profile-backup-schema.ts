@@ -1,3 +1,4 @@
+import { validDesktopBindingShape } from './desktop-identity.js';
 import type { ProfileBackupAssetCatalog } from './profile-backup-types.js';
 import { validCodingBackupPolicy } from '@runnets/domain';
 const bad = (): never => {
@@ -153,8 +154,7 @@ export function validateProfileCatalogShape(c: ProfileBackupAssetCatalog): void 
     c.desktopInventory.uploads.map((u) => u.id),
     10000,
   );
-  if (c.desktopInventory.binding)
-    keys(c.desktopInventory.binding, 'profileId,root,identity,originalRoot');
+  if (c.desktopInventory.binding && !validDesktopBindingShape(c.desktopInventory.binding)) bad();
   for (const message of c.desktopInventory.messages)
     keys(message, 'id,roomId,requestId,body,requestBinding,requestReply');
   for (const operation of c.desktopInventory.operations) keys(operation, 'id,binding,state,result');

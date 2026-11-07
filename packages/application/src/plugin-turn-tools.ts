@@ -23,6 +23,8 @@ import {
 import type { PluginCallAdmissionService } from './plugin-admission.js';
 import type { PluginAccessStorePort, PluginConnectionStorePort } from './plugin-ports.js';
 import type { ServicePluginJson } from './service-plugin-transport.js';
+import type { ServicePluginTransportPort } from './service-plugin-transport.js';
+import { pluginSessionReady } from './plugin-session-authority.js';
 import type { ToolEffectContext, ToolInvocation, ToolResult, ToolSchema } from './tools.js';
 import {
   bindPluginArguments,
@@ -39,6 +41,10 @@ import type { TurnInput } from './types.js';
 /** Shape the shared turn executor passes to `runTurn`; cleanup is synchronous. */
 export type GrantedPluginTools = NonNullable<TurnInput['tools']> & {
   readonly cleanupConfirmed: true;
+  /** Trusted in-process digest; never supplied by a model or serialized as authority. */
+  readonly callDigest?: (text: string) => string;
+  /** Source already enforces identity/payload and bounded retention itself. */
+  readonly ownCallIdentity?: true;
 };
 
 /** Resolver used by the shared chat executor for non-coding room turns. */
@@ -51,6 +57,7 @@ export interface PluginToolServiceOptions {
   readonly grants: Pick<PluginAccessStorePort, 'grants'>;
   readonly connections: Pick<PluginConnectionStorePort, 'get'>;
   readonly admission: PluginCallAdmissionService;
+  readonly transport?: ServicePluginTransportPort;
   readonly maxCallsPerTurn?: number;
   readonly maxOutputBytes?: number;
 }
@@ -86,6 +93,7 @@ export class PluginToolService implements GrantedToolSource {
       if (connection.pluginId !== grant.pluginId) continue;
       if (connection.generation !== grant.connectionGeneration) continue;
       if (connection.schemaDigest !== grant.schemaDigest) continue;
+      if (!pluginSessionReady(this.#options.transport ?? {}, connection)) continue;
       const tools = (connection.tools ?? []).filter((tool) => grant.tools.includes(tool.name));
       if (tools.length === 0) continue;
       const entry: ResolvedGrant = { grant, connection, tools };

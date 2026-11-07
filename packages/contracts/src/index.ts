@@ -22,3 +22,22 @@ export * from './local-broadcast.js';
 export * from './local-plugins.js';
 export * from './local-plugins-validate.js';
 export * from './local-plugins-validate-grants.js';
+export * from './local-model-connections.js';
+export {
+  isLocalModelConnectionsQuery,
+  isLocalModelConnectionQuery,
+  isLocalModelConnectionSetRequest,
+  isLocalModelConnectionRevisionRequest,
+  isLocalModelCheckMetadata,
+  isLocalModelConnectionStatus,
+  isLocalModelConnectionCheckResponse,
+} from './local-model-connections-validate.js';
+export * from './local-model-metadata-validate.js';
+export * from './local-model-bindings-validate.js';
+export * from './local-model-execution.js';
+export * from './local-model-execution-validate.js';
+
+export * from './local-services.js';
+export * from './local-service-views.js';
+
+export * from './local-runtime-room-tasks.js';

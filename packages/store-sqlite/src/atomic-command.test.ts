@@ -1,46 +1,24 @@
 import { expect, it } from 'vitest';
+import { command, setup } from '../test-fixtures/atomic-command.js';
 import { TaskRunService } from '@runnets/application';
-import {
-  conversationId,
-  taskRunId,
-  unlimitedBudget,
-  workspaceId,
-  type AnyCommand,
-} from '@runnets/domain';
-import { DatabaseSync } from 'node:sqlite';
+import { taskRunId, unlimitedBudget, type AnyCommand } from '@runnets/domain';
 import { SqliteEventLog } from './event-log.js';
 import { initializeSchema } from './schema.js';
 import { SqliteCommandDedup } from './command-dedup.js';
 import { createDurableIdGenerator } from './id-source.js';
 
-const command: AnyCommand = {
-  type: 'CreateTaskRun',
-  commandId: 'cm_atomic',
-  taskRunId: taskRunId('tr_atomic'),
-  expectedVersion: 0,
-  actor: { kind: 'user', id: 'user' },
-  payload: {
-    conversationId: conversationId('cv_atomic'),
-    workspaceId: workspaceId('ws_atomic'),
-    parentTaskRunId: null,
-    model: 'model',
-    policyId: 'pl_atomic',
-    budget: unlimitedBudget(),
-  },
-};
-function setup() {
-  const db = new DatabaseSync(':memory:');
-  initializeSchema(db);
-  const ids = createDurableIdGenerator(db);
-  const log = new SqliteEventLog(db, ids);
-  const clock = { now: () => new Date('2026-01-01T00:00:00.000Z') };
-  return { db, log, service: new TaskRunService({ log, clock, ids }), clock, ids };
-}
 it('returns one original receipt to concurrent identical commands', async () => {
   const { service, log } = setup();
-  const results = await Promise.all([service.execute(command), service.execute(command)]);
-  expect(results[0]?.ok).toBe(true);
-  expect(results[1]).toEqual(results[0]);
+  const outcomes = await Promise.all([
+    service.executeWithDisposition(command),
+    service.executeWithDisposition(command),
+  ]);
+  const results = outcomes.map((outcome) => {
+    if (!outcome.ok) throw outcome.error;
+    return outcome.value;
+  });
+  expect(results.map((x) => x.disposition).sort()).toEqual(['committed', 'replayed']);
+  expect(results[1]?.receipt).toEqual(results[0]?.receipt);
   expect(await log.load(command.taskRunId)).toHaveLength(1);
 });
 it('keeps command receipts when the service is recreated', async () => {
@@ -58,7 +36,8 @@ it('rejects command identity reuse with another task, actor, version or payload'
     { ...command, expectedVersion: 1 },
     { ...command, payload: { ...command.payload, model: 'other' } },
   ];
-  for (const variant of variants) expect((await service.execute(variant)).ok).toBe(false);
+  for (const variant of variants)
+    expect((await service.executeWithDisposition(variant)).ok).toBe(false);
   expect(await log.load(taskRunId('tr_other'))).toHaveLength(0);
 });
 it('rolls back events if the atomic receipt insert fails', async () => {
@@ -113,9 +92,10 @@ it('replays when another submission commits between lookup and stream load', asy
     clock,
     ids,
   });
-  const result = await raced.execute(command);
-  expect(result.ok).toBe(true);
-  expect(result).toEqual(await service.execute(command));
+  const result = await raced.executeWithDisposition(command);
+  expect(result).toMatchObject({ ok: true, value: { disposition: 'replayed' } });
+  if (!result.ok) throw result.error;
+  expect(await service.execute(command)).toEqual({ ok: true, value: result.value.receipt });
   expect(await log.load(command.taskRunId)).toHaveLength(1);
 });
 it('allows only one target when concurrent submissions reuse an identity', async () => {

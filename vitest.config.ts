@@ -19,7 +19,10 @@ export default defineConfig({
       '@runnets/contracts': source('contracts'),
       '@runnets/provider-core': source('provider-core'),
       '@runnets/provider-deepseek': source('provider-deepseek'),
-      '@runnets/integrations-executor': source('integrations-executor'),
+      '@runnets/provider-openai': source('provider-openai'),
+      '@runnets/provider-anthropic': source('provider-anthropic'),
+      '@runnets/provider-local': source('provider-local'),
+      '@runnets/integrations-mcp': source('integrations-mcp'),
     },
   },
   test: {

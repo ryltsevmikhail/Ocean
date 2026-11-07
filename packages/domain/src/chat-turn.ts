@@ -1,4 +1,6 @@
-import type { Bot } from './conversations.js';
+import type { ModelActivationSnapshot } from './model-dispatch.js';
+import type { BotModelBinding } from './model-binding.js';
+import type { Bot, ConversationMessage } from './conversations.js';
 export type ChatTurnStatus =
   | 'queued'
   | 'accepted'
@@ -16,8 +18,25 @@ export interface ChatTurnBroadcastLink {
   /** Set only when an owner abandon terminalised a child that was never dispatched. */
   readonly abandoned?: boolean;
 }
+/** Immutable local intent captured after the delegate transaction; not completion. */
+export interface RoomHandoff {
+  readonly turnId: string;
+  readonly taskRunId: string;
+  readonly attemptId: string;
+  readonly callId: string;
+  readonly childTaskId: string;
+  readonly deliveryId: string;
+  readonly expectedRunVersion: number;
+}
 /** Durable admission and publication facts; a retry never creates new execution authority. */
 export interface ChatTurn {
+  readonly roomDelivery?: {
+    readonly version: 1;
+    readonly taskId: string;
+    readonly deliveryId: string;
+  };
+  readonly roomHandoff?: Readonly<{ version: 1 }> & RoomHandoff;
+  readonly roomSliceDisposition?: 'yielded';
   readonly codingTaskId?: string;
   readonly continuationReviewId?: string;
   readonly id: string;
@@ -30,10 +49,39 @@ export interface ChatTurn {
   /** Present only for a broadcast child; `queued` children were never dispatched. */
   readonly broadcast?: ChatTurnBroadcastLink;
   readonly bot: Bot;
+  readonly modelBinding?: BotModelBinding;
+  readonly activation?: ModelActivationSnapshot;
   readonly status: ChatTurnStatus;
   /** Stable visible refusal code for a child/named model that was never dispatched. */
   readonly failureCode?: string;
   readonly text: string;
   readonly preparedVersion: number | null;
   readonly stopReason: 'end_turn' | 'max_tokens';
+}
+
+/** A marked ordinary result exists only as the exact prepared self-targeted final. */
+export function roomFinalMessageMatches(
+  turn: ChatTurn,
+  message: ConversationMessage | null | undefined,
+): boolean {
+  return (
+    turn.roomDelivery !== undefined &&
+    turn.status === 'completed' &&
+    turn.roomSliceDisposition === undefined &&
+    turn.roomHandoff === undefined &&
+    Number.isSafeInteger(turn.preparedVersion) &&
+    turn.preparedVersion !== null &&
+    turn.preparedVersion > 0 &&
+    (turn.stopReason === 'end_turn' || turn.stopReason === 'max_tokens') &&
+    !!message &&
+    message.id === 'reply_' + turn.id &&
+    message.workspaceId === turn.workspaceId &&
+    message.roomId === turn.roomId &&
+    message.author === 'bot' &&
+    message.authorBotId === turn.bot.id &&
+    message.targetBotId === turn.bot.id &&
+    message.turnId === turn.id &&
+    message.body === turn.text &&
+    message.seq > turn.readThroughSeq
+  );
 }

@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { vi } from 'vitest';
+import { fixtureProviderHttpClient } from './provider-http.js';
 import { openOceanProfile } from '../src/ocean/profile.js';
 import { startLocalRuntime, type LocalRuntimeHost } from '../src/local-runtime/host.js';
 import { connectLocalRuntime } from '@runnets/tools-node';
@@ -88,7 +89,7 @@ export async function startBroadcastHost(
 ): Promise<StartedBroadcastHost> {
   const host = await startLocalRuntime({
     profile: fixture.profile,
-    providerBaseUrl: baseUrl,
+    ...(baseUrl ? { providerHttpClient: fixtureProviderHttpClient(baseUrl) } : {}),
     ...(provider === undefined ? {} : { provider }),
   });
   const client = await connectLocalRuntime({ profile: fixture.profile });

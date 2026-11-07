@@ -6,7 +6,8 @@
  * knows about a specific vendor, and the runtime consumes only this contract.
  */
 
-import type { ImageMediaType } from '@runnets/domain';
+import { emptyUsageObservation, observeUsage } from './usage-evidence.js';
+import type { CompletionStopReason, ImageMediaType, ModelUsageEvidence } from '@runnets/domain';
 
 /** Provider-neutral text content. Legacy messages keep a plain string instead. */
 export interface TextPart {
@@ -61,6 +62,8 @@ export interface ProviderModelInfo {
 }
 
 export interface ModelRequest {
+  /** Trusted runtime authority, checked immediately before actual inference dispatch. */
+  readonly authorizeDispatch?: () => boolean;
   readonly tools?: readonly ToolDefinition[];
   readonly model: string;
   readonly messages: readonly ChatMessage[];
@@ -75,8 +78,17 @@ export interface TokenUsage {
   readonly totalTokens: number;
 }
 
-export type CompletionStopReason =
-  'stop' | 'length' | 'content_filter' | 'tool_calls' | 'cancelled' | 'unknown';
+export type {
+  CompletionStopReason,
+  ModelActivationSnapshot,
+  ModelExecutionIdentity,
+  ModelExecutionLimits,
+  ModelUsageEvidence,
+  ModelCompletionEvidence,
+  StartModelRequestPayload,
+  SettleModelRequestPayload,
+  ModelExecutionState,
+} from '@runnets/domain';
 
 export type ProviderErrorCode =
   | 'auth'
@@ -93,11 +105,16 @@ export class ProviderError extends Error {
   readonly code: ProviderErrorCode;
   readonly retryable: boolean;
   readonly status: number | null;
+  readonly dispatch: 'not_sent' | 'rejected' | 'unknown';
 
   constructor(
     code: ProviderErrorCode,
     message: string,
-    options: { readonly retryable?: boolean; readonly status?: number | null } = {},
+    options: {
+      readonly retryable?: boolean;
+      readonly status?: number | null;
+      readonly dispatch?: 'not_sent' | 'rejected' | 'unknown';
+    } = {},
   ) {
     super(message);
     this.name = 'ProviderError';
@@ -106,6 +123,7 @@ export class ProviderError extends Error {
       options.retryable ??
       (code === 'rate_limit' || code === 'server' || code === 'network' || code === 'timeout');
     this.status = options.status ?? null;
+    this.dispatch = options.dispatch ?? 'unknown';
   }
 }
 
@@ -114,6 +132,7 @@ export type ProviderEvent =
   | { readonly type: 'text_delta'; readonly text: string }
   | { readonly type: 'reasoning_delta'; readonly text: string }
   | { readonly type: 'usage'; readonly usage: TokenUsage }
+  | { readonly type: 'usage_evidence'; readonly evidence: ModelUsageEvidence }
   | {
       readonly type: 'completed';
       readonly stopReason: CompletionStopReason;
@@ -158,6 +177,7 @@ export interface CollectedReply {
   readonly text: string;
   readonly reasoning: string;
   readonly usage: TokenUsage | null;
+  readonly usageEvidence: ModelUsageEvidence | null;
   readonly stopReason: CompletionStopReason | null;
   readonly error: ProviderError | null;
 }
@@ -168,7 +188,7 @@ export async function collectReply(
 ): Promise<CollectedReply> {
   let text = '';
   let reasoning = '';
-  let usage: TokenUsage | null = null;
+  let observed = emptyUsageObservation();
   let stopReason: CompletionStopReason | null = null;
   let error: ProviderError | null = null;
 
@@ -184,7 +204,10 @@ export async function collectReply(
         reasoning += event.text;
         break;
       case 'usage':
-        usage = event.usage;
+        observed = observeUsage(observed, { kind: 'actual', tokens: event.usage });
+        break;
+      case 'usage_evidence':
+        observed = observeUsage(observed, event.evidence);
         break;
       case 'completed':
         stopReason = event.stopReason;
@@ -195,5 +218,18 @@ export async function collectReply(
     }
   }
 
-  return { text, reasoning, usage, stopReason, error };
+  if (observed.conflict) {
+    error ??= new ProviderError('unknown', 'conflicting model usage reports');
+    stopReason = null;
+  }
+  if (observed.positiveActual && error !== null && error.dispatch !== 'unknown') {
+    error = new ProviderError(error.code, error.message, {
+      retryable: error.retryable,
+      status: error.status,
+      dispatch: 'unknown',
+    });
+  }
+  const usageEvidence = observed.evidence;
+  const usage = usageEvidence?.kind === 'actual' ? usageEvidence.tokens : null;
+  return { text, reasoning, usage, usageEvidence, stopReason, error };
 }

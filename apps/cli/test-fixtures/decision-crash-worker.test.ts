@@ -1,13 +1,27 @@
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule1 from '../src/local-runtime/host.js';
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule2 from '../src/ocean/profile.js';
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule3 from '../src/ocean/coding-project-host.js';
+// eslint-disable-next-line no-restricted-imports -- Same-app source contract; child executes dist.
+import type * as SourceModule4 from '../src/local-runtime/decisions.js';
 // Halt the real owner at a named commit boundary for the parent SIGKILL.
 import { writeSync, appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { startLocalRuntime } from '../dist/local-runtime/host.js';
+const { startLocalRuntime }: typeof SourceModule1 = await import(
+  String('../dist/local-runtime/host.js')
+);
 import { WorkspaceTools } from '@runnets/tools-node';
 import { openSqliteStore } from '@runnets/store-sqlite';
 import type { ProviderPort, ToolJournalPort } from '@runnets/application';
-import { openOceanProfile } from '../dist/ocean/profile.js';
-import { registeredCodingTools } from '../dist/ocean/coding-project-host.js';
-import { RuntimeDecisions } from '../dist/local-runtime/decisions.js';
+const { openOceanProfile }: typeof SourceModule2 = await import(String('../dist/ocean/profile.js'));
+const { registeredCodingTools }: typeof SourceModule3 = await import(
+  String('../dist/ocean/coding-project-host.js')
+);
+const { RuntimeDecisions }: typeof SourceModule4 = await import(
+  String('../dist/local-runtime/decisions.js')
+);
 const [profile, roomId, phase] = process.argv.slice(2) as [string, string, string];
 function halt(at: string) {
   if (at === phase) {

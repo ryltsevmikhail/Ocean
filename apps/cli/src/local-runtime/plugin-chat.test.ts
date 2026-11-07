@@ -90,16 +90,14 @@ async function seedProfile(): Promise<SeededProfile> {
 }
 
 function transportFixture() {
-  const tools = [
-    {
-      name: 'list_issues',
-      description: 'List issues',
-      inputSchema: {
-        type: 'object',
-        properties: { owner: { type: 'string' }, repo: { type: 'string' } },
-      },
+  const tools = ['issue_read', 'list_issues'].map((name) => ({
+    name,
+    description: name,
+    inputSchema: {
+      type: 'object',
+      properties: { owner: { type: 'string' }, repo: { type: 'string' } },
     },
-  ];
+  }));
   const digest = sha256(canonicalJson([...tools]));
   return fakePluginTransport(
     (target) => ({

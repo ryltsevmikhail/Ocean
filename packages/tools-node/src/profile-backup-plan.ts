@@ -16,7 +16,7 @@ import { preflightCodingWorktrees } from './coding-worktree-preflight.js';
 import { planRecoveryGraph } from './coding-recovery-plan.js';
 import { codingApplyRecoverySlot } from './coding-apply-scope.js';
 import { desktopAliasGuards } from './desktop-preparation-alias.js';
-import { desktopRootIdentity } from './desktop-assets.js';
+import { withDesktopRoot } from './desktop-root.js';
 export function prepareProfileBackupSources(
   session: ProfileBackupSession,
   coding: CodingBackupInventory,
@@ -180,9 +180,8 @@ export function prepareProfileBackupSources(
       optionalRoot(join(plan.tree.gitCommonDir, 'ocean-apply-recovery'), 'coding-recovery');
   }
   if (desktop.binding) {
-    if (desktopRootIdentity(desktop.binding.root) !== desktop.binding.identity)
-      throw Error('desktop_binding_mismatch');
-    root(desktop.binding.root, 'desktop');
+    const binding = desktop.binding;
+    withDesktopRoot(binding, () => root(binding.root, 'desktop'));
   } else if (desktop.messages.length || desktop.operations.length || desktop.uploads.length)
     throw Error('desktop_assets_unbound');
   preflightCodingWorktrees(coding.worktrees, managed);

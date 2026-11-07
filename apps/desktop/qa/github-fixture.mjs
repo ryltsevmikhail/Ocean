@@ -178,7 +178,7 @@ export function startGithubMcpServer(port = 0) {
 }
 
 /** Deterministic provider: one `issue_read` tool call, then the bounded result answer. */
-export function deterministicProvider() {
+export function deterministicProvider(plan = {}) {
   const requests = [];
   let callId = 0;
   return {
@@ -193,7 +193,9 @@ export function deterministicProvider() {
       });
       const last = request.messages[request.messages.length - 1];
       if (last?.role === 'tool') {
-        yield { type: 'text_delta', text: 'Прочитал issue #7 «Composer loses focus» в team/api.' };
+        const content =
+          typeof last.content === 'string' ? last.content : JSON.stringify(last.content);
+        yield { type: 'text_delta', text: content };
         yield { type: 'usage', usage: { inputTokens: 20, outputTokens: 12, totalTokens: 32 } };
         yield { type: 'completed', stopReason: 'stop', rawStopReason: 'stop' };
         return;
@@ -204,8 +206,21 @@ export function deterministicProvider() {
           type: 'tool_call',
           call: {
             id: 'qa_call_' + String(callId),
-            name: 'issue_read',
-            arguments: JSON.stringify({ issue_number: 7 }),
+            name: plan.tool ?? 'issue_read',
+            arguments: JSON.stringify(
+              plan.repository === undefined
+                ? { issue_number: 7 }
+                : {
+                    owner: plan.repository.split('/')[0],
+                    repo: plan.repository.split('/')[1],
+                    ...(plan.tool === 'list_issues'
+                      ? { state: 'OPEN', perPage: 10 }
+                      : {
+                          method: 'get',
+                          issue_number: plan.issueNumber ?? 5,
+                        }),
+                  },
+            ),
           },
         };
         yield { type: 'usage', usage: { inputTokens: 18, outputTokens: 6, totalTokens: 24 } };

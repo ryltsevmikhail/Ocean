@@ -9,13 +9,15 @@
 import {
   ProviderError,
   parseSse,
+  SseError,
+  retainTokenUsage,
   type CompletionStopReason,
   type ProviderEvent,
   type TokenUsage,
 } from '@runnets/provider-core';
 
 import { ToolAssembler } from './tool-assembler.js';
-import { errorFromStreamPayload } from './errors.js';
+import { errorFromStreamPayload, errorFromException } from './errors.js';
 import { asRecord, readDelta, readUsage } from './wire.js';
 
 const DONE_SENTINEL = '[DONE]';
@@ -48,86 +50,95 @@ function boundRawReason(finishReason: string): string {
 }
 
 /** Translate the DeepSeek SSE stream into normalized provider events. */
-export async function* mapStream(chunks: AsyncIterable<string>): AsyncIterable<ProviderEvent> {
+export async function* mapStream(
+  chunks: AsyncIterable<string>,
+  expectedModel?: string,
+): AsyncIterable<ProviderEvent> {
   let stopReason: CompletionStopReason | null = null;
   let rawStopReason: string | null = null;
   let usage: TokenUsage | null = null;
   let frames = 0;
   let terminated = false;
+  let calls: ReturnType<ToolAssembler['finish']> = [];
   const tools = new ToolAssembler();
 
-  for await (const frame of parseSse(chunks)) {
-    if (frame.data === DONE_SENTINEL) {
-      terminated = true;
-      break;
-    }
-    if (frame.data.trim() === '') continue;
-    frames += 1;
-
-    let payload: unknown;
-    try {
-      payload = JSON.parse(frame.data) as unknown;
-    } catch {
-      yield { type: 'error', error: malformedStream() };
-      return;
-    }
-    const record = asRecord(payload);
-    if (record === null) {
-      yield { type: 'error', error: malformedStream() };
-      return;
-    }
-
-    const wireError = record['error'];
-    if (wireError !== undefined) {
-      yield { type: 'error', error: errorFromStreamPayload(wireError) };
-      return;
-    }
-
-    try {
-      tools.accept(record);
-    } catch {
-      yield { type: 'error', error: malformedStream() };
-      return;
-    }
-    const chunkUsage = readUsage(record['usage']);
-    if (chunkUsage !== null) usage = chunkUsage;
-
-    const delta = readDelta(record);
-    if (delta === null) continue;
-    if (delta.reasoning !== null) yield { type: 'reasoning_delta', text: delta.reasoning };
-    if (delta.content !== null) yield { type: 'text_delta', text: delta.content };
-    if (delta.finishReason !== null) {
-      stopReason = toStopReason(delta.finishReason);
-      rawStopReason = boundRawReason(delta.finishReason);
-    }
-  }
-
-  if (frames === 0) {
-    yield {
-      type: 'error',
-      error: new ProviderError('server', 'empty DeepSeek stream', { retryable: false }),
-    };
-    return;
-  }
-
-  // Neither a finish reason nor `[DONE]` means the connection dropped mid-stream:
-  // a cut-off answer must never be reported as a completed turn, and partially
-  // assembled tool calls must not reach the executor.
-  if (stopReason === null && !terminated) {
-    if (usage !== null) yield { type: 'usage', usage };
-    yield {
-      type: 'error',
-      error: new ProviderError('server', 'incomplete DeepSeek stream', { retryable: false }),
-    };
-    return;
-  }
-
   try {
-    for (const call of tools.finish()) yield { type: 'tool_call', call };
-  } catch {
-    yield { type: 'error', error: malformedStream() };
+    for await (const frame of parseSse(chunks, {
+      requireTerminatedFrames: true,
+      maxFrameBytes: 262144,
+    })) {
+      if (frame.data === DONE_SENTINEL) {
+        terminated = true;
+        break;
+      }
+      if (frame.data.trim() === '') continue;
+      frames += 1;
+      let record: Record<string, unknown> | null;
+      try {
+        record = asRecord(JSON.parse(frame.data) as unknown);
+      } catch {
+        throw malformedStream();
+      }
+      if (record === null) throw malformedStream();
+      const chunkUsage = readUsage(record['usage']);
+      if (chunkUsage !== null) {
+        const retained = retainTokenUsage(usage, chunkUsage);
+        usage = retained.usage;
+        if (retained.conflict) throw malformedStream();
+      }
+      if (
+        expectedModel !== undefined &&
+        record['model'] !== undefined &&
+        record['model'] !== expectedModel
+      )
+        throw malformedStream();
+      if (record['error'] !== undefined) throw errorFromStreamPayload(record['error']);
+      if (stopReason !== null) {
+        const choices = record['choices'];
+        if (!Array.isArray(choices) || choices.length !== 0) throw malformedStream();
+      }
+      try {
+        tools.accept(record);
+      } catch {
+        throw malformedStream();
+      }
+      const delta = readDelta(record);
+      if (delta === null) continue;
+      if (delta.reasoning !== null) yield { type: 'reasoning_delta', text: delta.reasoning };
+      if (delta.content !== null) yield { type: 'text_delta', text: delta.content };
+      if (delta.finishReason !== null) {
+        stopReason = toStopReason(delta.finishReason);
+        rawStopReason = boundRawReason(delta.finishReason);
+      }
+    }
+    if (frames === 0)
+      throw new ProviderError('server', 'empty DeepSeek stream', { retryable: false });
+    if (stopReason === null || !terminated)
+      throw new ProviderError('server', 'incomplete DeepSeek stream', { retryable: false });
+    try {
+      calls = tools.finish();
+    } catch {
+      throw malformedStream();
+    }
+  } catch (error) {
+    // Preserve transport exceptions for the lifecycle's timeout/cancellation mapping.
+    const failure =
+      error instanceof SseError
+        ? malformedStream()
+        : errorFromException(error, { cancelled: null, timeout: null });
+    if (usage !== null) yield { type: 'usage', usage };
+    else yield { type: 'usage_evidence', evidence: { kind: 'unavailable', reason: 'interrupted' } };
+    if (
+      !(error instanceof ProviderError) &&
+      error instanceof Error &&
+      (error.name === 'AbortError' || error.name === 'TimeoutError')
+    )
+      throw error;
+    yield { type: 'error', error: failure };
     return;
   }
+  for (const call of calls) yield { type: 'tool_call', call };
   if (usage !== null) yield { type: 'usage', usage };
-  yield { type: 'completed', stopReason: stopReason ?? 'stop', rawStopReason };
+  else yield { type: 'usage_evidence', evidence: { kind: 'unavailable', reason: 'not_reported' } };
+  yield { type: 'completed', stopReason, rawStopReason };
 }

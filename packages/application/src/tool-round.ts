@@ -1,6 +1,12 @@
+import { roomHandoffOf, type RoomHandoff } from './room-slice-handoff.js';
 import type { ChatMessage, ToolCall } from './provider.js';
 import type { ToolResult } from './tools.js';
 import type { TurnInput } from './types.js';
+
+type ToolRoundDisposition =
+  | { readonly kind: 'continue' }
+  | { readonly kind: 'uncertain' }
+  | { readonly kind: 'delegated'; readonly handoff: RoomHandoff };
 
 /** Execute serially after admission; one uncertain outcome stops the turn without a replay. */
 export async function executeTools(
@@ -9,8 +15,9 @@ export async function executeTools(
   round: number,
   attemptId: string,
   messages: ChatMessage[],
-): Promise<{ readonly uncertain: boolean }> {
-  if (input.tools === undefined) return { uncertain: false };
+  room?: { readonly turnId: string },
+): Promise<ToolRoundDisposition> {
+  if (input.tools === undefined) return { kind: 'continue' };
   const skipped = (from: number, reason: string): void => {
     for (const call of calls.slice(from))
       messages.push({ role: 'tool', toolCallId: call.id, content: `Not executed: ${reason}` });
@@ -18,7 +25,7 @@ export async function executeTools(
   for (const [index, call] of calls.entries()) {
     if (input.signal.aborted) {
       skipped(index, 'turn cancelled');
-      return { uncertain: false };
+      return { kind: 'continue' };
     }
     const id = `${attemptId}_r${round}_${call.id}`;
     input.emit({
@@ -35,6 +42,10 @@ export async function executeTools(
               : 'edit',
       status: 'pending',
     });
+    if (input.signal.aborted) {
+      skipped(index, 'turn cancelled');
+      return { kind: 'continue' };
+    }
     let result: ToolResult;
     try {
       result = await input.tools.execute({ ...call, id }, input.signal, {
@@ -45,12 +56,25 @@ export async function executeTools(
       // A rejected execution promise cannot establish that no effect occurred.
       result = { isError: true, uncertain: true, output: 'tool outcome uncertain' };
     }
-    input.emit({
-      sessionUpdate: 'tool_call_update',
-      toolCallId: id,
-      status: result.isError || result.uncertain === true ? 'failed' : 'completed',
-      content: [{ type: 'content', content: { type: 'text', text: result.output } }],
-    });
+    const handoff = roomHandoffOf(result);
+    const committed =
+      handoff !== undefined &&
+      room?.turnId === handoff.turnId &&
+      !result.isError &&
+      result.uncertain !== true &&
+      handoff.taskRunId === input.taskRunId &&
+      handoff.attemptId === attemptId &&
+      handoff.callId === id;
+    try {
+      input.emit({
+        sessionUpdate: 'tool_call_update',
+        toolCallId: id,
+        status: result.isError || result.uncertain === true ? 'failed' : 'completed',
+        content: [{ type: 'content', content: { type: 'text', text: result.output } }],
+      });
+    } catch (error) {
+      if (!committed) throw error;
+    }
     messages.push({
       role: 'tool',
       toolCallId: call.id,
@@ -62,8 +86,19 @@ export async function executeTools(
     });
     if (result.uncertain === true) {
       skipped(index + 1, 'prior tool outcome uncertain');
-      return { uncertain: true };
+      return { kind: 'uncertain' };
+    }
+    if (handoff !== undefined) {
+      skipped(index + 1, 'delegated');
+      if (
+        result.isError ||
+        handoff.taskRunId !== input.taskRunId ||
+        handoff.attemptId !== attemptId ||
+        handoff.callId !== id
+      )
+        return { kind: 'uncertain' };
+      return { kind: 'delegated', handoff };
     }
   }
-  return { uncertain: false };
+  return { kind: 'continue' };
 }

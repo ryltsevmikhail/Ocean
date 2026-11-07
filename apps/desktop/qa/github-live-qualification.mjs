@@ -1,196 +1,259 @@
-// OPTIONAL live GitHub qualification for the RC2 read-issues pilot.
-//
-// Runs ONLY when the owner explicitly provides an environment reference and the
-// exact repository:
-//   OCEAN_GITHUB_TEST_TOKEN_REF=OCEAN_GITHUB_TEST_TOKEN
-//   OCEAN_GITHUB_TEST_REPOSITORY=owner/name
-// The credential VALUE is read from the named variable into the owner process
-// only; it is never printed, logged or written to the profile. Without both
-// variables this driver reports the external prerequisite as missing and exits
-// 3 — it never substitutes a local fixture for live acceptance.
+// Explicitly authorized live GitHub read-only qualification. No implicit credentials.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
-import { setTimeout as sleep } from 'node:timers/promises';
 import console from 'node:console';
-import { openExecutorPluginTransport } from '../../cli/dist/plugin-transport.js';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { deterministicProvider } from './github-fixture.mjs';
+import { liveCli, observeGithubRequests, scanPrivateTree } from './github-live-support.mjs';
 import { startLocalRuntime } from '../../cli/dist/local-runtime/host.js';
 
 const reference = process.env.OCEAN_GITHUB_TEST_TOKEN_REF ?? '';
 const repository = process.env.OCEAN_GITHUB_TEST_REPOSITORY ?? '';
-if (reference === '' || repository === '') {
+const credential = process.env[reference];
+const issueNumber = Number(process.env.OCEAN_GITHUB_TEST_ISSUE ?? 0);
+const marker = process.env.OCEAN_GITHUB_TEST_MARKER ?? '';
+if (
+  !/^[A-Z_][A-Z0-9_]{0,127}$/.test(reference) ||
+  !credential?.trim() ||
+  !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ||
+  !Number.isSafeInteger(issueNumber) ||
+  issueNumber < 1 ||
+  marker.length === 0
+) {
   console.log(
-    'LIVE GITHUB GATE NOT QUALIFIED: external prerequisite missing ' +
-      '(set OCEAN_GITHUB_TEST_TOKEN_REF to an environment variable NAME and ' +
-      'OCEAN_GITHUB_TEST_REPOSITORY to owner/name).',
+    'LIVE GITHUB GATE NOT QUALIFIED: explicit credential reference, repository, existing issue and marker required.',
   );
   process.exit(3);
 }
-const credential = process.env[reference];
-if (credential === undefined || credential.trim() === '') {
-  console.log('LIVE GITHUB GATE NOT QUALIFIED: named credential reference is empty.');
-  process.exit(3);
-}
-const [owner, name] = repository.split('/');
-assert.ok(
-  owner !== undefined && name !== undefined,
-  'OCEAN_GITHUB_TEST_REPOSITORY must be owner/name',
-);
 const cli = resolve(process.env.OCEAN_QA_CLI ?? 'apps/cli/dist/main.js');
-const root = mkdtempSync(join(tmpdir(), 'ocean-task6-live-'));
+const root = mkdtempSync(join(tmpdir(), 'ogl-'));
+const evidenceRoot = process.env.OCEAN_GITHUB_EVIDENCE_DIR ?? root;
 const profile = join(root, 'profile');
 const workspace = join(root, 'workspace');
-for (const directory of [root, profile, workspace])
+for (const directory of [root, profile, workspace, evidenceRoot])
   mkdirSync(directory, { recursive: true, mode: 0o700 });
-const env = {
-  PATH: process.env.PATH,
-  HOME: join(root, 'home'),
-  XDG_CONFIG_HOME: join(root, 'config'),
-  XDG_DATA_HOME: join(root, 'data'),
-  XDG_CACHE_HOME: join(root, 'cache'),
-  XDG_STATE_HOME: join(root, 'state'),
-  TMPDIR: join(root, 'tmp'),
-  [reference]: credential,
+const env = { PATH: process.env.PATH, [reference]: credential };
+for (const [key, suffix] of Object.entries({
+  HOME: 'home',
+  XDG_CONFIG_HOME: 'config',
+  XDG_DATA_HOME: 'data',
+  XDG_CACHE_HOME: 'cache',
+  XDG_STATE_HOME: 'state',
+  XDG_RUNTIME_DIR: 'run',
+  TMPDIR: 'tmp',
+})) {
+  env[key] = join(root, suffix);
+  mkdirSync(env[key], { mode: 0o700 });
+  process.env[key] = env[key];
+}
+const run = liveCli(cli, profile, { ...env, [reference]: undefined });
+const evidence = {
+  reference,
+  repository,
+  issueNumber,
+  root,
+  provider: 'deterministic; zero external model calls',
+  cliSha256: createHash('sha256').update(readFileSync(cli)).digest('hex'),
+  steps: [],
 };
-for (const key of [
-  'HOME',
-  'XDG_CONFIG_HOME',
-  'XDG_DATA_HOME',
-  'XDG_CACHE_HOME',
-  'XDG_STATE_HOME',
-  'TMPDIR',
-])
-  mkdirSync(env[key], { recursive: true, mode: 0o700 });
-const run = (...words) => {
-  const output = execFileSync(process.execPath, [cli, ...words, '--profile', profile, '--json'], {
-    env,
-    encoding: 'utf8',
-  });
-  return JSON.parse(output).data;
-};
-const evidence = { reference, repository, steps: [] };
+const observer = observeGithubRequests(repository);
+const plan = { repository, issueNumber, tool: 'list_issues' };
+const provider = deterministicProvider(plan);
 let host;
-try {
-  run('init', '--workspace', workspace);
-  const reply = (value) =>
-    value !== null && typeof value === 'object' && 'data' in value ? value.data : value;
-  const dev = reply(run('bot', 'add', '--handle', 'dev', '--name', 'Dev', '--role', 'reviewer'));
-  reply(run('bot', 'add', '--handle', 'review', '--name', 'Review', '--role', 'reviewer'));
-  const room = reply(
-    run('room', 'group', '--name', 'Live GitHub', '--bot', 'dev', '--bot', 'review'),
+const reply = (value) =>
+  value !== null && typeof value === 'object' && 'data' in value ? value.data : value;
+let connection;
+const discover = async () => {
+  const current = (await run('plugin', 'connections', 'list')).find(
+    (item) => item.id === connection.id,
   );
-  // The owner process opens the real qualified transport against the shipped
-  // GitHub endpoint (no local override) and keeps the reference only in memory.
-  const transport = await openExecutorPluginTransport({
-    env,
-    connection: () => ({
-      pluginId: 'github',
-      endpoint: 'https://api.githubcopilot.com/mcp/',
-      credentialReference: reference,
-    }),
+  // Each metadata pass has a distinct explicit owner acknowledgement, never a retry.
+  await run(
+    'plugin',
+    'connections',
+    'consent',
+    '--connection',
+    current.id,
+    '--generation',
+    String(current.generation),
+    '--acknowledge-endpoint',
+  );
+  const discovered = await run(
+    'plugin',
+    'connections',
+    'discover',
+    '--connection',
+    current.id,
+    '--generation',
+    String(current.generation),
+  );
+  assert.deepEqual(discovered.connection.tools, ['issue_read', 'list_issues']);
+  assert.equal(discovered.connection.readiness, 'ready');
+  evidence.steps.push({
+    step: 'consented-discovery',
+    generation: discovered.connection.generation,
+    schemaDigest: discovered.connection.schemaDigest,
+    identity: discovered.connection.identityLabel,
   });
-  const qualification = transport.qualification();
-  assert.equal(qualification.qualified, true, 'the pinned transport must qualify');
-  host = await startLocalRuntime({
-    profile,
-    provider: deterministicProvider(),
-    pluginTransport: transport,
-    pluginEnv: env,
+};
+const chat = async (room, bot, label, expectedCalls, expectedText) => {
+  const before = observer.business();
+  const previous = await run('history', room, '--limit', '100');
+  const ids = new Set(previous.map((message) => message.id));
+  await run('send', room, '--text', label, '--to', bot);
+  let answer;
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    const history = await run('history', room, '--limit', '100');
+    answer = history.find((message) => message.author === 'bot' && !ids.has(message.id));
+    if (answer !== undefined) break;
+    await sleep(100);
+  }
+  assert.ok(answer, 'chat answer not published');
+  assert.equal(observer.business() - before, expectedCalls, label + ' business count');
+  if (expectedText !== undefined)
+    assert.ok(answer.body.includes(expectedText), label + ' actual result');
+  evidence.steps.push({
+    step: label,
+    businessRequests: observer.business() - before,
+    answerSha256: createHash('sha256').update(answer.body).digest('hex'),
+    actualMarkerObserved: answer.body.includes(marker),
   });
-  evidence.steps.push({ step: 'transport-qualified', identities: qualification.identities });
-  run('plugin', 'catalog', 'install', '--plugin', 'github');
-  run('plugin', 'catalog', 'enable', '--plugin', 'github');
-  const connection = run(
+};
+try {
+  await run('init', '--workspace', workspace);
+  const dev = reply(
+    await run('bot', 'add', '--handle', 'dev', '--name', 'Dev', '--role', 'reviewer'),
+  );
+  const review = reply(
+    await run('bot', 'add', '--handle', 'review', '--name', 'Review', '--role', 'reviewer'),
+  );
+  const room = reply(
+    await run('room', 'group', '--name', 'Live GitHub', '--bot', 'dev', '--bot', 'review'),
+  );
+  const otherRoom = reply(await run('room', 'direct', '--bot', 'dev'));
+  host = await startLocalRuntime({ profile, provider, pluginEnv: env });
+  assert.ok(host.identity.capabilities.includes('plugin.session-authority-v1'));
+  assert.equal(observer.requests.length, 0, 'startup must be network-free');
+  evidence.steps.push({ step: 'normal-host-start', identity: host.identity });
+  await run('plugin', 'catalog', 'install', '--plugin', 'github');
+  await run('plugin', 'catalog', 'enable', '--plugin', 'github');
+  connection = await run(
     'plugin',
     'connections',
     'add',
     '--name',
-    'work',
+    'qualification',
     '--plugin',
     'github',
     '--credential-env',
     reference,
   );
-  run(
-    'plugin',
-    'connections',
-    'consent',
-    '--connection',
-    connection.id,
-    '--generation',
-    '1',
-    '--acknowledge-endpoint',
-  );
-  const discovered = run(
-    'plugin',
-    'connections',
-    'discover',
-    '--connection',
-    connection.id,
-    '--generation',
-    '1',
-  );
-  assert.equal(discovered.connection.schemaDigest.length, 64);
+  await discover();
+  const grant = async (tools) =>
+    run(
+      'plugin',
+      'access',
+      'grant',
+      '--room',
+      room.id,
+      '--bot',
+      dev.id,
+      '--plugin',
+      'github',
+      '--connection',
+      connection.id,
+      '--repository',
+      repository,
+      ...tools.flatMap((tool) => ['--tool', tool]),
+      '--acknowledge-group-visibility',
+    );
+  await grant(['list_issues']);
+  await chat(room.id, dev.id, 'List issues in ' + repository, 1, marker);
+  plan.tool = 'issue_read';
+  await chat(room.id, dev.id, 'Denied ungranted issue_read', 0, 'tool_ungranted');
+  await grant(['list_issues', 'issue_read']);
+  await chat(room.id, dev.id, 'Read existing issue ' + String(issueNumber), 1, marker);
+  plan.repository = 'outside/denied';
+  await chat(room.id, dev.id, 'Denied repository', 0, 'repository');
+  plan.repository = repository;
+  await chat(room.id, review.id, 'Denied bot', 0);
+  await chat(otherRoom.id, dev.id, 'Denied room', 0);
+  const beforeRestart = observer.requests.length;
+  assert.equal((await host.stop()).state, 'stopped');
+  await host.closed;
+  host = await startLocalRuntime({ profile, provider, pluginEnv: env });
+  assert.equal(observer.requests.length, beforeRestart, 'restart must not discover/replay');
+  const restarted = (await run('plugin', 'connections', 'list'))[0];
+  assert.equal(restarted.readiness, 'discovery_required');
+  assert.equal(restarted.schemaDigest, null);
+  const grants = await run('plugin', 'access', 'list');
+  assert.ok(grants.every((entry) => entry.state === 'revoked'));
+  await chat(room.id, dev.id, 'Denied after restart before owner recovery', 0);
   evidence.steps.push({
-    step: 'discovered',
-    tools: discovered.connection.tools,
-    identity: discovered.connection.identityLabel,
+    step: 'restart-inert',
+    connection: restarted,
+    grantsRevoked: grants.length,
   });
-  run(
-    'plugin',
-    'access',
-    'grant',
-    '--room',
-    room.id,
-    '--bot',
-    dev.id,
-    '--plugin',
-    'github',
-    '--connection',
-    connection.id,
-    '--repository',
-    repository,
-    '--tool',
-    'list_issues',
-    '--tool',
-    'issue_read',
-    '--acknowledge-group-visibility',
+  await run('plugin', 'catalog', 'enable', '--plugin', 'github');
+  await discover();
+  await grant(['list_issues', 'issue_read']);
+  await chat(room.id, dev.id, 'Read after explicit owner recovery', 1, marker);
+  const operations = await run('plugin', 'operations', 'list', '--room', room.id);
+  assert.equal(operations.length, 3);
+  assert.ok(
+    operations.every(
+      (operation) => operation.state === 'observed' && operation.outcomeCode === 'ok',
+    ),
   );
-  run('send', room.id, '--text', 'Прочитай первый открытый issue в ' + repository, '--to', dev.id);
-  let answered;
-  const deadline = Date.now() + 60_000;
-  while (Date.now() < deadline) {
-    const history = run('history', room.id, '--limit', '20');
-    answered = history.find((message) => message.author === 'bot');
-    if (answered !== undefined) break;
-    await sleep(250);
-  }
-  assert.ok(answered !== undefined, 'the live model turn did not publish an answer');
-  const operations = run('plugin', 'operations', 'list', '--room', room.id);
-  assert.equal(operations.length, 1, 'exactly one plugin operation is expected');
-  assert.equal(operations[0].state, 'observed');
-  evidence.steps.push({ step: 'operation', operation: operations[0] });
-  evidence.steps.push({ step: 'answer', text: answered.body });
-  writeFileSync(join(root, 'live-qualification-evidence.json'), JSON.stringify(evidence, null, 2), {
-    mode: 0o600,
-  });
-  console.log(
-    'LIVE GITHUB GATE QUALIFIED',
-    JSON.stringify({ repository, tools: discovered.connection.tools }),
-  );
-  console.log('evidence', join(root, 'live-qualification-evidence.json'));
+  evidence.operations = operations;
+  evidence.modelRequests = provider.requestCount();
+  assert.equal(observer.business(), 3);
+  assert.ok(observer.requests.every((entry) => entry.fixedTools && entry.readonly));
+  evidence.status = 'passed';
 } catch (error) {
-  console.error('LIVE GITHUB GATE FAILED', error);
-  try {
-    writeFileSync(join(root, 'live-qualification-failure.log'), String(error?.stack ?? error));
-  } catch {
-    /* preserve whatever exists */
-  }
+  evidence.status = 'failed';
+  evidence.failure = String(error?.message ?? 'unknown')
+    .replaceAll(credential, '[redacted]')
+    .slice(0, 300);
   process.exitCode = 1;
 } finally {
-  if (host !== undefined) await host.stop().catch(() => {});
+  if (host !== undefined) {
+    evidence.stop = await host.stop();
+    if (evidence.stop.state === 'stopped') await host.closed;
+  }
+  observer.close();
+  evidence.requests = observer.requests;
+  const db = new DatabaseSync(join(profile, 'runtime.sqlite'), { readOnly: true });
+  evidence.durable = {
+    operations: db
+      .prepare(
+        'SELECT tool, state, outcome_code, connection_generation FROM ocean_plugin_operations',
+      )
+      .all(),
+    consents: db.prepare('SELECT generation, used_at FROM ocean_plugin_consents').all(),
+    quickCheck: db.prepare('PRAGMA quick_check').all(),
+    foreignKeys: db.prepare('PRAGMA foreign_key_check').all(),
+  };
+  db.close();
+  evidence.secretScan = { files: scanPrivateTree(root, credential), exactSecretFound: false };
+  writeFileSync(join(evidenceRoot, 'live-report.json'), JSON.stringify(evidence, null, 2), {
+    mode: 0o600,
+  });
+  scanPrivateTree(evidenceRoot, credential);
+  console.log(
+    'LIVE GITHUB GATE',
+    evidence.status,
+    JSON.stringify({
+      repository,
+      businessRequests: observer.business(),
+      failure: evidence.failure ?? null,
+      report: join(evidenceRoot, 'live-report.json'),
+    }),
+  );
 }

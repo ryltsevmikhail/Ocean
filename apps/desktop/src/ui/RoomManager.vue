@@ -1,29 +1,44 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import ModelBindingPicker from './ModelBindingPicker.vue';
+import { connectionSettings } from './model-connection-state.js';
+import { createCreationOptions } from './creation-options.js';
+import type { LocalBotModelBinding } from '../model-protocol.js';
 import type { Bot } from '../protocol.js';
-import { call } from './bridge.js';
-import { explain } from './dom.js';
-import { submitCreation } from './room-create.js';
-import {
-  loadProviderStatus,
-  providerDefaultModel,
-  providerModels,
-  providerStatus,
-} from './provider-state.js';
+import { settingsError } from './model-settings-text.js';
+import { teamPending } from './ocean-team.js';
+import { createCreationState } from './creation-state.js';
+import { providerDefaultModel, providerModels, providerStatus } from './provider-state.js';
 import { providerCapabilitySuffix } from './provider-text.js';
 
 const props = defineProps<{ bots: Bot[]; busy: boolean }>();
-const emit = defineEmits<{ created: [roomId?: string] }>();
+const emit = defineEmits<{
+  created: [roomId?: string];
+  team: [choices: Record<string, LocalBotModelBinding>];
+}>();
 const manager = ref<HTMLDialogElement>();
-const dialog = ref<'' | 'room' | 'bot'>('');
+const dialog = ref<'' | 'room' | 'bot' | 'team'>('');
+const options = createCreationOptions();
+const { negotiated, model, message: optionsMessage } = options;
+const binding = ref<LocalBotModelBinding>({ connectionId: '', modelId: '' });
+const choices = ref<Record<string, LocalBotModelBinding>>({});
+const missing = computed(() =>
+  ['dev', 'review'].filter((handle) => !props.bots.some((bot) => bot.handle === handle)),
+);
+const { connections, stale } = connectionSettings;
 const selected = ref<string[]>([]);
 const title = ref('Ocean Team');
 const kind = ref<'group' | 'direct'>('group');
 const handle = ref('');
 const name = ref('');
 const role = ref('');
-const model = ref('');
-const pending = ref(false);
+const creation = createCreationState();
+const {
+  busy: pending,
+  pending: original,
+  message: creationMessage,
+  stale: creationStale,
+} = creation;
 const feedback = ref('');
 const feedbackError = ref(false);
 const invalidHandle = computed(
@@ -41,47 +56,78 @@ function capabilities(id: string): string {
   const entry = providerStatus.value?.modelCapabilities.find((item) => item.model === id);
   return providerCapabilitySuffix(entry?.imageInput ?? false);
 }
-function open(value: 'room' | 'bot') {
+function open(value: 'room' | 'bot' | 'team') {
   dialog.value = value;
   selected.value = [];
   feedback.value = '';
   feedbackError.value = false;
-  if (value === 'bot') {
-    void loadProviderStatus().then(() => {
-      model.value = providerDefaultModel.value;
-    });
-  }
+  binding.value = { connectionId: '', modelId: '' };
+  choices.value = Object.fromEntries(
+    missing.value.map((handle) => [handle, { connectionId: '', modelId: '' }]),
+  );
+  options.close();
+  if (value !== 'room') void options.open();
 }
 function close() {
   if (props.busy || pending.value) return;
+  options.close();
   dialog.value = '';
 }
 async function create() {
-  if (props.busy || pending.value) return;
-  pending.value = true;
+  if (props.busy || pending.value || original.value) return;
+  if (dialog.value === 'team') {
+    if (
+      negotiated.value !== true ||
+      stale.value ||
+      (!teamPending.value &&
+        missing.value.some(
+          (handle) => !choices.value[handle]?.connectionId || !choices.value[handle]?.modelId,
+        ))
+    )
+      return;
+    emit('team', choices.value);
+    dialog.value = '';
+    return;
+  }
+  if (
+    dialog.value === 'bot' &&
+    (negotiated.value === null ||
+      (negotiated.value && (stale.value || !binding.value.connectionId || !binding.value.modelId)))
+  )
+    return;
   feedback.value = '';
   feedbackError.value = false;
   try {
-    const created = await submitCreation(
-      {
-        dialog: dialog.value === 'bot' ? 'bot' : 'room',
-        kind: kind.value,
-        selected: [...selected.value],
-        title: title.value,
-        handle: handle.value,
-        name: name.value,
-        role: role.value,
-        model: model.value || providerDefaultModel.value,
-      },
-      call,
-    );
-    dialog.value = '';
-    emit('created', created ?? undefined);
+    const created = await creation.submit({
+      dialog: dialog.value === 'bot' ? 'bot' : 'room',
+      kind: kind.value,
+      selected: [...selected.value],
+      title: title.value,
+      handle: handle.value,
+      name: name.value,
+      role: role.value,
+      model: model.value || providerDefaultModel.value,
+      ...(negotiated.value ? { binding: { ...binding.value } } : {}),
+    });
+    if (created) {
+      dialog.value = '';
+      emit('created', created.roomId ?? undefined);
+    }
   } catch (error) {
-    feedback.value = explain(error);
+    feedback.value = settingsError(error);
     feedbackError.value = true;
-  } finally {
-    pending.value = false;
+  }
+}
+async function recover() {
+  try {
+    const result = await creation.recover();
+    if (result) {
+      dialog.value = '';
+      emit('created', result.roomId ?? undefined);
+    }
+  } catch (error) {
+    feedback.value = settingsError(error);
+    feedbackError.value = true;
   }
 }
 defineExpose({ open });
@@ -90,8 +136,18 @@ defineExpose({ open });
   <Teleport to="body">
     <dialog ref="manager" aria-label="Создание" @cancel.prevent="close">
       <form v-if="dialog" id="fields" @submit.prevent="create">
-        <small>{{ dialog === 'bot' ? 'НОВЫЙ БОТ' : 'НОВАЯ КОМНАТА' }}</small>
-        <h2>{{ dialog === 'bot' ? 'Добавить участника' : 'Кто в комнате' }}</h2>
+        <small>{{
+          dialog === 'bot' ? 'НОВЫЙ БОТ' : dialog === 'team' ? 'OCEAN TEAM' : 'НОВАЯ КОМНАТА'
+        }}</small>
+        <h2>
+          {{
+            dialog === 'bot'
+              ? 'Добавить участника'
+              : dialog === 'team'
+                ? 'Модели новых участников'
+                : 'Кто в комнате'
+          }}
+        </h2>
         <p class="form-copy">
           {{
             dialog === 'bot'
@@ -99,7 +155,33 @@ defineExpose({ open });
               : 'В группе вы выбираете, кому передать ход.'
           }}
         </p>
-        <template v-if="dialog === 'bot'"
+        <p v-if="optionsMessage" role="status">{{ optionsMessage }}</p>
+        <p v-if="negotiated && stale" role="status">
+          Метаданные подключений не прочитаны. Обновите их в настройках провайдера перед созданием
+          ботов.
+        </p>
+        <template v-if="dialog === 'team'">
+          <section v-if="teamPending" class="info-card warning">
+            <p>
+              Исход неизвестен. Будет прочитано текущее состояние и отправлен точный исходный
+              запрос.
+            </p>
+            <pre>{{ JSON.stringify(teamPending.command, null, 2) }}</pre>
+          </section>
+          <p>
+            Для каждого нового участника явно выберите подключение и модель. Существующие боты
+            сохраняют свои привязки.
+          </p>
+          <section v-for="item in missing" :key="item" class="info-card">
+            <strong>@{{ item }}</strong
+            ><ModelBindingPicker
+              v-model="choices[item]!"
+              :connections="connections"
+              :disabled="stale || pending || !!teamPending"
+            />
+          </section>
+        </template>
+        <template v-else-if="dialog === 'bot'"
           ><p>{{ props.bots.map((b) => '@' + b.handle).join(' · ') }}</p>
           <label
             >Идентификатор<input
@@ -113,7 +195,12 @@ defineExpose({ open });
             dev-team.</small
           ><label>Имя<input v-model="name" required /></label
           ><label>Роль<textarea v-model="role" required></textarea></label
-          ><label
+          ><ModelBindingPicker
+            v-if="negotiated"
+            v-model="binding"
+            :connections="connections"
+            :disabled="stale || pending || !!teamPending"
+          /><label v-else
             >Модель<select v-model="model" required>
               <option v-for="item in providerModels" :key="item" :value="item">
                 {{ item }}{{ capabilities(item) }}
@@ -142,6 +229,19 @@ defineExpose({ open });
             >
           </fieldset></template
         >
+        <section v-if="original" class="info-card warning">
+          <p role="status">{{ creationMessage }}</p>
+          <pre>{{ JSON.stringify(original, null, 2) }}</pre>
+          <button type="button" :disabled="pending || props.busy" @click="creation.refresh">
+            Обновить метаданные</button
+          ><button
+            type="button"
+            :disabled="pending || props.busy || creationStale"
+            @click="recover"
+          >
+            Завершить точный исходный запрос
+          </button>
+        </section>
         <p v-if="pending || feedback" :role="feedbackError ? 'alert' : 'status'">
           {{ feedback || 'Запрос выполняется…' }}
         </p>
@@ -150,12 +250,23 @@ defineExpose({ open });
           class="primary"
           :disabled="
             pending ||
+            !!original ||
             props.busy ||
-            (dialog === 'bot' && invalidHandle) ||
+            (dialog === 'bot' &&
+              (invalidHandle ||
+                negotiated === null ||
+                (negotiated && (stale || !binding.connectionId || !binding.modelId)))) ||
+            (dialog === 'team' &&
+              (negotiated !== true ||
+                stale ||
+                (!teamPending &&
+                  missing.some(
+                    (item) => !choices[item]?.connectionId || !choices[item]?.modelId,
+                  )))) ||
             (dialog === 'room' && selected.length < (kind === 'group' ? 2 : 1))
           "
         >
-          Создать
+          {{ dialog === 'team' && teamPending ? 'Завершить исходный запрос' : 'Создать' }}
         </button>
       </form>
     </dialog>

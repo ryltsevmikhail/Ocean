@@ -8,11 +8,10 @@
  * derived from a refusal or a persisted snapshot.
  */
 
-import { canonicalJson, type PluginManifest } from '@runnets/domain';
+import { type PluginManifest } from '@runnets/domain';
 import {
   ServicePluginDiscoveryRefusedError,
   type ServicePluginCatalog,
-  type ServicePluginTarget,
   type ServicePluginTransportPort,
 } from './service-plugin-transport.js';
 import {
@@ -25,7 +24,12 @@ import {
   type PluginVersionReadPort,
 } from './plugin-ports.js';
 import type { PluginAdapterIdentity } from '@runnets/domain';
-import { requireDeclaredTools, validDiscoveredTools } from './plugin-catalog-tools.js';
+import {
+  pluginConnectionTarget,
+  pluginSessionReady,
+  reconcilePluginSession,
+} from './plugin-session-authority.js';
+import { publishPluginDiscovery } from './plugin-discovery-publication.js';
 import {
   addPluginConnection,
   changePluginConnection,
@@ -80,6 +84,7 @@ export class PluginConnectionService {
   /** Restored profiles invalidate every connection, grant and confirmation durably. */
   initialize(): void {
     if (this.#context.restored === true) this.#store.invalidateRestored(this.#now());
+    else if (this.#context.mutationsAllowed !== false) this.list();
   }
 
   list(): readonly PluginConnectionView[] {
@@ -176,11 +181,7 @@ export class PluginConnectionService {
       throw refuse('discovery_consent_required');
     if (!this.#credentials.available(connection.credentialReference))
       throw refuse('credential_unavailable');
-    const target: ServicePluginTarget = {
-      integrationId: connection.pluginId,
-      connectionId: connection.id,
-      owner: 'user',
-    };
+    const target = pluginConnectionTarget(connection);
     let catalog: ServicePluginCatalog;
     try {
       catalog = await this.#transport.discover(target, {
@@ -193,27 +194,16 @@ export class PluginConnectionService {
         throw new PluginRefusedError(error.code, 'plugin discovery refused: ' + error.code);
       throw error;
     }
-    if (catalog.completeness !== 'complete') throw refuse('catalog_incomplete');
-    const validated = validDiscoveredTools(catalog.tools, this.#context.sha256, canonicalJson);
-    const tools = validated.tools;
-    if (catalog.schemaDigest !== validated.digest) throw refuse('schema_digest_mismatch');
-    if (catalog.target.connectionId !== connection.id) throw refuse('target_mismatch');
-    const account = catalog.account;
-    if (
-      account.identity !== null &&
-      (typeof account.identity !== 'string' || account.identity.length > 256)
-    )
-      throw refuse('invalid_identity');
-    requireDeclaredTools(enabled.manifest, tools);
-    const publication = this.#store.publishDiscovery({
-      connectionId: connection.id,
-      expectedGeneration: connection.generation,
-      pluginVersion: enabled.version,
+    const publication = publishPluginDiscovery({
+      store: this.#store,
+      transport: this.#transport,
+      connection,
+      catalog,
+      manifest: enabled.manifest,
+      version: enabled.version,
       adapterVersion,
-      schemaDigest: validated.digest,
-      tools,
-      identity: { identity: account.identity, verified: account.verified === true },
-      discoveredAt: this.#now(),
+      sha256: this.#context.sha256,
+      now: this.#now(),
     });
     return {
       connection: this.#view(publication.connection),
@@ -252,6 +242,7 @@ export class PluginConnectionService {
   }
 
   #view(connection: PluginConnectionRecord): PluginConnectionView {
+    connection = this.#reconcile(connection);
     const consented = this.#store
       .consents(connection.id)
       .some(
@@ -260,13 +251,23 @@ export class PluginConnectionService {
           entry.endpoint === connection.endpoint &&
           entry.usedAt === null,
       );
-    return pluginConnectionView(connection, consented);
+    return pluginConnectionView(
+      connection,
+      consented,
+      pluginSessionReady(this.#transport, connection),
+    );
   }
 
   #connection(connectionId: string): PluginConnectionRecord {
     const connection = this.#store.get(connectionId);
     if (connection === null) throw refuse('connection_unknown');
-    return connection;
+    return this.#reconcile(connection);
+  }
+
+  #reconcile(connection: PluginConnectionRecord): PluginConnectionRecord {
+    return this.#context.mutationsAllowed === false
+      ? connection
+      : reconcilePluginSession(this.#store, this.#transport, connection, this.#now());
   }
 
   #requireGeneration(connection: PluginConnectionRecord, expectedGeneration: number): void {

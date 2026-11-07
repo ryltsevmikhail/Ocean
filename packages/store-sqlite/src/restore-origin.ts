@@ -4,6 +4,7 @@ import { validProfileBackupManifest, type RestoreOrigin } from '@runnets/domain'
 import type { RestoreOriginStore } from '@runnets/application';
 import { withImmediateTransaction } from './transaction.js';
 import { migrateRebinds } from './profile-rebind.js';
+import { resetRestoredModelConnections } from './model-connection-storage.js';
 const hash = (v: string) => createHash('sha256').update(v).digest('hex');
 export function migrateRestoration(db: DatabaseSync): void {
   db.exec(`CREATE TABLE ocean_restore_origin (
@@ -66,6 +67,7 @@ export function restoreOriginStore(db: DatabaseSync): RestoreOriginStore {
         db.prepare(
           'INSERT INTO ocean_restore_origin VALUES(1,?) ON CONFLICT(singleton) DO UPDATE SET payload=excluded.payload',
         ).run(payload);
+        resetRestoredModelConnections(db);
       });
     },
   };

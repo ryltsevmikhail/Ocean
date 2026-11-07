@@ -118,7 +118,7 @@ it('returns every scoped pending application across the SQLite Unicode binary pa
       // Model retained uncertain claims. No operation, journal dispatch or source write runs in this fixture.
       const put = db.prepare('INSERT INTO ocean_coding_applications VALUES(?,?)'),
         held = db.prepare(
-          "INSERT INTO tool_invocations_v2 VALUES(?,'coding_apply',?,'apply',?,'uncertain')",
+          "INSERT INTO tool_invocations_v2(id,tool,task_run_id,attempt_id,fingerprint,outcome) VALUES(?,'coding_apply',?,'apply',?,'uncertain')",
         );
       db.exec('BEGIN');
       for (const id of ids) {

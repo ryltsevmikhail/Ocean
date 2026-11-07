@@ -5,8 +5,8 @@ import { join, resolve } from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { openOceanProfile } from '../ocean/profile.js';
 import { rooms } from '../../test-fixtures/local-runtime-admission.test.js';
+import { assertAdmissionModelWitness } from '../../test-fixtures/admission-model-witness.js';
 import { detachedClient } from '../../test-fixtures/detached-client.test.js';
-
 it
   .runIf(process.platform === 'linux')
   .each([
@@ -120,9 +120,18 @@ it
             }),
           );
           expect(await call('cancelRun', cancel)).toEqual(ack);
+          assertAdmissionModelWitness(profile, receipt.runId, scenario, known);
           const events = await call('listEvents', { ...run, after: ack.version });
-          expect(events).toMatchObject(
-            known ? [{ type: 'attempt.usage_recorded' }, { type: 'task_run.cancelled' }] : [],
+          const types = [
+            'attempt.model_request_settled',
+            ...(known ? ['attempt.usage_recorded', 'task_run.cancelled'] : []),
+          ];
+          expect(events).toEqual(
+            types.map((type, n) => ({
+              sequence: ack.version + n + 1,
+              type,
+              sensitivity: 'internal',
+            })),
           );
           expect(await client('client.stop()')).toMatchObject({
             outcome: known ? 'complete' : 'uncertain',
@@ -211,6 +220,8 @@ it
       }
       if (scenario !== 'deadline') {
         host.send(scenario);
+        await vi.waitFor(async () => expect((await client(query)).taskStatus).not.toBe('running'));
+        assertAdmissionModelWitness(profile, receipt.runId, scenario, scenario === 'success');
         const expected =
           scenario === 'success'
             ? {
@@ -218,7 +229,7 @@ it
                 taskStatus: 'succeeded',
                 resultMessageId: 'reply_' + receipt.turnId,
               }
-            : { turnStatus: 'uncertain', taskStatus: 'failed' };
+            : { turnStatus: 'uncertain', taskStatus: 'reconciling' };
         await vi.waitFor(async () => expect(await client(query)).toMatchObject(expected), {
           timeout: 5000,
         });

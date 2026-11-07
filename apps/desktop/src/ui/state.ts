@@ -1,10 +1,12 @@
+import { createRoomTasks } from './room-task-state.js';
 import { ref, computed, onMounted } from 'vue';
 import type { Bot, Room, Command, Run } from '../protocol.js';
 import { pages, useRoomFeed } from './room-feed.js';
 import { call, SendFailure, submitDraft } from './bridge.js';
 import { explain } from './dom.js';
 import { feedbackText } from './runtime-text.js';
-import { loadProviderStatus } from './provider-state.js';
+import { refreshModelSettings } from './model-support.js';
+import type { LocalBotModelBinding } from '../model-protocol.js';
 import { unavailableFeedback } from './provider-feedback.js';
 import {
   abandonBroadcast,
@@ -19,8 +21,8 @@ import {
 import { createOceanTeam } from './ocean-team.js';
 import { BROADCAST_RECIPIENT } from './broadcast-mode.js';
 import { sendBlockedHint } from './broadcast-text.js';
-
 export function useDesktop() {
+  const tasks = createRoomTasks();
   const bots = ref<Bot[]>([]),
     rooms = ref<Room[]>([]);
   const sent = ref(0),
@@ -38,6 +40,7 @@ export function useDesktop() {
         latest.body.slice(0, 120);
     },
     async (id) => readBroadcast(id),
+    tasks.watermark,
   );
   const drafts = new Map<string, string>();
   const room = ref<Room>(),
@@ -55,7 +58,7 @@ export function useDesktop() {
   );
   const members = computed(() => bots.value.filter((b) => memberIds.value.includes(b.id)));
   const label = (id: string | undefined) =>
-    bots.value.find((b) => b.id === id)?.handle ?? 'участник';
+    bots.value.find((b) => b.id === id)?.handle ?? id ?? 'участник';
   const roomName = (r: Room) => (r.kind === 'group' ? r.title : '@' + label(r.botId));
   const roomPreview = (r: Room) =>
     previews.value[r.id] ??
@@ -96,6 +99,7 @@ export function useDesktop() {
       admittedRun.value = null;
     }
     room.value = r;
+    void tasks.context(r?.id ?? '');
     uncertain.value = r ? unconfirmed.has(r.id) || pendingBroadcast(r.id) !== undefined : false;
     if (r) void readBroadcast(r.id);
     open(r?.id);
@@ -109,7 +113,7 @@ export function useDesktop() {
     try {
       bots.value = await loadBots();
       runtimeReady.value = true;
-      await loadProviderStatus();
+      await refreshModelSettings();
     } catch (error) {
       runtimeReady.value = false;
       throw error;
@@ -124,16 +128,19 @@ export function useDesktop() {
   }
   onMounted(() => void guard(() => refresh()));
   const uuid = () => crypto.randomUUID();
-  const team = () =>
-    createOceanTeam({
-      readBots: loadBots,
-      setBots: (next) => {
-        bots.value = next;
+  const team = (choices?: Readonly<Record<string, LocalBotModelBinding>>) =>
+    createOceanTeam(
+      {
+        readBots: loadBots,
+        setBots: (next) => {
+          bots.value = next;
+        },
+        currentBots: () => bots.value,
+        refresh,
+        requestId: uuid,
       },
-      currentBots: () => bots.value,
-      refresh,
-      requestId: uuid,
-    });
+      choices,
+    );
   async function send(attachments: string[] = []) {
     const r = room.value;
     if (!r) return;
@@ -146,7 +153,6 @@ export function useDesktop() {
       to: r.kind === 'group' ? recipient.value || null : null,
       requestId: uuid(),
     };
-
     try {
       const result = await submitDraft(command);
       admittedRun.value = result.runId;
@@ -224,6 +230,7 @@ export function useDesktop() {
     room.value?.kind === 'direct' ? label(room.value.botId) : undefined,
   );
   return {
+    tasks,
     roomHandle,
     sections,
     runtimeReady,

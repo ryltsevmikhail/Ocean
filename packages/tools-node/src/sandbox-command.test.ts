@@ -1,3 +1,4 @@
+import type { CodingTestPreset } from '@runnets/domain';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +12,7 @@ it.runIf(process.platform === 'linux' && process.env['OCEAN_SANDBOX_NATIVE'] ===
     try {
       await writeFile(join(root, '.git'), 'synthetic');
       await writeFile(join(root, 'source'), 'before');
-      const preset = {
+      const preset: CodingTestPreset = {
         id: 'test',
         program: '/toolchain/node',
         args: ['-e', "require('node:fs').writeFileSync('/workspace/source','after')"],

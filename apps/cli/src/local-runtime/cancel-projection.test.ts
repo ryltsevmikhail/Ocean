@@ -1,4 +1,5 @@
-import { randomUUID, randomBytes } from 'node:crypto';
+import { injectedProviderActivation } from '@runnets/application';
+import { createHash, randomUUID, randomBytes } from 'node:crypto';
 import { closeSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -61,6 +62,7 @@ it.each(['fresh', 'retry', 'changed binding'])(
       codingTools: {
         async forTurn() {
           return {
+            callDigest: (text: string) => createHash('sha256').update(text).digest('hex'),
             cleanupConfirmed: true as const,
             definitions: [],
             execute: async () => {
@@ -100,7 +102,7 @@ it.each(['fresh', 'retry', 'changed binding'])(
     };
     const host = new RuntimeTurns(
       chat,
-      provider,
+      injectedProviderActivation(provider),
       new RoomRuntimeRuns(store.openRoomReads(Date.now), tasks),
       identity.instanceId,
     );

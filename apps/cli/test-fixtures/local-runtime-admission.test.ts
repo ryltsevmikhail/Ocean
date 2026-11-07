@@ -48,7 +48,7 @@ export function gatedProvider(
   return {
     id: 'test',
     models: ['test'],
-    capabilities: { streaming: true, reasoning: false, usage: true },
+    capabilities: { streaming: true, reasoning: false, usage: true, toolCalls: true },
     async *stream(request) {
       entered(request.signal!);
       await wait();

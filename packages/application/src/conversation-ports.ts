@@ -1,9 +1,18 @@
 import type {
+  RoomTaskStopReceipt,
+  RoomTaskStateReceipt,
+  RoomTaskFenceReceipt,
+} from './room-task-host.js';
+import type { RoomTaskTransaction } from './room-task-records.js';
+import type {
   BroadcastBatch,
   ChatTurn,
   ChatReview,
   RoomExecutionPolicy,
+  RoomModelPolicy,
   Bot,
+  BotModelBinding,
+  BoundBot,
   BotProfileInput,
   ConversationMessage,
   DirectRoom,
@@ -39,7 +48,12 @@ export type ConversationReply =
 export interface ConversationReceipt {
   readonly binding: string;
   readonly reply:
+    | { readonly kind: 'room_task_state'; readonly data: RoomTaskStateReceipt }
+    | { readonly kind: 'room_task_fence'; readonly data: RoomTaskFenceReceipt }
+    | { readonly kind: 'room_task_stop'; readonly data: RoomTaskStopReceipt }
     | ConversationReply
+    | { readonly kind: 'room_model_policy'; readonly data: RoomModelPolicy }
+    | { readonly kind: 'bound_bot'; readonly data: BoundBot }
     | {
         readonly kind: 'review_request';
         readonly data: {
@@ -52,6 +66,19 @@ export interface ConversationReceipt {
 }
 /** Synchronous transaction surface; implementations must roll back writes on exceptions. */
 export interface ConversationTransaction {
+  readonly roomTasks?: RoomTaskTransaction;
+  /**
+   * Optional fail-closed publication evidence. Head and complete unresolved effects
+   * (this run plus unscoped legacy) MUST share this authoritative transaction/write
+   * lock with putChatTurn. Unrelated adapters or incomplete evidence return null.
+   */
+  chatFailureEvidence?(taskRunId: string): {
+    readonly taskVersion: number;
+    readonly relatedPendingEffects: number;
+  } | null;
+
+  roomModelPolicy(roomId: string): RoomModelPolicy | null;
+  putRoomModelPolicy(policy: RoomModelPolicy): void;
   review(id: string): ChatReview | null;
   putReview(review: ChatReview): void;
   roomPolicy(roomId: string): RoomExecutionPolicy | null;
@@ -67,6 +94,10 @@ export interface ConversationTransaction {
   botByHandle(handle: string): Bot | null;
   bots(): readonly Bot[];
   putBot(bot: Bot): void;
+  /** Compare and replace an existing profile; never insert. */
+  replaceBot(bot: Bot, expectedProfileVersion: number): void;
+  modelBinding(botId: string): BotModelBinding | null;
+  putModelBinding(botId: string, binding: BotModelBinding): void;
   room(id: string): Room | null;
   rooms(): readonly Room[];
   directRoom(botId: string): DirectRoom | null;

@@ -38,6 +38,7 @@ export const connection = {
   state: 'active' as const,
   generation: 2,
   schemaDigest: 'b'.repeat(64),
+  readiness: 'ready',
   tools: ['list_issues'],
   consented: true,
   consentedGeneration: 2,

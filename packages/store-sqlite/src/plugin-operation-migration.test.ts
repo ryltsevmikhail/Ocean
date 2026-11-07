@@ -1,3 +1,5 @@
+import { omitRoomTaskSchema } from '../test-fixtures/room-task-v26.js';
+import { omitModelConnectionSchema } from '../test-fixtures/model-schema.js';
 /**
  * Migration 18 qualification: the durable plugin operation table is additive,
  * preserves existing profiles, and a failed migration rolls back cleanly.
@@ -22,7 +24,7 @@ afterEach(() => {
 
 describe('plugin operation migration 18', () => {
   it('creates the operations table and migrates a genuine schema-17 profile with zero operations', () => {
-    expect(SCHEMA_VERSION).toBe(18);
+    expect(SCHEMA_VERSION).toBe(29);
     const directory = mkdtempSync(join(tmpdir(), 'ocean-op-migration-'));
     directories.push(directory);
     const path = join(directory, 'runtime.sqlite');
@@ -40,6 +42,8 @@ describe('plugin operation migration 18', () => {
     const raw = new RawDatabase(path);
     try {
       for (const table of PLUGIN_OPERATION_TABLES) raw.exec('DROP TABLE IF EXISTS ' + table);
+      omitModelConnectionSchema(raw);
+      omitRoomTaskSchema(raw);
       raw.exec("UPDATE meta SET value='17' WHERE key='schema_version'");
     } finally {
       raw.close();
@@ -48,7 +52,7 @@ describe('plugin operation migration 18', () => {
     databases.push(migrated);
     expect(
       migrated.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.['value'],
-    ).toBe('18');
+    ).toBe(String(SCHEMA_VERSION));
     const tables = migrated
       .prepare(`SELECT name FROM sqlite_master WHERE type='table'`)
       .all()
@@ -76,6 +80,8 @@ describe('plugin operation migration 18', () => {
       for (const table of PLUGIN_OPERATION_TABLES) raw.exec('DROP TABLE IF EXISTS ' + table);
       // Conflicting object makes the create fail after the version bump intent.
       raw.exec('CREATE VIEW ocean_plugin_operations AS SELECT 1 AS id');
+      omitModelConnectionSchema(raw);
+      omitRoomTaskSchema(raw);
       raw.exec("UPDATE meta SET value='17' WHERE key='schema_version'");
     } finally {
       raw.close();

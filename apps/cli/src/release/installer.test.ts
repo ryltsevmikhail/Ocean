@@ -8,7 +8,6 @@ import {
   fsyncSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -102,29 +101,26 @@ function releaseRepo(base: string, options: { licenses?: boolean } = {}): string
   for (const dir of ['apps/cli/dist/release', 'packages/domain/dist', 'docs'])
     mkdirSync(join(repo, dir), { recursive: true });
   // A synthetic adapter entry that still bundles the real pinned dependency tree.
-  const adapter = join(repo, 'packages/integrations-executor');
+  const adapter = join(repo, 'packages/integrations-mcp');
   mkdirSync(join(adapter, 'dist'), { recursive: true });
   mkdirSync(join(adapter, 'THIRD_PARTY_LICENSES'), { recursive: true });
   writeFileSync(
     join(adapter, 'package.json'),
-    readFileSync(join(workspace, 'packages/integrations-executor/package.json')),
+    readFileSync(join(workspace, 'packages/integrations-mcp/package.json')),
   );
   writeFileSync(
     join(adapter, 'dist/index.js'),
-    "import '@executor-js/sdk/core';\nimport '@executor-js/plugin-openapi/core';\nimport '@executor-js/plugin-mcp/core';\nimport 'effect';\nexport const fixtureAdapter = true;\n",
+    "export * from '@modelcontextprotocol/client';\nexport * from '@modelcontextprotocol/client/stdio';\n",
   );
   writeFileSync(
-    join(adapter, 'THIRD_PARTY_LICENSES/executor-MIT.txt'),
+    join(adapter, 'THIRD_PARTY_LICENSES/modelcontextprotocol-client-LICENSE'),
     'fixture third-party license',
   );
   symlinkSync(
-    join(workspace, 'packages/integrations-executor/node_modules'),
+    join(workspace, 'packages/integrations-mcp/node_modules'),
     join(adapter, 'node_modules'),
   );
   symlinkSync(join(workspace, 'node_modules'), join(repo, 'node_modules'));
-  mkdirSync(join(repo, 'patches'), { recursive: true });
-  for (const name of readdirSync(join(workspace, 'patches')))
-    writeFileSync(join(repo, 'patches', name), readFileSync(join(workspace, 'patches', name)));
   if (options.licenses !== false) {
     mkdirSync(join(repo, 'LICENSES'), { recursive: true });
     writeFileSync(join(repo, 'LICENSES/fixture-notice.txt'), 'fixture notice');

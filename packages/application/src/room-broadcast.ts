@@ -82,6 +82,7 @@ export class RoomBroadcastService {
       if (tx.broadcastBatchForRoom(room.id) !== null) return conversationFailure('batch_open');
       // Any non-batch hold keeps its pre-existing recovery meaning: only doubts about a
       // started turn are `recovery_required`, an ordinary in-flight turn is `room_busy`.
+      if (tx.roomTasks?.roomHold(room.id)) return conversationFailure('room_busy');
       const active = tx.activeChatTurn(room.id);
       if (active !== null)
         return conversationFailure(
@@ -89,6 +90,9 @@ export class RoomBroadcastService {
         );
       if (room.botIds.some((botId) => tx.bot(botId) === null))
         throw new Error('Missing room member');
+      const bindings = room.botIds.map((id) => tx.modelBinding(id));
+      if (bindings.some((binding) => binding === null))
+        return conversationFailure('provider_unavailable');
       const message: ConversationMessage = {
         id: this.#nextId(),
         workspaceId: input.workspaceId,
@@ -124,7 +128,8 @@ export class RoomBroadcastService {
           taskRunId: runId,
           inboundMessageId: message.id,
           readThroughSeq: message.seq,
-          bot,
+          bot: structuredClone(bot),
+          modelBinding: { ...bindings[position]! },
           status: 'queued',
           text: '',
           preparedVersion: null,

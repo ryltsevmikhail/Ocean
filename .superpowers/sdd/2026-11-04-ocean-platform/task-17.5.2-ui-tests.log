@@ -1,0 +1,9 @@
+
+ RUN  v4.1.12 /home/ryltsevmg/Projects/Ocean-stable
+
+············
+
+ Test Files  4 passed (4)
+      Tests  12 passed (12)
+   Start at  21:32:24
+   Duration  570ms (transform 466ms, setup 98ms, import 835ms, tests 77ms, environment 0ms)

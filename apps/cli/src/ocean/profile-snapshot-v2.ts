@@ -11,6 +11,7 @@ import {
   readProfileRestoreSnapshot,
 } from '@runnets/store-sqlite';
 import {
+  prepareDesktopBindingUpgrade,
   captureProfileBackupAssets,
   copyProfileBackupDatabase,
   prepareProfileBackupAssets,
@@ -145,6 +146,7 @@ export async function backupProfileV2(
           output!.publish();
         });
       },
+      (binding, inventory) => prepareDesktopBindingUpgrade(binding, inventory, profile),
     );
     if (!result) throw Error('invalid_backup');
     try {

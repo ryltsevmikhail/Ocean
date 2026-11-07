@@ -185,7 +185,7 @@ describe('TuiApp', () => {
     app.stop();
   });
 
-  it('reports a failed turn without leaving the UI busy', async () => {
+  it('reports an uncertain provider outcome without leaving the UI busy', async () => {
     const harness = streams();
     const provider = scripted([{ type: 'error', error: new ProviderError('server', 'boom') }]);
     const app = appOf(harness, provider);
@@ -197,9 +197,9 @@ describe('TuiApp', () => {
     await app.idle();
 
     expect(app.ui.busy).toBe(false);
-    expect(app.ui.status).toBe('turn failed (refusal)');
-    expect(app.selectedRun()?.aggregate?.status).toBe('failed');
-    expect(app.frame()).toContain('turn failed (refusal)');
+    expect(app.ui.status).toBe('outcome unknown — inspect effects; automatic retry blocked');
+    expect(app.selectedRun()?.aggregate?.status).toBe('reconciling');
+    expect(app.frame()).toContain('outcome unknown');
 
     app.stop();
   });

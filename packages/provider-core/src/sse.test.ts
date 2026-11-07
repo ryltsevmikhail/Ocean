@@ -67,3 +67,34 @@ describe('SSE parser', () => {
     await expect(parse(['event: ping\n\n'])).resolves.toEqual([]);
   });
 });
+
+async function strict(values: readonly string[], maxFrameBytes = 262144): Promise<SseEvent[]> {
+  const events: SseEvent[] = [];
+  for await (const event of parseSse(chunks(values), {
+    requireTerminatedFrames: true,
+    maxFrameBytes,
+  }))
+    events.push(event);
+  return events;
+}
+it('strict framing retains partial CRLF/multiline/comment behavior', async () => {
+  await expect(
+    strict([': ping\r\nevent: x\r\ndata: a\r', '\ndata: b\r\n\r', '\n']),
+  ).resolves.toEqual([{ event: 'x', data: 'a\nb' }]);
+});
+it.each(['data: [DONE]', 'data: [DONE]\n', 'data: a\n\ndata: pending'])(
+  'strict mode rejects pending final data %s',
+  async (value) => {
+    await expect(strict([value])).rejects.toThrow();
+  },
+);
+it('strict mode bounds UTF-8 frames across chunks and resets at boundaries', async () => {
+  await expect(strict(['data: ', 'я'.repeat(20)], 32)).rejects.toThrow();
+  await expect(strict(['data: a\n\ndata: b\n\n'], 10)).resolves.toHaveLength(2);
+});
+
+it('counts split astral UTF-8 exactly at the frame byte boundary', async () => {
+  await expect(strict(['data: \ud83d', '\ude01\n\n'], 12)).resolves.toEqual([
+    { event: null, data: '😁' },
+  ]);
+});

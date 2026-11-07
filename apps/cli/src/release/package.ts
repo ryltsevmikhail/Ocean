@@ -1,4 +1,4 @@
-/** Assemble compiled first-party runtime modules, the bundled Executor adapter and explicit docs. */
+/** Assemble compiled first-party runtime modules, the bundled MCP adapter and explicit docs. */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -30,7 +30,7 @@ const ADAPTER_DIRECTORY = ADAPTER_SOURCE_DIR.split('/').at(-1) ?? '';
  * Compiled test helpers (`*fixture*`, `*-cleanup*`) live beside product modules in
  * `dist` but are imported by tests only and are never installed.
  */
-const TEST_ONLY_MODULE = /(?:^|\/)[^/]*(?:fixture|cleanup)[^/]*\.js$/i;
+const TEST_ONLY_MODULE = /(?:^|\/)[^/]*(?:fixture|cleanup|\.test)[^/]*(?:\.js|\.d\.ts)$/i;
 
 /**
  * Internal planning/session documents are committed for the repository, not for an
@@ -90,11 +90,11 @@ function assertPackagedLayout(files: ReadonlyMap<string, unknown>): void {
       throw new Error('Release archive must not ship an unpackaged dependency: ' + name);
   }
   for (const required of [
-    'node_modules/@runnets/integrations-executor/package.json',
-    'node_modules/@runnets/integrations-executor/LICENSE',
-    'node_modules/@runnets/integrations-executor/dist/index.js',
-    'node_modules/@runnets/integrations-executor/dist/' + ADAPTER_INTEGRITY_FILE,
-    'node_modules/@runnets/integrations-executor/THIRD_PARTY_LICENSES',
+    'node_modules/@runnets/integrations-mcp/package.json',
+    'node_modules/@runnets/integrations-mcp/LICENSE',
+    'node_modules/@runnets/integrations-mcp/dist/index.js',
+    'node_modules/@runnets/integrations-mcp/dist/' + ADAPTER_INTEGRITY_FILE,
+    'node_modules/@runnets/integrations-mcp/THIRD_PARTY_LICENSES',
   ])
     throwUnlessPresent(files, required);
 }
@@ -144,7 +144,10 @@ export async function packageRelease(
       else throw new Error('Unexpected document link');
     }
   };
-  const modules = readdirSync(join(root, 'packages'));
+  // C18.1 is a qualification harness, outside the installed runtime.
+  const modules = readdirSync(join(root, 'packages')).filter(
+    (name) => name !== 'integrations-executor',
+  );
   if (!modules.includes(ADAPTER_DIRECTORY))
     throw new Error('Release packaging requires the bundled adapter package ' + ADAPTER_PACKAGE);
   const adapter = await buildAdapterBundle(root);
@@ -156,7 +159,11 @@ export async function packageRelease(
     const destination = name === 'cli' ? 'apps/cli' : 'node_modules/@runnets/' + name;
     manifest['version'] = version;
     delete manifest['dependencies'];
-    if (name === ADAPTER_DIRECTORY) stripDeclarationReferences(manifest);
+    delete manifest['devDependencies'];
+    if (name === ADAPTER_DIRECTORY) {
+      stripDeclarationReferences(manifest);
+      manifest['exports'] = { '.': { import: './dist/index.js' } };
+    }
     add(destination + '/package.json', JSON.stringify(manifest, null, 2) + '\n');
     if (name === ADAPTER_DIRECTORY) {
       // Ship the deterministic bundle instead of the tsc output; the pinned
@@ -173,8 +180,15 @@ export async function packageRelease(
         if (entry.isDirectory()) {
           if (entry.name !== 'release')
             copy(join(directory, entry.name), relative + entry.name + '/');
-        } else if (entry.isFile() && entry.name.endsWith('.js')) {
-          if (TEST_ONLY_MODULE.test(relative + entry.name)) continue;
+        } else if (
+          entry.isFile() &&
+          (entry.name.endsWith('.js') || (name !== 'cli' && entry.name.endsWith('.d.ts')))
+        ) {
+          if (
+            TEST_ONLY_MODULE.test(relative + entry.name) ||
+            (name === 'cli' && /^plugin-transport\.(?:js|d\.ts)$/.test(relative + entry.name))
+          )
+            continue;
           add(
             destination + '/dist/' + relative + entry.name,
             compiled(join(directory, entry.name)),

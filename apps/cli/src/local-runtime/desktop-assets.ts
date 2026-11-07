@@ -1,7 +1,11 @@
 import { DesktopAssetService, type DesktopAssetStore } from '@runnets/application';
 import { decodeDesktopAttachments, hasDesktopAttachmentMarker } from '@runnets/domain';
 import { isDesktopCommand, type LocalDesktopReply } from '@runnets/contracts';
-import { desktopAssetFiles, desktopImageResolver, desktopRootIdentity } from '@runnets/tools-node';
+import {
+  desktopAssetFiles,
+  desktopImageResolver,
+  desktopBindingMatches,
+} from '@runnets/tools-node';
 export { desktopImageResolver };
 export function runtimeDesktopAssets(store: DesktopAssetStore, profile: string, profileId: string) {
   const service = new DesktopAssetService(store, desktopAssetFiles(profile, profileId));
@@ -17,12 +21,19 @@ export function runtimeDesktopAssets(store: DesktopAssetStore, profile: string, 
         (bound.profileId !== profileId ||
           !bound.root.startsWith(profile + '/') ||
           !/^desktop-[a-f0-9-]{36}\/tree$/.test(bound.root.slice(profile.length + 1)) ||
-          desktopRootIdentity(bound.root) !== bound.identity)
+          !desktopBindingMatches(bound))
       )
         throw Error('desktop_binding_mismatch');
       if (!isDesktopCommand(params)) throw Error('invalid_params');
       const c = params;
       switch (c.op) {
+        case 'attach': {
+          const enrollment = store.operation('enrollment');
+          if (enrollment && enrollment.state !== 'completed')
+            throw Error('desktop_outcome_unknown');
+          if (!bound) throw Error('desktop_not_enrolled');
+          return { result: { op: c.op, ok: true } };
+        }
         case 'enroll':
           service.enroll(c.userData);
           return { result: { op: c.op, ok: true } };

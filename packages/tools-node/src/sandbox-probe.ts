@@ -1,6 +1,6 @@
 import { fingerprintTree } from './sandbox-tree.js';
 import { createHash } from 'node:crypto';
-import { ToolError } from '@runnets/application';
+import { ToolError, type ToolDispatchGuard } from '@runnets/application';
 import type { CodingTestPreset } from '@runnets/domain';
 import { blockedName, checkedPath, type WorkspaceBackend, type FileEntry } from './backend.js';
 import { realpath } from 'node:fs/promises';
@@ -40,7 +40,11 @@ s.on('error',()=>process.exit(0));
 setTimeout(()=>process.exit(3),500);
 });
 `;
-export async function probeSandbox(options: SandboxOptions): Promise<SandboxQualification> {
+export async function probeSandbox(
+  options: SandboxOptions,
+  guard?: ToolDispatchGuard,
+  signal?: AbortSignal,
+): Promise<SandboxQualification> {
   const platform = process.platform + '/' + process.arch;
   let qualified = false;
   try {
@@ -49,6 +53,8 @@ export async function probeSandbox(options: SandboxOptions): Promise<SandboxQual
       ...options,
       program: '/toolchain/node',
       args: ['-e', canary],
+      ...(guard ? { guard } : {}),
+      ...(signal ? { signal } : {}),
     });
     qualified =
       result.exitCode === 0 &&
@@ -78,9 +84,13 @@ export async function sandboxCommand(
   options: SandboxOptions,
   preset: CodingTestPreset,
   signal: AbortSignal,
-  snapshot: () => Promise<string>,
+  snapshot: (guard?: ToolDispatchGuard) => Promise<string>,
+  guard?: ToolDispatchGuard,
 ): Promise<SandboxCommandEvidence> {
-  const beforeTreeHash = await snapshot();
+  const inspection = guard?.inspect
+    ? { authorize: () => false, inspect: () => guard.inspect!() }
+    : undefined;
+  const beforeTreeHash = await snapshot(inspection);
   const dependencyHash = await validateMounts(options.mounts ?? [], options.dependencyProjectRoot);
   const invocationHash = createHash('sha256')
     .update(JSON.stringify({ preset, limits: sandboxLimits, options, dependencyHash }))
@@ -91,8 +101,9 @@ export async function sandboxCommand(
     args: preset.args,
     cwd: checkedPath(preset.cwd),
     signal,
+    ...(guard ? { guard } : {}),
   });
-  const afterTreeHash = await snapshot();
+  const afterTreeHash = await snapshot(inspection);
   return {
     ...result,
     invocationHash,
@@ -109,7 +120,9 @@ export async function sandboxCommand(
 export async function createSandboxBackend(
   options: SandboxOptions,
   presets: readonly CodingTestPreset[],
-  snapshot: () => Promise<string>,
+  snapshot: (guard?: ToolDispatchGuard) => Promise<string>,
+  guard?: ToolDispatchGuard,
+  signal?: AbortSignal,
 ): Promise<WorkspaceBackend> {
   const frozen = structuredClone({ options, presets });
   options = frozen.options;
@@ -129,7 +142,9 @@ export async function createSandboxBackend(
         : fingerprintTree(mount.source);
   options = { ...options, expectedInputs };
   const qualifiedIdentity = await identity();
-  if (!(await probeSandbox(options)).qualified)
+  if (signal?.aborted || (guard && !guard.authorize()))
+    throw new ToolError('coding_denied', 'sandbox preparation refused');
+  if (!(await probeSandbox(options, guard, signal)).qualified)
     throw new ToolError('containment_unavailable', 'sandbox qualification failed');
   if ((await identity()) !== qualifiedIdentity)
     throw new ToolError('containment_unavailable', 'sandbox inputs changed during qualification');
@@ -139,9 +154,13 @@ export async function createSandboxBackend(
     if ((await identity()) !== qualifiedIdentity)
       throw new ToolError('containment_unavailable', 'sandbox qualification is stale');
   };
-  const fileOperation = async (input: Parameters<typeof sandboxFile>[1], signal?: AbortSignal) => {
+  const fileOperation = async (
+    input: Parameters<typeof sandboxFile>[1],
+    signal?: AbortSignal,
+    guard?: ToolDispatchGuard,
+  ) => {
     try {
-      return await sandboxFile(options, input, signal);
+      return await sandboxFile(options, input, signal, guard);
     } catch (error) {
       if (error instanceof ToolError && error.code === 'effect_uncertain') held = true;
       throw error;
@@ -153,24 +172,24 @@ export async function createSandboxBackend(
       processContainment: true,
       confirmedTreeStop: true,
     },
-    async read(path) {
+    async read(path, signal, guard) {
       await verify();
-      return (await fileOperation({ op: 'read', path })) as string | null;
+      return (await fileOperation({ op: 'read', path }, signal, guard)) as string | null;
     },
-    async list(path) {
+    async list(path, signal, guard) {
       await verify();
-      const entries = (await fileOperation({ op: 'list', path })) as FileEntry[];
+      const entries = (await fileOperation({ op: 'list', path }, signal, guard)) as FileEntry[];
       return entries
         .filter((e) => !blockedName(e.name))
         .sort((a, b) => a.name.localeCompare(b.name));
     },
-    async write(path, content, expected, signal) {
+    async write(path, content, expected, signal, guard) {
       await verify();
       if (Buffer.byteLength(content) > 131072 || content.includes('\0'))
         throw new ToolError('unsupported_file', 'write exceeds text limits');
-      await fileOperation({ op: 'write', path, content, expected }, signal);
+      await fileOperation({ op: 'write', path, content, expected }, signal, guard);
     },
-    async command(program, args, cwd, signal) {
+    async command(program, args, cwd, signal, guard) {
       await verify();
       const preset = presets.find(
         (p) =>
@@ -180,7 +199,7 @@ export async function createSandboxBackend(
         throw new ToolError('preset_denied', 'only exact owner-registered presets are allowed');
       let result: SandboxCommandEvidence;
       try {
-        result = await sandboxCommand(options, preset, signal, snapshot);
+        result = await sandboxCommand(options, preset, signal, snapshot, guard);
       } catch (error) {
         held = true;
         throw error;

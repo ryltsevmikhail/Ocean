@@ -1,8 +1,7 @@
 /**
  * Public client for the runtime-owned provider connection API.
  *
- * Every reply is validated against the versioned contract; only metadata ever
- * crosses the socket. The key input is validated locally before it is framed.
+ * Every reply is validated against the versioned contract; responses contain metadata only. The key input is validated locally before it is framed.
  */
 
 import {

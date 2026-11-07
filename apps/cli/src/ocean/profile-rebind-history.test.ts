@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { expect, it as test, vi } from 'vitest';
+import { taskRunId } from '@runnets/domain';
 import {
   ProfileRebindService,
   RuntimeOwnerDecisions,
@@ -51,7 +52,8 @@ function frozen<T>(path: string, work: (fdPath: string) => T): T {
 const textProvider: ProviderPort = {
   id: 'fixture',
   models: ['fixture'],
-  capabilities: { streaming: true, usage: true, reasoning: false },
+  // A task-bound coding turn requires the advertised tool-call contract even for a text answer.
+  capabilities: { streaming: true, usage: true, reasoning: false, toolCalls: true },
   async *stream() {
     yield { type: 'text_delta', text: 'fixture history answer' };
     yield { type: 'usage', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
@@ -83,6 +85,9 @@ it('keeps exact old task/changeset/review/run history and diffs readable from fr
     const sent = await f.send('history-run', textProvider);
     if (!sent.ok) throw Error(sent.error.code);
     const runId = String(sent.value.taskRunId);
+    expect(sent.value.status, 'history fixture must reach confirmed completion').toBe('completed');
+    expect((await f.runtime.service.state(taskRunId(runId))).status).toBe('succeeded');
+    expect(await f.runtime.toolJournal!.pending()).toEqual([]);
     const requested = await f.runtime.codingReview!.request(
       {
         id: 'review-history',
@@ -124,6 +129,12 @@ it('keeps exact old task/changeset/review/run history and diffs readable from fr
       ]),
       { mode: 0o600 },
     );
+    const checked = stores.openSqliteStore({ path: join(f.directory, 'runtime.sqlite') });
+    try {
+      expect(checked.rebind.atomic((tx) => tx.holds())).toEqual([]);
+    } finally {
+      checked.close();
+    }
     const source = historyRows(join(f.directory, 'runtime.sqlite'), artifact.hash, runId);
     expect(JSON.parse(String((source.changeset as { payload: string }).payload)).diff).toContain(
       'answer.txt',
@@ -236,4 +247,4 @@ it('keeps exact old task/changeset/review/run history and diffs readable from fr
     fs.rmSync(root, { recursive: true, force: true });
     vi.unstubAllEnvs();
   }
-});
+}, 30_000);

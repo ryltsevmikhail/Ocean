@@ -20,6 +20,8 @@ export function requireDeclaredTools(
   const declared = new Set(manifest.operations.map((operation) => operation.tool));
   if (tools.some((tool) => !declared.has(tool.name)))
     throw new PluginRefusedError('unexpected_tool', 'plugin catalog refused: unexpected_tool');
+  if (tools.length !== declared.size)
+    throw new PluginRefusedError('missing_tool', 'plugin catalog refused: missing_tool');
 }
 
 export function validDiscoveredTools(

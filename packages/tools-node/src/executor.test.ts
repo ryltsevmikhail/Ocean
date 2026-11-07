@@ -98,3 +98,71 @@ it('fails closed when requested containment has no backend guarantee', async () 
     tools.prepare({ id: 'a', name: 'read_file', arguments: '{"path":"a"}' }),
   ).rejects.toThrow('containment');
 });
+it('guards the actual pre-read during prepare and the list dispatch after asynchronous preparation', async () => {
+  let reads = 0,
+    lists = 0,
+    allowed = true;
+  const backend: WorkspaceBackend = {
+    read: async () => {
+      reads++;
+      return 'content';
+    },
+    list: async () => {
+      lists++;
+      return [];
+    },
+    write: async () => {},
+    command: async () => ({ isError: false, output: '' }),
+  };
+  const tools = new WorkspaceTools(backend),
+    guard = {
+      prepare: async () => {
+        await Promise.resolve();
+        allowed = false;
+      },
+      authorize: () => allowed,
+    };
+  await expect(
+    tools.prepare({ id: 'read', name: 'read_file', arguments: '{"path":"file"}' }, signal, guard),
+  ).rejects.toMatchObject({ code: 'coding_denied' });
+  expect(reads).toBe(0);
+  const listing = await tools.prepare(
+    { id: 'list', name: 'list_files', arguments: '{"path":"."}' },
+    signal,
+    guard,
+  );
+  await expect(listing.execute(signal, guard)).rejects.toMatchObject({ code: 'coding_denied' });
+  expect(lists).toBe(0);
+});
+it('forwards the exact read/list invocation guard and signal to the physical backend', async () => {
+  const seen: unknown[][] = [],
+    controller = new AbortController(),
+    guard = { authorize: () => true, inspect: () => true };
+  const backend: WorkspaceBackend = {
+    read: async (...args) => {
+      seen.push(args);
+      return 'content';
+    },
+    list: async (...args) => {
+      seen.push(args);
+      return [];
+    },
+    write: async () => {},
+    command: async () => ({ isError: false, output: '' }),
+  };
+  const tools = new WorkspaceTools(backend);
+  const read = await tools.prepare(
+    { id: 'r', name: 'read_file', arguments: '{"path":"file"}' },
+    controller.signal,
+    guard,
+  );
+  await read.execute(controller.signal, guard);
+  const list = await tools.prepare(
+    { id: 'l', name: 'list_files', arguments: '{"path":"."}' },
+    controller.signal,
+    guard,
+  );
+  await list.execute(controller.signal, guard);
+  expect(seen.length).toBeGreaterThanOrEqual(2);
+  expect(seen.every((args) => args[1] === controller.signal && args[2] === guard)).toBe(true);
+});

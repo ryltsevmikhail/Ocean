@@ -40,7 +40,7 @@ describe('provider connection service', () => {
     const replay = f.service.set(set);
     expect(replay).toEqual(first);
     expect(f.secrets.writes).toHaveLength(1);
-    expect((f.service.current() as { key: string }).key).toBe(set.key);
+    expect((f.service.current() as unknown as { key: string }).key).toBe(set.key);
     expect(() => f.service.set({ ...set, model: 'deepseek-v4-pro' })).toThrow('request_conflict');
     expect(() => f.service.set({ ...set, key: 'sk-different-key' })).toThrow('request_conflict');
     expect(f.service.status().revision).toBe(1);
@@ -61,7 +61,7 @@ describe('provider connection service', () => {
     const f = fixture();
     f.service.set(set);
     const before = f.service.current();
-    expect((before as { key: string }).key).toBe(set.key);
+    expect((before as unknown as { key: string }).key).toBe(set.key);
     const after = f.service.set({
       requestId: 'set-2',
       key: 'sk-fixture-rotated-key',
@@ -72,7 +72,7 @@ describe('provider connection service', () => {
     expect([...f.secrets.values.values()]).toEqual(['sk-fixture-rotated-key']);
     const rotated = f.service.current();
     expect(rotated).not.toBe(before);
-    expect((rotated as { key: string }).key).toBe('sk-fixture-rotated-key');
+    expect((rotated as unknown as { key: string }).key).toBe('sk-fixture-rotated-key');
     expect(f.service.status().model).toBe('deepseek-v4-pro');
   });
 

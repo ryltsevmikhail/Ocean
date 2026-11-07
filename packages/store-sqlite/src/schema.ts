@@ -16,7 +16,8 @@ import { applyMigrations } from './schema-migrations.js';
 
 import { ownerBusy } from './maintenance-owner.js';
 import { userTables } from './schema-inspection.js';
-export const SCHEMA_VERSION = 18;
+/** Schema 29 adds immutable host scope to executable room-task roots. */
+export const SCHEMA_VERSION = 29;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_BUSY_TIMEOUT_MS = 60_000;
 
@@ -91,8 +92,8 @@ export function openDatabase(
   assertBusyTimeout(busyTimeoutMs);
   const db = new DatabaseSync(path, { enableForeignKeyConstraints: true });
   try {
-    db.exec('PRAGMA synchronous = FULL');
     db.exec('PRAGMA busy_timeout = ' + String(busyTimeoutMs));
+    db.exec('PRAGMA synchronous = FULL');
     initializeSchema(db, requireOwnerAbsent);
     applyDurabilityProfile(db, busyTimeoutMs);
     if (path !== ':memory:') assertWalMode(db);

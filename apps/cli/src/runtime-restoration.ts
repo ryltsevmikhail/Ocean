@@ -1,3 +1,5 @@
+import type { Clock, ProjectLeasePort, CodingApplyResolutionDeps } from '@runnets/application';
+import type { SqliteStore } from '@runnets/store-sqlite';
 import * as fs from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -103,4 +105,47 @@ export function restoredRuntimeAdmission(
   if (active) throw Error('invalid_execution_epoch');
   if (inspection.kind !== 'none' && !allowed) throw Error('restore_restricted');
   return inspection.kind !== 'none';
+}
+
+/** Called only after exclusive runtime ownership and verified restore admission. */
+export function bindRuntimeRoomHost(
+  store: SqliteStore,
+  ownerId: string,
+  eligible: boolean,
+  verified: { readonly origin: RestoreOrigin | null; readonly active: ProfileRebindRecord | null },
+): void {
+  if (!eligible) return;
+  store.bindRoomHost({ ownerId, epochId: verified.active?.preview.epochId ?? null }, verified);
+}
+
+/** Existing reconciliation authority, kept beside the host's restoration admission. */
+export function codingResolutionAuthority(codingDeps: {
+  ownerId: string;
+  clock: Clock;
+  restored: boolean;
+  leases: ProjectLeasePort;
+}): CodingApplyResolutionDeps {
+  return {
+    ownerId: codingDeps.ownerId,
+    clock: codingDeps.clock,
+    admit: (task, tx) => {
+      const worktree = tx.worktree(task.id);
+      return (
+        !codingDeps.restored &&
+        task.status === 'reserved' &&
+        worktree !== null &&
+        worktree.state === 'ready' &&
+        worktree.root === task.worktreeRoot &&
+        worktree.projectRoot === task.projectRoot &&
+        worktree.baseCommit === task.baseCommit &&
+        worktree.workspaceId === task.workspaceId &&
+        worktree.taskId === task.id &&
+        worktree.lease.ownerId === codingDeps.ownerId &&
+        worktree.lease.projectRoot === worktree.root &&
+        task.lease.projectRoot === task.projectRoot &&
+        codingDeps.leases.owns(task.lease) &&
+        codingDeps.leases.owns(worktree.lease)
+      );
+    },
+  };
 }

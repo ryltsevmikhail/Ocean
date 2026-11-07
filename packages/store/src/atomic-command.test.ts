@@ -33,9 +33,16 @@ function setup() {
 }
 it('returns one original receipt to concurrent identical commands', async () => {
   const { service, log } = setup();
-  const results = await Promise.all([service.execute(command), service.execute(command)]);
-  expect(results[0]?.ok).toBe(true);
-  expect(results[1]).toEqual(results[0]);
+  const outcomes = await Promise.all([
+    service.executeWithDisposition(command),
+    service.executeWithDisposition(command),
+  ]);
+  const results = outcomes.map((outcome) => {
+    if (!outcome.ok) throw outcome.error;
+    return outcome.value;
+  });
+  expect(results.map((x) => x.disposition).sort()).toEqual(['committed', 'replayed']);
+  expect(results[1]?.receipt).toEqual(results[0]?.receipt);
   expect(await log.load(command.taskRunId)).toHaveLength(1);
 });
 it('keeps command receipts when the service is recreated', async () => {
@@ -53,7 +60,8 @@ it('rejects command identity reuse with another task, actor, version or payload'
     { ...command, expectedVersion: 1 },
     { ...command, payload: { ...command.payload, model: 'other' } },
   ];
-  for (const variant of variants) expect((await service.execute(variant)).ok).toBe(false);
+  for (const variant of variants)
+    expect((await service.executeWithDisposition(variant)).ok).toBe(false);
   expect(await log.load(taskRunId('tr_other'))).toHaveLength(0);
 });
 
@@ -71,9 +79,10 @@ it('replays when another submission commits between lookup and stream load', asy
     clock,
     ids,
   });
-  const result = await raced.execute(command);
-  expect(result.ok).toBe(true);
-  expect(result).toEqual(await service.execute(command));
+  const result = await raced.executeWithDisposition(command);
+  expect(result).toMatchObject({ ok: true, value: { disposition: 'replayed' } });
+  if (!result.ok) throw result.error;
+  expect(await service.execute(command)).toEqual({ ok: true, value: result.value.receipt });
   expect(await log.load(command.taskRunId)).toHaveLength(1);
 });
 it('allows only one target when concurrent submissions reuse an identity', async () => {

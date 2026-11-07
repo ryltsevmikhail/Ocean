@@ -1,3 +1,4 @@
+import { omitModelConnectionSchema } from '../test-fixtures/model-schema.js';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, it } from 'vitest';
 import { ConversationService, TaskRunService } from '@runnets/application';
@@ -50,6 +51,7 @@ function setup() {
 }
 /** Remove only new tables to recreate the original v1 tables with their exact runtime records. */
 function downgradeFixture(db: DatabaseSync) {
+  omitModelConnectionSchema(db);
   db.exec(
     'DROP TABLE ocean_desktop_operations; DROP TABLE ocean_desktop_uploads; DROP TABLE ocean_desktop_adopted',
   );

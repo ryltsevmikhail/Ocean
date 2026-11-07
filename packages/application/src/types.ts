@@ -5,13 +5,18 @@
  * with their own update sink and cancellation signal.
  */
 
+import type { RoomHandoff } from './room-slice-handoff.js';
 import type { ToolService } from './tools.js';
 import type { TaskRunService } from './service.js';
 import type { TurnUpdate, StopReason } from './turn-update.js';
-import type { TaskRunId } from '@runnets/domain';
+import type { Clock } from './ports.js';
+import type { ModelActivationSnapshot, TaskRunId } from '@runnets/domain';
 import type { ChatMessage, ProviderPort } from './provider.js';
 
 export interface TurnInput {
+  readonly authorizeModelDispatch?: () => boolean;
+  readonly activation?: ModelActivationSnapshot;
+  readonly clock?: Clock;
   readonly beforeComplete?: (
     text: string,
     stopReason: 'end_turn' | 'max_tokens',
@@ -36,3 +41,5 @@ export type TurnOutcome =
   | { readonly kind: 'uncertain'; readonly stopReason: 'refusal'; readonly text: string }
   | { readonly kind: 'failed'; readonly stopReason: StopReason; readonly text: string }
   | { readonly kind: 'cancelled'; readonly stopReason: 'cancelled'; readonly text: string };
+
+export type YieldedRoomSlice = { readonly kind: 'yielded'; readonly handoff: RoomHandoff };

@@ -1,3 +1,9 @@
+import { localRoomTasksClient, type LocalRoomTasksClient } from './local-room-tasks-client.js';
+import { localServiceClient, type LocalServiceClient } from './local-service-client.js';
+import {
+  localModelConnectionsClient,
+  type LocalModelConnectionsClient,
+} from './local-model-connections-client.js';
 import { localDesktopClient, type LocalDesktopClient } from './local-desktop-client.js';
 import { localRestoreClient, type LocalRestoreClient } from './local-restore-client.js';
 import { localProfileClient, type LocalProfileClient } from './local-profile-client.js';
@@ -10,6 +16,13 @@ import { randomUUID } from 'node:crypto';
 import { connect, type Socket } from 'node:net';
 import {
   LOCAL_RUNTIME_MAX_WAIT_MS,
+  LOCAL_PLUGIN_SESSION_AUTHORITY,
+  LOCAL_MODEL_CONNECTIONS,
+  LOCAL_SERVICE_CONFIRMATIONS,
+  LOCAL_SERVICE_AUTHORITY,
+  LOCAL_ADDRESSED_HISTORY,
+  LOCAL_ROOM_TASKS,
+  LOCAL_ROOM_TASK_LIST,
   isLocalRuntimeIdentity,
   isLocalReceiptQuery,
   isLocalRunQuery,
@@ -35,6 +48,9 @@ import { localBroadcastClient, type LocalBroadcastClient } from './local-broadca
 import { localPluginClient, type LocalPluginClient } from './local-plugin-client.js';
 export interface LocalRuntimeClient
   extends
+    LocalRoomTasksClient,
+    LocalServiceClient,
+    LocalModelConnectionsClient,
     LocalRestoreClient,
     LocalDesktopClient,
     LocalProfileClient,
@@ -142,15 +158,34 @@ async function connectDescriptor(
   });
   const peer = new Peer(socket);
   try {
-    const identity = await peer.request('hello', descriptor);
+    const identity = await peer.request('hello', {
+      ...descriptor,
+      clientFeatures: [
+        LOCAL_PLUGIN_SESSION_AUTHORITY,
+        LOCAL_MODEL_CONNECTIONS,
+        LOCAL_SERVICE_CONFIRMATIONS,
+        LOCAL_SERVICE_AUTHORITY,
+        LOCAL_ADDRESSED_HISTORY,
+        LOCAL_ROOM_TASKS,
+        LOCAL_ROOM_TASK_LIST,
+      ],
+    });
     if (
       !isLocalRuntimeIdentity(identity) ||
       identity.instanceId !== descriptor.instanceId ||
       identity.profileId !== descriptor.profileId
     )
       throw Error('identity_mismatch');
+    if (
+      identity.capabilities.some((capability) => capability.startsWith('plugin.')) &&
+      !identity.capabilities.includes(LOCAL_PLUGIN_SESSION_AUTHORITY)
+    )
+      throw Error('plugin_runtime_upgrade_required');
     return {
       identity,
+      ...localRoomTasksClient(peer.request.bind(peer), identity),
+      ...localServiceClient(peer.request.bind(peer), identity),
+      ...localModelConnectionsClient(peer.request.bind(peer), identity),
       ...localRestoreClient(peer.request.bind(peer)),
       ...localDesktopClient((method, params) => peer.request(method, params)),
       ...localProfileClient(peer.request.bind(peer)),

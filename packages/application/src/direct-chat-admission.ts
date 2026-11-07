@@ -1,3 +1,4 @@
+import { admitRoomModelTransfer } from './room-model-policy.js';
 import {
   conversationFailure,
   ok,
@@ -7,6 +8,8 @@ import {
   type ConversationMessage,
   type ConversationResult,
 } from '@runnets/domain';
+import type { ProviderActivation, ProviderActivationPort } from './model-activation-types.js';
+import { freezeModelActivation } from './model-activation-snapshot.js';
 import type { ConversationStore } from './conversation-ports.js';
 import { providerAdmits } from './provider-admission.js';
 import type { ConversationServiceDeps } from './conversations.js';
@@ -23,15 +26,27 @@ export interface DirectChatRequest {
   readonly to?: string | undefined;
 }
 export type ChatAdmissionMode = 'admit' | 'existing_only';
-export type ChatAdmission =
+export type ChatProviderSource =
+  | { readonly resolver: ProviderActivationPort; readonly provider?: never }
+  | { readonly provider: ProviderPort | null; readonly resolver?: never };
+type DurableAdmission =
   | { readonly turn: ChatTurn; readonly fresh: boolean; readonly messages: readonly ChatMessage[] }
+  | { readonly record: ConversationMessage };
+export type ChatAdmission =
+  | { readonly turn: ChatTurn; readonly fresh: false; readonly messages: readonly ChatMessage[] }
+  | {
+      readonly turn: ChatTurn;
+      readonly fresh: true;
+      readonly messages: readonly ChatMessage[];
+      readonly provider: ProviderPort;
+    }
   | { readonly record: ConversationMessage };
 
 /** Bind a user request and its sole selected recipient before admitting any model dispatch. */
 export function admitChat(
   deps: ConversationServiceDeps,
   request: DirectChatRequest,
-  provider: ProviderPort | null,
+  source: ProviderPort | null | ChatProviderSource,
   policy: { readonly mode: ChatAdmissionMode; readonly codingAvailable: boolean },
 ): ConversationResult<ChatAdmission> {
   if (
@@ -51,7 +66,23 @@ export function admitChat(
     ...(request.to === undefined ? [] : [request.to]),
     ...(request.taskId === undefined ? [] : [{ codingTaskId: request.taskId }]),
   ]);
-  return deps.store.atomic((tx) => {
+  const mode =
+    source !== null && ('resolver' in source || 'provider' in source)
+      ? source
+      : { provider: source };
+  const hasResolver = 'resolver' in mode,
+    hasProvider = 'provider' in mode;
+  if (
+    hasResolver === hasProvider ||
+    (hasResolver && typeof mode.resolver?.resolve !== 'function') ||
+    (hasProvider && mode.provider === undefined)
+  )
+    return conversationFailure('invalid_input');
+  const captured: {
+    value: { id: string; provider: ProviderPort; activation?: ProviderActivation } | null;
+  } = { value: null };
+  const result = deps.store.atomic<ConversationResult<DurableAdmission>>((tx) => {
+    captured.value = null;
     const receipt = tx.receipt(request.requestId);
     if (receipt !== null) {
       if (receipt.binding !== binding) return conversationFailure('request_conflict');
@@ -101,10 +132,27 @@ export function admitChat(
     }
     // A durable batch holds the room between its children; only Notes stay available.
     if (tx.broadcastBatchForRoom(room.id) !== null) return conversationFailure('batch_open');
+    if (tx.roomTasks?.roomHold(room.id)) return conversationFailure('room_busy');
     const active = tx.activeChatTurn(room.id);
     if (active !== null)
       return conversationFailure(active.status === 'uncertain' ? 'recovery_required' : 'room_busy');
-    if (!providerAdmits(provider, selected)) return conversationFailure('provider_unavailable');
+    const admittedAt = deps.clock.now().toISOString();
+    const modelBinding = tx.modelBinding(selected.id);
+    let activation: ProviderActivation | undefined;
+    if (mode.resolver !== undefined) {
+      if (modelBinding === null) return conversationFailure('provider_unavailable');
+      const resolved = mode.resolver.resolve({ bot: selected, binding: modelBinding }, admittedAt);
+      if (!resolved.ok) return resolved;
+      activation = {
+        provider: resolved.value.provider,
+        snapshot: freezeModelActivation(resolved.value.snapshot),
+      };
+    }
+    const transfer = admitRoomModelTransfer(tx, room.id, activation?.snapshot.identity);
+    if (!transfer.ok) return transfer;
+    const provider = activation?.provider ?? mode.provider ?? null;
+    if (!providerAdmits(provider, selected, activation?.snapshot))
+      return conversationFailure('provider_unavailable');
     const id = deps.nextId();
     const messageId = deps.nextId();
     const seq = tx.nextSequence(room.id);
@@ -120,6 +168,7 @@ export function admitChat(
       provider,
       model: selected.model,
       messages: context.value,
+      ...(activation === undefined ? {} : { capabilities: activation.snapshot.capabilities }),
     });
     if (!images.ok) return images;
     const turn: ChatTurn = {
@@ -132,6 +181,8 @@ export function admitChat(
       inboundMessageId: messageId,
       readThroughSeq: seq,
       bot: selected,
+      ...(modelBinding === null ? {} : { modelBinding: { ...modelBinding } }),
+      ...(activation === undefined ? {} : { activation: activation.snapshot }),
       status: 'accepted',
       text: '',
       preparedVersion: null,
@@ -145,18 +196,36 @@ export function admitChat(
       author: 'user',
       targetBotId: selected.id,
       body: request.text,
-      createdAt: deps.clock.now().toISOString(),
+      createdAt: admittedAt,
     });
     tx.putChatTurn(turn);
     tx.putReceipt(request.requestId, { binding, reply: { kind: 'turn', data: turn } });
+    captured.value = { id: turn.id, provider, ...(activation === undefined ? {} : { activation }) };
     return ok({ turn, fresh: true, messages: context.value });
   });
+  if (!result.ok) return result;
+  if ('record' in result.value) return ok(result.value);
+  if (!result.value.fresh) return ok({ ...result.value, fresh: false });
+  const capture = captured.value;
+  if (
+    !capture ||
+    capture.id !== result.value.turn.id ||
+    JSON.stringify(capture.activation?.snapshot) !== JSON.stringify(result.value.turn.activation)
+  )
+    throw Error('missing committed activation capture');
+  const turn =
+    capture.activation === undefined
+      ? result.value.turn
+      : { ...result.value.turn, activation: capture.activation.snapshot };
+  return ok({ ...result.value, turn, fresh: true, provider: capture.provider });
 }
 /** Update only a matching durable phase. Late results cannot release another turn. */
 export function updateChat(store: ConversationStore, expected: ChatTurn, next: ChatTurn): void {
   store.atomic((tx) => {
     const current = tx.chatTurn(expected.id);
     if (
+      (expected.roomDelivery !== undefined &&
+        JSON.stringify(current) !== JSON.stringify(expected)) ||
       current?.status !== expected.status ||
       current?.continuationReviewId !== expected.continuationReviewId
     )

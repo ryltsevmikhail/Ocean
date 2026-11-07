@@ -1,0 +1,968 @@
+{
+  "base": "79edcaa9132865e270f39329a98e2ba0d11e5082",
+  "provenance": "BASE build migrates unchanged genuine27 synthetic populated fixture to actual schema28",
+  "schema": [
+    {
+      "type": "index",
+      "name": "ocean_broadcast_open",
+      "sql": "CREATE UNIQUE INDEX ocean_broadcast_open ON ocean_broadcast_batches(room_id)\n      WHERE state IN ('open','paused')"
+    },
+    {
+      "type": "index",
+      "name": "ocean_chat_broadcast",
+      "sql": "CREATE INDEX ocean_chat_broadcast ON ocean_chat_turns(json_extract(payload,'$.broadcast.batchId'))\n      WHERE json_extract(payload,'$.broadcast.version')=1"
+    },
+    {
+      "type": "index",
+      "name": "ocean_chat_room_hold",
+      "sql": "CREATE UNIQUE INDEX ocean_chat_room_hold ON ocean_chat_turns(room_id)\n    WHERE status IN ('accepted','dispatching','prepared','uncertain') AND review_id IS NULL\n      AND json_extract(payload,'$.roomDelivery') IS NULL"
+    },
+    {
+      "type": "index",
+      "name": "ocean_coding_finalization_hold",
+      "sql": "CREATE UNIQUE INDEX ocean_coding_finalization_hold ON ocean_coding_finalizations(task_id)\n   WHERE state IN ('preview','finalizing','finalized','uncertain')"
+    },
+    {
+      "type": "index",
+      "name": "ocean_coding_project_hold",
+      "sql": "CREATE UNIQUE INDEX ocean_coding_project_hold ON ocean_coding_tasks(project_root) WHERE status='reserved'"
+    },
+    {
+      "type": "index",
+      "name": "ocean_decision_revision",
+      "sql": "CREATE INDEX ocean_decision_revision ON ocean_owner_decisions(revision)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_decisions_by_room",
+      "sql": "CREATE INDEX ocean_decisions_by_room ON ocean_owner_decisions(workspaceId,roomId,decisionId)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_decisions_by_run",
+      "sql": "CREATE INDEX ocean_decisions_by_run ON ocean_owner_decisions(workspaceId,roomId,runId,status)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_evidence_preset",
+      "sql": "CREATE INDEX ocean_evidence_preset\n    ON ocean_coding_test_evidence(task_id,json_extract(payload,'$.presetId'))"
+    },
+    {
+      "type": "index",
+      "name": "ocean_message_final",
+      "sql": "CREATE UNIQUE INDEX ocean_message_final ON ocean_messages(turn_id)\n    WHERE author='bot' AND author_bot_id=target_bot_id"
+    },
+    {
+      "type": "index",
+      "name": "ocean_plugin_grants_connection",
+      "sql": "CREATE INDEX ocean_plugin_grants_connection\n      ON ocean_plugin_grants(connection_id, state)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_plugin_grants_plugin",
+      "sql": "CREATE INDEX ocean_plugin_grants_plugin\n      ON ocean_plugin_grants(plugin_id, state)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_plugin_grants_scope",
+      "sql": "CREATE INDEX ocean_plugin_grants_scope\n      ON ocean_plugin_grants(workspace_id, room_id, bot_id, state)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_plugin_operations_connection",
+      "sql": "CREATE INDEX ocean_plugin_operations_connection\n      ON ocean_plugin_operations(connection_id, connection_generation)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_plugin_operations_scope",
+      "sql": "CREATE INDEX ocean_plugin_operations_scope\n      ON ocean_plugin_operations(workspace_id, room_id, bot_id, created_at DESC)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_plugin_operations_state",
+      "sql": "CREATE INDEX ocean_plugin_operations_state\n      ON ocean_plugin_operations(state, created_at DESC)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_room_assignment_result",
+      "sql": "CREATE UNIQUE INDEX ocean_room_assignment_result ON ocean_room_deliveries(from_task_id) WHERE kind='result'"
+    },
+    {
+      "type": "index",
+      "name": "ocean_room_decision_revision",
+      "sql": "CREATE INDEX ocean_room_decision_revision ON ocean_owner_decisions(workspaceId,roomId,revision)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_room_delivery_sequence",
+      "sql": "CREATE INDEX ocean_room_delivery_sequence ON ocean_room_deliveries(to_task_id,seq)"
+    },
+    {
+      "type": "index",
+      "name": "ocean_room_delivery_turn",
+      "sql": "CREATE UNIQUE INDEX ocean_room_delivery_turn ON ocean_chat_turns(json_extract(payload,'$.roomDelivery.deliveryId'))\n    WHERE json_extract(payload,'$.roomDelivery') IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "ocean_room_task_hold",
+      "sql": "CREATE UNIQUE INDEX ocean_room_task_hold ON ocean_chat_turns(json_extract(payload,'$.roomDelivery.taskId'))\n    WHERE status IN ('accepted','dispatching','prepared','uncertain') AND json_extract(payload,'$.roomDelivery') IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "ocean_room_task_roots",
+      "sql": "CREATE INDEX ocean_room_task_roots ON ocean_room_tasks(workspace_id,room_id,root_id)"
+    },
+    {
+      "type": "table",
+      "name": "checkpoints",
+      "sql": "CREATE TABLE checkpoints (\n  aggregate_id TEXT NOT NULL,\n  event_position INTEGER NOT NULL,\n  schema_version INTEGER NOT NULL,\n  snapshot TEXT,\n  PRIMARY KEY (aggregate_id, event_position),\n  CHECK (event_position >= 1),\n  FOREIGN KEY (aggregate_id, event_position) REFERENCES events (aggregate_id, sequence)\n) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "command_receipts",
+      "sql": "CREATE TABLE command_receipts (\n  command_id TEXT PRIMARY KEY,\n  aggregate_id TEXT NOT NULL,\n  version INTEGER NOT NULL,\n  events TEXT NOT NULL\n, request_binding TEXT) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "events",
+      "sql": "CREATE TABLE events (\n  aggregate_id TEXT NOT NULL,\n  sequence INTEGER NOT NULL,\n  event_id TEXT NOT NULL,\n  aggregate_type TEXT NOT NULL,\n  type TEXT NOT NULL,\n  schema_version INTEGER NOT NULL,\n  timestamp TEXT NOT NULL,\n  causation_id TEXT,\n  correlation_id TEXT NOT NULL,\n  actor_kind TEXT NOT NULL,\n  actor_id TEXT NOT NULL,\n  sensitivity TEXT NOT NULL,\n  payload TEXT NOT NULL,\n  PRIMARY KEY (aggregate_id, sequence),\n  CHECK (sequence >= 1)\n) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "meta",
+      "sql": "CREATE TABLE meta (\n  key TEXT PRIMARY KEY,\n  value TEXT NOT NULL\n) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_bot_model_bindings",
+      "sql": "CREATE TABLE ocean_bot_model_bindings (\n      bot_id TEXT PRIMARY KEY REFERENCES ocean_bots(id),\n      connection_id TEXT NOT NULL REFERENCES ocean_model_connections(connection_id),\n      model_id TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_bots",
+      "sql": "CREATE TABLE ocean_bots (\n      id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES ocean_workspace(id),\n      handle TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL,\n      provider TEXT NOT NULL, model TEXT NOT NULL,\n      profile_version INTEGER NOT NULL CHECK(profile_version >= 1),\n      UNIQUE(workspace_id,handle), UNIQUE(workspace_id,id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_broadcast_batches",
+      "sql": "CREATE TABLE ocean_broadcast_batches (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      room_id TEXT NOT NULL,\n      request_id TEXT NOT NULL UNIQUE,\n      binding TEXT NOT NULL,\n      message_id TEXT NOT NULL UNIQUE,\n      boundary_seq INTEGER NOT NULL CHECK(boundary_seq>=1),\n      recipients TEXT NOT NULL,\n      state TEXT NOT NULL CHECK(state IN ('open','paused','completed','abandoned')),\n      revision INTEGER NOT NULL CHECK(revision>=1),\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      UNIQUE(room_id,id),\n      FOREIGN KEY(workspace_id,room_id) REFERENCES ocean_rooms(workspace_id,id),\n      FOREIGN KEY(message_id) REFERENCES ocean_messages(id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_capture_receipts",
+      "sql": "CREATE TABLE ocean_capture_receipts(\n  request_id TEXT PRIMARY KEY,binding TEXT NOT NULL,hash TEXT NOT NULL REFERENCES ocean_changesets(hash)\n ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_changesets",
+      "sql": "CREATE TABLE ocean_changesets(\n  hash TEXT PRIMARY KEY,task_id TEXT NOT NULL REFERENCES ocean_coding_tasks(id),payload TEXT NOT NULL\n ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_chat_turns",
+      "sql": "CREATE TABLE \"ocean_chat_turns\" (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      room_id TEXT NOT NULL,\n      task_run_id TEXT NOT NULL UNIQUE,\n      status TEXT NOT NULL CHECK(status IN ('queued','accepted','dispatching','prepared','completed','failed','uncertain','cancelled')),\n      payload TEXT NOT NULL,\n      review_id TEXT REFERENCES ocean_reviews(id),\n      UNIQUE(room_id,id),\n      FOREIGN KEY(workspace_id,room_id) REFERENCES ocean_rooms(workspace_id,id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_coding_applications",
+      "sql": "CREATE TABLE ocean_coding_applications(id TEXT PRIMARY KEY,payload TEXT NOT NULL) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_coding_approval_claims",
+      "sql": "CREATE TABLE ocean_coding_approval_claims(\n      invocation_key TEXT PRIMARY KEY,\n      approval_id TEXT NOT NULL UNIQUE REFERENCES ocean_coding_approvals(id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_coding_approvals",
+      "sql": "CREATE TABLE ocean_coding_approvals(\n      id TEXT PRIMARY KEY,payload TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_coding_finalizations",
+      "sql": "CREATE TABLE ocean_coding_finalizations(\n   request_id TEXT PRIMARY KEY,\n   task_id TEXT NOT NULL REFERENCES ocean_coding_tasks(id),\n   project_root TEXT NOT NULL,\n   state TEXT NOT NULL CHECK(state IN ('preview','finalizing','finalized','uncertain','refused')),\n   revision INTEGER NOT NULL CHECK(revision>=1),\n   binding_digest TEXT NOT NULL,\n   payload TEXT NOT NULL\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_coding_receipts",
+      "sql": "CREATE TABLE ocean_coding_receipts(\n  request_id TEXT PRIMARY KEY,binding TEXT NOT NULL,task_id TEXT NOT NULL REFERENCES ocean_coding_tasks(id)\n ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_coding_review_requests",
+      "sql": "CREATE TABLE ocean_coding_review_requests(id TEXT PRIMARY KEY,payload TEXT NOT NULL) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_coding_review_verdicts",
+      "sql": "CREATE TABLE ocean_coding_review_verdicts(\n id TEXT PRIMARY KEY,request_id TEXT NOT NULL UNIQUE REFERENCES ocean_coding_review_requests(id),payload TEXT NOT NULL\n ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_coding_tasks",
+      "sql": "CREATE TABLE ocean_coding_tasks(\n  id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL,project_root TEXT NOT NULL,\n  owner_room_id TEXT NOT NULL,dev_bot_id TEXT NOT NULL,review_room_id TEXT NOT NULL,review_bot_id TEXT NOT NULL,\n  status TEXT NOT NULL CHECK(status IN ('reserved','cancelled','finalizing','finalized')),\n  policy_version INTEGER NOT NULL CHECK(policy_version=1),payload TEXT NOT NULL,\n  UNIQUE(workspace_id,id),\n  FOREIGN KEY(workspace_id) REFERENCES ocean_workspace(id),\n  FOREIGN KEY(owner_room_id,dev_bot_id) REFERENCES ocean_members(room_id,bot_id),\n  FOREIGN KEY(review_room_id,review_bot_id) REFERENCES ocean_members(room_id,bot_id),\n  CHECK(dev_bot_id!=review_bot_id)\n ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_coding_test_evidence",
+      "sql": "CREATE TABLE ocean_coding_test_evidence(\n id TEXT PRIMARY KEY,hash TEXT NOT NULL UNIQUE,task_id TEXT NOT NULL,payload TEXT NOT NULL\n ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_desktop_adopted",
+      "sql": "CREATE TABLE ocean_desktop_adopted(message_id TEXT PRIMARY KEY,room TEXT NOT NULL,request_id TEXT NOT NULL,body TEXT NOT NULL) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_desktop_operations",
+      "sql": "CREATE TABLE ocean_desktop_operations(id TEXT PRIMARY KEY,binding TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('started','completed')),result TEXT) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_desktop_uploads",
+      "sql": "CREATE TABLE ocean_desktop_uploads(id TEXT PRIMARY KEY,room TEXT NOT NULL,name TEXT NOT NULL,size INTEGER NOT NULL,sha256 TEXT NOT NULL,data TEXT NOT NULL) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_execution_epoch",
+      "sql": "CREATE TABLE ocean_execution_epoch (\n    singleton INTEGER PRIMARY KEY CHECK(singleton=1), request_id TEXT NOT NULL UNIQUE REFERENCES ocean_profile_rebinds(request_id)\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_members",
+      "sql": "CREATE TABLE ocean_members (\n      workspace_id TEXT NOT NULL, room_id TEXT NOT NULL, bot_id TEXT NOT NULL,\n      PRIMARY KEY(room_id,bot_id),\n      FOREIGN KEY(workspace_id,room_id) REFERENCES ocean_rooms(workspace_id,id),\n      FOREIGN KEY(workspace_id,bot_id) REFERENCES ocean_bots(workspace_id,id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_messages",
+      "sql": "CREATE TABLE \"ocean_messages\"(\n    id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL,room_id TEXT NOT NULL,\n    seq INTEGER NOT NULL CHECK(seq>=1),author TEXT NOT NULL CHECK(author IN ('user','bot')),\n    target_bot_id TEXT,body TEXT NOT NULL,created_at TEXT NOT NULL,\n    author_bot_id TEXT,turn_id TEXT,UNIQUE(room_id,seq),UNIQUE(room_id,seq,id),\n    CHECK((author='user' AND author_bot_id IS NULL AND turn_id IS NULL)\n      OR (author='bot' AND author_bot_id IS NOT NULL AND target_bot_id IS NOT NULL AND turn_id IS NOT NULL)),\n    FOREIGN KEY(workspace_id,room_id) REFERENCES ocean_rooms(workspace_id,id),\n    FOREIGN KEY(room_id,target_bot_id) REFERENCES ocean_members(room_id,bot_id),\n    FOREIGN KEY(room_id,turn_id) REFERENCES ocean_chat_turns(room_id,id)\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_model_connection_receipts",
+      "sql": "CREATE TABLE ocean_model_connection_receipts (\n      request_id TEXT PRIMARY KEY,\n      connection_id TEXT NOT NULL REFERENCES ocean_model_connections(connection_id),\n      binding TEXT NOT NULL, result TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_model_connections",
+      "sql": "CREATE TABLE ocean_model_connections (\n      connection_id TEXT PRIMARY KEY, payload TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_owner_decisions",
+      "sql": "CREATE TABLE ocean_owner_decisions (\n   decisionId TEXT PRIMARY KEY, workspaceId TEXT NOT NULL, roomId TEXT NOT NULL, runId TEXT NOT NULL,\n   kind TEXT NOT NULL, bindingDigest TEXT NOT NULL, createdAt INTEGER NOT NULL, expiresAt INTEGER NOT NULL,\n   version INTEGER NOT NULL, status TEXT NOT NULL, previewLength INTEGER NOT NULL, preview BLOB NOT NULL, revision INTEGER NOT NULL\n ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_owner_scope_grants",
+      "sql": "CREATE TABLE ocean_owner_scope_grants (\n      id TEXT PRIMARY KEY,\n      revision INTEGER NOT NULL CHECK(revision >= 1),\n      record TEXT NOT NULL CHECK(json_valid(record) AND length(CAST(record AS BLOB)) <= 65536)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_plugin_confirmations",
+      "sql": "CREATE TABLE ocean_plugin_confirmations (\n      id TEXT PRIMARY KEY,\n      connection_id TEXT NOT NULL,\n      connection_generation INTEGER NOT NULL CHECK(connection_generation >= 1),\n      state TEXT NOT NULL CHECK(state IN ('pending','revoked','consumed')),\n      created_at TEXT NOT NULL,\n      revoked_at TEXT\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_plugin_connections",
+      "sql": "CREATE TABLE ocean_plugin_connections (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      plugin_id TEXT NOT NULL,\n      plugin_version TEXT NOT NULL,\n      adapter_version TEXT NOT NULL,\n      endpoint TEXT NOT NULL,\n      credential_ref TEXT NOT NULL,\n      account_label TEXT,\n      identity TEXT,\n      identity_verified INTEGER NOT NULL CHECK(identity_verified IN (0,1)),\n      state TEXT NOT NULL CHECK(state IN ('active','disconnected')),\n      generation INTEGER NOT NULL CHECK(generation >= 1),\n      schema_digest TEXT,\n      tools TEXT,\n      consented_generation INTEGER,\n      consented_at TEXT,\n      last_discovery_at TEXT,\n      created_at TEXT NOT NULL,\n      updated_at TEXT NOT NULL,\n      UNIQUE(plugin_id, name)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_plugin_consents",
+      "sql": "CREATE TABLE ocean_plugin_consents (\n      connection_id TEXT NOT NULL,\n      generation INTEGER NOT NULL,\n      endpoint TEXT NOT NULL,\n      consented_at TEXT NOT NULL,\n      used_at TEXT,\n      PRIMARY KEY(connection_id, generation)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_plugin_grants",
+      "sql": "CREATE TABLE ocean_plugin_grants (\n      id TEXT PRIMARY KEY,\n      workspace_id TEXT NOT NULL,\n      room_id TEXT NOT NULL,\n      bot_id TEXT NOT NULL,\n      plugin_id TEXT NOT NULL,\n      connection_id TEXT NOT NULL,\n      connection_generation INTEGER NOT NULL CHECK(connection_generation >= 1),\n      tools TEXT NOT NULL,\n      repository TEXT NOT NULL,\n      schema_digest TEXT NOT NULL,\n      policy_version INTEGER NOT NULL,\n      visibility TEXT NOT NULL,\n      state TEXT NOT NULL CHECK(state IN ('active','revoked')),\n      created_at TEXT NOT NULL,\n      revoked_at TEXT,\n      CHECK((state = 'revoked') = (revoked_at IS NOT NULL))\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_plugin_operations",
+      "sql": "CREATE TABLE ocean_plugin_operations (\n      id TEXT PRIMARY KEY,\n      task_run_id TEXT NOT NULL,\n      attempt_id TEXT NOT NULL,\n      workspace_id TEXT NOT NULL,\n      room_id TEXT NOT NULL,\n      bot_id TEXT NOT NULL,\n      plugin_id TEXT NOT NULL,\n      connection_id TEXT NOT NULL,\n      connection_generation INTEGER NOT NULL CHECK(connection_generation >= 1),\n      endpoint TEXT NOT NULL,\n      tool TEXT NOT NULL,\n      repository TEXT NOT NULL,\n      schema_digest TEXT NOT NULL,\n      arguments_digest TEXT NOT NULL,\n      arguments TEXT NOT NULL,\n      state TEXT NOT NULL CHECK(state IN\n        ('started','observed','failed','not_started','uncertain','acknowledged')),\n      outcome_code TEXT,\n      detail TEXT,\n      result_summary TEXT,\n      result_bytes INTEGER,\n      truncated INTEGER NOT NULL CHECK(truncated IN (0,1)),\n      revision INTEGER NOT NULL CHECK(revision >= 1),\n      created_at TEXT NOT NULL,\n      settled_at TEXT,\n      acknowledged_at TEXT,\n      acknowledged_reason TEXT,\n      CHECK((state = 'started') = (settled_at IS NULL)),\n      CHECK((state = 'acknowledged') = (acknowledged_at IS NOT NULL))\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_plugin_versions",
+      "sql": "CREATE TABLE ocean_plugin_versions (\n      plugin_id TEXT NOT NULL,\n      version TEXT NOT NULL,\n      publisher TEXT NOT NULL,\n      title TEXT NOT NULL,\n      manifest_digest TEXT NOT NULL,\n      manifest TEXT NOT NULL,\n      adapter TEXT NOT NULL,\n      state TEXT NOT NULL CHECK(state IN ('installing','installed','interrupted','corrupt')),\n      enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),\n      file_digest TEXT,\n      installed_at TEXT NOT NULL,\n      verified_at TEXT,\n      PRIMARY KEY(plugin_id, version)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_profile_rebinds",
+      "sql": "CREATE TABLE ocean_profile_rebinds (\n    request_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, state TEXT NOT NULL, payload TEXT NOT NULL\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_provider_connections",
+      "sql": "CREATE TABLE ocean_provider_connections (\n      provider TEXT PRIMARY KEY,\n      model TEXT,\n      secret_ref TEXT,\n      intent TEXT NOT NULL CHECK(intent IN ('active','disconnected','pending')),\n      revision INTEGER NOT NULL CHECK(revision >= 1),\n      request_id TEXT,\n      binding TEXT,\n      last_check TEXT,\n      updated_at TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_provider_receipts",
+      "sql": "CREATE TABLE ocean_provider_receipts (\n      request_id TEXT PRIMARY KEY,\n      provider TEXT NOT NULL,\n      binding TEXT NOT NULL,\n      result TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_rebind_observations",
+      "sql": "CREATE TABLE ocean_rebind_observations(id TEXT PRIMARY KEY,payload TEXT NOT NULL) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_receipts",
+      "sql": "CREATE TABLE ocean_receipts (\n      request_id TEXT PRIMARY KEY, binding TEXT NOT NULL, reply TEXT NOT NULL\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_restore_origin",
+      "sql": "CREATE TABLE ocean_restore_origin (\n    singleton INTEGER PRIMARY KEY CHECK(singleton=1), payload TEXT NOT NULL\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_restore_origins",
+      "sql": "CREATE TABLE ocean_restore_origins(identity TEXT PRIMARY KEY,payload TEXT NOT NULL) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_retired_epochs",
+      "sql": "CREATE TABLE ocean_retired_epochs(identity TEXT PRIMARY KEY,payload TEXT NOT NULL) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_reviews",
+      "sql": "CREATE TABLE ocean_reviews(\n    id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL,room_id TEXT NOT NULL,\n    task_run_id TEXT NOT NULL,turn_id TEXT NOT NULL UNIQUE,notice_message_id TEXT NOT NULL UNIQUE,\n    payload TEXT NOT NULL,UNIQUE(room_id,id),\n    FOREIGN KEY(workspace_id,room_id) REFERENCES ocean_rooms(workspace_id,id),\n    FOREIGN KEY(room_id,turn_id) REFERENCES ocean_chat_turns(room_id,id),\n    FOREIGN KEY(notice_message_id) REFERENCES ocean_messages(id)\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_room_deliveries",
+      "sql": "CREATE TABLE \"ocean_room_deliveries\"(\n    id TEXT PRIMARY KEY CHECK(length(CAST(id AS BLOB)) BETWEEN 1 AND 128),\n    workspace_id TEXT NOT NULL CHECK(length(CAST(workspace_id AS BLOB)) BETWEEN 1 AND 128),room_id TEXT NOT NULL CHECK(length(CAST(room_id AS BLOB)) BETWEEN 1 AND 128),\n    root_id TEXT NOT NULL CHECK(length(CAST(root_id AS BLOB)) BETWEEN 1 AND 128),to_task_id TEXT NOT NULL CHECK(length(CAST(to_task_id AS BLOB)) BETWEEN 1 AND 128),\n    recipient_bot_id TEXT NOT NULL CHECK(length(CAST(recipient_bot_id AS BLOB)) BETWEEN 1 AND 128),cause_id TEXT NOT NULL CHECK(length(CAST(cause_id AS BLOB)) BETWEEN 1 AND 128),\n    request_key TEXT NOT NULL CHECK(length(CAST(request_key AS BLOB)) BETWEEN 1 AND 128),message_id TEXT NOT NULL CHECK(length(CAST(message_id AS BLOB)) BETWEEN 1 AND 128),\n    from_task_id TEXT CHECK(from_task_id IS NULL OR length(CAST(from_task_id AS BLOB)) BETWEEN 1 AND 128),source_turn_id TEXT CHECK(source_turn_id IS NULL OR length(CAST(source_turn_id AS BLOB)) BETWEEN 1 AND 128),sender_bot_id TEXT CHECK(sender_bot_id IS NULL OR length(CAST(sender_bot_id AS BLOB)) BETWEEN 1 AND 128),\n    kind TEXT NOT NULL CHECK(kind IN ('start','message','delegate','result')),\n    seq INTEGER NOT NULL CHECK(seq>=1),version INTEGER NOT NULL CHECK(version=1),\n    position INTEGER NOT NULL CHECK(position BETWEEN 0 AND 31),source_attempt_id TEXT CHECK(source_attempt_id IS NULL OR length(CAST(source_attempt_id AS BLOB)) BETWEEN 1 AND 128),\n    state TEXT NOT NULL CHECK(state IN ('queued','claimed','consumed','held')),\n    UNIQUE(request_key,position),UNIQUE(request_key,recipient_bot_id),UNIQUE(to_task_id,message_id),\n    CHECK((kind='start' AND cause_id=root_id AND from_task_id IS NULL AND source_turn_id IS NULL AND sender_bot_id IS NULL AND source_attempt_id IS NULL)\n      OR (kind IN ('message','delegate','result') AND position=0 AND from_task_id IS NOT NULL\n        AND source_turn_id IS NOT NULL AND sender_bot_id IS NOT NULL AND source_attempt_id IS NOT NULL)),\n    FOREIGN KEY(workspace_id,room_id,root_id,to_task_id) REFERENCES ocean_room_tasks(workspace_id,room_id,root_id,id),\n    FOREIGN KEY(workspace_id,room_id,root_id,from_task_id) REFERENCES ocean_room_tasks(workspace_id,room_id,root_id,id),\n    FOREIGN KEY(room_id,source_turn_id) REFERENCES ocean_chat_turns(room_id,id),\n    FOREIGN KEY(room_id,seq,message_id) REFERENCES ocean_messages(room_id,seq,id) DEFERRABLE INITIALLY DEFERRED,\n    FOREIGN KEY(request_key) REFERENCES ocean_receipts(request_id) DEFERRABLE INITIALLY DEFERRED\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_room_model_policies",
+      "sql": "CREATE TABLE ocean_room_model_policies(\n    room_id TEXT PRIMARY KEY REFERENCES ocean_rooms(id),\n    cloud_transfer TEXT NOT NULL CHECK(cloud_transfer IN ('allow','deny')),\n    revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991)\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_room_policies",
+      "sql": "CREATE TABLE ocean_room_policies(\n    room_id TEXT PRIMARY KEY,mode TEXT NOT NULL CHECK(mode='text_only'),\n    review_id TEXT NOT NULL UNIQUE,\n    FOREIGN KEY(room_id,review_id) REFERENCES ocean_reviews(room_id,id)\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_room_tasks",
+      "sql": "CREATE TABLE ocean_room_tasks(\n    id TEXT PRIMARY KEY CHECK(length(CAST(id AS BLOB)) BETWEEN 1 AND 128),\n    workspace_id TEXT NOT NULL CHECK(length(CAST(workspace_id AS BLOB)) BETWEEN 1 AND 128),\n    room_id TEXT NOT NULL CHECK(length(CAST(room_id AS BLOB)) BETWEEN 1 AND 128),\n    root_id TEXT NOT NULL CHECK(length(CAST(root_id AS BLOB)) BETWEEN 1 AND 128),parent_id TEXT CHECK(parent_id IS NULL OR length(CAST(parent_id AS BLOB)) BETWEEN 1 AND 128),assignee_bot_id TEXT CHECK(assignee_bot_id IS NULL OR length(CAST(assignee_bot_id AS BLOB)) BETWEEN 1 AND 128),\n    status TEXT NOT NULL CHECK(status IN ('ready','waiting','paused','completed','stopped')),\n    version INTEGER NOT NULL CHECK(version=1),revision INTEGER NOT NULL CHECK(revision>=1),\n    last_delivery_seq INTEGER NOT NULL CHECK(last_delivery_seq>=0),waiting_child_id TEXT CHECK(waiting_child_id IS NULL OR length(CAST(waiting_child_id AS BLOB)) BETWEEN 1 AND 128),\n    root_payload TEXT,\n    UNIQUE(workspace_id,room_id,root_id,id),\n    CHECK((id=root_id AND parent_id IS NULL AND assignee_bot_id IS NULL\n      AND waiting_child_id IS NULL AND last_delivery_seq=0 AND root_payload IS NOT NULL\n      AND json_valid(root_payload))\n      OR (id<>root_id AND parent_id IS NOT NULL AND parent_id<>id AND assignee_bot_id IS NOT NULL\n      AND root_payload IS NULL AND ((status='waiting')=(waiting_child_id IS NOT NULL)))),\n    FOREIGN KEY(workspace_id,room_id) REFERENCES ocean_rooms(workspace_id,id),\n    FOREIGN KEY(workspace_id,assignee_bot_id) REFERENCES ocean_bots(workspace_id,id),\n    FOREIGN KEY(workspace_id,room_id,root_id,root_id) REFERENCES ocean_room_tasks(workspace_id,room_id,root_id,id),\n    FOREIGN KEY(workspace_id,room_id,root_id,parent_id) REFERENCES ocean_room_tasks(workspace_id,room_id,root_id,id),\n    FOREIGN KEY(workspace_id,room_id,root_id,waiting_child_id) REFERENCES ocean_room_tasks(workspace_id,room_id,root_id,id)\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_rooms",
+      "sql": "CREATE TABLE \"ocean_rooms\"(\n      id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL,\n      kind TEXT NOT NULL CHECK(kind IN ('direct','group')),bot_id TEXT,title TEXT,\n      CHECK((kind='direct' AND bot_id IS NOT NULL AND title IS NULL)\n        OR (kind='group' AND bot_id IS NULL AND title IS NOT NULL)),\n      UNIQUE(workspace_id,bot_id),UNIQUE(workspace_id,id),\n      FOREIGN KEY(workspace_id) REFERENCES ocean_workspace(id),\n      FOREIGN KEY(workspace_id,bot_id) REFERENCES ocean_bots(workspace_id,id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_service_catalogs",
+      "sql": "CREATE TABLE ocean_service_catalogs (\n      id TEXT PRIMARY KEY,\n      connection_id TEXT NOT NULL REFERENCES ocean_service_connections(id),\n      record TEXT NOT NULL CHECK(json_valid(record) AND length(CAST(record AS BLOB)) <= 4194304),\n      UNIQUE(connection_id, id)\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_service_connections",
+      "sql": "CREATE TABLE ocean_service_connections (\n      id TEXT PRIMARY KEY,\n      config_revision INTEGER NOT NULL CHECK(config_revision >= 1),\n      trust_revision INTEGER NOT NULL CHECK(trust_revision >= 1),\n      credential_revision INTEGER NOT NULL CHECK(credential_revision >= 1),\n      current_catalog_id TEXT,\n      record TEXT NOT NULL CHECK(json_valid(record) AND length(CAST(record AS BLOB)) <= 65536),\n      FOREIGN KEY(id, current_catalog_id) REFERENCES ocean_service_catalogs(connection_id, id)\n        DEFERRABLE INITIALLY DEFERRED\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_service_owner_receipts",
+      "sql": "CREATE TABLE ocean_service_owner_receipts (\n    request_id TEXT PRIMARY KEY CHECK(length(request_id) BETWEEN 1 AND 128),\n    owner_id TEXT NOT NULL CHECK(length(owner_id) BETWEEN 1 AND 128),\n    state TEXT NOT NULL CHECK(state IN ('prepared','completed')),\n    record TEXT NOT NULL CHECK(json_valid(record) AND length(CAST(record AS BLOB)) <= 131072)\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_workspace",
+      "sql": "CREATE TABLE ocean_workspace (\n      singleton INTEGER PRIMARY KEY CHECK(singleton = 1),\n      id TEXT NOT NULL UNIQUE, root TEXT NOT NULL UNIQUE\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "ocean_worktrees",
+      "sql": "CREATE TABLE ocean_worktrees(\n  task_id TEXT PRIMARY KEY REFERENCES ocean_coding_tasks(id),root TEXT NOT NULL UNIQUE,\n  state TEXT NOT NULL CHECK(state IN ('preparing','ready','uncertain')),payload TEXT NOT NULL\n ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "tool_effect_resolutions_v1",
+      "sql": "CREATE TABLE tool_effect_resolutions_v1 (\n    id TEXT NOT NULL, task_run_id TEXT NOT NULL, attempt_id TEXT NOT NULL,\n    fingerprint TEXT NOT NULL, payload TEXT NOT NULL,\n    PRIMARY KEY(task_run_id,attempt_id,id)\n  ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "tool_invocations_v1",
+      "sql": "CREATE TABLE tool_invocations_v1 (\n      id TEXT PRIMARY KEY, tool TEXT NOT NULL,\n      outcome TEXT NOT NULL CHECK(outcome IN ('started', 'completed', 'failed', 'uncertain'))\n    ) STRICT"
+    },
+    {
+      "type": "table",
+      "name": "tool_invocations_v2",
+      "sql": "CREATE TABLE tool_invocations_v2 (\n      id TEXT NOT NULL, tool TEXT NOT NULL, task_run_id TEXT NOT NULL,\n      attempt_id TEXT NOT NULL, fingerprint TEXT NOT NULL,\n      outcome TEXT NOT NULL CHECK(outcome IN\n        ('started', 'completed', 'failed', 'uncertain', 'not_started')),\n      admission TEXT CHECK(admission IS NULL OR (json_valid(admission) AND length(CAST(admission AS BLOB)) <= 2097152)),\n      PRIMARY KEY(task_run_id, attempt_id, id)\n    ) STRICT"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_addressed_message",
+      "sql": "CREATE TRIGGER ocean_addressed_message BEFORE INSERT ON ocean_messages\n  WHEN NEW.author='bot' AND NEW.author_bot_id<>NEW.target_bot_id AND NOT EXISTS(\n    SELECT 1 FROM ocean_room_deliveries d JOIN ocean_chat_turns c ON c.id=d.source_turn_id\n    JOIN ocean_room_deliveries i ON i.id=d.cause_id\n    WHERE d.message_id=NEW.id AND d.seq=NEW.seq AND d.room_id=NEW.room_id\n      AND d.workspace_id=NEW.workspace_id AND d.sender_bot_id=NEW.author_bot_id\n      AND d.recipient_bot_id=NEW.target_bot_id AND d.source_turn_id=NEW.turn_id\n      AND d.kind IN ('message','delegate')\n      AND json_extract(c.payload,'$.roomDelivery.deliveryId')=i.id\n      AND json_extract(c.payload,'$.roomDelivery.taskId')=d.from_task_id\n      AND i.to_task_id=d.from_task_id AND i.root_id=d.root_id)\n  BEGIN SELECT RAISE(ABORT,'addressed message requires delivery'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_direct_member",
+      "sql": "CREATE TRIGGER ocean_direct_member BEFORE INSERT ON ocean_members\n    WHEN (SELECT kind FROM ocean_rooms WHERE id=NEW.room_id)='direct'\n      AND NEW.bot_id!=(SELECT bot_id FROM ocean_rooms WHERE id=NEW.room_id)\n    BEGIN SELECT RAISE(ABORT,'direct room member mismatch'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_direct_target",
+      "sql": "CREATE TRIGGER ocean_direct_target BEFORE INSERT ON ocean_messages\n    WHEN (SELECT kind FROM ocean_rooms WHERE id=NEW.room_id)='direct' AND NEW.target_bot_id IS NULL\n    BEGIN SELECT RAISE(ABORT,'direct message requires a target'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_message_immutable",
+      "sql": "CREATE TRIGGER ocean_message_immutable BEFORE UPDATE ON ocean_messages\n    WHEN NEW.id IS NOT OLD.id OR NEW.workspace_id IS NOT OLD.workspace_id OR NEW.room_id IS NOT OLD.room_id\n      OR NEW.seq IS NOT OLD.seq OR NEW.author IS NOT OLD.author OR NEW.target_bot_id IS NOT OLD.target_bot_id\n      OR NEW.body IS NOT OLD.body OR NEW.created_at IS NOT OLD.created_at\n      OR NEW.author_bot_id IS NOT OLD.author_bot_id OR NEW.turn_id IS NOT OLD.turn_id\n    BEGIN SELECT RAISE(ABORT,'immutable conversation message'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_review_immutable",
+      "sql": "CREATE TRIGGER ocean_review_immutable BEFORE UPDATE OF review_id ON ocean_chat_turns\n      WHEN OLD.review_id IS NOT NULL AND NEW.review_id IS NOT OLD.review_id\n      BEGIN SELECT RAISE(ABORT,'continuation review is immutable'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_review_turn",
+      "sql": "CREATE TRIGGER ocean_review_turn BEFORE UPDATE OF review_id ON ocean_chat_turns\n      WHEN NEW.review_id IS NOT NULL AND NOT EXISTS(\n        SELECT 1 FROM ocean_reviews WHERE id=NEW.review_id AND turn_id=NEW.id AND room_id=NEW.room_id)\n      BEGIN SELECT RAISE(ABORT,'continuation review has wrong turn'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_delivery_immutable",
+      "sql": "CREATE TRIGGER ocean_room_delivery_immutable BEFORE UPDATE ON ocean_room_deliveries\n  WHEN NEW.id IS NOT OLD.id OR NEW.workspace_id IS NOT OLD.workspace_id OR NEW.room_id IS NOT OLD.room_id\n    OR NEW.root_id IS NOT OLD.root_id OR NEW.to_task_id IS NOT OLD.to_task_id\n    OR NEW.recipient_bot_id IS NOT OLD.recipient_bot_id OR NEW.cause_id IS NOT OLD.cause_id\n    OR NEW.request_key IS NOT OLD.request_key OR NEW.message_id IS NOT OLD.message_id\n    OR NEW.from_task_id IS NOT OLD.from_task_id OR NEW.source_turn_id IS NOT OLD.source_turn_id\n    OR NEW.sender_bot_id IS NOT OLD.sender_bot_id OR NEW.kind IS NOT OLD.kind OR NEW.seq IS NOT OLD.seq\n    OR NEW.version IS NOT OLD.version OR NEW.position IS NOT OLD.position OR NEW.source_attempt_id IS NOT OLD.source_attempt_id\n  BEGIN SELECT RAISE(ABORT,'immutable room delivery'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_delivery_target",
+      "sql": "CREATE TRIGGER ocean_room_delivery_target BEFORE INSERT ON ocean_room_deliveries\n    WHEN (NEW.kind<>'result' AND (NOT EXISTS(SELECT 1 FROM ocean_room_tasks t WHERE t.id=NEW.to_task_id\n    AND t.workspace_id=NEW.workspace_id AND t.room_id=NEW.room_id AND t.root_id=NEW.root_id\n    AND t.assignee_bot_id=NEW.recipient_bot_id\n    AND t.parent_id=CASE WHEN NEW.kind='start' THEN NEW.root_id ELSE NEW.from_task_id END)\n    OR (NEW.kind<>'start' AND NOT EXISTS(\n      SELECT 1 FROM ocean_room_tasks s JOIN ocean_chat_turns c ON c.id=NEW.source_turn_id\n      JOIN ocean_room_deliveries i ON i.id=NEW.cause_id\n      WHERE s.id=NEW.from_task_id AND s.assignee_bot_id=NEW.sender_bot_id\n        AND s.workspace_id=NEW.workspace_id AND s.room_id=NEW.room_id AND s.root_id=NEW.root_id\n        AND c.workspace_id=NEW.workspace_id AND c.room_id=NEW.room_id\n        AND json_extract(c.payload,'$.roomDelivery.taskId')=s.id\n        AND json_extract(c.payload,'$.roomDelivery.deliveryId')=i.id\n        AND json_extract(c.payload,'$.bot.id')=NEW.sender_bot_id\n        AND i.to_task_id=s.id AND i.root_id=NEW.root_id)))) OR (NEW.kind='result' AND NOT EXISTS(\n      SELECT 1 FROM ocean_room_deliveries edge\n      JOIN ocean_room_tasks p ON p.id=edge.from_task_id\n      JOIN ocean_room_tasks b ON b.id=edge.to_task_id\n      JOIN ocean_chat_turns yielded ON yielded.id=edge.source_turn_id\n      JOIN ocean_chat_turns final ON final.id=NEW.source_turn_id\n      JOIN ocean_room_deliveries input ON input.id=json_extract(final.payload,'$.roomDelivery.deliveryId')\n      JOIN ocean_messages m ON m.id=NEW.message_id\n      WHERE edge.id=NEW.cause_id AND edge.kind='delegate' AND edge.root_id=NEW.root_id\n      AND p.id=NEW.to_task_id AND p.waiting_child_id=b.id AND p.status='waiting'\n      AND b.id=NEW.from_task_id AND b.status='completed' AND b.parent_id=p.id AND b.assignee_bot_id=NEW.sender_bot_id\n      AND p.assignee_bot_id=NEW.recipient_bot_id AND b.root_id=p.root_id AND b.root_id=NEW.root_id\n      AND p.workspace_id=NEW.workspace_id AND p.room_id=NEW.room_id\n      AND b.workspace_id=NEW.workspace_id AND b.room_id=NEW.room_id\n      AND edge.workspace_id=NEW.workspace_id AND edge.room_id=NEW.room_id\n      AND yielded.status='completed' AND json_extract(yielded.payload,'$.roomSliceDisposition')='yielded'\n      AND json_extract(yielded.payload,'$.roomHandoff.deliveryId')=edge.id\n      AND json_extract(yielded.payload,'$.roomHandoff.childTaskId')=b.id\n      AND json_extract(final.payload,'$.roomDelivery.taskId')=b.id\n      AND final.workspace_id=NEW.workspace_id AND final.room_id=NEW.room_id\n      AND input.to_task_id=b.id AND input.root_id=b.root_id AND input.state='consumed'\n      AND m.id='reply_'||final.id AND m.seq=NEW.seq AND m.turn_id=final.id\n      AND m.workspace_id=NEW.workspace_id AND m.room_id=NEW.room_id\n      AND m.author='bot' AND m.author_bot_id=b.assignee_bot_id AND m.target_bot_id=b.assignee_bot_id\n      AND m.body=json_extract(final.payload,'$.text') AND final.status='completed'\n      AND EXISTS(SELECT 1 FROM events e WHERE e.aggregate_id=final.task_run_id AND e.type='task_run.succeeded'\n        AND e.sequence=(SELECT max(sequence) FROM events WHERE aggregate_id=final.task_run_id)\n        AND json_extract(e.payload,'$.attemptId')=NEW.source_attempt_id\n        AND e.causation_id='cm_'||final.task_run_id||'_Complete_'||(json_extract(final.payload,'$.preparedVersion')+1))\n      AND json_extract(final.payload,'$.roomSliceDisposition') IS NULL))\n    BEGIN SELECT RAISE(ABORT,'invalid room delivery lineage'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_no_handoff_final",
+      "sql": "CREATE TRIGGER ocean_room_no_handoff_final BEFORE INSERT ON ocean_messages\n    WHEN NEW.author='bot' AND NEW.author_bot_id=NEW.target_bot_id AND EXISTS(\n      SELECT 1 FROM ocean_chat_turns c WHERE c.id=NEW.turn_id\n      AND json_extract(c.payload,'$.roomHandoff') IS NOT NULL)\n    BEGIN SELECT RAISE(ABORT,'handoff cannot publish final'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_proof_immutable",
+      "sql": "CREATE TRIGGER ocean_room_proof_immutable BEFORE UPDATE ON ocean_chat_turns\n    WHEN (json_type(OLD.payload,'$.roomHandoff') IS NOT NULL AND json_extract(NEW.payload,'$.roomHandoff') IS NOT json_extract(OLD.payload,'$.roomHandoff'))\n    OR (json_extract(OLD.payload,'$.roomDelivery') IS NOT NULL\n      AND json_extract(OLD.payload,'$.roomHandoff') IS NULL AND OLD.status IN ('prepared','completed')\n      AND (json_extract(NEW.payload,'$.text') IS NOT json_extract(OLD.payload,'$.text')\n        OR json_extract(NEW.payload,'$.preparedVersion') IS NOT json_extract(OLD.payload,'$.preparedVersion')\n        OR json_extract(NEW.payload,'$.stopReason') IS NOT json_extract(OLD.payload,'$.stopReason')))\n    OR (json_type(OLD.payload,'$.roomSliceDisposition') IS NOT NULL AND json_extract(NEW.payload,'$.roomSliceDisposition') IS NOT json_extract(OLD.payload,'$.roomSliceDisposition'))\n    BEGIN SELECT RAISE(ABORT,'immutable room proof'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_slice_insert",
+      "sql": "CREATE TRIGGER ocean_room_slice_insert BEFORE INSERT ON ocean_chat_turns\n    WHEN (json_type(NEW.payload,'$.roomDelivery') IS NOT NULL AND (\n      json_type(NEW.payload,'$.roomDelivery') IS NOT 'object'\n      OR (SELECT count(*) FROM json_each(NEW.payload,'$.roomDelivery'))<>3\n      OR EXISTS(SELECT 1 FROM json_each(NEW.payload,'$.roomDelivery') WHERE key NOT IN ('version','taskId','deliveryId'))\n      OR json_type(NEW.payload,'$.roomDelivery.version') IS NOT 'integer'\n      OR json_extract(NEW.payload,'$.roomDelivery.version') IS NOT 1\n      OR json_type(NEW.payload,'$.roomDelivery.taskId') IS NOT 'text'\n      OR json_type(NEW.payload,'$.roomDelivery.deliveryId') IS NOT 'text'))\n    OR (json_type(NEW.payload,'$.roomHandoff') IS NOT NULL AND (\n      json_type(NEW.payload,'$.roomHandoff') IS NOT 'object'\n      OR (SELECT count(*) FROM json_each(NEW.payload,'$.roomHandoff'))<>8\n      OR EXISTS(SELECT 1 FROM json_each(NEW.payload,'$.roomHandoff') WHERE key NOT IN ('version','turnId','taskRunId','attemptId','callId','childTaskId','deliveryId','expectedRunVersion'))\n      OR json_type(NEW.payload,'$.roomHandoff.expectedRunVersion') IS NOT 'integer'\n      OR json_extract(NEW.payload,'$.roomHandoff.expectedRunVersion') NOT BETWEEN 1 AND 9007199254740990\n      OR json_type(NEW.payload,'$.roomHandoff.callId') IS NOT 'text'\n      OR length(CAST(json_extract(NEW.payload,'$.roomHandoff.callId') AS BLOB)) NOT BETWEEN 1 AND 512\n      OR NEW.status NOT IN ('dispatching','uncertain','completed')\n      OR (NEW.status='completed' AND json_extract(NEW.payload,'$.roomSliceDisposition') IS NOT 'yielded')\n      OR json_type(NEW.payload,'$.roomDelivery.version') IS NOT 'integer'\n      OR json_extract(NEW.payload,'$.roomDelivery.version') IS NOT 1\n      OR json_type(NEW.payload,'$.roomHandoff.version') IS NOT 'integer'\n      OR json_extract(NEW.payload,'$.roomHandoff.version') IS NOT 1\n      OR json_extract(NEW.payload,'$.roomHandoff.turnId') IS NOT NEW.id\n      OR json_extract(NEW.payload,'$.roomHandoff.taskRunId') IS NOT NEW.task_run_id\n      OR NOT EXISTS(SELECT 1 FROM ocean_room_deliveries d JOIN ocean_room_tasks t ON t.id=d.from_task_id\n        WHERE d.id=json_extract(NEW.payload,'$.roomHandoff.deliveryId') AND d.kind='delegate'\n        AND d.source_turn_id=NEW.id AND d.source_attempt_id=json_extract(NEW.payload,'$.roomHandoff.attemptId')\n        AND d.to_task_id=json_extract(NEW.payload,'$.roomHandoff.childTaskId')\n        AND d.from_task_id=json_extract(NEW.payload,'$.roomDelivery.taskId')\n        AND d.cause_id=json_extract(NEW.payload,'$.roomDelivery.deliveryId'))))\n      OR (json_extract(NEW.payload,'$.roomDelivery') IS NOT NULL AND NEW.status='completed'\n        AND json_type(NEW.payload,'$.roomSliceDisposition') IS NULL AND (\n          json_extract(NEW.payload,'$.roomHandoff') IS NOT NULL\n          OR json_type(NEW.payload,'$.preparedVersion') IS NOT 'integer'\n          OR json_extract(NEW.payload,'$.preparedVersion')<1\n          OR json_type(NEW.payload,'$.text') IS NOT 'text'\n          OR json_extract(NEW.payload,'$.stopReason') NOT IN ('end_turn','max_tokens')\n          OR NOT EXISTS(SELECT 1 FROM ocean_chat_turns old WHERE old.id=NEW.id\n            AND old.status IN ('prepared','completed') AND old.workspace_id=NEW.workspace_id AND old.room_id=NEW.room_id\n            AND old.task_run_id=NEW.task_run_id AND json_extract(old.payload,'$.text')=json_extract(NEW.payload,'$.text')\n            AND json_extract(old.payload,'$.preparedVersion')=json_extract(NEW.payload,'$.preparedVersion')\n            AND json_extract(old.payload,'$.stopReason')=json_extract(NEW.payload,'$.stopReason'))\n          OR NOT EXISTS(SELECT 1 FROM events e WHERE e.aggregate_id=NEW.task_run_id AND e.type='task_run.succeeded'\n            AND e.sequence=json_extract(NEW.payload,'$.preparedVersion')+1\n            AND e.sequence=(SELECT max(sequence) FROM events WHERE aggregate_id=NEW.task_run_id))\n          OR NOT EXISTS(SELECT 1 FROM ocean_messages m WHERE m.id='reply_'||NEW.id AND m.turn_id=NEW.id\n            AND m.workspace_id=NEW.workspace_id AND m.room_id=NEW.room_id AND m.seq>json_extract(NEW.payload,'$.readThroughSeq')\n            AND m.author='bot' AND m.author_bot_id=json_extract(NEW.payload,'$.bot.id') AND m.target_bot_id=m.author_bot_id\n            AND m.body=json_extract(NEW.payload,'$.text'))))\n      OR (json_type(NEW.payload,'$.roomSliceDisposition') IS NOT NULL AND (\n        json_extract(NEW.payload,'$.roomSliceDisposition') IS NOT 'yielded' OR NEW.status IS NOT 'completed'\n        OR json_type(NEW.payload,'$.roomHandoff') IS NULL OR json_extract(NEW.payload,'$.text') IS NOT ''\n        OR json_type(NEW.payload,'$.preparedVersion') IS NOT 'null'))\n    BEGIN SELECT RAISE(ABORT,'invalid room slice'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_slice_update",
+      "sql": "CREATE TRIGGER ocean_room_slice_update BEFORE UPDATE ON ocean_chat_turns\n    WHEN (json_type(NEW.payload,'$.roomDelivery') IS NOT NULL AND (\n      json_type(NEW.payload,'$.roomDelivery') IS NOT 'object'\n      OR (SELECT count(*) FROM json_each(NEW.payload,'$.roomDelivery'))<>3\n      OR EXISTS(SELECT 1 FROM json_each(NEW.payload,'$.roomDelivery') WHERE key NOT IN ('version','taskId','deliveryId'))\n      OR json_type(NEW.payload,'$.roomDelivery.version') IS NOT 'integer'\n      OR json_extract(NEW.payload,'$.roomDelivery.version') IS NOT 1\n      OR json_type(NEW.payload,'$.roomDelivery.taskId') IS NOT 'text'\n      OR json_type(NEW.payload,'$.roomDelivery.deliveryId') IS NOT 'text'))\n    OR (json_type(NEW.payload,'$.roomHandoff') IS NOT NULL AND (\n      json_type(NEW.payload,'$.roomHandoff') IS NOT 'object'\n      OR (SELECT count(*) FROM json_each(NEW.payload,'$.roomHandoff'))<>8\n      OR EXISTS(SELECT 1 FROM json_each(NEW.payload,'$.roomHandoff') WHERE key NOT IN ('version','turnId','taskRunId','attemptId','callId','childTaskId','deliveryId','expectedRunVersion'))\n      OR json_type(NEW.payload,'$.roomHandoff.expectedRunVersion') IS NOT 'integer'\n      OR json_extract(NEW.payload,'$.roomHandoff.expectedRunVersion') NOT BETWEEN 1 AND 9007199254740990\n      OR json_type(NEW.payload,'$.roomHandoff.callId') IS NOT 'text'\n      OR length(CAST(json_extract(NEW.payload,'$.roomHandoff.callId') AS BLOB)) NOT BETWEEN 1 AND 512\n      OR NEW.status NOT IN ('dispatching','uncertain','completed')\n      OR (NEW.status='completed' AND json_extract(NEW.payload,'$.roomSliceDisposition') IS NOT 'yielded')\n      OR json_type(NEW.payload,'$.roomDelivery.version') IS NOT 'integer'\n      OR json_extract(NEW.payload,'$.roomDelivery.version') IS NOT 1\n      OR json_type(NEW.payload,'$.roomHandoff.version') IS NOT 'integer'\n      OR json_extract(NEW.payload,'$.roomHandoff.version') IS NOT 1\n      OR json_extract(NEW.payload,'$.roomHandoff.turnId') IS NOT NEW.id\n      OR json_extract(NEW.payload,'$.roomHandoff.taskRunId') IS NOT NEW.task_run_id\n      OR NOT EXISTS(SELECT 1 FROM ocean_room_deliveries d JOIN ocean_room_tasks t ON t.id=d.from_task_id\n        WHERE d.id=json_extract(NEW.payload,'$.roomHandoff.deliveryId') AND d.kind='delegate'\n        AND d.source_turn_id=NEW.id AND d.source_attempt_id=json_extract(NEW.payload,'$.roomHandoff.attemptId')\n        AND d.to_task_id=json_extract(NEW.payload,'$.roomHandoff.childTaskId')\n        AND d.from_task_id=json_extract(NEW.payload,'$.roomDelivery.taskId')\n        AND d.cause_id=json_extract(NEW.payload,'$.roomDelivery.deliveryId'))))\n      OR (json_extract(NEW.payload,'$.roomDelivery') IS NOT NULL AND NEW.status='completed'\n        AND json_type(NEW.payload,'$.roomSliceDisposition') IS NULL AND (\n          json_extract(NEW.payload,'$.roomHandoff') IS NOT NULL\n          OR json_type(NEW.payload,'$.preparedVersion') IS NOT 'integer'\n          OR json_extract(NEW.payload,'$.preparedVersion')<1\n          OR json_type(NEW.payload,'$.text') IS NOT 'text'\n          OR json_extract(NEW.payload,'$.stopReason') NOT IN ('end_turn','max_tokens')\n          OR NOT EXISTS(SELECT 1 FROM ocean_chat_turns old WHERE old.id=NEW.id\n            AND old.status IN ('prepared','completed') AND old.workspace_id=NEW.workspace_id AND old.room_id=NEW.room_id\n            AND old.task_run_id=NEW.task_run_id AND json_extract(old.payload,'$.text')=json_extract(NEW.payload,'$.text')\n            AND json_extract(old.payload,'$.preparedVersion')=json_extract(NEW.payload,'$.preparedVersion')\n            AND json_extract(old.payload,'$.stopReason')=json_extract(NEW.payload,'$.stopReason'))\n          OR NOT EXISTS(SELECT 1 FROM events e WHERE e.aggregate_id=NEW.task_run_id AND e.type='task_run.succeeded'\n            AND e.sequence=json_extract(NEW.payload,'$.preparedVersion')+1\n            AND e.sequence=(SELECT max(sequence) FROM events WHERE aggregate_id=NEW.task_run_id))\n          OR NOT EXISTS(SELECT 1 FROM ocean_messages m WHERE m.id='reply_'||NEW.id AND m.turn_id=NEW.id\n            AND m.workspace_id=NEW.workspace_id AND m.room_id=NEW.room_id AND m.seq>json_extract(NEW.payload,'$.readThroughSeq')\n            AND m.author='bot' AND m.author_bot_id=json_extract(NEW.payload,'$.bot.id') AND m.target_bot_id=m.author_bot_id\n            AND m.body=json_extract(NEW.payload,'$.text'))))\n      OR (json_type(NEW.payload,'$.roomSliceDisposition') IS NOT NULL AND (\n        json_extract(NEW.payload,'$.roomSliceDisposition') IS NOT 'yielded' OR NEW.status IS NOT 'completed'\n        OR json_type(NEW.payload,'$.roomHandoff') IS NULL OR json_extract(NEW.payload,'$.text') IS NOT ''\n        OR json_type(NEW.payload,'$.preparedVersion') IS NOT 'null'))\n    BEGIN SELECT RAISE(ABORT,'invalid room slice'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_task_immutable",
+      "sql": "CREATE TRIGGER ocean_room_task_immutable BEFORE UPDATE ON ocean_room_tasks\n  WHEN NEW.id IS NOT OLD.id OR NEW.workspace_id IS NOT OLD.workspace_id OR NEW.room_id IS NOT OLD.room_id\n    OR NEW.root_id IS NOT OLD.root_id OR NEW.parent_id IS NOT OLD.parent_id\n    OR NEW.assignee_bot_id IS NOT OLD.assignee_bot_id OR NEW.root_payload IS NOT OLD.root_payload\n    OR NEW.version IS NOT OLD.version\n  BEGIN SELECT RAISE(ABORT,'immutable room task'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_task_insert_wait",
+      "sql": "CREATE TRIGGER ocean_room_task_insert_wait BEFORE INSERT ON ocean_room_tasks\n  WHEN NEW.waiting_child_id IS NOT NULL\n  BEGIN SELECT RAISE(ABORT,'inserted task cannot already wait'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_task_parent",
+      "sql": "CREATE TRIGGER ocean_room_task_parent BEFORE INSERT ON ocean_room_tasks\n  WHEN NEW.id<>NEW.root_id AND (NOT EXISTS(\n    SELECT 1 FROM ocean_room_tasks WHERE id=NEW.parent_id AND workspace_id=NEW.workspace_id\n      AND room_id=NEW.room_id AND root_id=NEW.root_id) OR NOT EXISTS(\n    SELECT 1 FROM ocean_room_tasks WHERE id=NEW.root_id AND id=root_id AND parent_id IS NULL\n      AND workspace_id=NEW.workspace_id AND room_id=NEW.room_id))\n  BEGIN SELECT RAISE(ABORT,'invalid room task parent'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_task_wait",
+      "sql": "CREATE TRIGGER ocean_room_task_wait BEFORE UPDATE OF waiting_child_id ON ocean_room_tasks\n  WHEN NEW.waiting_child_id IS NOT NULL AND NOT EXISTS(\n    SELECT 1 FROM ocean_room_tasks c WHERE c.id=NEW.waiting_child_id AND c.parent_id=NEW.id\n      AND c.root_id=NEW.root_id AND c.workspace_id=NEW.workspace_id AND c.room_id=NEW.room_id)\n  BEGIN SELECT RAISE(ABORT,'invalid waiting child'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_turn_immutable",
+      "sql": "CREATE TRIGGER ocean_room_turn_immutable BEFORE UPDATE ON ocean_chat_turns\n  WHEN json_extract(NEW.payload,'$.roomDelivery') IS NOT json_extract(OLD.payload,'$.roomDelivery')\n    OR (json_extract(OLD.payload,'$.roomDelivery') IS NOT NULL AND (\n      NEW.id IS NOT OLD.id OR NEW.workspace_id IS NOT OLD.workspace_id OR NEW.room_id IS NOT OLD.room_id\n      OR NEW.task_run_id IS NOT OLD.task_run_id\n      OR json_extract(NEW.payload,'$.id') IS NOT json_extract(OLD.payload,'$.id')\n      OR json_extract(NEW.payload,'$.workspaceId') IS NOT json_extract(OLD.payload,'$.workspaceId')\n      OR json_extract(NEW.payload,'$.roomId') IS NOT json_extract(OLD.payload,'$.roomId')\n      OR json_extract(NEW.payload,'$.taskRunId') IS NOT json_extract(OLD.payload,'$.taskRunId')\n      OR json_extract(NEW.payload,'$.bot') IS NOT json_extract(OLD.payload,'$.bot')\n      OR json_extract(NEW.payload,'$.activation') IS NOT json_extract(OLD.payload,'$.activation')\n      OR json_extract(NEW.payload,'$.modelBinding') IS NOT json_extract(OLD.payload,'$.modelBinding')\n      OR json_extract(NEW.payload,'$.inboundMessageId') IS NOT json_extract(OLD.payload,'$.inboundMessageId')\n      OR json_extract(NEW.payload,'$.readThroughSeq') IS NOT json_extract(OLD.payload,'$.readThroughSeq')\n      OR json_extract(NEW.payload,'$.status') IS NOT NEW.status))\n  BEGIN SELECT RAISE(ABORT,'immutable room turn lineage'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "ocean_room_turn_insert",
+      "sql": "CREATE TRIGGER ocean_room_turn_insert BEFORE INSERT ON ocean_chat_turns\n  WHEN json_extract(NEW.payload,'$.roomDelivery') IS NOT NULL AND (\n    json_extract(NEW.payload,'$.roomDelivery.version') IS NOT 1 OR NOT EXISTS(\n    SELECT 1 FROM ocean_room_deliveries d JOIN ocean_room_tasks t ON t.id=d.to_task_id\n    WHERE d.id=json_extract(NEW.payload,'$.roomDelivery.deliveryId')\n      AND t.id=json_extract(NEW.payload,'$.roomDelivery.taskId')\n      AND d.workspace_id=NEW.workspace_id AND d.room_id=NEW.room_id\n      AND json_extract(NEW.payload,'$.workspaceId')=NEW.workspace_id\n      AND json_extract(NEW.payload,'$.roomId')=NEW.room_id\n      AND json_extract(NEW.payload,'$.id')=NEW.id\n      AND json_extract(NEW.payload,'$.taskRunId')=NEW.task_run_id\n      AND json_extract(NEW.payload,'$.status')=NEW.status\n      AND json_extract(NEW.payload,'$.bot.id')=t.assignee_bot_id\n      AND json_extract(NEW.payload,'$.bot.workspaceId')=NEW.workspace_id\n      AND json_extract(NEW.payload,'$.inboundMessageId')=d.message_id\n      AND json_extract(NEW.payload,'$.readThroughSeq')=d.seq))\n  BEGIN SELECT RAISE(ABORT,'invalid room turn lineage'); END"
+    }
+  ],
+  "rows": {
+    "checkpoints": [],
+    "command_receipts": [
+      {
+        "command_id": "cm_tr_turn_d_3_0",
+        "aggregate_id": "tr_turn_d_3",
+        "version": 1,
+        "events": "[{\"eventId\":\"ev_0001\",\"aggregateType\":\"task_run\",\"aggregateId\":\"tr_turn_d_3\",\"sequence\":1,\"type\":\"task_run.created\",\"schemaVersion\":1,\"timestamp\":\"2026-11-06T00:00:02Z\",\"causationId\":\"cm_tr_turn_d_3_0\",\"correlationId\":\"fixture\",\"actor\":{\"kind\":\"runtime\",\"id\":\"fixture\"},\"sensitivity\":\"internal\",\"payload\":{\"conversationId\":\"cv_room\",\"workspaceId\":\"ws_ws_fixture\",\"parentTaskRunId\":null,\"model\":\"one\",\"policyId\":\"pl_fixture\",\"budget\":{\"active_time_ms\":null,\"provider_cost_usd\":null,\"provider_tokens\":null,\"tool_calls\":null,\"retry_attempts\":null,\"child_runs\":null,\"process_starts\":null}}}]",
+        "request_binding": "{\"actor\":{\"id\":\"fixture\",\"kind\":\"runtime\"},\"commandId\":\"cm_tr_turn_d_3_0\",\"expectedVersion\":0,\"payload\":{\"budget\":{\"active_time_ms\":null,\"child_runs\":null,\"process_starts\":null,\"provider_cost_usd\":null,\"provider_tokens\":null,\"retry_attempts\":null,\"tool_calls\":null},\"conversationId\":\"cv_room\",\"model\":\"one\",\"parentTaskRunId\":null,\"policyId\":\"pl_fixture\",\"workspaceId\":\"ws_ws_fixture\"},\"taskRunId\":\"tr_turn_d_3\",\"type\":\"CreateTaskRun\"}"
+      },
+      {
+        "command_id": "cm_tr_turn_d_3_1",
+        "aggregate_id": "tr_turn_d_3",
+        "version": 2,
+        "events": "[{\"eventId\":\"ev_0002\",\"aggregateType\":\"task_run\",\"aggregateId\":\"tr_turn_d_3\",\"sequence\":2,\"type\":\"task_run.queued\",\"schemaVersion\":1,\"timestamp\":\"2026-11-06T00:00:02Z\",\"causationId\":\"cm_tr_turn_d_3_1\",\"correlationId\":\"fixture\",\"actor\":{\"kind\":\"runtime\",\"id\":\"fixture\"},\"sensitivity\":\"internal\",\"payload\":{}}]",
+        "request_binding": "{\"actor\":{\"id\":\"fixture\",\"kind\":\"runtime\"},\"commandId\":\"cm_tr_turn_d_3_1\",\"expectedVersion\":1,\"payload\":{},\"taskRunId\":\"tr_turn_d_3\",\"type\":\"Admit\"}"
+      },
+      {
+        "command_id": "cm_tr_turn_d_3_2",
+        "aggregate_id": "tr_turn_d_3",
+        "version": 3,
+        "events": "[{\"eventId\":\"ev_0003\",\"aggregateType\":\"task_run\",\"aggregateId\":\"tr_turn_d_3\",\"sequence\":3,\"type\":\"task_run.admitted\",\"schemaVersion\":1,\"timestamp\":\"2026-11-06T00:00:02Z\",\"causationId\":\"cm_tr_turn_d_3_2\",\"correlationId\":\"fixture\",\"actor\":{\"kind\":\"runtime\",\"id\":\"fixture\"},\"sensitivity\":\"internal\",\"payload\":{}}]",
+        "request_binding": "{\"actor\":{\"id\":\"fixture\",\"kind\":\"runtime\"},\"commandId\":\"cm_tr_turn_d_3_2\",\"expectedVersion\":2,\"payload\":{},\"taskRunId\":\"tr_turn_d_3\",\"type\":\"Schedule\"}"
+      },
+      {
+        "command_id": "cm_tr_turn_d_3_3",
+        "aggregate_id": "tr_turn_d_3",
+        "version": 4,
+        "events": "[{\"eventId\":\"ev_0004\",\"aggregateType\":\"task_run\",\"aggregateId\":\"tr_turn_d_3\",\"sequence\":4,\"type\":\"attempt.started\",\"schemaVersion\":1,\"timestamp\":\"2026-11-06T00:00:02Z\",\"causationId\":\"cm_tr_turn_d_3_3\",\"correlationId\":\"fixture\",\"actor\":{\"kind\":\"runtime\",\"id\":\"fixture\"},\"sensitivity\":\"internal\",\"payload\":{\"attemptId\":\"at_turn_d_3\",\"ordinal\":1,\"reason\":\"initial\",\"provider\":\"fixture\",\"model\":\"one\"}}]",
+        "request_binding": "{\"actor\":{\"id\":\"fixture\",\"kind\":\"runtime\"},\"commandId\":\"cm_tr_turn_d_3_3\",\"expectedVersion\":3,\"payload\":{\"attemptId\":\"at_turn_d_3\",\"model\":\"one\",\"provider\":\"fixture\",\"reason\":\"initial\"},\"taskRunId\":\"tr_turn_d_3\",\"type\":\"StartAttempt\"}"
+      },
+      {
+        "command_id": "cm_tr_turn_d_3_4",
+        "aggregate_id": "tr_turn_d_3",
+        "version": 5,
+        "events": "[{\"eventId\":\"ev_0005\",\"aggregateType\":\"task_run\",\"aggregateId\":\"tr_turn_d_3\",\"sequence\":5,\"type\":\"attempt.model_request_started\",\"schemaVersion\":1,\"timestamp\":\"2026-11-06T00:00:02Z\",\"causationId\":\"cm_tr_turn_d_3_4\",\"correlationId\":\"fixture\",\"actor\":{\"kind\":\"runtime\",\"id\":\"fixture\"},\"sensitivity\":\"internal\",\"payload\":{\"attemptId\":\"at_turn_d_3\",\"ordinal\":1,\"activation\":{\"version\":1,\"identity\":{\"source\":\"connection\",\"providerId\":\"fixture\",\"modelId\":\"one\",\"connectionId\":\"cloud\",\"connectionRevision\":1,\"botProfileVersion\":1,\"kind\":\"cloud\",\"endpoint\":\"https://fixture.invalid\",\"auth\":\"api_key\",\"artifactDigest\":null,\"backendVersion\":null},\"capabilities\":{\"tools\":true,\"streaming\":true,\"inputModalities\":[\"text\"],\"contextTokens\":null,\"maxOutputTokens\":null,\"usage\":\"reported\"},\"limits\":{\"maxModelRequests\":4,\"requestTimeoutMs\":60000,\"turnTimeoutMs\":600000},\"admittedAt\":\"2026-11-06T00:00:00Z\",\"deadlineAt\":\"2026-11-06T00:10:00Z\"},\"startedAt\":\"2026-11-06T00:00:01Z\"}}]",
+        "request_binding": "{\"actor\":{\"id\":\"fixture\",\"kind\":\"runtime\"},\"commandId\":\"cm_tr_turn_d_3_4\",\"expectedVersion\":4,\"payload\":{\"activation\":{\"admittedAt\":\"2026-11-06T00:00:00Z\",\"capabilities\":{\"contextTokens\":null,\"inputModalities\":[\"text\"],\"maxOutputTokens\":null,\"streaming\":true,\"tools\":true,\"usage\":\"reported\"},\"deadlineAt\":\"2026-11-06T00:10:00Z\",\"identity\":{\"artifactDigest\":null,\"auth\":\"api_key\",\"backendVersion\":null,\"botProfileVersion\":1,\"connectionId\":\"cloud\",\"connectionRevision\":1,\"endpoint\":\"https://fixture.invalid\",\"kind\":\"cloud\",\"modelId\":\"one\",\"providerId\":\"fixture\",\"source\":\"connection\"},\"limits\":{\"maxModelRequests\":4,\"requestTimeoutMs\":60000,\"turnTimeoutMs\":600000},\"version\":1},\"attemptId\":\"at_turn_d_3\",\"ordinal\":1,\"startedAt\":\"2026-11-06T00:00:01Z\"},\"taskRunId\":\"tr_turn_d_3\",\"type\":\"StartModelRequest\"}"
+      },
+      {
+        "command_id": "cm_tr_turn_d_3_5",
+        "aggregate_id": "tr_turn_d_3",
+        "version": 7,
+        "events": "[{\"eventId\":\"ev_0006\",\"aggregateType\":\"task_run\",\"aggregateId\":\"tr_turn_d_3\",\"sequence\":6,\"type\":\"attempt.model_request_settled\",\"schemaVersion\":1,\"timestamp\":\"2026-11-06T00:00:02Z\",\"causationId\":\"cm_tr_turn_d_3_5\",\"correlationId\":\"fixture\",\"actor\":{\"kind\":\"runtime\",\"id\":\"fixture\"},\"sensitivity\":\"internal\",\"payload\":{\"attemptId\":\"at_turn_d_3\",\"ordinal\":1,\"finishedAt\":\"2026-11-06T00:00:02Z\",\"completion\":{\"kind\":\"terminal\",\"stopReason\":\"tool_calls\"},\"usage\":{\"kind\":\"actual\",\"tokens\":{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}}}},{\"eventId\":\"ev_0007\",\"aggregateType\":\"task_run\",\"aggregateId\":\"tr_turn_d_3\",\"sequence\":7,\"type\":\"attempt.usage_recorded\",\"schemaVersion\":1,\"timestamp\":\"2026-11-06T00:00:02Z\",\"causationId\":\"cm_tr_turn_d_3_5\",\"correlationId\":\"fixture\",\"actor\":{\"kind\":\"runtime\",\"id\":\"fixture\"},\"sensitivity\":\"internal\",\"payload\":{\"attemptId\":\"at_turn_d_3\",\"usage\":{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}}}]",
+        "request_binding": "{\"actor\":{\"id\":\"fixture\",\"kind\":\"runtime\"},\"commandId\":\"cm_tr_turn_d_3_5\",\"expectedVersion\":5,\"payload\":{\"attemptId\":\"at_turn_d_3\",\"completion\":{\"kind\":\"terminal\",\"stopReason\":\"tool_calls\"},\"finishedAt\":\"2026-11-06T00:00:02Z\",\"ordinal\":1,\"usage\":{\"kind\":\"actual\",\"tokens\":{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}}},\"taskRunId\":\"tr_turn_d_3\",\"type\":\"SettleModelRequest\"}"
+      }
+    ],
+    "events": [
+      {
+        "aggregate_id": "tr_turn_d_3",
+        "sequence": 1,
+        "event_id": "ev_0001",
+        "aggregate_type": "task_run",
+        "type": "task_run.created",
+        "schema_version": 1,
+        "timestamp": "2026-11-06T00:00:02Z",
+        "causation_id": "cm_tr_turn_d_3_0",
+        "correlation_id": "fixture",
+        "actor_kind": "runtime",
+        "actor_id": "fixture",
+        "sensitivity": "internal",
+        "payload": "{\"conversationId\":\"cv_room\",\"workspaceId\":\"ws_ws_fixture\",\"parentTaskRunId\":null,\"model\":\"one\",\"policyId\":\"pl_fixture\",\"budget\":{\"active_time_ms\":null,\"provider_cost_usd\":null,\"provider_tokens\":null,\"tool_calls\":null,\"retry_attempts\":null,\"child_runs\":null,\"process_starts\":null}}"
+      },
+      {
+        "aggregate_id": "tr_turn_d_3",
+        "sequence": 2,
+        "event_id": "ev_0002",
+        "aggregate_type": "task_run",
+        "type": "task_run.queued",
+        "schema_version": 1,
+        "timestamp": "2026-11-06T00:00:02Z",
+        "causation_id": "cm_tr_turn_d_3_1",
+        "correlation_id": "fixture",
+        "actor_kind": "runtime",
+        "actor_id": "fixture",
+        "sensitivity": "internal",
+        "payload": "{}"
+      },
+      {
+        "aggregate_id": "tr_turn_d_3",
+        "sequence": 3,
+        "event_id": "ev_0003",
+        "aggregate_type": "task_run",
+        "type": "task_run.admitted",
+        "schema_version": 1,
+        "timestamp": "2026-11-06T00:00:02Z",
+        "causation_id": "cm_tr_turn_d_3_2",
+        "correlation_id": "fixture",
+        "actor_kind": "runtime",
+        "actor_id": "fixture",
+        "sensitivity": "internal",
+        "payload": "{}"
+      },
+      {
+        "aggregate_id": "tr_turn_d_3",
+        "sequence": 4,
+        "event_id": "ev_0004",
+        "aggregate_type": "task_run",
+        "type": "attempt.started",
+        "schema_version": 1,
+        "timestamp": "2026-11-06T00:00:02Z",
+        "causation_id": "cm_tr_turn_d_3_3",
+        "correlation_id": "fixture",
+        "actor_kind": "runtime",
+        "actor_id": "fixture",
+        "sensitivity": "internal",
+        "payload": "{\"attemptId\":\"at_turn_d_3\",\"ordinal\":1,\"reason\":\"initial\",\"provider\":\"fixture\",\"model\":\"one\"}"
+      },
+      {
+        "aggregate_id": "tr_turn_d_3",
+        "sequence": 5,
+        "event_id": "ev_0005",
+        "aggregate_type": "task_run",
+        "type": "attempt.model_request_started",
+        "schema_version": 1,
+        "timestamp": "2026-11-06T00:00:02Z",
+        "causation_id": "cm_tr_turn_d_3_4",
+        "correlation_id": "fixture",
+        "actor_kind": "runtime",
+        "actor_id": "fixture",
+        "sensitivity": "internal",
+        "payload": "{\"attemptId\":\"at_turn_d_3\",\"ordinal\":1,\"activation\":{\"version\":1,\"identity\":{\"source\":\"connection\",\"providerId\":\"fixture\",\"modelId\":\"one\",\"connectionId\":\"cloud\",\"connectionRevision\":1,\"botProfileVersion\":1,\"kind\":\"cloud\",\"endpoint\":\"https://fixture.invalid\",\"auth\":\"api_key\",\"artifactDigest\":null,\"backendVersion\":null},\"capabilities\":{\"tools\":true,\"streaming\":true,\"inputModalities\":[\"text\"],\"contextTokens\":null,\"maxOutputTokens\":null,\"usage\":\"reported\"},\"limits\":{\"maxModelRequests\":4,\"requestTimeoutMs\":60000,\"turnTimeoutMs\":600000},\"admittedAt\":\"2026-11-06T00:00:00Z\",\"deadlineAt\":\"2026-11-06T00:10:00Z\"},\"startedAt\":\"2026-11-06T00:00:01Z\"}"
+      },
+      {
+        "aggregate_id": "tr_turn_d_3",
+        "sequence": 6,
+        "event_id": "ev_0006",
+        "aggregate_type": "task_run",
+        "type": "attempt.model_request_settled",
+        "schema_version": 1,
+        "timestamp": "2026-11-06T00:00:02Z",
+        "causation_id": "cm_tr_turn_d_3_5",
+        "correlation_id": "fixture",
+        "actor_kind": "runtime",
+        "actor_id": "fixture",
+        "sensitivity": "internal",
+        "payload": "{\"attemptId\":\"at_turn_d_3\",\"ordinal\":1,\"finishedAt\":\"2026-11-06T00:00:02Z\",\"completion\":{\"kind\":\"terminal\",\"stopReason\":\"tool_calls\"},\"usage\":{\"kind\":\"actual\",\"tokens\":{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}}}"
+      },
+      {
+        "aggregate_id": "tr_turn_d_3",
+        "sequence": 7,
+        "event_id": "ev_0007",
+        "aggregate_type": "task_run",
+        "type": "attempt.usage_recorded",
+        "schema_version": 1,
+        "timestamp": "2026-11-06T00:00:02Z",
+        "causation_id": "cm_tr_turn_d_3_5",
+        "correlation_id": "fixture",
+        "actor_kind": "runtime",
+        "actor_id": "fixture",
+        "sensitivity": "internal",
+        "payload": "{\"attemptId\":\"at_turn_d_3\",\"usage\":{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}}"
+      }
+    ],
+    "meta": [
+      {
+        "key": "schema_version",
+        "value": "28"
+      },
+      {
+        "key": "identity_counter_ev",
+        "value": "7"
+      }
+    ],
+    "ocean_bot_model_bindings": [
+      {
+        "bot_id": "a",
+        "connection_id": "cloud",
+        "model_id": "one"
+      },
+      {
+        "bot_id": "b",
+        "connection_id": "cloud",
+        "model_id": "one"
+      },
+      {
+        "bot_id": "c",
+        "connection_id": "cloud",
+        "model_id": "one"
+      }
+    ],
+    "ocean_bots": [
+      {
+        "id": "a",
+        "workspace_id": "ws_fixture",
+        "handle": "a",
+        "name": "a",
+        "role": "assistant",
+        "provider": "fixture",
+        "model": "one",
+        "profile_version": 1
+      },
+      {
+        "id": "b",
+        "workspace_id": "ws_fixture",
+        "handle": "b",
+        "name": "b",
+        "role": "assistant",
+        "provider": "fixture",
+        "model": "one",
+        "profile_version": 1
+      },
+      {
+        "id": "c",
+        "workspace_id": "ws_fixture",
+        "handle": "c",
+        "name": "c",
+        "role": "assistant",
+        "provider": "fixture",
+        "model": "one",
+        "profile_version": 1
+      }
+    ],
+    "ocean_broadcast_batches": [],
+    "ocean_capture_receipts": [],
+    "ocean_changesets": [],
+    "ocean_chat_turns": [
+      {
+        "id": "turn_d_3",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "task_run_id": "tr_turn_d_3",
+        "status": "dispatching",
+        "payload": "{\"id\":\"turn_d_3\",\"workspaceId\":\"ws_fixture\",\"roomId\":\"room\",\"requestId\":\"execute_d_3\",\"taskRunId\":\"tr_turn_d_3\",\"inboundMessageId\":\"d_2\",\"readThroughSeq\":1,\"bot\":{\"id\":\"a\",\"workspaceId\":\"ws_fixture\",\"handle\":\"a\",\"name\":\"a\",\"role\":\"assistant\",\"provider\":\"fixture\",\"model\":\"one\",\"profileVersion\":1},\"modelBinding\":{\"connectionId\":\"cloud\",\"modelId\":\"one\"},\"activation\":{\"version\":1,\"identity\":{\"source\":\"connection\",\"connectionId\":\"cloud\",\"modelId\":\"one\",\"providerId\":\"fixture\",\"connectionRevision\":1,\"botProfileVersion\":1,\"kind\":\"cloud\",\"endpoint\":\"https://fixture.invalid\",\"auth\":\"api_key\",\"artifactDigest\":null,\"backendVersion\":null},\"capabilities\":{\"tools\":true,\"streaming\":true,\"inputModalities\":[\"text\"],\"contextTokens\":null,\"maxOutputTokens\":null,\"usage\":\"reported\"},\"limits\":{\"maxModelRequests\":4,\"requestTimeoutMs\":60000,\"turnTimeoutMs\":600000},\"admittedAt\":\"2026-11-06T00:00:00Z\",\"deadlineAt\":\"2026-11-06T00:10:00Z\"},\"roomDelivery\":{\"version\":1,\"taskId\":\"d_3\",\"deliveryId\":\"d_4\"},\"status\":\"dispatching\",\"text\":\"\",\"preparedVersion\":null,\"stopReason\":\"end_turn\"}",
+        "review_id": null
+      }
+    ],
+    "ocean_coding_applications": [],
+    "ocean_coding_approval_claims": [],
+    "ocean_coding_approvals": [],
+    "ocean_coding_finalizations": [],
+    "ocean_coding_receipts": [],
+    "ocean_coding_review_requests": [],
+    "ocean_coding_review_verdicts": [],
+    "ocean_coding_tasks": [],
+    "ocean_coding_test_evidence": [],
+    "ocean_desktop_adopted": [],
+    "ocean_desktop_operations": [],
+    "ocean_desktop_uploads": [],
+    "ocean_execution_epoch": [],
+    "ocean_members": [
+      {
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "bot_id": "a"
+      },
+      {
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "bot_id": "b"
+      },
+      {
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "bot_id": "c"
+      }
+    ],
+    "ocean_messages": [
+      {
+        "id": "d_2",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "seq": 1,
+        "author": "user",
+        "target_bot_id": null,
+        "body": "work",
+        "created_at": "2026-11-06T00:00:00.000Z",
+        "author_bot_id": null,
+        "turn_id": null
+      },
+      {
+        "id": "d_7",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "seq": 2,
+        "author": "bot",
+        "target_bot_id": "b",
+        "body": "v27 inert wait",
+        "created_at": "2026-11-06T00:00:00.000Z",
+        "author_bot_id": "a",
+        "turn_id": "turn_d_3"
+      }
+    ],
+    "ocean_model_connection_receipts": [],
+    "ocean_model_connections": [
+      {
+        "connection_id": "legacy:deepseek",
+        "payload": "{\"connectionId\":\"legacy:deepseek\",\"providerId\":\"deepseek\",\"kind\":\"cloud\",\"endpoint\":\"https://api.deepseek.com\",\"auth\":\"api_key\",\"defaultModelId\":null,\"localQualification\":null,\"secretRef\":null,\"intent\":\"unconfigured\",\"revision\":0,\"requestId\":null,\"binding\":null,\"lastCheck\":null,\"updatedAt\":\"1970-01-01T00:00:00.000Z\",\"pendingSecretChange\":null,\"legacyEnvironment\":true,\"configuredAfterRestore\":false,\"pendingRequest\":null}"
+      },
+      {
+        "connection_id": "cloud",
+        "payload": "{\"connectionId\":\"cloud\",\"providerId\":\"fixture\",\"kind\":\"cloud\",\"endpoint\":\"https://fixture.invalid\",\"auth\":\"api_key\",\"defaultModelId\":\"one\",\"localQualification\":null,\"secretRef\":null,\"intent\":\"active\",\"revision\":1,\"requestId\":null,\"binding\":null,\"lastCheck\":null,\"updatedAt\":\"1970-01-01T00:00:00.000Z\",\"pendingSecretChange\":null,\"legacyEnvironment\":false,\"configuredAfterRestore\":false,\"pendingRequest\":null}"
+      },
+      {
+        "connection_id": "legacy:fixture",
+        "payload": "{\"connectionId\":\"legacy:fixture\",\"providerId\":\"fixture\",\"kind\":\"cloud\",\"endpoint\":null,\"auth\":\"api_key\",\"defaultModelId\":null,\"localQualification\":null,\"secretRef\":null,\"intent\":\"unconfigured\",\"revision\":0,\"requestId\":null,\"binding\":null,\"lastCheck\":null,\"updatedAt\":\"1970-01-01T00:00:00.000Z\",\"pendingSecretChange\":null,\"legacyEnvironment\":false,\"configuredAfterRestore\":false,\"pendingRequest\":null}"
+      }
+    ],
+    "ocean_owner_decisions": [],
+    "ocean_owner_scope_grants": [],
+    "ocean_plugin_confirmations": [],
+    "ocean_plugin_connections": [],
+    "ocean_plugin_consents": [],
+    "ocean_plugin_grants": [],
+    "ocean_plugin_operations": [],
+    "ocean_plugin_versions": [],
+    "ocean_profile_rebinds": [],
+    "ocean_provider_connections": [],
+    "ocean_provider_receipts": [],
+    "ocean_rebind_observations": [],
+    "ocean_receipts": [
+      {
+        "request_id": "start",
+        "binding": "[\"RoomTaskStart/v1\",\"owner\",\"ws_fixture\",\"room\",\"work\",[\"a\",\"b\"],[{\"botId\":\"a\",\"grantReferences\":[]},{\"botId\":\"b\",\"grantReferences\":[]},{\"botId\":\"c\",\"grantReferences\":[]}],{\"codingTaskId\":null,\"permissions\":[],\"projectId\":null}]",
+        "reply": "{\"kind\":\"message\",\"data\":{\"id\":\"d_2\",\"workspaceId\":\"ws_fixture\",\"roomId\":\"room\",\"seq\":1,\"author\":\"user\",\"targetBotId\":null,\"body\":\"work\",\"createdAt\":\"2026-11-06T00:00:00.000Z\"}}"
+      },
+      {
+        "request_id": "room-agent/v1:78a87dc95c24624796e90f037e55a202cf3355480bf16205049393585a2f770f",
+        "binding": "[\"ws_fixture\",\"room\",\"d_1\",\"d_3\",\"d_4\",\"a\",\"delegate\",\"b\",\"v27 inert wait\"]",
+        "reply": "{\"kind\":\"message\",\"data\":{\"id\":\"d_7\",\"workspaceId\":\"ws_fixture\",\"roomId\":\"room\",\"seq\":2,\"author\":\"bot\",\"authorBotId\":\"a\",\"targetBotId\":\"b\",\"turnId\":\"turn_d_3\",\"body\":\"v27 inert wait\",\"createdAt\":\"2026-11-06T00:00:00.000Z\"}}"
+      }
+    ],
+    "ocean_restore_origin": [],
+    "ocean_restore_origins": [],
+    "ocean_retired_epochs": [],
+    "ocean_reviews": [],
+    "ocean_room_deliveries": [
+      {
+        "id": "d_4",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "root_id": "d_1",
+        "to_task_id": "d_3",
+        "recipient_bot_id": "a",
+        "cause_id": "d_1",
+        "request_key": "start",
+        "message_id": "d_2",
+        "from_task_id": null,
+        "source_turn_id": null,
+        "sender_bot_id": null,
+        "kind": "start",
+        "seq": 1,
+        "version": 1,
+        "position": 0,
+        "source_attempt_id": null,
+        "state": "claimed"
+      },
+      {
+        "id": "d_6",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "root_id": "d_1",
+        "to_task_id": "d_5",
+        "recipient_bot_id": "b",
+        "cause_id": "d_1",
+        "request_key": "start",
+        "message_id": "d_2",
+        "from_task_id": null,
+        "source_turn_id": null,
+        "sender_bot_id": null,
+        "kind": "start",
+        "seq": 1,
+        "version": 1,
+        "position": 1,
+        "source_attempt_id": null,
+        "state": "queued"
+      },
+      {
+        "id": "d_9",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "root_id": "d_1",
+        "to_task_id": "d_8",
+        "recipient_bot_id": "b",
+        "cause_id": "d_4",
+        "request_key": "room-agent/v1:78a87dc95c24624796e90f037e55a202cf3355480bf16205049393585a2f770f",
+        "message_id": "d_7",
+        "from_task_id": "d_3",
+        "source_turn_id": "turn_d_3",
+        "sender_bot_id": "a",
+        "kind": "delegate",
+        "seq": 2,
+        "version": 1,
+        "position": 0,
+        "source_attempt_id": "at_turn_d_3",
+        "state": "queued"
+      }
+    ],
+    "ocean_room_model_policies": [
+      {
+        "room_id": "room",
+        "cloud_transfer": "allow",
+        "revision": 1
+      }
+    ],
+    "ocean_room_policies": [],
+    "ocean_room_tasks": [
+      {
+        "id": "d_1",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "root_id": "d_1",
+        "parent_id": null,
+        "assignee_bot_id": null,
+        "status": "ready",
+        "version": 1,
+        "revision": 1,
+        "last_delivery_seq": 0,
+        "waiting_child_id": null,
+        "root_payload": "{\"ownerId\":\"owner\",\"mandate\":{\"projectId\":null,\"codingTaskId\":null,\"permissions\":[]},\"members\":[{\"botId\":\"a\",\"grantReferences\":[],\"identity\":{\"source\":\"connection\",\"connectionId\":\"cloud\",\"modelId\":\"one\",\"providerId\":\"fixture\",\"connectionRevision\":1,\"botProfileVersion\":1,\"kind\":\"cloud\",\"endpoint\":\"https://fixture.invalid\",\"auth\":\"api_key\",\"artifactDigest\":null,\"backendVersion\":null}},{\"botId\":\"b\",\"grantReferences\":[],\"identity\":{\"source\":\"connection\",\"connectionId\":\"cloud\",\"modelId\":\"one\",\"providerId\":\"fixture\",\"connectionRevision\":1,\"botProfileVersion\":1,\"kind\":\"cloud\",\"endpoint\":\"https://fixture.invalid\",\"auth\":\"api_key\",\"artifactDigest\":null,\"backendVersion\":null}},{\"botId\":\"c\",\"grantReferences\":[],\"identity\":{\"source\":\"connection\",\"connectionId\":\"cloud\",\"modelId\":\"one\",\"providerId\":\"fixture\",\"connectionRevision\":1,\"botProfileVersion\":1,\"kind\":\"cloud\",\"endpoint\":\"https://fixture.invalid\",\"auth\":\"api_key\",\"artifactDigest\":null,\"backendVersion\":null}}],\"limits\":{\"concurrentSlices\":2,\"totalSlices\":32,\"providerStarts\":64,\"toolCalls\":64}}"
+      },
+      {
+        "id": "d_3",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "root_id": "d_1",
+        "parent_id": "d_1",
+        "assignee_bot_id": "a",
+        "status": "waiting",
+        "version": 1,
+        "revision": 2,
+        "last_delivery_seq": 0,
+        "waiting_child_id": "d_8",
+        "root_payload": null
+      },
+      {
+        "id": "d_5",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "root_id": "d_1",
+        "parent_id": "d_1",
+        "assignee_bot_id": "b",
+        "status": "ready",
+        "version": 1,
+        "revision": 1,
+        "last_delivery_seq": 0,
+        "waiting_child_id": null,
+        "root_payload": null
+      },
+      {
+        "id": "d_8",
+        "workspace_id": "ws_fixture",
+        "room_id": "room",
+        "root_id": "d_1",
+        "parent_id": "d_3",
+        "assignee_bot_id": "b",
+        "status": "ready",
+        "version": 1,
+        "revision": 1,
+        "last_delivery_seq": 0,
+        "waiting_child_id": null,
+        "root_payload": null
+      }
+    ],
+    "ocean_rooms": [
+      {
+        "id": "room",
+        "workspace_id": "ws_fixture",
+        "kind": "group",
+        "bot_id": null,
+        "title": "Team"
+      }
+    ],
+    "ocean_service_catalogs": [],
+    "ocean_service_connections": [],
+    "ocean_service_owner_receipts": [],
+    "ocean_workspace": [
+      {
+        "singleton": 1,
+        "id": "ws_fixture",
+        "root": "/fixture"
+      }
+    ],
+    "ocean_worktrees": [],
+    "tool_effect_resolutions_v1": [],
+    "tool_invocations_v1": [],
+    "tool_invocations_v2": []
+  }
+}

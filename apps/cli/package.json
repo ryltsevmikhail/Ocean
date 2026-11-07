@@ -11,12 +11,15 @@
     "@runnets/application": "workspace:*",
     "@runnets/contracts": "workspace:*",
     "@runnets/domain": "workspace:*",
-    "@runnets/integrations-executor": "workspace:*",
     "@runnets/provider-core": "workspace:*",
     "@runnets/provider-deepseek": "workspace:*",
     "@runnets/store": "workspace:*",
     "@runnets/store-sqlite": "workspace:*",
-    "@runnets/tools-node": "workspace:*"
+    "@runnets/tools-node": "workspace:*",
+    "@runnets/provider-openai": "workspace:*",
+    "@runnets/provider-anthropic": "workspace:*",
+    "@runnets/provider-local": "workspace:*",
+    "@runnets/integrations-mcp": "workspace:*"
   },
   "license": "Apache-2.0"
 }

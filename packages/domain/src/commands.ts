@@ -6,6 +6,7 @@
  * state transitions derived from committed events only.
  */
 
+import type { StartModelRequestPayload, SettleModelRequestPayload } from './model-dispatch.js';
 import type {
   Actor,
   AttemptReason,
@@ -33,6 +34,8 @@ export interface CommandPayloads {
     readonly provider: string;
     readonly model: string;
   };
+  StartModelRequest: StartModelRequestPayload;
+  SettleModelRequest: SettleModelRequestPayload;
   RecordUsage: {
     readonly attemptId: string;
     readonly usage: TokenUsagePayload;

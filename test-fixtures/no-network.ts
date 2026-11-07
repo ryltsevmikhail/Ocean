@@ -12,8 +12,9 @@ import { afterAll } from 'vitest';
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]', '0.0.0.0']);
 const attempts: string[] = [];
 const original = globalThis.fetch;
+type FetchInput = Parameters<typeof original>[0];
 
-function hostOf(input: RequestInfo | URL): string | null {
+function hostOf(input: FetchInput): string | null {
   try {
     const url =
       typeof input === 'string'
@@ -29,7 +30,7 @@ function hostOf(input: RequestInfo | URL): string | null {
   }
 }
 
-globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+globalThis.fetch = (input: FetchInput, init?: RequestInit): Promise<Response> => {
   const host = hostOf(input);
   if (host === null || !LOOPBACK.has(host)) {
     const url = typeof input === 'string' ? input : String(input);
@@ -38,8 +39,8 @@ globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit): Promise<Resp
       Object.assign(new Error('test_network_blocked: ' + url), { code: 'test_network_blocked' }),
     );
   }
-  return original(input as RequestInfo, init);
-}) as typeof globalThis.fetch;
+  return original(input, init);
+};
 
 Object.defineProperty(globalThis, '__oceanBlockedFetches', {
   value: attempts,

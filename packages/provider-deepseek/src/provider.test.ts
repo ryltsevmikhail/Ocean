@@ -175,6 +175,7 @@ describe('DeepSeekProvider stream', () => {
     expect(events).toEqual([
       { type: 'text_delta', text: 'Hel' },
       { type: 'text_delta', text: 'lo' },
+      { type: 'usage_evidence', evidence: { kind: 'unavailable', reason: 'not_reported' } },
       { type: 'completed', stopReason: 'stop', rawStopReason: 'stop' },
     ]);
   });
@@ -221,12 +222,15 @@ describe('DeepSeekProvider stream', () => {
   });
 
   it('treats [DONE] as a terminator and ignores trailing frames', async () => {
-    const http = fakeHttp({ chunks: [textDelta('a'), DONE, textDelta('after'), finish('length')] });
+    const http = fakeHttp({
+      chunks: [textDelta('a'), finish('stop'), DONE, textDelta('after'), finish('length')],
+    });
     const events = await streamEvents(makeProvider(http, { timeoutMs: 0 }), makeRequest());
 
     expect(events).toEqual([
       { type: 'text_delta', text: 'a' },
-      { type: 'completed', stopReason: 'stop', rawStopReason: null },
+      { type: 'usage_evidence', evidence: { kind: 'unavailable', reason: 'not_reported' } },
+      { type: 'completed', stopReason: 'stop', rawStopReason: 'stop' },
     ]);
   });
 

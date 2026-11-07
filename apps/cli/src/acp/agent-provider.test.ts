@@ -188,7 +188,7 @@ describe('ACP agent with a provider', () => {
     client.close();
   });
 
-  it('turns a provider error into a failed run and a refusal', async () => {
+  it('keeps a partial provider error unresolved and returns a refusal', async () => {
     const client = harness(
       scriptedProvider([
         { type: 'text_delta', text: 'partial' },
@@ -204,10 +204,10 @@ describe('ACP agent with a provider', () => {
 
     expect(resultOf(response)['stopReason']).toBe('refusal');
     const state = await client.service.state(turnTaskRunId(sessionId, 1));
-    expect(state.status).toBe('failed');
+    expect(state.status).toBe('reconciling');
     if (state.status !== 'absent') {
-      expect(state.terminal?.failure?.code).toBe('provider_error');
-      expect(state.terminal?.failure?.message).toContain('auth');
+      expect(state.terminal).toBeNull();
+      expect(state.modelExecution?.lastRequest.settlement?.completion).toEqual({ kind: 'unknown' });
     }
     const messages = updatesOf(client).filter(
       (update) => update['sessionUpdate'] === 'agent_message_chunk',

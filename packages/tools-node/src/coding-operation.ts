@@ -1,7 +1,13 @@
+import { assertCodingInspection } from './coding-git.js';
 import { createHash } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import type { CodingApprovalBinding, CodingTask, CodingTestEvidence } from '@runnets/domain';
-import { ToolError, type PreparedCodingOperation, type ToolInvocation } from '@runnets/application';
+import {
+  ToolError,
+  type PreparedCodingOperation,
+  type ToolInvocation,
+  type ToolDispatchGuard,
+} from '@runnets/application';
 import { WorkspaceTools } from './executor.js';
 import {
   type SandboxCommandEvidence,
@@ -18,12 +24,14 @@ export type CodingOperationScope = Pick<
 
 /** Trusted host factory. Caller supplies the authoritative task and complete source snapshot port. */
 export interface CodingOperationInput {
+  readonly guard?: ToolDispatchGuard;
+  readonly signal?: AbortSignal;
   readonly task: CodingTask;
   readonly scope: CodingOperationScope;
   readonly approvalId: string;
   readonly call: ToolInvocation;
   readonly sandbox: SandboxOptions;
-  readonly snapshot: () => Promise<string>;
+  readonly snapshot: (guard?: ToolDispatchGuard) => Promise<string>;
   readonly recordEvidence?: (evidence: CodingTestEvidence) => void;
 }
 export async function prepareCodingOperation(
@@ -50,13 +58,25 @@ async function prepareOperation(
     call.id !== scope.invocationId
   )
     throw new ToolError('coding_denied', 'task operation scope mismatch');
-  const snapshot = input.snapshot;
+  const snapshot = async () => {
+    assertCodingInspection(input.guard);
+    return input.snapshot(input.guard);
+  };
   const tools =
     sessionTools ??
-    new WorkspaceTools(await createSandboxBackend(sandbox, task.policy.testPresets, snapshot), {
-      requireContainment: true,
-    });
-  const tool = await tools.prepare(call);
+    new WorkspaceTools(
+      await createSandboxBackend(
+        sandbox,
+        task.policy.testPresets,
+        snapshot,
+        input.guard,
+        input.signal,
+      ),
+      {
+        requireContainment: true,
+      },
+    );
+  const tool = await tools.prepare(call, input.signal, input.guard);
   if (tool.kind !== 'edit' && tool.kind !== 'execute')
     throw new ToolError('coding_denied', 'approval factory accepts mutations and tests');
   const operation = tool.kind === 'edit' ? 'write' : 'test';
@@ -102,6 +122,7 @@ async function prepareOperation(
   const binding = await currentBinding();
   return {
     approvalId,
+    guarded: true,
     binding,
     currentBinding,
     ...(operation === 'test' && input.recordEvidence
@@ -156,11 +177,20 @@ async function prepareOperation(
     tool: {
       ...tool,
       preview,
-      execute: async (signal) => {
+      execute: async (signal, guard) => {
         signal.throwIfAborted();
         if ((await snapshot()) !== binding.sourceTreeHash)
           throw new ToolError('stale_read', 'approved source tree changed before execution');
-        return tool.execute(signal);
+        if (!guard) throw new ToolError('coding_denied', 'dispatch authority required');
+        return tool.execute(signal, {
+          ...(input.guard ? { inspect: () => input.guard!.inspect?.() === true } : {}),
+          authorize: () => guard.authorize(),
+          prepare: async () => {
+            const current = await currentBinding();
+            if (JSON.stringify(current) !== JSON.stringify(binding))
+              throw new ToolError('stale_read', 'coding binding changed before worker dispatch');
+          },
+        });
       },
     },
   };
@@ -182,22 +212,41 @@ export async function createCodingOperationSession(
   )
     throw new ToolError('coding_denied', 'task session scope mismatch');
   const tools = new WorkspaceTools(
-    await createSandboxBackend(fixed.sandbox, fixed.task.policy.testPresets, fixed.snapshot),
+    await createSandboxBackend(
+      fixed.sandbox,
+      fixed.task.policy.testPresets,
+      fixed.snapshot,
+      input.guard,
+      input.signal,
+    ),
     { requireContainment: true },
   );
   return {
-    async read(call: ToolInvocation, signal: AbortSignal) {
+    async read(call: ToolInvocation, signal: AbortSignal, guard?: ToolDispatchGuard) {
       if (
         !fixed.task.policy.devCapabilities.includes('project_read') ||
         (call.name !== 'read_file' && call.name !== 'list_files')
       )
         throw new ToolError('coding_denied', 'task read capability required');
-      const prepared = await tools.prepare(call);
-      return prepared.execute(signal);
+      const prepared = await tools.prepare(call, signal, guard);
+      return prepared.execute(signal, guard);
     },
-    prepare(approvalId: string, call: ToolInvocation, attemptId = fixed.scope.attemptId) {
+    prepare(
+      approvalId: string,
+      call: ToolInvocation,
+      attemptId = fixed.scope.attemptId,
+      guard?: ToolDispatchGuard,
+      signal?: AbortSignal,
+    ) {
       return prepareOperation(
-        { ...fixed, approvalId, call, scope: { ...fixed.scope, attemptId, invocationId: call.id } },
+        {
+          ...fixed,
+          approvalId,
+          call,
+          ...(guard ? { guard } : {}),
+          ...(signal ? { signal } : {}),
+          scope: { ...fixed.scope, attemptId, invocationId: call.id },
+        },
         tools,
       );
     },

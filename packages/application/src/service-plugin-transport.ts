@@ -1,11 +1,9 @@
 /**
  * Service-plugin transport port.
  *
- * Ocean reaches installed service plugins (OpenAPI services and MCP servers)
- * through this application-owned seam. Only the adapter
- * (`@runnets/integrations-executor`) may touch the pinned Executor SDK and its
- * Effect runtime; every type below is plain TypeScript so domain rules and the
- * application layer stay independent of both.
+ * Historical service-plugin records and their inert compatibility services use
+ * this application-owned seam. Its plain TypeScript types remain available for
+ * old profiles; current execution uses ServiceCallTransportPort and direct MCP.
  *
  * The contract is fail-closed:
  *
@@ -43,6 +41,14 @@ export interface ServicePluginTarget {
   readonly integrationId: string;
   readonly connectionId: string;
   readonly owner: ServicePluginOwner;
+  /** Immutable Ocean authority snapshot, supplied only by the runtime owner. */
+  readonly authority?: {
+    readonly generation: number;
+    readonly endpoint: string;
+    readonly pluginVersion: string;
+    readonly adapterVersion: string;
+    readonly credentialReference: string;
+  };
 }
 
 /** A tool as exposed to the application: name, summary and JSON input schema. */
@@ -117,8 +123,7 @@ export interface ServicePluginInvokeOptions {
 }
 
 /** Hard limits. The application owns them; the adapter enforces them. */
-export const SERVICE_PLUGIN_MAX_TOOLS = 256;
-export const SERVICE_PLUGIN_MAX_DISCOVERY_BYTES = 4 * 1024 * 1024;
+export { SERVICE_PLUGIN_MAX_TOOLS, SERVICE_PLUGIN_MAX_DISCOVERY_BYTES } from '@runnets/domain';
 export const SERVICE_PLUGIN_MAX_REQUEST_BYTES = 1024 * 1024;
 export const SERVICE_PLUGIN_CALL_DEADLINE_MS = 30_000;
 export const SERVICE_PLUGIN_DISCOVERY_DEADLINE_MS = 15_000;
@@ -213,6 +218,8 @@ export interface ServicePluginTransportQualification {
  * allowlist and one isolated runtime; they never retry an invocation.
  */
 export interface ServicePluginTransportPort {
+  /** Local session proof only: never provisions or performs network I/O. */
+  readonly sessions?: ServicePluginSessions;
   /** Current qualification; safe to call at any time, performs no I/O. */
   qualification(): ServicePluginTransportQualification;
   /** Bounded discovery. Throws `ServicePluginDiscoveryRefusedError` to fail closed. */
@@ -226,4 +233,12 @@ export interface ServicePluginTransportPort {
     invocation: ServicePluginInvocation,
     options?: ServicePluginInvokeOptions,
   ): Promise<ServicePluginInvokeOutcome>;
+}
+
+export interface ServicePluginSessions {
+  ready(target: ServicePluginTarget): boolean;
+  /** The exact discovery receipt still has its original credential snapshot. */
+  current(catalog: ServicePluginCatalog): boolean;
+  /** Activate only after durable publication succeeds; no candidate is executable earlier. */
+  publish(catalog: ServicePluginCatalog, target: ServicePluginTarget): boolean;
 }

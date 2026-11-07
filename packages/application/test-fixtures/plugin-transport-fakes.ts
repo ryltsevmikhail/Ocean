@@ -44,7 +44,14 @@ export function fakePluginTransport(
     ): Promise<ServicePluginCatalog> {
       transport.discoverCalls++;
       transport.targets.push(target);
-      return transport.catalog(target);
+      const catalog = await transport.catalog(target);
+      return {
+        ...catalog,
+        target: {
+          ...catalog.target,
+          ...(target.authority === undefined ? {} : { authority: target.authority }),
+        },
+      };
     },
     async invoke(
       target: ServicePluginTarget,
