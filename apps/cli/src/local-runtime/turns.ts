@@ -94,9 +94,18 @@ export class RuntimeTurns {
         return { result: receipt };
       }
       case 'receipts.get':
-        return isLocalReceiptQuery(params)
-          ? { result: this.#chat.getReceipt(params) }
-          : { error: { code: 'invalid_params' } };
+        if (
+          !isLocalReceiptQuery(params) ||
+          (params.taskId !== undefined && !context.codingWorkspace)
+        )
+          return { error: { code: 'invalid_params' } };
+        try {
+          return { result: this.#chat.getReceipt(params) };
+        } catch (error) {
+          if (error instanceof Error && error.message === 'coding_denied')
+            return { error: { code: 'coding_denied' } };
+          throw error;
+        }
       default:
         return this.#queries.dispatch(
           method,

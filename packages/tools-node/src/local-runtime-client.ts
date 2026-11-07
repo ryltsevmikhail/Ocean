@@ -217,6 +217,8 @@ async function connectDescriptor(
       },
       async getReceipt(input) {
         const query = validatedParams(input, isLocalReceiptQuery);
+        if (query.taskId !== undefined && !identity.capabilities.includes(LOCAL_CODING_WORKSPACE))
+          throw Error('client_upgrade_required');
         const result = await peer.request('receipts.get', query);
         if (result !== null && !matchesReceipt(result, query)) throw Error('invalid_frame');
         return result;

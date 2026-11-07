@@ -2,8 +2,11 @@ import { DesktopAttachmentClient } from '@runnets/tools-node';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { connectLocalRuntime } from '@runnets/tools-node/local-runtime-client';
 import { dispatch } from './runtime-client.js';
+import { desktopEntry } from './desktop-entry.js';
+import { dispatchProject, projectCommand } from './project-client.js';
 import { profileAssets } from './profile-assets.js';
 import { join, resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import { AttachmentHost } from './attachment-host.js';
@@ -13,7 +16,18 @@ import { commands, outputs, type SendStage } from '../protocol.js';
 process.umask(0o077);
 app.enableSandbox();
 const dist = resolve(import.meta.dirname, '../..');
-const page = pathToFileURL(join(dist, 'web/index.html')).href;
+const entry = desktopEntry(
+  process.argv.slice(1),
+  app.getPath('userData'),
+  process.env['OCEAN_DESKTOP_PROFILE'],
+);
+const projects = entry.page === 'projects.html';
+if (projects) {
+  mkdirSync(entry.userData, { recursive: true, mode: 0o700 });
+  app.setPath('userData', entry.userData);
+  app.setPath('sessionData', entry.userData);
+}
+const page = pathToFileURL(join(dist, 'web', entry.page)).href;
 const failure = (code: string, sendStage?: SendStage) => ({
   version: 1,
   ok: false,
@@ -40,8 +54,7 @@ const admissionRefusals = new Set([
   'request_too_large',
 ]);
 async function open() {
-  const userData = app.getPath('userData');
-  const profile = process.env['OCEAN_DESKTOP_PROFILE'] ?? join(userData, 'conversation', 'profile');
+  const { userData, profile } = entry;
   const win = new BrowserWindow({
     width: 1180,
     autoHideMenuBar: true,
@@ -73,9 +86,17 @@ async function open() {
       event.senderFrame.url !== page
     )
       return failure('invalid_request');
+    let project;
+    if (projects) {
+      try {
+        project = projectCommand(raw);
+      } catch {
+        return failure('invalid_request');
+      }
+    }
     const asset = attachmentCommands.safeParse(raw);
     const parsed = commands.safeParse(raw);
-    if (!parsed.success && !asset.success) return failure('invalid_request');
+    if (!project && !parsed.success && !asset.success) return failure('invalid_request');
     let phase: 'preparation' | 'submit' | undefined =
       parsed.success && parsed.data.op === 'send' ? 'preparation' : undefined;
     if (inflight >= 8) return failure('client_busy', phase);
@@ -88,6 +109,7 @@ async function open() {
         },
       );
       try {
+        if (project) return { version: 1, ok: true, data: await dispatchProject(client, project) };
         profileAssets(userData, profile, client.identity.profileId);
         const attachmentClient = new DesktopAttachmentClient(client);
         await attachmentClient.connect(userData);

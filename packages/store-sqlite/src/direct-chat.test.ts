@@ -267,4 +267,24 @@ it('requires an injected task factory and binds task identity into the durable c
     error: { code: 'request_conflict' },
   });
   expect(requests).toHaveLength(1);
+  const ordinary = { ...send, requestId: 'ordinary', taskId: undefined };
+  const { taskId: _taskId, ...ordinaryInput } = ordinary;
+  expect(await chat.send(ordinaryInput)).toMatchObject({ ok: true });
+  const restarted = c.reopen();
+  const scope = { workspaceId: input.workspaceId, roomId: c.roomId };
+  expect(
+    restarted.chat.getReceipt({ ...scope, requestId: send.requestId, taskId: 'task' }),
+  ).toMatchObject({
+    requestId: send.requestId,
+    runId: expect.any(String),
+  });
+  expect(() =>
+    restarted.chat.getReceipt({ ...scope, requestId: send.requestId, taskId: 'different' }),
+  ).toThrow('coding_denied');
+  expect(() =>
+    restarted.chat.getReceipt({ ...scope, requestId: ordinary.requestId, taskId: 'task' }),
+  ).toThrow('coding_denied');
+  expect(restarted.chat.getReceipt({ ...scope, requestId: ordinary.requestId })).toMatchObject({
+    requestId: ordinary.requestId,
+  });
 });

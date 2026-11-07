@@ -6,6 +6,7 @@ export interface LocalRoomScope {
 }
 export interface LocalReceiptQuery extends LocalRoomScope {
   readonly requestId: string;
+  readonly taskId?: string;
 }
 export interface LocalRunQuery extends LocalRoomScope {
   readonly runId: string;
@@ -13,7 +14,6 @@ export interface LocalRunQuery extends LocalRoomScope {
 export interface LocalTurnRequest extends LocalReceiptQuery {
   readonly text: string;
   readonly to?: string;
-  readonly taskId?: string;
 }
 export interface LocalTurnReceipt extends LocalReceiptQuery {
   readonly messageId: string;
@@ -70,7 +70,13 @@ function only(v: Record<string, unknown>, allowed: readonly string[]) {
   return Object.keys(v).every((k) => allowed.includes(k));
 }
 export function isLocalReceiptQuery(v: unknown): v is LocalReceiptQuery {
-  return localRuntimeRecord(v) && scope(v) && id(v['requestId']) && only(v, receiptKeys);
+  return (
+    localRuntimeRecord(v) &&
+    scope(v) &&
+    id(v['requestId']) &&
+    (v['taskId'] === undefined || id(v['taskId'])) &&
+    only(v, [...receiptKeys, 'taskId'])
+  );
 }
 export function isLocalRunQuery(v: unknown): v is LocalRunQuery {
   return (

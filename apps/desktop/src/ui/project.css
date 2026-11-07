@@ -1,0 +1,137 @@
+.project-shell {
+  grid-template-columns: minmax(185px, 22%) minmax(0, 1fr);
+}
+.project-rail {
+  gap: 1rem;
+}
+.project-rail nav,
+.project-form,
+.project-work,
+.project-panel,
+.project-operation,
+.project-decision {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+}
+.project-rail nav {
+  padding: 0.2rem;
+}
+.project-rail nav button {
+  justify-content: start;
+}
+.project-shell label {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.project-shell select,
+.project-shell input,
+.project-shell textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  background: var(--bg);
+}
+.project-shell textarea {
+  resize: vertical;
+}
+.project-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 2.25rem);
+  overflow-wrap: anywhere;
+}
+.project-main > * {
+  width: 100%;
+  max-width: 68rem;
+  justify-self: center;
+}
+.project-eyebrow {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.project-main h1 {
+  font-size: 1.65rem;
+}
+.project-main > button {
+  width: auto;
+  justify-self: start;
+}
+.project-panel {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--rail);
+}
+.project-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+}
+.project-row > h2,
+.project-row > strong {
+  margin-right: auto;
+}
+.project-primary:enabled {
+  background: var(--accent);
+  color: white;
+}
+.project-decision {
+  border-left: 2px solid var(--line);
+  padding-left: 0.75rem;
+}
+.project-assignments {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+.project-assignments dt,
+.project-run-status,
+.project-history strong {
+  color: var(--muted);
+}
+.project-assignments dd {
+  margin: 0;
+}
+.project-history,
+.project-main pre {
+  min-width: 0;
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.65rem;
+  background: var(--bg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.project-history article + article {
+  margin-top: 0.65rem;
+}
+.project-hash {
+  font-family: ui-monospace, monospace;
+}
+.project-main [role='alert'] {
+  color: var(--danger);
+}
+@media (max-width: 680px) {
+  .project-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .project-rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

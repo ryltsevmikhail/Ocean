@@ -1,7 +1,7 @@
 # Project Desktop
 
 The project client uses the same private Ocean runtime and profile as the bot
-Desktop. Its planned flow is project → task → dev run → diff → review → apply.
+Desktop. Its flow is project → task → dev run → diff → review → apply.
 
 ## Implemented: SDK discovery
 
@@ -154,8 +154,35 @@ changed inputs, stale evidence and trees, and process kills before a claim
 and after file publication. A pre-claim read failure permits clean shutdown
 when the journal proves there is no outstanding effect.
 
-## Planned
+## Implemented in source: the project window
 
-The project window and its installed acceptance
-follow in the [project Desktop plan](../superpowers/plans/2026-11-07-ocean-project-desktop.md).
+Start the owner runtime as usual, then open the Projects window from this
+workspace:
+
+```sh
+OCEAN_DESKTOP_PROFILE=/absolute/private/profile pnpm --filter @ocean/desktop start --projects
+```
+
+Without the override, both Desktop entries use the bot Desktop's existing
+`<userData>/conversation/profile` default. Projects has its own browser
+storage below that user-data directory. It uses the same authenticated owner
+connection and opens no runtime. Use the owner CLI to register projects and
+configure their policies, rooms, bots and test presets.
+
+The window selects a registered project and task. It shows the assigned rooms
+and bots and follows reserve, prepare, dev message, immutable snapshot, test
+evidence, review and exact apply. The approval card shows the operation preview
+and its binding; a decision and the subsequent effect result are shown
+separately. The dev history is the selected task's assigned room history.
+Cancellation is a request until the runtime reports the actual run state.
+
+Closing the window detaches from ongoing work. Reopening it looks up saved
+operation IDs and the task's durable turn receipt. A missing acknowledgement
+does not submit again on its own. The project client uses the optional
+`taskId` on the negotiated `getReceipt` lookup to reject an ordinary or
+another task's turn before observing, cancelling or voting on the run.
+Older, unscoped lookups retain their behavior.
+
+Packaged GUI, native presets and the disposable installed workflow are still
+[acceptance work](../superpowers/plans/2026-11-07-ocean-project-desktop.md#224--installed-acceptance).
 The published Ocean 1.1.0 bot Desktop stays on its own release revision.
