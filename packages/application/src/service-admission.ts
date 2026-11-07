@@ -221,6 +221,7 @@ export class ServiceCallAdmissionService {
       return false;
     };
     let outcome: ServicePluginInvokeOutcome = lost();
+    let dispatchPreparation: Promise<void> | undefined;
     try {
       const interrupted = new Promise<ServicePluginInvokeOutcome>((resolve) => {
         if (lifetime.signal.aborted) resolve(lost());
@@ -236,7 +237,11 @@ export class ServiceCallAdmissionService {
           signal: lifetime.signal,
           deadlineMs: ms,
           authorizeDispatch,
-          prepareDispatch: refreshResources,
+          prepareDispatch: () => {
+            if (closed || lifetime.signal.aborted || Date.now() >= expire)
+              return Promise.reject(Error('resource preparation expired'));
+            return (dispatchPreparation ??= refreshResources());
+          },
           ...(typeof managedSession === 'string' ? { managedSession } : {}),
         }),
         interrupted,
@@ -262,6 +267,7 @@ export class ServiceCallAdmissionService {
       outcome,
       resource,
       cleanupErrors,
+      dispatchPreparation,
     );
   }
 }

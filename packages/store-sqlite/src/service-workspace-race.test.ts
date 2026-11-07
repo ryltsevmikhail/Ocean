@@ -96,12 +96,17 @@ it.each(['revoke', 'unknown', 'connection'] as const)(
     expect(sends).toBe(0);
   },
 );
-it('closes physical evidence that finishes preparing after its outer call deadline', async () => {
+it('joins postclaim evidence preparing past its deadline before returning not-started', async () => {
   let release!: () => void,
     entered!: () => void,
     done!: () => void,
     preparations = 0,
-    lateClosed = 0;
+    lateClosed = 0,
+    abortObserved!: () => void,
+    finished = false;
+  const aborted = new Promise<void>((r) => {
+    abortObserved = r;
+  });
   const held = new Promise<void>((r) => {
       release = r;
     }),
@@ -127,8 +132,9 @@ it('closes physical evidence that finishes preparing after its outer call deadli
     },
     30,
     {
-      prepareResources: async () => {
+      prepareResources: async (_admission, signal) => {
         if (++preparations === 2) {
+          signal.addEventListener('abort', abortObserved, { once: true });
           entered();
           await held;
           return {
@@ -143,11 +149,20 @@ it('closes physical evidence that finishes preparing after its outer call deadli
       },
     },
   );
-  const call = f.service.call(f.request);
-  await waiting;
+  const call = f.service.call(f.request).finally(() => {
+    finished = true;
+  });
+  try {
+    await waiting;
+    await aborted;
+    await new Promise<void>((r) => setImmediate(r));
+    expect(finished).toBe(false);
+  } finally {
+    release();
+    await call;
+    await joined;
+  }
   expect((await call).outcome?.kind).toBe('not_started');
-  release();
-  await joined;
   expect(lateClosed).toBe(1);
 });
 it('returns a proved preclaim deadline refusal while held preparation remains owned until late unwind', async () => {

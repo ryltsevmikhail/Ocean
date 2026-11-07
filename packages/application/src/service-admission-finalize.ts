@@ -36,6 +36,7 @@ export async function finishServiceCall(
   outcome: ServicePluginInvokeOutcome,
   resource: ServiceResourceEvidence | undefined,
   errors: unknown[],
+  preparation?: Promise<void>,
 ): Promise<ServiceCallResult> {
   let retirement: Promise<void> | undefined;
   if (outcome.kind === 'uncertain') {
@@ -48,6 +49,11 @@ export async function finishServiceCall(
     } catch (error) {
       errors.push(error);
     }
+  }
+  try {
+    await preparation;
+  } catch (error) {
+    if (error instanceof AggregateError) errors.push(error);
   }
   await closeServiceResource(resource, errors);
   try {
