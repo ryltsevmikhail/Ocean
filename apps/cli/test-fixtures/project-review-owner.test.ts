@@ -9,12 +9,13 @@ import { startLocalRuntime } from '../dist/local-runtime/host.js';
 import { serve } from './model-process-rpc.ts';
 
 const [, , profile, mode] = process.argv;
-if (mode === 'apply-crash') {
+if (mode === 'apply-crash' || mode === 'apply-file-failure') {
   const unlink = fs.unlinkSync;
   fs.unlinkSync = (path) => {
     unlink(path);
     if (String(path).endsWith('.after')) {
       writeFileSync(join(profile!, 'apply-file-published'), 'published', { flush: true });
+      if (mode === 'apply-file-failure') throw Error('scripted post-publication failure');
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
     }
   };
@@ -24,7 +25,7 @@ let unblock: (() => void) | undefined;
 let waiting: Promise<void> | undefined;
 let beforeSend = false;
 let transportUnknown = false;
-if (mode === 'apply-before-claim') {
+if (mode?.startsWith('apply-before-claim')) {
   const inspect = GitCodingApplyProject.prototype.inspect;
   GitCodingApplyProject.prototype.inspect = async function (root) {
     const db = new DatabaseSync(join(profile!, 'runtime.sqlite'), { readOnly: true });
@@ -41,6 +42,8 @@ if (mode === 'apply-before-claim') {
     if (allowed) {
       writeFileSync(join(profile!, 'apply-before-claim'), 'allowed', { flush: true });
       await waiting;
+      if (mode === 'apply-before-claim-failure')
+        throw Error('scripted post-allow Git inspection failure');
     }
     return inspect.call(this, root);
   };

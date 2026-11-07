@@ -1,5 +1,9 @@
-import type { CodingApplyPreview, RuntimeOwnerDecisions } from '@runnets/application';
-import type { CodingApplyReceipt } from '@runnets/domain';
+import type {
+  CodingApplyOwnerPort,
+  CodingApplyPreview,
+  RuntimeOwnerDecisions,
+} from '@runnets/application';
+import { codingFailure, type CodingApplyReceipt } from '@runnets/domain';
 import {
   isCodingApplyStatus,
   type CodingApplyQuery,
@@ -33,6 +37,16 @@ function preview(q: CodingApplyQuery, { task, changeset, verdict }: CodingApplyP
     },
   };
 }
+function matchesReceipt(q: CodingApplyQuery, id: string, receipt: CodingApplyReceipt) {
+  return (
+    receipt.id === id &&
+    receipt.taskId === q.taskId &&
+    receipt.expectedBase === q.expectedBase &&
+    receipt.changesetHash === q.changesetHash &&
+    receipt.reviewRequestId === q.reviewRequestId
+  );
+}
+
 function summary(receipt: CodingApplyReceipt) {
   const { id, taskId, changesetHash, expectedBase, reviewRequestId, status, files } = receipt;
   return {
@@ -96,11 +110,7 @@ export class ProjectApply {
     if (
       receipt &&
       (decision.status !== 'allowed' ||
-        receipt.id !== ref.decisionId ||
-        receipt.taskId !== q.taskId ||
-        receipt.expectedBase !== q.expectedBase ||
-        receipt.changesetHash !== q.changesetHash ||
-        receipt.reviewRequestId !== q.reviewRequestId ||
+        !matchesReceipt(q, ref.decisionId, receipt) ||
         receipt.files.length !== pin.fileCount)
     )
       throw Error('apply_unavailable');
@@ -119,6 +129,25 @@ export class ProjectApply {
     if (!isCodingApplyStatus(value)) throw Error('apply_unavailable');
     return value;
   }
+  #outstandingEffect(q: CodingApplyQuery, id: string): boolean {
+    try {
+      const receipt = this.#service().receipt(id);
+      if (receipt === null) return false;
+      const settledFile =
+        receipt.status === 'completed'
+          ? 'completed'
+          : receipt.status === 'not_started'
+            ? 'pending'
+            : null;
+      return (
+        !matchesReceipt(q, id, receipt) ||
+        settledFile === null ||
+        receipt.files.some((file) => file.status !== settledFile)
+      );
+    } catch {
+      return true;
+    }
+  }
   async run(
     q: CodingApplyQuery,
     confirm: (value: unknown, current: () => Promise<boolean>) => Promise<boolean>,
@@ -135,7 +164,8 @@ export class ProjectApply {
       changesetHash: q.changesetHash,
       reviewRequestId: q.reviewRequestId,
     };
-    const result = await service.apply(input, {
+    let allowed = false;
+    const owner: CodingApplyOwnerPort = {
       confirm: async (prepared) => {
         const pin = preview(q, prepared);
         if (!this.#completedReview(q, pin)) throw Error('coding_denied');
@@ -143,7 +173,7 @@ export class ProjectApply {
           codingOwnerTask(this.runtime, q);
           return this.#completedReview(q, pin);
         };
-        const allowed = await confirm(
+        allowed = await confirm(
           pin,
           async () => checkScope() && (await service.current(input, prepared)) && checkScope(),
         );
@@ -154,11 +184,23 @@ export class ProjectApply {
           return false;
         }
       },
-    });
-    if (!result.ok && result.error.code === 'recovery_required') {
-      const receipt = service.receipt(input.id);
-      if (receipt?.status === 'applying' || receipt?.status === 'uncertain') uncertain();
+    };
+    try {
+      const result = await service.apply(input, owner);
+      if (
+        !result.ok &&
+        result.error.code === 'recovery_required' &&
+        this.#outstandingEffect(q, input.id)
+      )
+        uncertain();
+      return result;
+    } catch (error) {
+      // Card creation and decision persistence errors still fail the shared lane closed.
+      if (!allowed) throw error;
+      // A Git read can fail after allowance but before any effect is claimed.
+      if (!this.#outstandingEffect(q, input.id)) return codingFailure('worktree_unavailable');
+      uncertain();
+      return codingFailure('recovery_required');
     }
-    return result;
   }
 }

@@ -2,63 +2,23 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { dirname, join } from 'node:path';
 import { expect, it } from 'vitest';
-import type { CodingReviewStatus, LocalDecision } from '@runnets/contracts';
 import {
   calls,
   injectEvidence,
   launchOwner,
   launchPeer,
-  prepare,
   ref,
   vote,
 } from '../../test-fixtures/project-review-fixture.ts';
 import { reserveFixture } from '../../test-fixtures/project-reserve-fixture.ts';
 
-type Fixture = Awaited<ReturnType<typeof reserveFixture>>;
-type Peer = ReturnType<typeof launchPeer>;
-const selectedBytes = 'immutable selected bytes\n';
-const source = (f: Fixture) => readFileSync(join(f.project, 'file'), 'utf8');
-const journal = (f: Fixture, id: string) => {
-  const db = new DatabaseSync(join(f.directory, 'runtime.sqlite'), { readOnly: true });
-  try {
-    const row = db.prepare('SELECT payload FROM ocean_coding_applications WHERE id=?').get(id);
-    return row ? JSON.parse(String(row['payload'])) : null;
-  } finally {
-    db.close();
-  }
-};
-async function approvedReview(f: Fixture, peer: Peer) {
-  const { query, saved, later, path } = await prepare(f, peer);
-  writeFileSync(path, selectedBytes);
-  const evidence = injectEvidence(f, saved, dirname(path), 'selected-tree');
-  const review = () => peer.call<CodingReviewStatus>('requestCodingReview', query);
-  const { decision } = await review();
-  await vote(peer, decision);
-  await expect.poll(review).toMatchObject({
-    state: 'completed',
-    tests: 'matches_snapshot',
-    verdict: { verdict: 'approve' },
-  });
-  return {
-    path,
-    saved,
-    later,
-    evidence,
-    verdict: (await review()).verdict!,
-    input: {
-      workspaceId: query.workspaceId,
-      roomId: f.input.ownerRoomId,
-      taskId: query.taskId,
-      requestId: 'apply',
-      expectedBase: saved.baseCommit,
-      changesetHash: saved.hash,
-      reviewRequestId: decision.decisionId,
-    },
-  };
-}
-type Input = Awaited<ReturnType<typeof approvedReview>>['input'];
-const apply = (peer: Peer, input: Input) =>
-  peer.call<{ decision: LocalDecision }>('applyCodingChangeset', input);
+import {
+  apply,
+  approvedReview,
+  journal,
+  selectedBytes,
+  source,
+} from '../../test-fixtures/project-apply-fixture.ts';
 
 it('writes the exact approved changes once and reopens the same compact receipt across peers and restart', async () => {
   const f = await reserveFixture();
@@ -243,40 +203,73 @@ it('recovers a killed file effect as unknown and does not reapply it', async () 
   }
 }, 20000);
 
-it('never resumes an allowed request without a receipt or an interrupted owner card', async () => {
+it.each(['kill', 'throw'])(
+  'does not apply after a post-allow/pre-claim %s',
+  async (failure) => {
+    const f = await reserveFixture();
+    try {
+      const host = launchOwner(
+        f,
+        failure === 'kill' ? 'apply-before-claim' : 'apply-before-claim-failure',
+      );
+      await host.ready;
+      const a = launchPeer(f);
+      await a.ready;
+      const { input } = await approvedReview(f, a);
+      const pending = await apply(a, input);
+      const interrupted = { ...input, requestId: 'interrupted-apply' };
+      if (failure === 'kill') await apply(a, interrupted);
+      await host.call('hold');
+      await vote(a, pending.decision);
+      await expect.poll(() => existsSync(join(f.directory, 'apply-before-claim'))).toBe(true);
+      const id = pending.decision.decisionId;
+      const unconfirmed = { decision: { status: 'allowed' }, state: 'unconfirmed', receipt: null };
+      expect(journal(f, id)).toBeNull();
+      expect(source(f)).toBe('base');
+      if (failure === 'throw') {
+        await host.call('release');
+        expect(await apply(a, input)).toMatchObject(unconfirmed);
+        expect(await a.call('stop')).toMatchObject({ state: 'stopped', outcome: 'complete' });
+      } else {
+        await host.kill();
+        await launchOwner(f, 'apply').ready;
+        const b = launchPeer(f);
+        await b.ready;
+        expect(await apply(b, input)).toMatchObject(unconfirmed);
+        expect(await apply(b, interrupted)).toMatchObject({
+          decision: { status: 'interrupted' },
+          state: 'no_application',
+          receipt: null,
+        });
+        expect(await b.call('stop')).toMatchObject({ state: 'stopped', outcome: 'complete' });
+      }
+      expect(journal(f, id)).toBeNull();
+      expect(source(f)).toBe('base');
+    } finally {
+      await f.close();
+    }
+  },
+  20000,
+);
+
+it('keeps shutdown uncertain when the live apply loses proof after publishing a file', async () => {
   const f = await reserveFixture();
   try {
-    const host = launchOwner(f, 'apply-before-claim');
-    await host.ready;
+    await launchOwner(f, 'apply-file-failure').ready;
     const a = launchPeer(f);
     await a.ready;
     const { input } = await approvedReview(f, a);
     const pending = await apply(a, input);
-    const interrupted = { ...input, requestId: 'interrupted-apply' };
-    await apply(a, interrupted);
-    await host.call('hold');
     await vote(a, pending.decision);
-    await expect.poll(() => existsSync(join(f.directory, 'apply-before-claim'))).toBe(true);
-    const id = pending.decision.decisionId;
-    expect(journal(f, id)).toBeNull();
-    expect(source(f)).toBe('base');
-    await host.kill();
-    await launchOwner(f, 'apply').ready;
-    const b = launchPeer(f);
-    await b.ready;
-    expect(await apply(b, input)).toMatchObject({
-      decision: { status: 'allowed' },
-      state: 'unconfirmed',
-      receipt: null,
-    });
-    expect(await apply(b, interrupted)).toMatchObject({
-      decision: { status: 'interrupted' },
-      state: 'no_application',
-      receipt: null,
-    });
-    expect(await b.call('stop')).toMatchObject({ state: 'stopped', outcome: 'complete' });
-    expect(journal(f, id)).toBeNull();
-    expect(source(f)).toBe('base');
+    await expect
+      .poll(() => apply(a, input))
+      .toMatchObject({
+        decision: { status: 'allowed' },
+        state: 'outcome_unknown',
+        receipt: { status: 'uncertain', uncertainFiles: 1 },
+      });
+    expect(source(f)).toBe(selectedBytes);
+    expect(await a.call('stop')).toMatchObject({ state: 'stop_incomplete', outcome: 'uncertain' });
   } finally {
     await f.close();
   }
