@@ -2873,7 +2873,7 @@ only after actual evidence; retained B results do not qualify E candidate bytes.
       квитанцией после перезапуска и один GitHub MCP read через Issues read-only.
       Общий адрес GitHub не квалифицирован; OpenAI/Anthropic live отложены.
       См. [границы приёмки](../../ocean/platform-stage-f.md#installed-live-qualification).
-- [ ] Реальная локальная модель на Omarchy: offline chat + tool, RAM/VRAM,
+- [x] Реальная локальная модель на Omarchy: offline chat + tool, RAM/VRAM,
       задержка и пределы контекста; затем смешанная цепочка cloud → local → cloud
       и перезапуск runtime. Записать версии backend/model, настройки и результат;
       fake server не заменяет эту приёмку. Без квалифицированного backend gate открыт.
@@ -2886,6 +2886,9 @@ only after actual evidence; retained B results do not qualify E candidate bytes.
       результата. Без поля сохраняется действующее поведение; прочие grants
       проверяются отдельно. После RED→GREEN и независимого ревью повторить полный
       живой сценарий с новым корнем и перезапуском. Старые неизвестные исходы не повторять.
+      Принято после независимого ревью: offline chat/tool на rc.21 и реальная
+      цепочка с тем же результатом и квитанцией после перезапуска на rc.22
+      (`3140f14`). Подробности и ограничения — в [карте выпуска](../../ocean/platform-stage-f.md).
 - [ ] Финальный Linux-артефакт, SHA-256, inventory/licenses, установленный GUI;
       сверить опубликованные байты и ревизию. Stable не выпускать по одним старым RC2 gates.
 

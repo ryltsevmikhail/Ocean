@@ -26,7 +26,7 @@ and entry points documented for each stage.
 | Independent runtime/authority/migration and whole-branch review                        | Accepted with bounded fixes. The review covered the complete `v1.0.0..11729d9` range by inventory and high-risk source paths. The fix wave closed runtime construction cleanup and the two named native test boundaries; `8bc6ff8` also prevents recovery after failed construction and makes the ordinary HTTP tests portable. Root check/build/format pass (4,188 source, 184 process; 44/58 skips). Remaining narrow limits and release qualification stay open below. |
 | Disposable install, migration, backup/restore, reboot/device identity, update/rollback | Accepted for the observed disposable Linux boundary at `7dbbf90` (rc.21). Real RC2 migrated 18→29; old execution refused, and a compatible backup restored to a separate schema18 profile on rollback. Installed CLI/TUI/ACP, authenticated Python socket, complete format-2 assets, lineage and exact owner rebind were exercised. Btrfs and endpoint limits are below.                                                                                                  |
 | Live cloud and MCP                                                                     | Installed rc.21: DeepSeek completed once and preserved the same receipt across runtime restart. GitHub MCP read issue #5 once after exact owner approval using the read-only Issues endpoint. The default GitHub catalog failed before business dispatch. OpenAI and Anthropic live are deferred. See the qualification scope below.                                                                                                                                      |
-| Real local and mixed autonomy                                                          | Pending. On Omarchy, measure offline chat and a tool run, RAM/VRAM, latency and context limits, then verify autonomous cloud → local → cloud and runtime restart. Record the backend/model versions and settings. A qualifying backend and real model are required.                                                                                                                                                                                                       |
+| Real local and mixed autonomy                                                          | Native offline chat and one tool effect on Ollama 0.40.14; installed rc.22 completed DeepSeek → Ollama → DeepSeek, restarted, and returned the same receipt and result without redispatch. See the qualified scope below.                                                                                                                                                                                                                                                 |
 | Linux artifact, installed GUI and publication                                          | Pending. Bind the final Linux artifact, SHA-256, inventory, licenses and installed GUI evidence to the exact revision and verify the published bytes. E and RC2 evidence retains its original scope.                                                                                                                                                                                                                                                                      |
 
 Cold typecheck, lint and build passed at the existing 2 GiB/256-task/60 s/32 KiB
@@ -72,8 +72,39 @@ test; its account and permissions were not independently audited.
 The DeepSeek key and GitHub token stayed in memory via the existing credential
 ports; scans found no copies in the retained test files. The GitHub run used a
 synthetic model to request the exact read. OpenAI and Anthropic live were
-deferred by the owner. This result leaves the real local and mixed team gate
-and final release qualification open.
+deferred by the owner. This result does not qualify those adapters against live
+services.
+
+### Native local model and mixed workflow
+
+The rc.21 offline probe used Ollama 0.40.14 and the pinned `qwen3:1.7b`
+artifact (2.0B GGUF, Q4_K_M). Five inference requests completed, including
+ordinary chat and one durably claimed tool effect with model continuation.
+The isolated network had only loopback; IPv4 and IPv6 egress probes failed.
+Actual allocation was context 4096 on CPU with zero VRAM. Charged memory
+peaked at 2,803,888,128 bytes without swap or OOM. First text / terminal
+latency was 2,981 / 3,400 ms cold and 788 / 1,373 ms warm. Cold means the
+backend had no loaded model, with the OS page cache retained.
+
+The offline supervisor's aggregate check remained nonzero because sampling
+missed the short-lived socket binder. All observed roles were in the private
+namespace and cleanup was confirmed. The offline evidence remains attributed
+to rc.21. The rc.22 payload comparison found the provider and engine bytes
+unchanged; the live test below exercises the changed room task code.
+
+On installed rc.22 (`3140f14`), DeepSeek delegated to Ollama, whose participant
+had `peerTools: false` and no other tool grants. Ollama returned an ordinary
+reply. The runtime delivered one result to DeepSeek, which resumed and
+completed the root. Physical inference calls: two DeepSeek and one Ollama;
+metadata requests: one and six respectively. With the same SQLite profile,
+the runtime closed and reopened in the test process. A separate SDK process
+reattached and read the same receipt, root and history with no redispatch.
+Changing the participant option under the same request ID conflicted.
+
+The two earlier mixed roots had incomplete outcomes. Their unknown model
+settlements were retained, and neither root was resumed. The successful case qualifies the explicitly restricted
+participant on this backend and model. It does not establish reliable peer tool
+selection for this small model when all tools are exposed.
 
 ### Room task SDK option for mixed teams
 
@@ -90,7 +121,7 @@ Earlier SDKs and runtimes reject requests with the new field. The current runtim
 reads existing roots with the field absent. An earlier runtime also rejects a
 saved root containing the new field, so rollback uses a compatible backup. Do
 not remove the field from a saved root to make it readable by an older runtime.
-Scripted coverage for this option does not close the real mixed model gate.
+The installed mixed workflow above exercised this option with real models.
 
 ## Inherited v1.1 obligations
 
