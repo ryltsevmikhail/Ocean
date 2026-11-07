@@ -4,6 +4,7 @@ import { GitCodingProject } from '@runnets/tools-node';
 import type { Runtime } from '../runtime.js';
 import { readCodingProjects } from '../ocean/coding-projects.js';
 import { digest, ownerPreview } from './decision-preview.js';
+import { ProjectPreCardRefusal } from './project-pre-card-refusal.js';
 type Authorized = Parameters<CodingOwnerPort['confirm']>[0];
 type Preview = {
   operation: 'reserve';
@@ -34,7 +35,10 @@ export class ProjectReservation {
     this.owner = owner;
   }
   async input(q: CodingTaskReserve): Promise<StartCodingTask> {
-    const project = (await readCodingProjects(this.profile)).find((p) => p.id === q.projectId);
+    const projects = await readCodingProjects(this.profile).catch(() => {
+      throw new ProjectPreCardRefusal('catalog_unavailable');
+    });
+    const project = projects.find((p) => p.id === q.projectId);
     if (!project) throw Error('unknown_project');
     return {
       taskId: q.taskId,

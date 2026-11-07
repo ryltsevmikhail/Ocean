@@ -68,13 +68,18 @@ it('enforces cloud transfer policy and invalidates a changed configured reviewer
     await expect(policy('deny', 1)).rejects.toThrow('model_policy_members_conflict');
     const db = new DatabaseSync(join(f.directory, 'runtime.sqlite'));
     try {
-      db.prepare(
-        "UPDATE ocean_room_model_policies SET cloud_transfer='deny', revision=2 WHERE room_id=?",
-      ).run(query.roomId);
+      db.prepare('DELETE FROM ocean_room_model_policies WHERE room_id=?').run(query.roomId);
+      await expect(a.call('requestCodingReview', query)).rejects.toThrow(
+        /^project_pre_card_model_policy_unavailable$/,
+      );
+      db.prepare("INSERT INTO ocean_room_model_policies VALUES(?,'deny',2)").run(query.roomId);
     } finally {
       db.close();
     }
-    await expect(a.call('requestCodingReview', query)).rejects.toThrow('model_transfer_denied');
+    await expect(a.call('requestCodingReview', query)).rejects.toThrow(
+      /^project_pre_card_model_transfer_denied$/,
+    );
+    expect(await a.call('listDecisions', { workspaceId, roomId: query.roomId })).toEqual([]);
     expect(calls(f)).toEqual([]);
     await policy('allow', 2);
     const pending = await a.call<CodingReviewStatus>('requestCodingReview', query);

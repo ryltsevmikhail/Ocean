@@ -3,6 +3,8 @@ import { localRuntimeRecord } from './local-runtime.js';
 import { localPosition, type LocalRoomsQuery } from './local-runtime-queries.js';
 
 export const LOCAL_CODING_WORKSPACE = 'coding.workspace-v1';
+/** An initial setup job refused admission before attempting to open its owner card. */
+export const LOCAL_PROJECT_PRE_CARD_REFUSAL = 'project_pre_card_';
 export const LOCAL_CODING_WORKSPACE_PAGE = 50;
 export type CodingWorkspaceReadMethod = 'coding.projects.list' | 'coding.tasks.list';
 export const isCodingWorkspaceRead = (method: string): method is CodingWorkspaceReadMethod =>

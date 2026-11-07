@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { projectActions, projectStatus } from './project-state.js';
+import { projectActions, projectAdmission, projectError, projectStatus } from './project-state.js';
 
 it('does not offer apply for stale approval or a different snapshot', () => {
   const input = {
@@ -33,7 +33,6 @@ it('keeps acknowledgement and unknown outcomes separate from confirmed results',
 });
 
 it('restores a prior handle only when a new request is definitively refused', async () => {
-  const { projectAdmission } = await import('./project-state.js');
   let handle = 'new';
   const restore = () => {
     handle = 'prior';
@@ -58,4 +57,48 @@ it('keeps an owner preview’s visible directional escapes intact', async () => 
   const escaped = '{"path":"safe\\u202ereversed.txt"}';
   expect(projectDecisionText(escaped)).toBe(escaped);
   expect(projectDecisionText('unsafe\u202Epath')).toBe('unsafe\\u202epath');
+});
+
+it.each([
+  'project_pre_card_request_conflict',
+  'project_pre_card_recovery_required',
+  'project_pre_card_catalog_unavailable',
+  'project_pre_card_model_transfer_denied',
+  'project_pre_card_model_policy_unavailable',
+])('restores the prior selection on %s and explains the prerequisite', async (code) => {
+  let handle = 'submitted';
+  const failure = Error(code);
+  await expect(
+    projectAdmission(
+      async () => {
+        throw failure;
+      },
+      () => {
+        handle = 'editable';
+      },
+    ),
+  ).rejects.toBe(failure);
+  expect(handle).toBe('editable');
+  expect(projectError(failure)).not.toBe(projectError(Error('outcome_unknown')));
+});
+
+it.each([
+  'request_conflict',
+  'recovery_required',
+  'reservation_unavailable',
+  'unknown_decision',
+  'outcome_unknown',
+])('retains the exact saved handle on unproven %s', async (code) => {
+  let handle = 'submitted';
+  await expect(
+    projectAdmission(
+      async () => {
+        throw Error(code);
+      },
+      () => {
+        handle = 'editable';
+      },
+    ),
+  ).rejects.toThrow(code);
+  expect(handle).toBe('submitted');
 });

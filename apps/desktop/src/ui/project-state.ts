@@ -1,3 +1,5 @@
+import { LOCAL_PROJECT_PRE_CARD_REFUSAL } from '@runnets/contracts';
+
 const statuses: Record<string, string> = {
   reserved: 'Зарезервировано',
   pending: 'Ожидает решения владельца',
@@ -49,10 +51,28 @@ const errors: Record<string, string> = {
   runtime_draining: 'Сервер завершает работу. Подключитесь заново после запуска.',
   invalid_params: 'Сервер отклонил параметры. Проверьте состояние и версию Ocean.',
   provider_unavailable: 'Назначенной модели сейчас нельзя отправить запрос.',
+  catalog_unavailable:
+    'Каталог проектов или его зависимости недоступны. Проверьте их и повторите запрос.',
+  model_transfer_denied: 'Политика комнаты запрещает отправлять снимок назначенной модели.',
+  model_policy_unavailable:
+    'Политика комнаты ревью недоступна. Восстановите её и повторите запрос.',
 };
-export const projectError = (error: unknown) =>
-  errors[error instanceof Error ? error.message : ''] ??
-  'Состояние не подтверждено. Обновите его перед новым действием.';
+const preCardReason = (code: string) =>
+  code.startsWith(LOCAL_PROJECT_PRE_CARD_REFUSAL)
+    ? code.slice(LOCAL_PROJECT_PRE_CARD_REFUSAL.length)
+    : '';
+export function projectError(error: unknown) {
+  const code = error instanceof Error ? error.message : '';
+  const reason = preCardReason(code);
+  if (reason === 'request_conflict')
+    return 'Идентификатор задачи уже используется. Укажите свободный идентификатор.';
+  return (
+    errors[reason || code] ??
+    (reason
+      ? 'Сервер отказал до открытия карточки подтверждения.'
+      : 'Состояние не подтверждено. Обновите его перед новым действием.')
+  );
+}
 
 export function projectActions(input: {
   ready: boolean;
@@ -77,8 +97,8 @@ export function projectActions(input: {
   };
 }
 
-// The first request acknowledges a card before its effect. These replies refuse admission;
-// transport failure, conflict or recovery_required cannot establish that a request is absent.
+// A setup job can prove it refused admission before attempting to open its card.
+// Untagged conflict, recovery and transport errors cannot establish that the request is absent.
 const projectRefusals = new Set([
   'invalid_request',
   'invalid_params',
@@ -101,7 +121,11 @@ export async function projectAdmission<T>(request: () => Promise<T>, restore: ()
   try {
     return await request();
   } catch (error) {
-    if (error instanceof Error && projectRefusals.has(error.message)) restore();
+    if (
+      error instanceof Error &&
+      (preCardReason(error.message) || projectRefusals.has(error.message))
+    )
+      restore();
     throw error;
   }
 }

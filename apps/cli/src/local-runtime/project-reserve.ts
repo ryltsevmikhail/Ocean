@@ -2,6 +2,7 @@ import type { ProviderActivationPort, RuntimeOwnerDecisions } from '@runnets/app
 import {
   CODING_APPLY_REQUEST,
   CODING_REVIEW_REQUEST,
+  LOCAL_PROJECT_PRE_CARD_REFUSAL,
   isCodingApplyQuery,
   type CodingApplyQuery,
   isCodingReviewQuery,
@@ -19,6 +20,11 @@ import { ProjectReservation } from './project-reservation.js';
 import { ProjectPreparation, prepareReference, preparePreview } from './project-prepare.js';
 import { ProjectReview, reviewReference } from './project-review.js';
 import { ProjectApply, applyReference } from './project-apply.js';
+import { ProjectPreCardRefusal } from './project-pre-card-refusal.js';
+
+const preCardRefusal = (code: string): RuntimeReply => ({
+  error: { code: LOCAL_PROJECT_PRE_CARD_REFUSAL + code },
+});
 type Job = { binding: string; acknowledged: Promise<RuntimeReply>; done: Promise<void> };
 const normalize = (q: CodingTaskReserve): CodingTaskReserve => ({
   workspaceId: q.workspaceId,
@@ -222,15 +228,21 @@ export class RuntimeProjectReserve {
               : review
                 ? await this.#review!.run(review, this.#closing.signal, confirm, uncertain)
                 : await this.#apply.run(apply!, confirm, uncertain);
-          if (!result.ok) acknowledge({ error: { code: result.error.code } });
-          else if (!review && !apply) {
+          if (!result.ok) {
+            const code = result.error.code;
+            acknowledge(opened ? { error: { code } } : preCardRefusal(code));
+          } else if (!review && !apply) {
             const previous = await existing();
             acknowledge(previous ? { result: previous } : { error: { code: 'request_conflict' } });
           }
         })
         .catch((error: unknown) => {
           if (opened) this.#failure = true;
-          acknowledge(this.#error(error));
+          acknowledge(
+            !opened && error instanceof ProjectPreCardRefusal
+              ? preCardRefusal(error.message)
+              : this.#error(error),
+          );
         })
         .finally(() => this.#jobs.delete(ref.decisionId));
       this.#jobs.set(ref.decisionId, { binding, acknowledged, done });

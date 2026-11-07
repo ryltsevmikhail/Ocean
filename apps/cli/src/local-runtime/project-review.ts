@@ -23,6 +23,7 @@ import {
 } from '@runnets/contracts';
 import type { Runtime } from '../runtime.js';
 import { digest, ownerPreview } from './decision-preview.js';
+import { ProjectPreCardRefusal } from './project-pre-card-refusal.js';
 
 type ReviewRuntime = Pick<Runtime, 'codingReview' | 'coding' | 'conversationStore' | 'service'>;
 export const reviewReference = (q: CodingReviewQuery) => {
@@ -89,7 +90,7 @@ export class ProjectReview {
       if (!resolved.ok) throw Error(resolved.error.code);
       const snapshot = freezeModelActivation(resolved.value.snapshot);
       const transfer = admitRoomModelTransfer(tx, q.roomId, snapshot.identity);
-      if (!transfer.ok) throw Error(transfer.error.code);
+      if (!transfer.ok) throw new ProjectPreCardRefusal(transfer.error.code);
       if (
         snapshot.identity.providerId !== bot.provider ||
         snapshot.identity.modelId !== bot.model ||

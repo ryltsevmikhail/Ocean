@@ -168,3 +168,36 @@ it.each([
     expect(data.turn?.cancelId).toBe(retainedId);
   },
 );
+
+it('offers another explicit review after a proven refusal and preserves a later lost reply', async () => {
+  const hash = 'b'.repeat(64);
+  let data: WorkMemory = { capture: { requestId: turn.requestId, hash, policyVersion: 1 } };
+  let policyFixed = false;
+  const request = vi.fn(async (op: string) => {
+    if (op === 'task') return task;
+    if (op === 'history' || op === 'tests') return [];
+    if (op === 'diff') return { hash, afterTreeHash: 'c'.repeat(64) };
+    if (op === 'review')
+      throw Error(policyFixed ? 'outcome_unknown' : 'project_pre_card_model_transfer_denied');
+    if (op === 'operation-status') throw Error('unknown_decision');
+    throw Error('unexpected_effect');
+  });
+  const storage = {
+    read: () => data,
+    write: (value: WorkMemory) => {
+      data = value;
+    },
+  };
+  const work = createProjectWork(request as ProjectRequest, storage, 'task', 'dev');
+  await work.refresh();
+  await work.begin('review');
+  expect(data.review).toBeUndefined();
+  expect(work.can.value.review).toBe(true);
+  policyFixed = true;
+  await work.begin('review');
+  const saved = data.review;
+  expect(saved).toBeDefined();
+  await work.refresh();
+  expect(data.review).toEqual(saved);
+  expect(work.can.value.review).toBe(false);
+});
