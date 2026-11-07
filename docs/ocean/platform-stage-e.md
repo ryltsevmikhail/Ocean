@@ -2,8 +2,9 @@
 
 E20.1 server/public-SDK discovery is accepted at `fdb8d2b` after independent review
 without findings. Desktop source integration E20.2 is accepted at `ccf021b` after
-one scoped correction and clean re-review. Installed GUI acceptance E20.3 remains
-planned. These milestones do not qualify an installed build or stable Ocean 1.1.
+one scoped correction and clean re-review. Installed GUI acceptance E20.3 passed
+on product `c6f7cf8`, with final QA and independent re-review at `b6e5f5a`.
+This qualifies the paired Desktop and runtime for E, with the release gates in F.
 
 ## Implemented: a scoped room task index
 
@@ -80,10 +81,35 @@ Frozen `ccf021b` passed root `pnpm check`, `pnpm build`, `pnpm format:check` and
 source files are within 300 physical lines. These checks establish source integration,
 not an installed window, compositor geometry or live-provider behavior.
 
-## Planned: installed GUI acceptance
+## Implemented and verified: installed GUI
 
-E20.3 qualifies actual paired installed GUI bytes at three widths with two windows,
-keyboard/focus, attachments, restart, receipts and one-effect witnesses.
+Two packaged Electron windows with separate user data and an independent installed
+SDK process connected to the same private owner. Desktop uses the three negotiated
+task features and attaches to the existing profile asset root without reenrolling
+each window. The second window discovered the scoped task without its original
+receipt. Addressed history preserved the task, delegation, local result and cloud
+result in order; closing the first window did not cancel the task.
+
+Both windows saw the same confirmation. The first vote produced one service call
+and effect. The second window rejected its stale vote visibly; only one resolve
+reached the owner. An exact task-bound read before resolving preserves the runtime's
+existing decision and replay semantics. Revoked grants refused without substitution,
+and an unavailable local connection did not fall back to cloud. The old runtime
+still served ordinary chat with tasks unavailable.
+
+Stopping a task with a lost service response fenced the root and preserved the
+uncertain outcome. After a real owner restart in the same private socket namespace,
+the SDK saw the same task and history with zero new model requests. Four exported
+originals matched their prior bytes, including the 10 MiB boundary. Vision sent
+the original image bytes to an eligible fixture and refused an unsupported send.
+Measured Wayland windows at 1024, 1280 and 1920 × 800 exercised the actual task form,
+all nine keyboard targets, scroll and focus return, alongside the ordinary composer.
+
+The source and QA at `c40b1e6` passed `pnpm check` (4193 source and 174 process tests,
+44/58 configured skips), `pnpm build`, `pnpm format:check` and the Desktop bundle.
+The two later QA-only corrections passed scoped lint, format, focused native runs
+and independent re-review on unchanged product bytes. No live provider, physical
+reboot or missing socket namespace is qualified by these fixtures.
 
 F still owns final native/preset, device identity, backup, install/rollback, live models,
 whole-branch review and release. All historical deferred findings/rulings remain inputs.

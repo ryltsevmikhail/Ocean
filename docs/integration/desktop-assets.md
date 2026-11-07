@@ -108,7 +108,13 @@ Run the separate native gate after building:
 ## Protocol and evidence
 
 Local protocol v1 adds authenticated `desktop.assets` with strict `op` variants:
-`enroll`, `begin`, `chunk`, `commit`, `read`, `prepare`, `receipt`.
+`attach`, `enroll`, `begin`, `chunk`, `commit`, `read`, `prepare`, `receipt`.
+Path-free `attach` validates the existing profile asset binding without writing or
+adopting legacy files. Separate Desktop windows may use the same binding. A known
+unbound profile can still use the existing one-time `enroll`; an older peer that
+explicitly rejects the new command uses the original enrollment path. A first
+enrollment race allows one read-only recheck of the winner's binding. An unknown
+outcome or binding mismatch does not trigger an enrollment retry.
 The public SDK validates commands/replies. JSON frames remain capped at 2 MiB;
 raw chunks are at most 256 KiB, encoded chunks at most 349,528 characters, and
 one file at most 10 MiB. Preparation accepts one to four unique file UUIDs.

@@ -2816,30 +2816,35 @@ under 300 lines as needed; reuse existing `model-native-session`, widths, curren
 client-handoff and asset/restart/lifecycle helpers. Add `docs/ocean/platform-stage-e.md`
 only after actual evidence; retained B results do not qualify E candidate bytes.
 
-- [ ] Build/install one frozen disposable candidate and pin CLI/SDK manifest, Desktop
+- [x] Build/install one frozen disposable candidate and pin CLI/SDK manifest, Desktop
       executable/ASAR hashes and revision. Use two real packaged Electron processes with
       separate fresh userData, one private profile/runtime and an independent installed
       SDK peer. Deterministic loopback cloud/local/provider/service fixtures, no renderer
       mocks, seeded DB, live-key requirement or protected installed/profile changes.
-- [ ] Through UI start one scoped text task, observe same root from second window without
+- [x] Through UI start one scoped text task, observe same root from second window without
       receipt; verify delegation/wait/yield/result and actual history order. Show the same
       confirmation twice: one accepted operation, stale second vote refused, effect count1.
       Closing a window does not cancel. Restart/reconnect preserves IDs and no repeated
       dispatch. Explicit stop distinguishes root fence from unresolved cleanup/unknown.
-- [ ] Check mixed bindings/auth-none local, revoked scope and unavailable local without
+- [x] Check mixed bindings/auth-none local, revoked scope and unavailable local without
       hidden cloud sends; unsupported peer leaves ordinary chat usable and tasks inert.
       Preserve normal image/text/binary attachments/original export after restart; eligible
       fixture receives exact image bytes, unsupported model rejects before send.
-- [ ] At measured 1024/1280/1920×800 verify controls/composer/drafts/chips fit, keyboard
+- [x] At measured 1024/1280/1920×800 verify controls/composer/drafts/chips fit, keyboard
       access, Escape/focus return and unchanged Enter/Shift+Enter behavior. Independent
       public reads and counters verify results; screenshots are supplemental evidence.
-- [ ] Reuse unchanged private runner with only explicitly passed, owned Wayland and
+- [x] Reuse unchanged private runner with only explicitly passed, owned Wayland and
       Hyprland command sockets as argv; map those endpoints into private runtime state,
       never inherit real HOME/XDG/DBus/env or change system settings. Operate only checked
       candidate PIDs/windows. Record exact commands, artifacts, limits and owned cleanup.
       Missing compositor/geometry is an explicit native gap, not a passing source test.
-- [ ] Final root gates, independent task review, document actual implemented vs planned
+- [x] Final root gates, independent task review, document actual implemented vs planned
       E results and continue F. Do not claim stable or full A–H completion here.
+
+Принято на продукте `c6f7cf8`, QA `b6e5f5a`, после двух точечных исправлений
+проверочной обвязки и чистого re-review. Проверены два установленных окна,
+однократный эффект, перезапуск в том же приватном пространстве сокета,
+исходные вложения и открытая форма на трёх размерах. Детали: [этап E](../../ocean/platform-stage-e.md).
 
 ## Task 21: F. Приёмка и выпуск приоритета 1
 
