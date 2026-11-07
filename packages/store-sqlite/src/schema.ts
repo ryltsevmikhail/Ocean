@@ -92,8 +92,8 @@ export function openDatabase(
   assertBusyTimeout(busyTimeoutMs);
   const db = new DatabaseSync(path, { enableForeignKeyConstraints: true });
   try {
-    db.exec('PRAGMA synchronous = FULL');
     db.exec('PRAGMA busy_timeout = ' + String(busyTimeoutMs));
+    db.exec('PRAGMA synchronous = FULL');
     initializeSchema(db, requireOwnerAbsent);
     applyDurabilityProfile(db, busyTimeoutMs);
     if (path !== ':memory:') assertWalMode(db);
