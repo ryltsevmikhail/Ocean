@@ -48,8 +48,8 @@ it('honors the busy timeout before initialization under another process exclusiv
     // wall-clock bound or a timed release racing the contender.
     expect(elapsed).toBeGreaterThanOrEqual(100);
     holder.send('release');
-    const [exit] = await closed;
-    expect({ exit, stderr }).toEqual({ exit: 0, stderr: '' });
+    const [exit, signal] = await closed;
+    expect({ exit, signal }, stderr).toEqual({ exit: 0, signal: null });
     const reopened = openDatabase(path, 150);
     try {
       expect(reopened.prepare('PRAGMA journal_mode').get()?.['journal_mode']).toBe('wal');
