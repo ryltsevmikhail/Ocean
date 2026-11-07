@@ -3,6 +3,7 @@ import { runtimeDesktopAssets } from './desktop-assets.js';
 import { desktopSubmitRefusal, desktopImageResolver } from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
 import {
+  CODING_REVIEW_REQUEST,
   isCodingWorkspaceRead,
   LOCAL_RESTORE_METHODS,
   LOCAL_BROADCAST_METHODS,
@@ -106,6 +107,7 @@ export async function startLocalRuntime(options: LocalRuntimeHostOptions) {
       providerHttpClient: options.providerHttpClient,
     });
     const { provider, plugins, models, services } = settings;
+    const { resolver } = provider;
     plugin.connections(runtime.plugins?.connections);
     const finalization = new RuntimeFinalization(
       runtime.finalization,
@@ -118,7 +120,7 @@ export async function startLocalRuntime(options: LocalRuntimeHostOptions) {
     const reads = runtime.openProfileReads?.();
     if (!reads) throw Error('durable_runtime_required');
     const panels = new CodingPanelQueries(runtime, reads);
-    const reserve = new RuntimeProjectReserve(paths.profile, runtime, decisions.owner);
+    const reserve = new RuntimeProjectReserve(paths.profile, runtime, decisions.owner, resolver);
     if (!runtime.desktopAssets) throw Error('durable_runtime_required');
     const desktop = runtimeDesktopAssets(runtime.desktopAssets, paths.profile, paths.profileId);
     const identity: LocalRuntimeIdentity = {
@@ -130,13 +132,13 @@ export async function startLocalRuntime(options: LocalRuntimeHostOptions) {
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
       runtime.chat,
-      provider.resolver,
+      resolver,
       runtime.openRoomRuns(),
       identity.instanceId,
     );
     const { broadcasts, roomTasks } = hostRoomTasks(
       runtime,
-      provider.resolver,
+      resolver,
       identity.instanceId,
       images,
       options.roomTaskCapacity,
@@ -234,6 +236,8 @@ export async function startLocalRuntime(options: LocalRuntimeHostOptions) {
             return restoration.dispatch(method, params);
           if (options.restore && !maintenanceRead(method))
             return { error: { code: 'restore_restricted' } };
+          if (method === CODING_REVIEW_REQUEST)
+            return reserve.dispatch(params, state !== 'ready', 'review');
           if (method === 'coding.tasks.prepare')
             return reserve.dispatch(params, state !== 'ready', 'prepare');
           if (method === 'coding.tasks.reserve') return reserve.dispatch(params, state !== 'ready');

@@ -7,6 +7,7 @@ import {
   type CodingTask,
   type Changeset,
   type CodingReviewRequest,
+  type CodingReviewBinding,
   type CodingReviewVerdict,
   type CodingResult,
 } from '@runnets/domain';
@@ -18,6 +19,7 @@ export interface CodingReviewTransaction {
   putReviewVerdict(requestId: string, verdict: CodingReviewVerdict): void;
   reviewVerdict(requestId: string): CodingReviewVerdict | null;
   evidenceHashes(taskId: string): readonly string[];
+  evidenceTreesMatch(taskId: string, afterTreeHash: string): boolean;
   evidence(taskId: string): readonly CodingTestEvidence[];
 }
 export interface CodingReviewStore {
@@ -111,6 +113,30 @@ export class CodingReviewService {
       tx.putReviewRequest(prepared.request);
       return ok(prepared.request);
     });
+  }
+  /** Compare the selected stored snapshot and evidence without consulting a live Git tree. */
+  inspectBinding(binding: CodingReviewBinding) {
+    return this.#store.atomic((tx) => {
+      const changeset = tx.changeset(binding.changesetHash);
+      const hashes = tx.evidenceHashes(binding.taskId);
+      return {
+        current: changeset !== null && codingReviewCurrent(binding, changeset, hashes),
+        tests:
+          JSON.stringify(binding.testEvidenceHashes) !== JSON.stringify(hashes)
+            ? 'changed'
+            : hashes.length === 0
+              ? 'none'
+              : tx.evidenceTreesMatch(binding.taskId, binding.afterTreeHash)
+                ? 'matches_snapshot'
+                : 'different_snapshot',
+      } as const;
+    });
+  }
+  facts(id: string) {
+    return this.#store.atomic((tx) => ({
+      request: tx.reviewRequest(id),
+      verdict: tx.reviewVerdict(id),
+    }));
   }
   async dispatch(
     requestId: string,

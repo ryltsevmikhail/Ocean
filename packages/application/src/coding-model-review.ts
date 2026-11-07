@@ -4,6 +4,7 @@ import {
   unlimitedBudget,
   type TaskRunId,
   type CodingReviewVerdict,
+  type ModelActivationSnapshot,
 } from '@runnets/domain';
 import type { CodingReviewerPort } from './coding-review.js';
 import type { TaskRunService } from './service.js';
@@ -55,6 +56,8 @@ export type ModelCodingReviewerDeps = Readonly<{
   model: string;
   nextRunId: () => TaskRunId;
   signal: AbortSignal;
+  activation?: ModelActivationSnapshot;
+  authorizeModelDispatch?: () => boolean;
   emit: (update: TurnUpdate) => void;
 }>;
 export class ModelCodingReviewer implements CodingReviewerPort {
@@ -89,6 +92,10 @@ export class ModelCodingReviewer implements CodingReviewerPort {
       signal: deps.signal,
       emit: deps.emit,
       maxModelRequests: 1,
+      ...(deps.activation ? { activation: deps.activation } : {}),
+      ...(deps.authorizeModelDispatch
+        ? { authorizeModelDispatch: deps.authorizeModelDispatch }
+        : {}),
       messages: [
         {
           role: 'system',

@@ -15,6 +15,7 @@ import {
   LOCAL_ROOM_TASK_LIST,
   LOCAL_CODING_WORKSPACE,
   isCodingWorkspaceRead,
+  CODING_REVIEW_REQUEST,
   isCodingChangesetMethod,
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
@@ -176,7 +177,8 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
         (isCodingWorkspaceRead(method) ||
           isCodingChangesetMethod(method) ||
           method === 'coding.tasks.reserve' ||
-          method === 'coding.tasks.prepare') &&
+          method === 'coding.tasks.prepare' ||
+          method === CODING_REVIEW_REQUEST) &&
         !context.codingWorkspace
       ) {
         reject('client_upgrade_required');
