@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { child } from '../../test-fixtures/model-process-rpc.ts';
 import { serviceOwnerPeer } from '../../test-fixtures/service-owner-peer.js';
@@ -164,15 +165,16 @@ async function capacity() {
 it.each(['partial', 'unconfirmed'])(
   'retains cleanup evidence on %s HTTP setup failure',
   async (mode) => {
-    const f = await managedNativeFixture();
-    const listener = child(
-      '../../../packages/integrations-mcp/test-fixtures/capacity-http-process.ts',
-      [f.proof, mode],
-      process.env,
-    );
+    const proof = mkdtempSync(join(tmpdir(), 'capacity-http-'));
+    let listener: ReturnType<typeof child> | undefined;
     try {
+      listener = child(
+        '../../../packages/integrations-mcp/test-fixtures/capacity-http-process.ts',
+        [proof, mode],
+        process.env,
+      );
       await expect(listener.ready).rejects.toThrow('child_exit');
-      const evidence = JSON.parse(readFileSync(join(f.proof, 'http-cleanup.json'), 'utf8')) as {
+      const evidence = JSON.parse(readFileSync(join(proof, 'http-cleanup.json'), 'utf8')) as {
         count: number;
         errors: string[];
       };
@@ -180,9 +182,10 @@ it.each(['partial', 'unconfirmed'])(
       expect(evidence.errors).toEqual(
         mode === 'unconfirmed' ? ['injected retirement unconfirmed'] : [],
       );
-      await expect(fetch(readFileSync(join(f.proof, 'partial-url.txt'), 'utf8'))).rejects.toThrow();
+      await expect(fetch(readFileSync(join(proof, 'partial-url.txt'), 'utf8'))).rejects.toThrow();
     } finally {
-      await listener.kill();
+      await listener?.kill();
+      rmSync(proof, { recursive: true, force: true });
     }
   },
 );

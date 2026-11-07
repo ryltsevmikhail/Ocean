@@ -183,17 +183,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       ownerId: codingDeps.ownerId,
       sha256: codingDeps.projectId,
     });
-    const ready = chat.recover().then(() => {
-      // Unfinished batches pause only after started children were resolved by chat recovery.
-      broadcasts.recover();
-      codingApply.recover();
-      // Lower crashed plugin operations to `uncertain` before generic journal recovery.
-      pluginRuntime.operations?.recover();
-      return reconcileInterrupted(service, store.tools, (id) =>
-        unstartedRoomClaimRuns(roomTasks.deps).includes(id),
-      );
-    });
-    return {
+    const runtime: Omit<Runtime, 'ready'> = {
       restored,
       roomTasks,
       ...(codingTools ? { codingTools } : {}),
@@ -260,7 +250,6 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       reviews,
       durable: true,
       toolJournal: store.tools,
-      ready,
       close(): void {
         try {
           store.close();
@@ -269,13 +258,28 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         }
       },
     };
+    const ready = chat.recover().then(() => {
+      // Unfinished batches pause only after started children were resolved by chat recovery.
+      broadcasts.recover();
+      codingApply.recover();
+      // Lower crashed plugin operations to `uncertain` before generic journal recovery.
+      pluginRuntime.operations?.recover();
+      return reconcileInterrupted(service, store.tools, (id) =>
+        unstartedRoomClaimRuns(roomTasks.deps).includes(id),
+      );
+    });
+    return { ...runtime, ready };
   } catch (error) {
     try {
       opened?.close();
     } catch {
       // Preserve the construction error.
     }
-    release();
+    try {
+      release();
+    } catch {
+      // Preserve the construction error even if ownership release fails.
+    }
     throw error;
   }
 }
