@@ -117,13 +117,18 @@ browser smoke with a test bridge. Packaged Electron and native gates follow.
 
 ## 22.4 — Installed acceptance
 
-- [ ] Build and launch the actual packaged Project Desktop, bot Desktop and an
+- [x] Build and launch the actual packaged Project Desktop, bot Desktop and an
       independent peer on one disposable runtime. Use a real Git fixture,
       authorized native worktree/sandbox presets and synthetic model inputs
       for reproducibility. Create/prepare a task, start dev, inspect diff/tests,
       request read-only review, refuse stale apply, then approve exact apply
       and check the source bytes once. Restart/reconnect and verify no replay,
       same task/receipts and correct unknown state.
-- [ ] Record precise source/artifacts, root gates, scope and results; publish
+- [x] Record precise source/artifacts, root gates, scope and results; publish
       accepted changes through the working branch/PR. Keep 1.1.0 tag unchanged.
       Continue to Task 23 only after acceptance.
+
+Accepted final product `c1d7fb7` after one whole-stage fix and independent
+re-review. The exact root gates and Desktop bundle passed. Installed Wayland,
+native sandbox, stale/unknown recovery and process retirement are recorded in
+the [installed acceptance](../../integration/project-desktop.md#installed-acceptance-linux-x86_64).

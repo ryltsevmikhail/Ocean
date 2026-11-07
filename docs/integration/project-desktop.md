@@ -188,6 +188,33 @@ The window at `3a4686b` passed independent review, root check/build/format
 passed a 1024×768 browser smoke with a test bridge, including recovery after a
 lost acknowledgement and stale apply and decision refusal.
 
-Packaged GUI, native presets and the disposable installed workflow are still
-[acceptance work](../superpowers/plans/2026-11-07-ocean-project-desktop.md#224--installed-acceptance).
-The published Ocean 1.1.0 bot Desktop stays on its own release revision.
+## Installed acceptance: Linux x86_64
+
+The final product revision `c1d7fb7` passed independent review, frozen install,
+root check/build/format (4,263 source and 219 process tests), and the Desktop
+bundle. Start the installed runtime in one terminal and launch the unpacked
+Desktop from another, using the same profile:
+
+```sh
+/path/to/installed/ocean runtime start --profile "$OCEAN_PROFILE"
+OCEAN_DESKTOP_PROFILE="$OCEAN_PROFILE" /path/to/OceanDesktop --projects
+```
+
+On Omarchy, both packaged Wayland windows and an independent SDK peer shared a
+disposable runtime. The actual project window worked at 1024×800. A duplicate
+task ID left the form editable with no approval card or source write. Closing
+and reopening the project window preserved an active dev run. The fixture used
+real Git, an approved native sandbox preset, and scripted model responses. It
+refused a stale apply, applied the exact approved snapshot once, and preserved
+the receipt and a later owner edit on restart. A separate dispatched cancellation
+kept its unknown outcome on restart without another model call.
+
+The local qualification archives had these SHA-256 digests:
+
+| Linux x64 archive                      | SHA-256                                                            |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| `ocean-1.1.1-linux-x64.tar.gz`         | `79df7ef32739f56eaf983e155140dc9ec36077b3451831374274a694d2aff833` |
+| `ocean-desktop-1.1.1-linux-x64.tar.gz` | `1f4fc53795f9f83749417b22aa01d797b35cc5628684852e3acaa470afaca4ec` |
+
+This qualification used a separate installation and profile. The published
+Ocean 1.1.0 release remains on its own revision.

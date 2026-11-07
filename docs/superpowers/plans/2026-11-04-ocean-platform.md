@@ -2905,6 +2905,11 @@ only after actual evidence; retained B results do not qualify E candidate bytes.
 сначала чтение через SDK, затем точные операции владельца, отдельный GUI и
 установленная приёмка.
 
+Принято на `c1d7fb7`: реальный установленный Project Desktop и чат ботов
+работали с одним runtime, прошли native test, точное ревью, отказ устаревшего
+применения, отдельное согласие и восстановление без повтора.
+[Доказательства и границы](../../integration/project-desktop.md#installed-acceptance-linux-x86_64).
+
 ## Task 23: H. Два TUI — позднее
 
 Сохранить нынешние команды и ACP совместимыми на A–F. Затем отдельно развить
