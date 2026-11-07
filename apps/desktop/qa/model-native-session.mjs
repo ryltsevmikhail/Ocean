@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, lstatSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import {
+  nativeEnvironment,
   artifact,
   defaultQualificationParent,
   digest,
@@ -19,7 +20,7 @@ import { setTimeout, clearTimeout } from 'node:timers';
 import { pathToFileURL } from 'node:url';
 import { bounded, currentWindow, wait } from './current-window.mjs';
 import { launchDesktopGroup } from './desktop-launcher.mjs';
-const initializedProfiles = new Set();
+const initializedProfiles = new Map();
 
 export async function openModelNativeSession(
   {
@@ -30,6 +31,7 @@ export async function openModelNativeSession(
     label = 'desktop',
     ownerHook,
     resumeProfile,
+    resumeRuntimeDirectory,
     qualificationParent = defaultQualificationParent,
   },
   { setupDirectory = directory, appendEvidence = appendFileSync } = {},
@@ -132,24 +134,16 @@ export async function openModelNativeSession(
     const profile = resumeProfile ?? join(root, 'profile'),
       workspace = join(root, 'workspace');
     setupDirectory(workspace);
-    const env = {
-      PATH: dirname(process.execPath) + ':/usr/bin',
-      LANG: 'C.UTF-8',
-      DBUS_SESSION_BUS_ADDRESS: 'disabled:',
-      DBUS_SYSTEM_BUS_ADDRESS: 'disabled:',
-    };
-    for (const [key, path] of Object.entries({
-      HOME: 'home',
-      XDG_CONFIG_HOME: 'config',
-      XDG_CACHE_HOME: 'cache',
-      XDG_DATA_HOME: 'data',
-      XDG_STATE_HOME: 'state',
-      XDG_RUNTIME_DIR: 'run',
-      TMPDIR: 'tmp',
-    })) {
-      env[key] = join(['run', 'tmp'].includes(path) ? short : root, path);
-      setupDirectory(env[key]);
+    if (resumeRuntimeDirectory) {
+      assert.equal(
+        initializedProfiles.get(resumeProfile),
+        resumeRuntimeDirectory,
+        'unowned runtime directory',
+      );
+      const stat = lstatSync(resumeRuntimeDirectory);
+      assert.ok(stat.isDirectory() && stat.uid === process.getuid() && !(stat.mode & 0o077));
     }
+    const env = nativeEnvironment(root, short, setupDirectory, resumeRuntimeDirectory);
     setupDirectory(join(root, 'exports'));
     const fixture = {
       root,
@@ -175,7 +169,7 @@ export async function openModelNativeSession(
           }),
         );
     assert.equal(init.ok, true);
-    if (!resumeProfile) initializedProfiles.add(profile);
+    if (!resumeProfile) initializedProfiles.set(profile, env.XDG_RUNTIME_DIR);
     const hook = verified(ownerHook ?? join(import.meta.dirname, 'model-native-transport.mjs'));
     owner = launchDesktopGroup(
       process.execPath,

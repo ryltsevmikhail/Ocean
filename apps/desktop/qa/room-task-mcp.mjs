@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL, URL } from 'node:url';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Buffer } from 'node:buffer';
 const require = createRequire(
@@ -76,6 +76,10 @@ export async function taskMcp(root) {
         }),
       );
       if (input.method === 'tools/call') await gate;
+      if (input.method === 'tools/call' && existsSync(join(root, 'drop-effect-response'))) {
+        res.destroy();
+        return;
+      }
       res.writeHead(response.status, Object.fromEntries(response.headers));
       res.end(Buffer.from(await response.arrayBuffer()));
     })().catch(() => res.destroy());

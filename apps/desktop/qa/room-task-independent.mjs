@@ -4,9 +4,45 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { wait } from './current-window.mjs';
-import { handoffAssets, image } from './model-handoff-assets.mjs';
-import { button } from './room-task-setup.mjs';
+import { handoffAssets, image, files } from './model-handoff-assets.mjs';
+import { button, selectRoom } from './room-task-setup.mjs';
 import { saveProof } from './model-native-paths.mjs';
+export async function restartAssets(s, setup, step) {
+  const { peer, page } = s;
+  const group = (
+    await step(() =>
+      peer.createGroup({
+        workspaceId: 'ws_ocean',
+        requestId: 'restart-assets',
+        title: 'Handoff files',
+        botIds: setup.bots.map((b) => b.id),
+      }),
+    )
+  ).data.id;
+  await step(() => button(page, 'Обновить').click());
+  await selectRoom(page, 'Handoff files', step);
+  await step(() =>
+    page.locator('#composer input[type=file]').setInputFiles(files, { timeout: 60000 }),
+  );
+  await step(() => button(page, 'Убрать boundary.bin').waitFor({ timeout: 60000 }));
+  await step(() => page.getByLabel('Сообщение', { exact: true }).fill('restart original files'));
+  await step(() => page.getByLabel('Кому').selectOption(''));
+  await step(() => button(page, 'Отправить').click());
+  await wait(
+    async () => (await step(() => page.locator('#history .attachment-card').count())) === 4,
+  );
+  await wait(
+    async () => (await step(() => page.locator('#composer .attachment-card').count())) === 0,
+  );
+  const history = await step(() =>
+    page.evaluate((room) => globalThis.ocean.request({ op: 'history', room, after: 0 }), group),
+  );
+  assert.equal(history.ok, true);
+  const message = history.data.find((m) => m.body === 'restart original files');
+  assert.ok(message);
+  await selectRoom(page, setup.room.title, step);
+  return { assetsRoom: group, message };
+}
 export async function ordinaryNativePhase(s, setup, step) {
   const {
       page,
@@ -156,6 +192,44 @@ export async function ordinaryNativePhase(s, setup, step) {
     'data:image/png;base64,' + image.buffer.toString('base64'),
   );
   saveProof(root, 'ordinary-vision.json', { direct, images, message, provider: rows });
+  const unsupportedRoom = (
+    await step(() =>
+      peer.openDirect({
+        workspaceId: 'ws_ocean',
+        requestId: 'unsupported-direct',
+        botId: setup.bots[1].id,
+      }),
+    )
+  ).data.id;
+  await step(() => button(page, 'Обновить').click());
+  await step(() => button(page, '@b').click());
+  await step(() => page.locator('#composer input[type=file]').setInputFiles(image));
+  await step(() => page.getByLabel('Сообщение', { exact: true }).fill('unsupported exact vision'));
+  await step(() => page.getByText(/не принимает изображения: отправка будет отклонена/).waitFor());
+  const before = await step(() =>
+    peer.history({ workspaceId: 'ws_ocean', roomId: unsupportedRoom }),
+  );
+  await step(() => button(page, 'Отправить').click());
+  await step(() => page.getByText(/Отправка не выполнена/).waitFor());
+  const after = await step(() =>
+    peer.history({ workspaceId: 'ws_ocean', roomId: unsupportedRoom }),
+  );
+  assert.deepEqual(after, before);
+  const refusedRows = readFileSync(join(root, 'provider.jsonl'), 'utf8')
+    .trim()
+    .split('\n')
+    .map(JSON.parse);
+  assert.equal(
+    refusedRows.filter((r) => r.kind === 'generation').length,
+    rows.filter((r) => r.kind === 'generation').length,
+  );
+  saveProof(root, 'unsupported-vision.json', {
+    unsupportedRoom,
+    before,
+    after,
+    provider: refusedRows,
+    ui: await step(() => page.locator('body').innerText()),
+  });
   await step(() => button(page, room.title).click());
   return { assetsRoom: group, message };
 }

@@ -7,7 +7,10 @@ export const button = (page, name) => page.getByRole('button', { name, exact: tr
 export async function selectRoom(page, title, step) {
   await wait(async () => (await step(() => page.locator('nav button').count())) > 0);
   const target = button(page, title);
-  if (!(await step(() => target.isVisible())))
+  if (
+    !(await step(() => target.isVisible())) &&
+    (await step(() => button(page, 'Список комнат').isVisible()))
+  )
     await step(() => button(page, 'Список комнат').click());
   await step(() => target.click());
   await step(() => page.getByRole('heading', { name: title, exact: true }).waitFor());

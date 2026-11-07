@@ -1,41 +1,22 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
-import { lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
-import { parseArgs, promisify } from 'node:util';
-import process from 'node:process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { openModelNativeSession, saveProof } from './model-native-session.mjs';
 import { currentWindow, wait } from './current-window.mjs';
 import { setupTask, button, selectRoom } from './room-task-setup.mjs';
 import { files } from './model-handoff-assets.mjs';
-import { ordinaryNativePhase } from './room-task-independent.mjs';
+import { ordinaryNativePhase, restartAssets } from './room-task-independent.mjs';
 import { digest } from './model-native-paths.mjs';
+import { taskEdges } from './room-task-edges.mjs';
+import {
+  independentTask,
+  restartTask,
+  taskArguments,
+  retireTaskSession,
+} from './room-task-restart.mjs';
 import { taskMcp } from './room-task-mcp.mjs';
-const { values: v } = parseArgs({
-  options: {
-    'task-only': { type: 'boolean' },
-    ...Object.fromEntries(
-      ['installed-root', 'desktop', 'root', 'wayland-socket', 'hypr-command-socket'].map((k) => [
-        k,
-        { type: 'string' },
-      ]),
-    ),
-  },
-});
-for (const key of ['wayland-socket', 'hypr-command-socket']) {
-  const stat = lstatSync(v[key]);
-  assert.ok(stat.isSocket());
-  assert.equal(stat.uid, process.getuid());
-}
-assert.equal(basename(v['hypr-command-socket']), '.socket.sock');
-const signature = basename(dirname(v['hypr-command-socket']));
-assert.match(signature, /^[a-zA-Z0-9_-]+$/);
-const mapping = join(process.env.XDG_RUNTIME_DIR, 'hypr', signature);
-mkdirSync(mapping, { recursive: true, mode: 0o700 });
-symlinkSync(v['hypr-command-socket'], join(mapping, '.socket.sock'));
-process.env.HYPRLAND_INSTANCE_SIGNATURE = signature;
-process.env.WAYLAND_DISPLAY = v['wayland-socket'];
+const { v, mapping } = taskArguments();
 const inputs = {
   installedRoot: v['installed-root'],
   desktopExecutable: v.desktop,
@@ -44,26 +25,10 @@ const inputs = {
 };
 const s = await openModelNativeSession({ ...inputs, root: v.root });
 const { peer, page, fixture } = s;
-let second, original, mcp;
+let second, original, mcp, assets, evidence;
 const rows = () =>
   readFileSync(join(v.root, 'provider.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
-const independent = async (query, step) => {
-  const r = await step(() =>
-    promisify(execFile)(
-      process.execPath,
-      [
-        join(import.meta.dirname, 'room-task-peer.mjs'),
-        v['installed-root'],
-        fixture.profile,
-        JSON.stringify(query),
-      ],
-      { env: fixture.env, timeout: 15000, killSignal: 'SIGKILL' },
-    ),
-  );
-  const data = JSON.parse(r.stdout);
-  assert.notEqual(data.pid, process.pid);
-  return data;
-};
+const independent = independentTask(v['installed-root'], fixture);
 try {
   mcp = await taskMcp(v.root);
   await s.runCase(async (step) => {
@@ -71,10 +36,12 @@ try {
       v.root,
       'qa-source-inputs.json',
       Object.fromEntries(
-        ['native', 'independent', 'mcp', 'peer', 'setup', 'transport'].map((name) => {
-          const path = join(import.meta.dirname, 'room-task-' + name + '.mjs');
-          return [path, digest(readFileSync(path))];
-        }),
+        ['native', 'independent', 'mcp', 'peer', 'setup', 'transport', 'restart', 'edges'].map(
+          (name) => {
+            const path = join(import.meta.dirname, 'room-task-' + name + '.mjs');
+            return [path, digest(readFileSync(path))];
+          },
+        ),
       ),
     );
     saveProof(v.root, 'socket-map.json', {
@@ -84,7 +51,23 @@ try {
     });
     const setup = await setupTask(s, mcp, step),
       { scope, room, grant } = setup;
-    if (!v['task-only']) await ordinaryNativePhase(s, setup, step);
+    if (v['edge-only']) {
+      mcp.releaseResponse();
+      writeFileSync(join(v.root, 'release-b'), '');
+      assets = await restartAssets(s, setup, step);
+      await step(() => button(page, 'Задачи команды').click());
+      const edges = await taskEdges(s, setup, mcp, independent, step);
+      evidence = {
+        query: edges.completedQuery,
+        task: await independent(edges.completedQuery, step),
+        instanceId: peer.identity.instanceId,
+        assets,
+        edges,
+        title: 'E20 reconnect completed',
+      };
+      return;
+    }
+    if (!v['task-only']) assets = await ordinaryNativePhase(s, setup, step);
     saveProof(v.root, 'task-support-probe.json', {
       identity: peer.identity,
       sdkList: await step(() => peer.roomTaskList(scope)),
@@ -242,11 +225,29 @@ try {
         async () => (await step(() => peer.roomTaskGet(query))).status === 'completed',
         20000,
       );
+      const completed = await independent(query, step);
+      assert.deepEqual(
+        completed.history.map((m) => [m.seq, m.body]),
+        [
+          [1, 'E20 task: delegate, wait, then one scoped effect'],
+          [2, 'ask B'],
+          [3, 'B done'],
+          [4, 'A done'],
+        ],
+      );
       saveProof(v.root, 'completed.json', {
-        ...(await independent(query, step)),
+        ...completed,
         provider: rows(),
         mcp: mcp?.stats,
       });
+      const edges = await taskEdges({ ...s, page: second.page }, setup, mcp, independent, step);
+      evidence = {
+        query,
+        task: await independent(query, step),
+        instanceId: peer.identity.instanceId,
+        assets,
+        edges,
+      };
     } catch (error) {
       saveProof(reopen, 'decision-failure.json', {
         body: await first.page.locator('body').innerText(),
@@ -277,7 +278,11 @@ try {
 } finally {
   const errors = [];
   mcp?.releaseResponse();
-  for (const action of [() => second?.dispose(), () => s.dispose(original), () => mcp?.close()])
+  for (const action of [
+    () => second?.dispose(),
+    () => retireTaskSession(s, original, !!evidence?.edges),
+    () => mcp?.close(),
+  ])
     try {
       await action();
     } catch (e) {
@@ -286,3 +291,5 @@ try {
   saveProof(v.root, 'retirement.json', { errors, second: second?.records(), mcp: mcp?.stats });
   assert.deepEqual(errors, []);
 }
+
+await restartTask(inputs, v.root + '-restart', fixture, evidence, independent);

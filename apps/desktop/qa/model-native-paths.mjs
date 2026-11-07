@@ -91,3 +91,28 @@ export function saveProof(root, name, data) {
     mode: 0o600,
   });
 }
+
+export function nativeEnvironment(root, short, setupDirectory, resumeRuntimeDirectory) {
+  const env = {
+    PATH: dirname(process.execPath) + ':/usr/bin',
+    LANG: 'C.UTF-8',
+    DBUS_SESSION_BUS_ADDRESS: 'disabled:',
+    DBUS_SYSTEM_BUS_ADDRESS: 'disabled:',
+  };
+  for (const [key, path] of Object.entries({
+    HOME: 'home',
+    XDG_CONFIG_HOME: 'config',
+    XDG_CACHE_HOME: 'cache',
+    XDG_DATA_HOME: 'data',
+    XDG_STATE_HOME: 'state',
+    XDG_RUNTIME_DIR: 'run',
+    TMPDIR: 'tmp',
+  })) {
+    if (key === 'XDG_RUNTIME_DIR' && resumeRuntimeDirectory) env[key] = resumeRuntimeDirectory;
+    else {
+      env[key] = join(['run', 'tmp'].includes(path) ? short : root, path);
+      setupDirectory(env[key]);
+    }
+  }
+  return env;
+}

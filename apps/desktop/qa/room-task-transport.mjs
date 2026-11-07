@@ -123,8 +123,10 @@ globalThis.fetch = (url, options) => {
     text.startsWith(endpoint + '/') || text.startsWith('http://127.0.0.1:'),
     'unexpected fixture network destination',
   );
-  if (existsSync(join(root, 'local-unavailable')) && text === endpoint + '/api/chat')
+  if (existsSync(join(root, 'local-unavailable')) && text === endpoint + '/api/chat') {
+    record({ kind: 'local-unavailable', route: '/api/chat' });
     throw Error('synthetic local unavailable');
+  }
   return fetch(url, options);
 };
 // Observe only exact owner decision votes. This never changes a frame or its result.
@@ -143,11 +145,11 @@ Socket.prototype.emit = function (event, ...args) {
       } catch {
         continue;
       }
-      if (frame.method === 'decisions.resolve') {
+      if (['decisions.resolve', 'roomTasks.start'].includes(frame.method)) {
         if (!requests.has(this)) requests.set(this, new Map());
         requests.get(this).set(frame.id, frame);
         appendFileSync(
-          join(root, 'votes.jsonl'),
+          join(root, frame.method === 'decisions.resolve' ? 'votes.jsonl' : 'task-starts.jsonl'),
           JSON.stringify({ kind: 'request', frame }) + '\n',
         );
       }
@@ -166,7 +168,12 @@ Socket.prototype.write = function (chunk, ...rest) {
     }
     if (response && requests.get(this)?.has(response.id))
       appendFileSync(
-        join(root, 'votes.jsonl'),
+        join(
+          root,
+          requests.get(this).get(response.id).method === 'decisions.resolve'
+            ? 'votes.jsonl'
+            : 'task-starts.jsonl',
+        ),
         JSON.stringify({ kind: 'response', frame: response }) + '\n',
       );
   }
