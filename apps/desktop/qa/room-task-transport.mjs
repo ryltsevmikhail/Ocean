@@ -127,3 +127,48 @@ globalThis.fetch = (url, options) => {
     throw Error('synthetic local unavailable');
   return fetch(url, options);
 };
+// Observe only exact owner decision votes. This never changes a frame or its result.
+const { Socket } = await import('node:net');
+const requests = new WeakMap(),
+  tails = new WeakMap();
+const emit = Socket.prototype.emit;
+Socket.prototype.emit = function (event, ...args) {
+  if (event === 'data' && Buffer.isBuffer(args[0])) {
+    const lines = ((tails.get(this) ?? '') + args[0].toString()).split('\n');
+    tails.set(this, lines.pop());
+    for (const line of lines) {
+      let frame;
+      try {
+        frame = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (frame.method === 'decisions.resolve') {
+        if (!requests.has(this)) requests.set(this, new Map());
+        requests.get(this).set(frame.id, frame);
+        appendFileSync(
+          join(root, 'votes.jsonl'),
+          JSON.stringify({ kind: 'request', frame }) + '\n',
+        );
+      }
+    }
+  }
+  return emit.call(this, event, ...args);
+};
+const write = Socket.prototype.write;
+Socket.prototype.write = function (chunk, ...rest) {
+  if (Buffer.isBuffer(chunk) && chunk[0] === 123) {
+    let response;
+    try {
+      response = JSON.parse(chunk);
+    } catch {
+      /* other protocol frame */
+    }
+    if (response && requests.get(this)?.has(response.id))
+      appendFileSync(
+        join(root, 'votes.jsonl'),
+        JSON.stringify({ kind: 'response', frame: response }) + '\n',
+      );
+  }
+  return write.call(this, chunk, ...rest);
+};

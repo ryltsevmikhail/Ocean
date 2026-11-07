@@ -71,6 +71,24 @@ export function dispatchServiceSettings(client: LocalRuntimeClient, c: ServiceCo
     case 'service-preview':
       return client.decisionPreview(c.input);
     case 'service-resolve':
-      return client.resolveDecision(c.input);
+      return c.binding ? resolveTaskDecision(client, c) : client.resolveDecision(c.input);
   }
+}
+async function resolveTaskDecision(
+  client: LocalRuntimeClient,
+  c: Extract<ServiceCommand, { op: 'service-resolve' }>,
+) {
+  const { workspaceId, roomId, runId, decisionId } = c.input;
+  const card = await client.getDecision({ workspaceId, roomId, runId, decisionId });
+  if (
+    card.workspaceId !== workspaceId ||
+    card.roomId !== roomId ||
+    card.runId !== runId ||
+    card.decisionId !== decisionId
+  )
+    throw Error('invalid_frame');
+  if (card.bindingDigest !== c.input.bindingDigest) throw Error('binding_conflict');
+  if (card.status !== 'pending' || card.version !== c.input.expectedVersion)
+    throw Error('version_conflict');
+  return client.resolveDecision(c.input);
 }

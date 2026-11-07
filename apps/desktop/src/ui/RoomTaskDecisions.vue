@@ -42,7 +42,7 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section v-if="refs.length">
+  <section v-if="refs.length || current || other || message || error">
     <h3>Решения выбранного корня</h3>
     <button
       v-for="item in refs"

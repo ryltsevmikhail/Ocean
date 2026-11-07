@@ -44,7 +44,7 @@ export async function taskMcp(root) {
           },
         },
       ],
-      ttlMs: 0,
+      ttlMs: 60000,
       cacheScope: 'private',
     }));
     server.setRequestHandler('tools/call', (request) => {

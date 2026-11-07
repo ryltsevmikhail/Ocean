@@ -5,6 +5,7 @@ import { wait } from './current-window.mjs';
 import { saveProof } from './model-native-paths.mjs';
 export const button = (page, name) => page.getByRole('button', { name, exact: true });
 export async function selectRoom(page, title, step) {
+  await wait(async () => (await step(() => page.locator('nav button').count())) > 0);
   const target = button(page, title);
   if (!(await step(() => target.isVisible())))
     await step(() => button(page, 'Список комнат').click());

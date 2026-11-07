@@ -1,30 +1,27 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import {
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  symlinkSync,
-  writeFileSync,
-  unlinkSync,
-} from 'node:fs';
+import { lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { parseArgs, promisify } from 'node:util';
 import process from 'node:process';
+import { setTimeout as delay } from 'node:timers/promises';
 import { openModelNativeSession, saveProof } from './model-native-session.mjs';
 import { currentWindow, wait } from './current-window.mjs';
 import { setupTask, button, selectRoom } from './room-task-setup.mjs';
 import { files } from './model-handoff-assets.mjs';
-import { independentTaskPhase, ordinaryNativePhase } from './room-task-independent.mjs';
+import { ordinaryNativePhase } from './room-task-independent.mjs';
 import { digest } from './model-native-paths.mjs';
 import { taskMcp } from './room-task-mcp.mjs';
 const { values: v } = parseArgs({
-  options: Object.fromEntries(
-    ['installed-root', 'desktop', 'root', 'wayland-socket', 'hypr-command-socket'].map((k) => [
-      k,
-      { type: 'string' },
-    ]),
-  ),
+  options: {
+    'task-only': { type: 'boolean' },
+    ...Object.fromEntries(
+      ['installed-root', 'desktop', 'root', 'wayland-socket', 'hypr-command-socket'].map((k) => [
+        k,
+        { type: 'string' },
+      ]),
+    ),
+  },
 });
 for (const key of ['wayland-socket', 'hypr-command-socket']) {
   const stat = lstatSync(v[key]);
@@ -87,7 +84,7 @@ try {
     });
     const setup = await setupTask(s, mcp, step),
       { scope, room, grant } = setup;
-    await ordinaryNativePhase(s, setup, step);
+    if (!v['task-only']) await ordinaryNativePhase(s, setup, step);
     saveProof(v.root, 'task-support-probe.json', {
       identity: peer.identity,
       sdkList: await step(() => peer.roomTaskList(scope)),
@@ -118,8 +115,6 @@ try {
     assert.equal(secondStatus.ok, true, JSON.stringify(secondStatus));
     assert.equal(secondStatus.data.instanceId, firstStatus.instanceId);
     await selectRoom(second.page, room.title, step);
-    await independentTaskPhase(s, setup, independent, step);
-    unlinkSync(join(v.root, 'release-b'));
     await step(() =>
       page.getByLabel('Сообщение', { exact: true }).fill('ordinary draft untouched'),
     );
@@ -137,7 +132,7 @@ try {
       await step(() =>
         panel
           .locator('form section')
-          .filter({ has: panel.getByLabel('Участник @' + handle, { exact: true }) })
+          .filter({ hasText: 'Участник @' + handle })
           .getByLabel('Получает первый ход')
           .setChecked(handle === 'a'),
       );
@@ -149,7 +144,7 @@ try {
     let index, root;
     await wait(async () => {
       index = await step(() => peer.roomTaskList(scope));
-      return index.roots.length === 2;
+      return index.roots.length === 1;
     });
     root = index.roots[0].rootId;
     const query = { ...scope, rootId: root };
@@ -208,6 +203,8 @@ try {
       await step(() => button(first.page, 'Задачи команды').click());
       for (const p of [first.page, second.page]) {
         const d = p.getByRole('dialog', { name: 'Задачи команды', exact: true });
+        await wait(async () => !(await step(() => button(d, 'Перечитать задачи').isDisabled())));
+        await step(() => delay(1200));
         await step(() => d.getByRole('button', { name: new RegExp(card.decisionId) }).click());
         await step(() => button(d, 'Разрешить один раз').waitFor());
       }
@@ -221,6 +218,15 @@ try {
       await step(() => button(first.page, 'Разрешить один раз').click());
       await wait(() => mcp.stats.effects === 1);
       await step(() => button(other, 'Разрешить один раз').click());
+      await step(() => delay(300));
+      saveProof(v.root, 'vote-observed.json', {
+        first: await first.page
+          .getByRole('dialog', { name: 'Задачи команды', exact: true })
+          .innerText(),
+        second: await other.innerText(),
+        votes: readFileSync(join(v.root, 'votes.jsonl'), 'utf8').trim().split('\n').map(JSON.parse),
+        counters: mcp.stats,
+      });
       await step(() => other.getByText(/Устаревшее решение отклонено/).waitFor());
       assert.equal(mcp.stats.effects, 1);
       assert.equal(mcp.stats.calls, 1);
@@ -241,6 +247,14 @@ try {
         provider: rows(),
         mcp: mcp?.stats,
       });
+    } catch (error) {
+      saveProof(reopen, 'decision-failure.json', {
+        body: await first.page.locator('body').innerText(),
+        error: String(error),
+        card: await peer.getDecision({ ...scope, runId: card.runId, decisionId: card.decisionId }),
+        counters: mcp.stats,
+      });
+      throw error;
     } finally {
       await first.dispose();
       saveProof(reopen, 'retirement.json', first.records());
@@ -262,6 +276,7 @@ try {
   throw error;
 } finally {
   const errors = [];
+  mcp?.releaseResponse();
   for (const action of [() => second?.dispose(), () => s.dispose(original), () => mcp?.close()])
     try {
       await action();

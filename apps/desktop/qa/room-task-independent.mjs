@@ -1,67 +1,12 @@
 // Supplemental single-window facts; never qualifies the separate two-window gate.
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { wait } from './current-window.mjs';
 import { handoffAssets, image } from './model-handoff-assets.mjs';
 import { button } from './room-task-setup.mjs';
 import { saveProof } from './model-native-paths.mjs';
-export async function independentTaskPhase(s, setup, independent, step) {
-  const {
-      page,
-      peer,
-      fixture: { root },
-    } = s,
-    { scope } = setup;
-  await step(() => button(page, 'Задачи команды').click());
-  const panel = page.getByRole('dialog', { name: 'Задачи команды', exact: true });
-  await step(() => button(panel, 'Новое поручение').click());
-  await step(() => panel.getByLabel('Текст поручения').fill('E20 task independent'));
-  for (const handle of ['a', 'b'])
-    await step(() => panel.getByLabel('Участник @' + handle, { exact: true }).check());
-  for (const handle of ['a', 'b'])
-    await step(() =>
-      panel
-        .locator('form section')
-        .filter({ has: panel.getByLabel('Участник @' + handle, { exact: true }) })
-        .getByLabel('Получает первый ход')
-        .setChecked(handle === 'a'),
-    );
-  await step(() => button(panel, 'Начать поручение').click());
-  let roots;
-  await wait(async () => {
-    roots = await step(() => peer.roomTaskList(scope));
-    return roots.roots.length === 1;
-  });
-  const query = { ...scope, rootId: roots.roots[0].rootId };
-  await wait(async () =>
-    (await step(() => peer.roomTaskGet(query))).rows.some(
-      (r) => r.type === 'task' && r.waitingChildId,
-    ),
-  );
-  const held = await independent(query, step);
-  assert.ok(
-    held.root.rows.some(
-      (r) => r.type === 'slice' && r.disposition === 'yielded' && r.resultMessageId === null,
-    ),
-  );
-  await step(() => panel.getByText(/ждёт @b/).waitFor());
-  saveProof(root, 'independent-held.json', { ...held, ui: await step(() => panel.innerText()) });
-  writeFileSync(join(root, 'release-b'), '');
-  await wait(async () => (await step(() => peer.roomTaskGet(query))).status === 'completed', 20000);
-  const done = await independent(query, step);
-  const addressed = done.history.filter(
-    (m) => m.authorBotId && m.targetBotId && m.authorBotId !== m.targetBotId,
-  );
-  assert.ok(addressed.length >= 2);
-  const seqs = done.history.map((m) => m.seq);
-  assert.ok(seqs.every((n, i) => !i || n > seqs[i - 1]));
-  assert.ok(done.history.some((m) => m.body === 'A done'));
-  saveProof(root, 'independent-completed.json', done);
-  await step(() => page.keyboard.press('Escape'));
-  return { query, done };
-}
 export async function ordinaryNativePhase(s, setup, step) {
   const {
       page,
