@@ -2889,8 +2889,10 @@ only after actual evidence; retained B results do not qualify E candidate bytes.
       Принято после независимого ревью: offline chat/tool на rc.21 и реальная
       цепочка с тем же результатом и квитанцией после перезапуска на rc.22
       (`3140f14`). Подробности и ограничения — в [карте выпуска](../../ocean/platform-stage-f.md).
-- [ ] Финальный Linux-артефакт, SHA-256, inventory/licenses, установленный GUI;
-      сверить опубликованные байты и ревизию. Stable не выпускать по одним старым RC2 gates.
+- [x] Финальный Linux-артефакт, SHA-256, inventory/licenses, установленный GUI;
+      [stable v1.1.0](https://github.com/ryltsevmikhail/Ocean/releases/tag/v1.1.0) опубликован
+      с точной ревизией `4fd6687`. Независимое ревью принято, скачанные семь
+      файлов совпали по SHA-256; см. [карту выпуска](../../ocean/platform-stage-f.md).
 
 ## Task 22: G. Графический клиент проектов — приоритет 2, после F
 

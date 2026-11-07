@@ -27,7 +27,7 @@ and entry points documented for each stage.
 | Disposable install, migration, backup/restore, reboot/device identity, update/rollback | Accepted for the observed disposable Linux boundary at `7dbbf90` (rc.21). Real RC2 migrated 18→29; old execution refused, and a compatible backup restored to a separate schema18 profile on rollback. Installed CLI/TUI/ACP, authenticated Python socket, complete format-2 assets, lineage and exact owner rebind were exercised. Btrfs and endpoint limits are below.                                                                                                  |
 | Live cloud and MCP                                                                     | Installed rc.21: DeepSeek completed once and preserved the same receipt across runtime restart. GitHub MCP read issue #5 once after exact owner approval using the read-only Issues endpoint. The default GitHub catalog failed before business dispatch. OpenAI and Anthropic live are deferred. See the qualification scope below.                                                                                                                                      |
 | Real local and mixed autonomy                                                          | Native offline chat and one tool effect on Ollama 0.40.14; installed rc.22 completed DeepSeek → Ollama → DeepSeek, restarted, and returned the same receipt and result without redispatch. See the qualified scope below.                                                                                                                                                                                                                                                 |
-| Linux artifact, installed GUI and publication                                          | Pending. Bind the final Linux artifact, SHA-256, inventory, licenses and installed GUI evidence to the exact revision and verify the published bytes. E and RC2 evidence retains its original scope.                                                                                                                                                                                                                                                                      |
+| Linux artifact, installed GUI and publication                                          | [Stable v1.1.0](https://github.com/ryltsevmikhail/Ocean/releases/tag/v1.1.0) published from `4fd6687`. Root check/build/format passed, along with disposable update/rollback and the extracted Electron Desktop. All seven downloaded assets matched their local SHA-256 values; tag and source tree were verified.                                                                                                                                                       |
 
 Cold typecheck, lint and build passed at the existing 2 GiB/256-task/60 s/32 KiB
 preset limits; lint reached 2 GiB with no demonstrated memory margin. The retained
@@ -122,6 +122,34 @@ reads existing roots with the field absent. An earlier runtime also rejects a
 saved root containing the new field, so rollback uses a compatible backup. Do
 not remove the field from a saved root to make it readable by an older runtime.
 The installed mixed workflow above exercised this option with real models.
+
+### Stable Linux 1.1.0
+
+[PR #6](https://github.com/ryltsevmikhail/Ocean/pull/6) merged the exact
+qualified tree to `main` at `de2bb84`. The [stable release](https://github.com/ryltsevmikhail/Ocean/releases/tag/v1.1.0)
+is tagged at source `4fd6687`. All seven files were downloaded again and
+verified against their sizes and SHA-256 values. The two archive hashes are:
+
+| Archive                                | SHA-256                                                            |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| `ocean-1.1.0-linux-x64.tar.gz`         | `dd95082de722fb448ed123900c17f81ddf1524c47cd3a29fe2c85521770ed91e` |
+| `ocean-desktop-1.1.0-linux-x64.tar.gz` | `2a1d5f56a7c0553b15d8b9bba29b742baa22220ecd434e8dc40a49a49ceb682c` |
+
+The frozen source passed `pnpm check` (4,194 source and 184 process tests;
+44 and 58 configured skips), `pnpm build` and `pnpm format:check`. The
+installed run exercised genuine RC2 migration, compatible-backup rollback,
+CLI/TUI/ACP, Python socket and strict SDK types. The extracted Desktop ran
+on Omarchy at 1024, 1280 and 1920 px, with attachments, two clients and
+an exact approval. A combined GUI run later refused a stale catalog; a
+fresh edge/restart shard on the same bytes passed reconnect and original
+exports and preserved the unknown outcome without replay.
+
+The earlier `70e5068` full gate had one unexplained concurrent restart
+refusal. A separate real SQLite lock regression justified setting the
+busy timeout before initialization; the original refusal's cause was not
+established. The concurrent restart test passed in the final full gate.
+The target's physical reboot, default GitHub MCP endpoint and live
+OpenAI/Anthropic remain outside the qualified scope.
 
 ## Inherited v1.1 obligations
 
