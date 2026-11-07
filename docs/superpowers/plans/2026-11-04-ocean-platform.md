@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`, локальное долговечное исполнение D19.2.4 — на `c3d7c21`, общий room-task host D19.2.5 — на `0f7435b` после двух раундов исправлений; нативная приёмка D19.3 принята на `62bd51e` после трёх раундов исправлений и независимых ревью; этапы E–H запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`, локальное долговечное исполнение D19.2.4 — на `c3d7c21`, общий room-task host D19.2.5 — на `0f7435b` после двух раундов исправлений; нативная приёмка D19.3 принята на `62bd51e` после трёх раундов исправлений и независимых ревью; E20.1 принят на `fdb8d2b` без замечаний; Desktop E20.2/20.3 и этапы F–H запланированы.
 Долг сохранённых регрессий Executor закрыт в C18.6: чистые root gates прошли
 на квалифицированном `1f31974`; финальные проверки текущего выпуска остаются F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -2726,29 +2726,33 @@ optional safe `limit` in 1–50 (default 50). Return `RoomTaskListPage` with ech
 `authority: 'current' | 'historical'`; no prompt, grants or model secrets.
 Application read-port shapes remain local to application/domain, without a contracts import.
 
-- [ ] **RED:** pin exact closed DTOs, limit 1/50/51, exclusive descending cursor,
+- [x] **RED:** pin exact closed DTOs, limit 1/50/51, exclusive descending cursor,
       duplicate/out-of-order/foreign-scope replies; verify SDK rejects unsupported peers.
       Store tests cover 51 roots with multiple initial siblings, exact pages, terminal/
       paused/unbound roots, different room/owner, no writes or execution from listing.
-- [ ] **Implement:** bounded room/owner-filtered SQL over existing tables and canonical
+- [x] **Implement:** bounded room/owner-filtered SQL over existing tables and canonical
       position-zero start message evidence; never scan the scheduler's global `roots()`.
       Return one entry per root, newest first. Fetch at most limit+1; when more exist,
       `nextBeforeSeq` is the last returned start sequence, otherwise null. Owner comes
       from the authenticated host. `current` requires the exact existing verified host
       binding; old/unbound/foreign-host entries remain historical and are not adopted.
       Unknown/foreign room follows existing scoped error behavior, not successful empty.
-- [ ] **Compatibility:** list requires negotiated `room.task-list-v1`, `room.tasks-v1`
+- [x] **Compatibility:** list requires negotiated `room.task-list-v1`, `room.tasks-v1`
       and `room.addressed-history-v1`. Add only the one feature token: current normal
       hello goes from 79 to 80, keeping the existing ceiling 80 and RC2 projection.
       Suppress list on restore-mode hosts just like D execution. Preserve four existing
       D methods, addressed-history compatibility, receipts and all effect/authority rules.
-- [ ] **GREEN/process:** real built owner and two independent public SDK peers: lose a
+- [x] **GREEN/process:** real built owner and two independent public SDK peers: lose a
       start ACK after durable commit, discover the same root without its receipt, restart
       owner and discover it again; identical replay retains IDs and changed payload fails.
       Listing changes neither provider/effect counters nor durable state. Old D peer still
       supports ordinary chat; missing list support is explicit, not an empty task list.
-- [ ] Run focused regressions and root `pnpm check`, `pnpm build`, `pnpm format:check`
+- [x] Run focused regressions and root `pnpm check`, `pnpm build`, `pnpm format:check`
       through the unchanged private runner, self-review, exact-path commit and task review.
+
+20.1 принят на `fdb8d2b`: независимое ревью без замечаний, root check/build/format —
+exit 0; 4122 source и 174 process прошли (44/58 opt-in пропусков). Это серверное
+чтение и public SDK; Desktop и установленная GUI-приёмка остаются 20.2/20.3.
 
 ### Task 20.2: Connect the existing Desktop to team tasks
 
