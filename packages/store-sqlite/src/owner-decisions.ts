@@ -70,14 +70,25 @@ export class SqliteOwnerDecisions implements OwnerDecisionStore {
       .get(offset * 2 + 1, length * 2, ...key(ref))?.['bytes'];
     return bytes instanceof Uint8Array ? Buffer.from(bytes).toString('utf16le') : null;
   }
-  list(scope: OwnerDecisionScope, after: string, limit: number) {
+  list(
+    scope: OwnerDecisionScope,
+    after: string,
+    limit: number,
+    excludeKind?: OwnerDecision['kind'],
+  ) {
     return this.db
       .prepare(
         'SELECT ' +
           columns +
-          ' FROM ocean_owner_decisions WHERE workspaceId=? AND roomId=? AND decisionId>? ORDER BY decisionId LIMIT ?',
+          ' FROM ocean_owner_decisions WHERE workspaceId=? AND roomId=? AND decisionId>? AND kind<>? ORDER BY decisionId LIMIT ?',
       )
-      .all(scope.workspaceId, scope.roomId, after, limit) as unknown as OwnerDecision[];
+      .all(
+        scope.workspaceId,
+        scope.roomId,
+        after,
+        excludeKind ?? '',
+        limit,
+      ) as unknown as OwnerDecision[];
   }
   settle(expected: OwnerDecision, outcome: DecisionOutcome) {
     return (

@@ -42,3 +42,5 @@ export * from './local-service-views.js';
 
 export * from './local-runtime-room-tasks.js';
 export * from './local-runtime-projects.js';
+
+export * from './local-project-reserve.js';

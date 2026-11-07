@@ -26,6 +26,7 @@ import type {
   CodingTransaction,
 } from './coding-ports.js';
 import { validCodingStart, codingParticipants, codingBinding } from './coding-validation.js';
+import { reservationReceipt } from './coding-receipt.js';
 export interface CodingServiceDeps {
   readonly store: CodingStore;
   readonly leases: ProjectLeasePort;
@@ -86,13 +87,8 @@ export class CodingTaskService {
     if (!validCodingStart(i)) return codingFailure('invalid_input');
     if (this.#deps.restored) return codingFailure('recovery_required');
     const binding = codingBinding(i);
-    const previous = this.#deps.store.atomic((tx) => tx.receipt(i.requestId));
-    if (previous) {
-      if (previous.binding !== binding) return codingFailure('request_conflict');
-      const task = this.#deps.store.atomic((tx) => tx.task(previous.taskId));
-      if (task && task.lease.ownerId !== this.#deps.ownerId) return codingFailure('coding_denied');
-      return task ? ok(task) : codingFailure('recovery_required');
-    }
+    const previous = this.reservationReceipt(i);
+    if (!previous.ok || previous.value) return previous as CodingResult<CodingTask>;
     if (this.#inspectionHeld()) return codingFailure('recovery_required');
     // A finalizing/uncertain finalization still owns the project reservation.
     if (this.#deps.store.projectHeld(i.projectRoot)) return codingFailure('recovery_required');
@@ -200,6 +196,9 @@ export class CodingTaskService {
     if (tx.task(lease.taskId)?.lease.token !== lease.token && !this.#deps.leases.release(lease))
       return codingFailure('recovery_required');
     return codingFailure(code);
+  }
+  reservationReceipt(input: StartCodingTask): CodingResult<CodingTask | null> {
+    return reservationReceipt(this.#deps, input);
   }
   inspect(workspaceId: string, taskId: string): CodingResult<CodingTask> {
     return this.#deps.store.atomic((tx) => {

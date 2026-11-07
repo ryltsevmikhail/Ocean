@@ -23,7 +23,8 @@ export interface OwnerDecision extends OwnerDecisionRef {
     | 'test'
     | 'continue-text-only'
     | 'restore-rebind'
-    | 'task-finalization';
+    | 'task-finalization'
+    | 'project-setup';
   readonly version: number;
   readonly status: 'pending' | DecisionOutcome;
   readonly bindingDigest: string;
@@ -46,7 +47,12 @@ export function assertNewOwnerDecision(card: OwnerDecision, preview: string) {
 /** A decision records an owner response. Only the operation service may grant or consume authority. */
 export interface OwnerDecisionStore {
   insert(card: OwnerDecision, preview: string): void;
-  list(scope: OwnerDecisionScope, after: string, limit: number): readonly OwnerDecision[];
+  list(
+    scope: OwnerDecisionScope,
+    after: string,
+    limit: number,
+    excludeKind?: OwnerDecision['kind'],
+  ): readonly OwnerDecision[];
   has(decisionId: string): boolean;
   find(ref: OwnerDecisionRef): OwnerDecision | null;
   preview(ref: OwnerDecisionRef, offset?: number, length?: number): string | null;

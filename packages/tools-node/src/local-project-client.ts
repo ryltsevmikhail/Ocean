@@ -1,4 +1,9 @@
+import { createHash } from 'node:crypto';
 import {
+  isCodingTaskReserve,
+  isCodingTaskReservation,
+  type CodingTaskReserve,
+  type CodingTaskReservation,
   LOCAL_CODING_WORKSPACE,
   LOCAL_CODING_WORKSPACE_PAGE,
   isCodingProjectsList,
@@ -14,6 +19,7 @@ import {
 import { validatedParams } from './local-room-client.js';
 
 export interface LocalProjectClient {
+  reserveCodingTask(input: CodingTaskReserve): Promise<CodingTaskReservation>;
   listCodingProjects(input: CodingProjectsList): Promise<CodingProjectsPage>;
   listCodingTasks(input: CodingTasksList): Promise<CodingTasksPage>;
 }
@@ -46,6 +52,30 @@ export function localProjectClient(
       throw Error('client_upgrade_required');
   };
   return {
+    async reserveCodingTask(input) {
+      requireFeature();
+      const q = validatedParams(input, isCodingTaskReserve);
+      const v = await send('coding.tasks.reserve', q);
+      if (
+        !isCodingTaskReservation(v) ||
+        v.decision.workspaceId !== q.workspaceId ||
+        v.decision.roomId !== q.ownerRoomId ||
+        v.decision.runId !== v.decision.decisionId ||
+        v.decision.decisionId !==
+          'reserve-' +
+            createHash('sha256')
+              .update(JSON.stringify([q.workspaceId, q.requestId]))
+              .digest('hex') ||
+        (v.task &&
+          (v.task.id !== q.taskId ||
+            v.task.ownerRoomId !== q.ownerRoomId ||
+            v.task.devBotId !== q.devBotId ||
+            v.task.reviewRoomId !== q.reviewRoomId ||
+            v.task.reviewBotId !== q.reviewBotId))
+      )
+        throw Error('invalid_frame');
+      return v;
+    },
     async listCodingProjects(input) {
       requireFeature();
       const q = validatedParams(input, isCodingProjectsList);

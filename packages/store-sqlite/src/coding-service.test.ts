@@ -90,6 +90,19 @@ function setup(
   };
 }
 for (const kind of ['memory', 'sqlite'] as const) {
+  it(kind + ' reads only the exact reservation receipt without repeating the effect', async () => {
+    const s = setup(kind);
+    expect(s.service.reservationReceipt(s.input)).toEqual({ ok: true, value: null });
+    expect((await s.service.start(s.input, { confirm: async () => true })).ok).toBe(true);
+    expect(s.service.reservationReceipt(s.input)).toMatchObject({
+      ok: true,
+      value: { id: 'task' },
+    });
+    expect(s.service.reservationReceipt({ ...s.input, taskId: 'other' })).toMatchObject({
+      ok: false,
+      error: { code: 'request_conflict' },
+    });
+  });
   it(
     kind + ' an old start receipt cannot authorize or appear as a task owned by a new epoch',
     async () => {

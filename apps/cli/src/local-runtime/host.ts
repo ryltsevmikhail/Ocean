@@ -1,9 +1,6 @@
 import { failedStartupDrain } from './service-drain.js';
-import {
-  runtimeDesktopAssets,
-  desktopSubmitRefusal,
-  desktopImageResolver,
-} from './desktop-assets.js';
+import { runtimeDesktopAssets } from './desktop-assets.js';
+import { desktopSubmitRefusal, desktopImageResolver } from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
 import {
   isCodingWorkspaceRead,
@@ -31,6 +28,7 @@ import { RuntimeTurns } from './turns.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
 import { assertRuntimeDrained } from './drain-supervision.js';
+import { RuntimeProjectReserve } from './project-reserve.js';
 import { RuntimeFinalization } from './finalization.js';
 import { hostRoomTasks, wakeRoomTasksAfter } from './host-room-tasks.js';
 import { runtimeCapabilities } from './capabilities.js';
@@ -39,11 +37,8 @@ import { settingsHosts } from './settings-hosts.js';
 import { hostPluginSettings } from './host-plugin.js';
 import type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
 export type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
-
 /** The existing runtime remains the only SQLite owner and recovery/effect journal executor. */
-export async function startLocalRuntime(
-  options: LocalRuntimeHostOptions,
-): Promise<LocalRuntimeHost> {
+export async function startLocalRuntime(options: LocalRuntimeHostOptions) {
   const drainDeadlineMs = options.drainDeadlineMs ?? LOCAL_RUNTIME_MAX_WAIT_MS - 1000;
   if (
     !Number.isSafeInteger(drainDeadlineMs) ||
@@ -123,6 +118,7 @@ export async function startLocalRuntime(
     const reads = runtime.openProfileReads?.();
     if (!reads) throw Error('durable_runtime_required');
     const panels = new CodingPanelQueries(runtime, reads);
+    const reserve = new RuntimeProjectReserve(paths.profile, runtime, decisions.owner);
     if (!runtime.desktopAssets) throw Error('durable_runtime_required');
     const desktop = runtimeDesktopAssets(runtime.desktopAssets, paths.profile, paths.profileId);
     const identity: LocalRuntimeIdentity = {
@@ -185,6 +181,7 @@ export async function startLocalRuntime(
                 panels,
                 restoration,
                 finalization,
+                reserve,
                 provider.settings,
                 models,
                 plugins,
@@ -237,6 +234,7 @@ export async function startLocalRuntime(
             return restoration.dispatch(method, params);
           if (options.restore && !maintenanceRead(method))
             return { error: { code: 'restore_restricted' } };
+          if (method === 'coding.tasks.reserve') return reserve.dispatch(params, state !== 'ready');
           if (isCodingWorkspaceRead(method))
             return projectsRead(paths.profile, reads, method, params, state !== 'ready');
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))

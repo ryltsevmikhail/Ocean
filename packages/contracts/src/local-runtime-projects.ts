@@ -77,7 +77,7 @@ export function isCodingProjectSummary(v: unknown): v is CodingProjectSummary {
     new Set(v['presetIds']).size === v['presetIds'].length
   );
 }
-function isCodingTaskSummary(v: unknown): v is CodingTaskSummary {
+export function isCodingTaskSummary(v: unknown): v is CodingTaskSummary {
   return (
     localRuntimeRecord(v) &&
     exact(v, [
