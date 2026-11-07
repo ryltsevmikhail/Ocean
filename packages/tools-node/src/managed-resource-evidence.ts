@@ -34,9 +34,15 @@ export async function prepareManagedResourceEvidence(
     }
     return sameManagedWorkspace(saved, witness.footprint) ? witness : null;
   };
-  const close = async () => {
-    await Promise.all([...opened.values()].map((v) => v.close()));
-  };
+  let closing: Promise<void> | undefined;
+  const close = () =>
+    (closing ??= (async () => {
+      const results = await Promise.allSettled(
+        [...opened.values()].map((v) => Promise.resolve().then(() => v.close())),
+      );
+      const errors = results.flatMap((r) => (r.status === 'rejected' ? [r.reason as unknown] : []));
+      if (errors.length) throw new AggregateError(errors, 'Managed resource close failed');
+    })());
   try {
     const current = await open(incoming);
     if (!current) throw Error('managed workspace stale');
@@ -76,7 +82,11 @@ export async function prepareManagedResourceEvidence(
       close,
     };
   } catch (error) {
-    await close();
+    try {
+      await close();
+    } catch (closeError) {
+      throw new AggregateError([error, closeError], 'Managed preparation and close failed');
+    }
     throw error;
   }
 }

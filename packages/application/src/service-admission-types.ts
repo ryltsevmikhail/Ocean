@@ -88,6 +88,8 @@ export interface ServiceCallAdmissionOptions {
   ) => boolean;
 }
 export interface ServiceCallResult {
+  /** Private in-process causes only; mapper emits fixed safe text, never serialized proof/errors. */
+  readonly cleanupError?: AggregateError;
   readonly code: string;
   readonly outcome: ServicePluginInvokeOutcome | null;
 }

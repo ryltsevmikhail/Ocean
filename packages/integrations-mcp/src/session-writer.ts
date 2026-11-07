@@ -5,6 +5,7 @@ import { InvocationSend } from './send.js';
 /** No transport gets authority from an SDK connection or an AsyncLocalStorage token. */
 export class SessionWriter {
   private readonly pending = new Set<Promise<unknown>>();
+  private preparations = 0;
   track<T>(work: () => Promise<T>): Promise<T> {
     const promise = work();
     this.pending.add(promise);
@@ -15,6 +16,9 @@ export class SessionWriter {
     return promise;
   }
   ownResources(work: () => Promise<ServiceResourceEvidence>): Promise<ServiceResourceEvidence> {
+    if (this.lifetime.aborted || !this.usable || this.preparations >= 16)
+      return Promise.reject(Error('managed preparation unavailable'));
+    this.preparations++;
     let ready!: (value: ServiceResourceEvidence) => void, fail!: (error: unknown) => void;
     const result = new Promise<ServiceResourceEvidence>((resolve, reject) => {
       ready = resolve;
@@ -42,6 +46,8 @@ export class SessionWriter {
         await released;
       } catch (error) {
         fail(error);
+      } finally {
+        this.preparations--;
       }
     }).catch(() => {});
     return result;

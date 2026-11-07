@@ -49,6 +49,24 @@ export function serviceUncertain(): ToolResult {
   };
 }
 export function serviceResult(result: ServiceCallResult): ToolResult {
+  if (result.cleanupError) {
+    const outcome = result.outcome;
+    const known =
+      outcome?.kind === 'observed'
+        ? `Service result observed (${outcome.code}):\n${canonicalJson(outcome.result)}`
+        : outcome?.kind === 'not_started'
+          ? `Service call did not start (${outcome.code}).`
+          : serviceResult({ code: result.code, outcome }).output;
+    return {
+      isError: true,
+      uncertain: true,
+      output: truncatePluginOutput(
+        'UNCONFIRMED CLEANUP OR RECORDING. Stop further tool work; do not repeat this operation.\n' +
+          known,
+        PLUGIN_MAX_MODEL_OUTPUT_BYTES,
+      ).text,
+    };
+  }
   if (result.code === 'claim_refused') return serviceUncertain();
   const outcome = result.outcome;
   if (!outcome) return serviceRefusal(result.code);

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
   managedLifetimeFingerprint,
+  effectResourcesConflict,
   type ServiceJson,
   type ToolEffectAdmission,
 } from '@runnets/domain';
@@ -206,3 +207,81 @@ it.each(['connection', 'enrollment', 'footprint'] as const)(
     }
   },
 );
+
+it.each(['binding', 'admission'] as const)(
+  'retains sealed type after complete %s replacement with its fingerprint and lifecycle unchanged',
+  (mode) => {
+    const f = fixture();
+    const incoming: ToolEffectAdmission = {
+      scope: {
+        kind: 'resources',
+        resources: [{ kind: 'project-worktree', projectId: 'actual', worktreeId: null }],
+      },
+      effectKind: 'mutation',
+      grantReference: null,
+      binding: { projectRoot: '/a' },
+    };
+    try {
+      expect(effectResourcesConflict(f.admission, incoming)).toBe(true);
+      const seal = f.db
+        .prepare("SELECT fingerprint FROM tool_invocations_v2 WHERE id='business'")
+        .get()!['fingerprint'];
+      const replacement: ToolEffectAdmission =
+        mode === 'binding'
+          ? { ...f.admission, binding: { projectRoot: '/other' } }
+          : {
+              ...incoming,
+              scope: {
+                kind: 'resources',
+                resources: [{ kind: 'project-worktree', projectId: 'other', worktreeId: null }],
+              },
+              binding: { projectRoot: '/other' },
+            };
+      f.db
+        .prepare("UPDATE tool_invocations_v2 SET admission=? WHERE id='business'")
+        .run(JSON.stringify(replacement));
+      expect(
+        f.db.prepare("SELECT fingerprint FROM tool_invocations_v2 WHERE id='business'").get()![
+          'fingerprint'
+        ],
+      ).toBe(seal);
+      expect(
+        f.db.prepare('SELECT fingerprint FROM tool_invocations_v2 WHERE id=?').get(f.own.id)![
+          'fingerprint'
+        ],
+      ).toBe(f.own.fingerprint);
+      const decoded = f.reopen();
+      expect(decoded).toBeUndefined();
+      expect(effectResourcesConflict(decoded, incoming)).toBe(true);
+    } finally {
+      f.close();
+    }
+  },
+);
+it('preserves genuine unmanaged legacy scope without a reserved seal', () => {
+  const db = store(),
+    journal = new SqliteToolJournal(db);
+  const admission: ToolEffectAdmission = {
+    scope: {
+      kind: 'resources',
+      resources: [{ kind: 'project-worktree', projectId: 'legacy', worktreeId: null }],
+    },
+    effectKind: 'mutation',
+    grantReference: null,
+    binding: { projectRoot: '/legacy' },
+  };
+  try {
+    expect(
+      journal.claimNow(
+        'legacy',
+        'legacy',
+        { taskRunId: 'run', attemptId: 'at' },
+        'legacy request',
+        admission,
+      ),
+    ).toBe(true);
+    expect(journal.inspectPending()[0]!.admission).toEqual(admission);
+  } finally {
+    db.close();
+  }
+});

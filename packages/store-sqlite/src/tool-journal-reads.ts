@@ -87,7 +87,7 @@ export function readEffectiveToolAdmission(
       ? admission
       : undefined;
   }
-  if (hasManagedMarkers(admission))
+  if (String(row['fingerprint']).startsWith('managed-business-') || hasManagedMarkers(admission))
     return exactManagedBusiness(db, row, admission) ? admission : undefined;
   const a = journalCodingApproval(db, row);
   if (a !== undefined) return a && exactCodingReceipt(a, admission) ? admission : undefined;

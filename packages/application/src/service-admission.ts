@@ -1,4 +1,9 @@
 import {
+  closeServiceResource,
+  finishServiceCall,
+  serviceCleanupResult,
+} from './service-admission-finalize.js';
+import {
   serviceResourceFactsCurrent,
   serviceResourceConflicts,
   type ServiceResourceEvidence,
@@ -84,6 +89,7 @@ export class ServiceCallAdmissionService {
       prepared = current.prepared;
     }
     let resource: ServiceResourceEvidence | undefined;
+    const cleanupErrors: unknown[] = [];
     const refreshResources = async () => {
       const next = await this.options.prepareResources?.(
         admitted.admission,
@@ -91,12 +97,14 @@ export class ServiceCallAdmissionService {
         expire,
       );
       if (closed || lifetime.signal.aborted || Date.now() >= expire) {
-        await next?.close();
+        await closeServiceResource(next, cleanupErrors);
         throw Error('resource preparation expired');
       }
       const prior = resource;
       resource = next;
-      await prior?.close();
+      const previousErrors = cleanupErrors.length;
+      await closeServiceResource(prior, cleanupErrors);
+      if (cleanupErrors.length !== previousErrors) throw Error('resource cleanup unavailable');
     };
     const admitted = prepared;
     const managedSession = (admitted.admission.binding as { managedSession?: unknown })
@@ -154,16 +162,19 @@ export class ServiceCallAdmissionService {
       if (!claimed) {
         clearTimeout(timer);
         signal?.removeEventListener('abort', abort);
-        await resource?.close();
-        return { code: 'claim_refused', outcome: null };
+        closed = true;
+        abort();
+        await closeServiceResource(resource, cleanupErrors);
+        return serviceCleanupResult({ code: 'claim_refused', outcome: null }, cleanupErrors);
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof AggregateError) cleanupErrors.push(error);
       closed = true;
       abort();
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
-      await resource?.close();
-      return { code: 'claim_refused', outcome: null };
+      await closeServiceResource(resource, cleanupErrors);
+      return serviceCleanupResult({ code: 'claim_refused', outcome: null }, cleanupErrors);
     }
     const authorizeDispatch = () => {
       if (
@@ -210,7 +221,6 @@ export class ServiceCallAdmissionService {
       return false;
     };
     let outcome: ServicePluginInvokeOutcome = lost();
-    let retirement: Promise<void> | undefined;
     try {
       const interrupted = new Promise<ServicePluginInvokeOutcome>((resolve) => {
         if (lifetime.signal.aborted) resolve(lost());
@@ -243,19 +253,15 @@ export class ServiceCallAdmissionService {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       abort();
-      if (outcome.kind === 'uncertain') {
-        retirement = this.options.transport.retireUncertain?.(
-          admitted.connection,
-          typeof managedSession === 'string' ? managedSession : undefined,
-        );
-        void retirement?.catch(() => {});
-      }
-      await resource?.close();
     }
-    const settlement =
-      outcome.kind === 'observed' ? (outcome.code === 'ok' ? 'completed' : 'failed') : outcome.kind;
-    this.options.store.atomic((tx) => tx.settle(r, settlement));
-    await retirement;
-    return { code: outcome.code, outcome };
+    return finishServiceCall(
+      this.options,
+      r,
+      admitted.connection,
+      managedSession,
+      outcome,
+      resource,
+      cleanupErrors,
+    );
   }
 }
