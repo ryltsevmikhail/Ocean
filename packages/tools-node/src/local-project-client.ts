@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 import {
+  isCodingTaskPrepare,
+  isCodingTaskPreparation,
+  type CodingTaskPrepare,
+  type CodingTaskPreparation,
   isCodingTaskReserve,
   isCodingTaskReservation,
   type CodingTaskReserve,
@@ -19,6 +23,7 @@ import {
 import { validatedParams } from './local-room-client.js';
 
 export interface LocalProjectClient {
+  prepareCodingTask(input: CodingTaskPrepare): Promise<CodingTaskPreparation>;
   reserveCodingTask(input: CodingTaskReserve): Promise<CodingTaskReservation>;
   listCodingProjects(input: CodingProjectsList): Promise<CodingProjectsPage>;
   listCodingTasks(input: CodingTasksList): Promise<CodingTasksPage>;
@@ -52,6 +57,26 @@ export function localProjectClient(
       throw Error('client_upgrade_required');
   };
   return {
+    async prepareCodingTask(input) {
+      requireFeature();
+      const q = validatedParams(input, isCodingTaskPrepare);
+      const v = await send('coding.tasks.prepare', q);
+      if (
+        !isCodingTaskPreparation(v) ||
+        (v.decision &&
+          (v.decision.workspaceId !== q.workspaceId ||
+            v.decision.roomId !== q.roomId ||
+            v.decision.runId !== v.decision.decisionId ||
+            v.decision.decisionId !==
+              'prepare-' +
+                createHash('sha256')
+                  .update(JSON.stringify([q.workspaceId, q.requestId]))
+                  .digest('hex'))) ||
+        (v.worktree && (v.worktree.taskId !== q.taskId || v.worktree.workspaceId !== q.workspaceId))
+      )
+        throw Error('invalid_frame');
+      return v;
+    },
     async reserveCodingTask(input) {
       requireFeature();
       const q = validatedParams(input, isCodingTaskReserve);

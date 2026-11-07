@@ -44,3 +44,4 @@ export * from './local-runtime-room-tasks.js';
 export * from './local-runtime-projects.js';
 
 export * from './local-project-reserve.js';
+export * from './local-project-prepare.js';

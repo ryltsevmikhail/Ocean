@@ -172,7 +172,9 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
         return;
       }
       if (
-        (isCodingWorkspaceRead(method) || method === 'coding.tasks.reserve') &&
+        (isCodingWorkspaceRead(method) ||
+          method === 'coding.tasks.reserve' ||
+          method === 'coding.tasks.prepare') &&
         !context.codingWorkspace
       ) {
         reject('client_upgrade_required');

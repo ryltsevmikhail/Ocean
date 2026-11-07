@@ -46,6 +46,30 @@ Clients without `coding.workspace-v1` cannot see or resolve setup cards.
 The reserve-only implementation at `7eaa1c1` passed independent review and
 root check/build/format (4,212 source and 193 process tests).
 
+## Implemented: prepare with a separate owner decision
+
+`prepareCodingTask` (`coding.tasks.prepare`) accepts only `workspaceId`,
+`roomId`, `taskId`, `requestId` and `expectedPolicyVersion`. The runtime resolves
+the assigned dev and project from the task, then uses the existing changeset
+service. Its separate setup card binds the task, canonical project root/base,
+policy and exact worktree root, branch and Git common directory. Neither the
+preview nor the public result contains lease material.
+
+The same bounded setup lane owns reserve and prepare jobs. `prepared` requires
+an allowed matching card plus a read-only proof of the persisted ready worktree,
+current scope/leases and Git binding. `allowed` alone is not completion;
+`unconfirmed` means no ready proof after the job ended. Repeating the same
+request reads the original card and verifies the worktree again. Changed inputs
+conflict. A worktree prepared previously through the CLI returns `existing`
+with no new decision or effect. Interrupted, uncertain or stale preparations
+are never retried by this route, including after restart. Disconnect detaches;
+shutdown cancels pending cards and joins active jobs.
+
+Preparation uses the existing durable worktree intent and source mutation guard.
+It does not run a dev turn, edit source files, capture a review or apply changes.
+The prepare implementation awaits independent acceptance; native/GUI and live
+provider qualification remain separate.
+
 ## Planned
 
 Remaining owner operations, the separate project window and its installed acceptance

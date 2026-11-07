@@ -234,6 +234,8 @@ export async function startLocalRuntime(options: LocalRuntimeHostOptions) {
             return restoration.dispatch(method, params);
           if (options.restore && !maintenanceRead(method))
             return { error: { code: 'restore_restricted' } };
+          if (method === 'coding.tasks.prepare')
+            return reserve.dispatch(params, state !== 'ready', 'prepare');
           if (method === 'coding.tasks.reserve') return reserve.dispatch(params, state !== 'ready');
           if (isCodingWorkspaceRead(method))
             return projectsRead(paths.profile, reads, method, params, state !== 'ready');
