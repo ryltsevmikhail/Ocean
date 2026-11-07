@@ -36,16 +36,16 @@ model adapter.
 
 ## 22.1 — Read the registered projects and tasks through the SDK
 
-- [ ] Add RED protocol and store tests. An authenticated new client can page
+- [x] Add RED protocol and store tests. An authenticated new client can page
       registered projects and their current owner tasks; a foreign workspace,
       unknown project, invalid cursor/page and unnegotiated peer refuse.
       An old peer still reads rooms and existing `coding.show`/`coding.diff`.
-- [ ] Add one negotiated `coding.workspace-v1` marker and strict DTOs in
+- [x] Add one negotiated `coding.workspace-v1` marker and strict DTOs in
       `packages/contracts/src/local-runtime-projects.ts`, with bounded
       `coding.projects.list` and `coding.tasks.list`. Add matching methods in
       `packages/tools-node/src/local-project-client.ts` and the existing client
       composition. Check server/SDK capability limits and negotiation per socket.
-- [ ] Add a small `apps/cli/src/local-runtime/projects-read.ts` host adapter
+- [x] Add a small `apps/cli/src/local-runtime/projects-read.ts` host adapter
       using `readCodingProjects` and owner-scoped `ProfileReads`. Extend the
       existing SQLite read projection (split if needed) with a bounded exact
       workspace + registered root + owner + dev room membership query.
@@ -53,9 +53,13 @@ model adapter.
       assignments/worktree readiness; never return leases, command argv, mounts
       or secret references. Reuse current chunked coding detail/diff reads.
       Reject malformed or unavailable catalog; never treat it as an empty list.
-- [ ] Cover two clients and restart via the real built local SDK process
+- [x] Cover two clients and restart via the real built local SDK process
       fixtures. Preserve old/nonnegotiated and restore/drain restrictions.
       Verify strict types, root gates and independent review before 22.2.
+
+Accepted after independent review at `c438756`: root check/build/format 0
+(4,198 source and 187 process tests passed). See the
+[implemented SDK boundary](../../integration/project-desktop.md).
 
 ## 22.2 — Route exact owner operations through the same runtime
 
