@@ -25,7 +25,7 @@ and entry points documented for each stage.
 | Frozen root checks, native and source-preset shards                                    | Accepted for the bounded target in independent review. On `77295d7`, root check/build/format passed (4,185 source and 182 process tests; 44/58 configured skips). The complete 656-file cold union passed all 4,185 enabled cases using fresh corrected shards and explicitly byte-equivalent prior results from `50fb569`. The unchanged native selection passed 54 Btrfs source and 58 process tests on the earlier revision.                                           |
 | Independent runtime/authority/migration and whole-branch review                        | Accepted with bounded fixes. The review covered the complete `v1.0.0..11729d9` range by inventory and high-risk source paths. The fix wave closed runtime construction cleanup and the two named native test boundaries; `8bc6ff8` also prevents recovery after failed construction and makes the ordinary HTTP tests portable. Root check/build/format pass (4,188 source, 184 process; 44/58 skips). Remaining narrow limits and release qualification stay open below. |
 | Disposable install, migration, backup/restore, reboot/device identity, update/rollback | Accepted for the observed disposable Linux boundary at `7dbbf90` (rc.21). Real RC2 migrated 18→29; old execution refused, and a compatible backup restored to a separate schema18 profile on rollback. Installed CLI/TUI/ACP, authenticated Python socket, complete format-2 assets, lineage and exact owner rebind were exercised. Btrfs and endpoint limits are below.                                                                                                  |
-| Live cloud and MCP                                                                     | Pending. Record fresh DeepSeek and supported MCP results and the actual release scope, with credentials excluded from logs. OpenAI and Anthropic live checks remain deferred by the user.                                                                                                                                                                                                                                                                                 |
+| Live cloud and MCP                                                                     | Installed rc.21: DeepSeek completed once and preserved the same receipt across runtime restart. GitHub MCP read issue #5 once after exact owner approval using the read-only Issues endpoint. The default GitHub catalog failed before business dispatch. OpenAI and Anthropic live are deferred. See the qualification scope below.                                                                                                                                      |
 | Real local and mixed autonomy                                                          | Pending. On Omarchy, measure offline chat and a tool run, RAM/VRAM, latency and context limits, then verify autonomous cloud → local → cloud and runtime restart. Record the backend/model versions and settings. A qualifying backend and real model are required.                                                                                                                                                                                                       |
 | Linux artifact, installed GUI and publication                                          | Pending. Bind the final Linux artifact, SHA-256, inventory, licenses and installed GUI evidence to the exact revision and verify the published bytes. E and RC2 evidence retains its original scope.                                                                                                                                                                                                                                                                      |
 
@@ -48,6 +48,32 @@ exact TTY rebind recovered the selected snapshot without replaying old effects. 
 original remained intact. Physical reboot and device reassignment were not performed;
 there is no automatic in-place repair or recovery of writes after the snapshot.
 See [the operator recovery procedure](operations.md#потеря-временного-доказательства-сокета).
+
+### Installed live qualification
+
+The installed `7dbbf90` candidate used a disposable profile and an explicit
+`deepseek-flash` connection. One metadata request and one inference request
+completed. The inference-start record was committed before dispatch. Submitting
+the same request before and after reopening the runtime and SQLite returned the
+same receipt and saved reply without another inference. The restart was within
+the test process; this check did not simulate a process crash.
+
+Through the same installed runtime and ordinary MCP transport, the
+[GitHub Issues read-only endpoint](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md)
+returned `ryltsevmikhail/Ocean#5` as closed after one exact owner approval.
+The default endpoint failed catalog discovery before any business call and
+remains unqualified. Across both configurations: eight metadata HTTP operations
+and one `tools/call`; no writes or unrelated repository requests. Separate
+loopback controls showed that changed operations could not reuse the approval
+and owner denials dispatched nothing. Ocean's generic HTTP connection does not
+enforce a GitHub repository allowlist. The scoped token was an input to the
+test; its account and permissions were not independently audited.
+
+The DeepSeek key and GitHub token stayed in memory via the existing credential
+ports; scans found no copies in the retained test files. The GitHub run used a
+synthetic model to request the exact read. OpenAI and Anthropic live were
+deferred by the owner. This result leaves the real local and mixed team gate
+and final release qualification open.
 
 ## Inherited v1.1 obligations
 

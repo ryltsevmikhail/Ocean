@@ -2868,8 +2868,11 @@ only after actual evidence; retained B results do not qualify E candidate bytes.
       откат, полные assets, Btrfs и восстановление из проверенного снимка. Физическая
       перезагрузка и автоматическое восстановление после потери доказательства сокета
       не квалифицированы; см. [карту выпуска](../../ocean/platform-stage-f.md).
-- [ ] Живой DeepSeek и поддерживаемые новые API-провайдеры, MCP; credentials
-      не логируются. Указать фактические пропуски и пределы квалификации.
+- [x] Живой DeepSeek и поддерживаемые новые API-провайдеры, MCP; credentials
+      не логируются. На установленном `7dbbf90`: один DeepSeek inference с той же
+      квитанцией после перезапуска и один GitHub MCP read через Issues read-only.
+      Общий адрес GitHub не квалифицирован; OpenAI/Anthropic live отложены.
+      См. [границы приёмки](../../ocean/platform-stage-f.md#installed-live-qualification).
 - [ ] Реальная локальная модель на Omarchy: offline chat + tool, RAM/VRAM,
       задержка и пределы контекста; затем смешанная цепочка cloud → local → cloud
       и перезапуск runtime. Записать версии backend/model, настройки и результат;
