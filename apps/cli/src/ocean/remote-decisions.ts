@@ -3,6 +3,8 @@ import type { LocalDecision, LocalReviewSnapshot } from '@runnets/contracts';
 import { DecisionPanel, visibleControls } from '../tui/decision-panel.js';
 import { pages, type RemoteRoomView } from './remote-room-view.js';
 import type { RoomConnection } from './room-connection.js';
+import type { LocalRuntimeClient } from '@runnets/tools-node';
+import { devDecision, hasProjectReceipt, type ProjectChatScope } from './project-chat-scope.js';
 
 const ref = ({ workspaceId, roomId, runId, decisionId }: LocalDecision) => ({
   workspaceId,
@@ -25,7 +27,10 @@ export class RemoteDecisions {
   readonly panel: DecisionPanel;
   readonly #connection: RoomConnection;
   readonly #room: RemoteRoomView;
-  constructor(connection: RoomConnection, room: RemoteRoomView) {
+  readonly #project: ProjectChatScope | undefined;
+  readonly #projectRuns = new Set<string>();
+  constructor(connection: RoomConnection, room: RemoteRoomView, project?: ProjectChatScope) {
+    this.#project = project;
     this.#room = room;
     this.#connection = connection;
     this.panel = new DecisionPanel(async (card, choice) => {
@@ -35,9 +40,21 @@ export class RemoteDecisions {
         expectedVersion: card.version,
         bindingDigest: card.bindingDigest,
       };
-      await connection.withClient((c) => c.resolveDecision(command));
+      await connection.withClient(async (c) => {
+        if (project) {
+          const run = await this.#projectRun(c, project, card);
+          if (!run?.pendingDecisionIds?.includes(card.decisionId))
+            throw Error('decision_scope_changed');
+        }
+        return c.resolveDecision(command);
+      });
       await this.refresh();
     });
+  }
+  async #projectRun(c: LocalRuntimeClient, project: ProjectChatScope, card: LocalDecision) {
+    if (!devDecision(card)) return null;
+    const run = await c.getRun({ ...this.#room.scope, runId: card.runId });
+    return (await hasProjectReceipt(c, this.#room.scope, project, run)) ? run : null;
   }
   refresh(full = true) {
     const reading = this.#reading.then(() => this.#readCards(full));
@@ -55,7 +72,14 @@ export class RemoteDecisions {
         : Promise.all([...this.#pending.values()].map((card) => c.getDecision(ref(card)))),
     );
     let changed = full;
+    const project = this.#project;
     for (const card of cards) {
+      if (project && !this.#projectRuns.has(card.runId)) {
+        if (!(await this.#connection.withClient((c) => this.#projectRun(c, project, card))))
+          continue;
+        this.#projectRuns.add(card.runId);
+      }
+      if (project && !devDecision(card)) continue;
       if (JSON.stringify(this.#cards.get(card.decisionId)) !== JSON.stringify(card)) changed = true;
       this.#cards.set(card.decisionId, card);
       if (card.status === 'pending') this.#pending.set(card.decisionId, card);
@@ -117,8 +141,16 @@ export class RemoteDecisions {
       if (!card) throw Error('unknown_decision');
     } else return null;
     const exactRef = ref(card);
-    const complete = await this.#connection.withClient((c) => c.decisionPreview(exactRef));
-    const current = await this.#connection.withClient((c) => c.getDecision(exactRef));
+    const project = this.#project;
+    const { complete, current } = await this.#connection.withClient(async (c) => {
+      if (project && !(await this.#projectRun(c, project, card)))
+        throw Error('decision_scope_changed');
+      const complete = await c.decisionPreview(exactRef);
+      const current = await c.getDecision(exactRef);
+      if (project && (!devDecision(current) || current.version !== card.version))
+        throw Error('version_conflict');
+      return { complete, current };
+    });
     if (current.bindingDigest !== card.bindingDigest) throw Error('binding_conflict');
     this.panel.open(current, complete);
     await this.refresh();

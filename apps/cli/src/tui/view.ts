@@ -25,6 +25,7 @@ export interface FrameInput {
   readonly model: string;
   readonly provider: string | null;
   readonly batch?: string | undefined;
+  readonly roomCommands?: boolean | undefined;
   readonly size: Size;
 }
 function dimensions(size: Size): Size {
@@ -64,6 +65,11 @@ function statusText(input: FrameInput): string {
       : state.budget.consumed.provider_tokens;
   return `${selected?.taskRunId ?? 'No task'} · ${selected?.liveMode ?? state?.status ?? 'ready'} · tokens ${tokens} · ${input.ui.status ?? (input.ui.busy ? 'working' : 'ready')}`;
 }
+function helpLines(input: FrameInput, width: number): string[] {
+  return HELP.filter(
+    (line) => input.roomCommands !== false || !line.startsWith('/broadcast '),
+  ).flatMap((line) => wrap(line, width));
+}
 function content(
   input: FrameInput,
   width: number,
@@ -92,10 +98,7 @@ function content(
   if (focus === 'help')
     return {
       title: 'Help · Esc close',
-      lines: HELP.flatMap((line) => wrap(line, width)).slice(
-        input.ui.eventScroll,
-        input.ui.eventScroll + height,
-      ),
+      lines: helpLines(input, width).slice(input.ui.eventScroll, input.ui.eventScroll + height),
     };
   if (focus === 'events')
     return {
@@ -129,7 +132,7 @@ export function navigationContext(input: FrameInput): {
       : input.ui.focus === 'details'
         ? details(selected, input.workspace).flatMap((line) => wrap(line, columns)).length
         : input.ui.focus === 'help'
-          ? HELP.flatMap((line) => wrap(line, columns)).length
+          ? helpLines(input, columns).length
           : eventLines(selected, columns).length;
   return {
     dialogCount:

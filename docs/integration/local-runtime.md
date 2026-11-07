@@ -97,7 +97,7 @@ pnpm ocean tui --profile /absolute/private/profile --room ROOM_ID --task TASK_ID
 
 The header uses room members and the admitted performer. Enter submits a message. In a group, a leading `@handle` addresses one bot. Unaddressed posts have a message receipt and no run. The TUI immediately displays the confirmed message and admitted run IDs. Room reads continue separately. Until the corresponding history and run are observed, repeating the same input shows the retained receipt and Enter keeps a different message in the editor. Press Enter again after history updates to send that draft. A read error is displayed beside that receipt while the client retries observation. An idle terminal reauthenticates and resynchronizes after a runtime instance change. F2 selects a run, F3 shows scoped event names and sequence numbers, and F4 shows the run version, performer, result ID and pending decision IDs. The dialogue follows committed room history, including posts from other clients. Active polling indexes entries by run ID and refreshes only active run snapshots and pending decision cards between full discovery passes. It caches confirmed continuation receipts. New user history, decision-change notices, explicit operations and resyncs discover changed projections; a full resync also runs at least every 30 seconds while the client is connected.
 
-`/quit`, EOF, terminal hangup and SIGTERM detach. Escape in the dialogue or Ctrl+C on a selected active run requests version-bound cancellation when the status row shows its complete run ID and bracketed version. Enlarge a compact or clipped terminal to reveal the binding. The receipt confirms the request. Run and turn state report eventual settlement. Escape in a panel closes it. Closing the client during an owner decision leaves the decision pending. The legacy standalone `tui` without `--room` retains its embedded execution lifecycle.
+`/quit`, EOF, terminal hangup and SIGTERM detach. Escape in the dialogue or Ctrl+C on a selected active run requests version-bound cancellation when the status row shows its complete run ID and bracketed version. Enlarge a compact or clipped terminal to reveal the binding. The receipt confirms the request. Run and turn state report eventual settlement. Escape in a panel closes it. Closing the client during an owner decision leaves the decision pending. The legacy standalone `tui` without `--room` or `--projects` retains its embedded execution lifecycle.
 
 A living client retries a lost submission acknowledgement with the original request ID and exact payload. A malformed acknowledgement holds that binding for an explicit retry of the original text. Opening a new terminal reads committed history and runs. A missing runtime returns `runtime_absent` on an initialized profile. Authentication and protocol failures propagate.
 
@@ -114,6 +114,40 @@ OCEAN_SANDBOX_NATIVE=1 pnpm exec vitest run apps/cli/src/ocean/room-tui-coding-n
 ```
 
 The Linux PTY driver requires Python 3. It starts the built CLI, submits, captures its run ID, physically closes the controlling PTY master while the provider waits, and separately checks raw-mode restoration after SIGTERM. An independent SDK process observes the running task and its single final result. Reopening the standard TUI reads the same committed answer. The persisted provider call count is one.
+
+## Project task terminal
+
+With the existing owner running, use the same profile and runtime directory:
+
+```sh
+pnpm ocean tui --projects --profile /absolute/private/profile
+```
+
+Choose a registered project and a current task by number. Enter `n` for more
+entries or `q` to leave the chooser. The terminal verifies the task assignment
+with the runtime and opens the existing chat in its dev room. An owner without
+project discovery returns `project_runtime_upgrade_required`. Use the existing
+`--room ROOM [--task TASK]` invocation for the room terminal; the project
+selector cannot be combined with either flag.
+
+Enter sends to the selected task's assigned dev bot, including in a group room.
+The shared room history is visible. Escape requests cancellation only when the
+run belongs to the selected task, proven by a task-scoped receipt. Use
+`/decision ID` for the selected dev run's project read, write or test cards; the
+terminal shows the exact preview and checks the receipt again before a vote.
+F6 uses the same coding details panel as the room terminal. Broadcast, plugin
+settings and room-wide text-only continuation remain available in the room
+terminal. Project setup, review and apply in this selector are planned separately.
+
+Closing the terminal detaches. Select the same task again to read the existing
+run and eligible decisions without replaying a turn. Source CLI and Linux PTY
+coverage uses a disposable owner and scripted provider. Installed terminal
+acceptance is a separate gate.
+
+```sh
+pnpm test apps/cli/src/ocean/project-tui.test.ts
+pnpm test:process apps/cli/src/ocean/room-tui-process.test.ts
+```
 
 ## Endpoint and independent clients
 

@@ -11,7 +11,8 @@ import sys
 import termios
 import time
 
-node, profile, room, action = sys.argv[1:]
+node, profile, room, action, *mode = sys.argv[1:]
+project = mode == ["projects"]
 master, slave = pty.openpty()
 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 140, 0, 0))
 original = termios.tcgetattr(slave)
@@ -21,8 +22,8 @@ def attach_terminal():
     fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
 
-cli = subprocess.Popen([node, "apps/cli/dist/main.js", "tui", "--profile", profile,
-                        "--room", room], stdin=slave, stdout=slave, stderr=subprocess.PIPE if action == 'hangup' else slave, preexec_fn=attach_terminal)
+flags = ["--projects"] if project else ["--room", room]
+cli = subprocess.Popen([node, "apps/cli/dist/main.js", "tui", "--profile", profile, *flags], stdin=slave, stdout=slave, stderr=subprocess.PIPE if action == 'hangup' else slave, preexec_fn=attach_terminal)
 screen = bytearray()
 
 
@@ -41,7 +42,14 @@ def until(pattern):
 
 
 try:
-    until(b"@dev / " if action == "desktop" else b"@dev / test")
+    if project:
+        until(b"1. fixture")
+        os.write(master, b"1\r")
+        until(b"1. task")
+        os.write(master, b"1\r")
+        until(rb"Project fixture .* task task .* dev @dev")
+    else:
+        until(b"@dev / " if action == "desktop" else b"@dev / test")
     if action in ("sigterm", "hangup"):
         os.write(master, b"from the terminal\r")
         run_id = until(rb"tr_[a-zA-Z0-9_-]+(?= )")
@@ -56,7 +64,7 @@ try:
             print("observing " + run_id, flush=True)
             until(b"Test provider .*detach-turn")
         else:
-            until(b"native fixture answer")
+            until(b"fixture answer" if project else b"native fixture answer")
         os.write(master, b"/quit\r")
     status = cli.wait(timeout=3)
     assert status == 0, (status, cli.stderr.read() if cli.stderr else screen[-500:])

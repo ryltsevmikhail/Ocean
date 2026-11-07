@@ -4,6 +4,7 @@ export interface OceanArguments {
   readonly flags: ReadonlyMap<string, string>;
   readonly json: boolean;
   readonly staticDoctor?: boolean;
+  readonly projects?: boolean;
   readonly textOnly: boolean;
   readonly bots: readonly string[];
   readonly attachments: readonly string[];
@@ -65,6 +66,7 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
   const flags = new Map<string, string>();
   const positional: string[] = [];
   let json = false;
+  let projects = false;
   let textOnly = false,
     staticDoctor = false,
     groupVisibilityAcknowledged = false,
@@ -75,6 +77,11 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined) continue;
+    if (token === '--projects') {
+      if (projects) throw Error('invalid_input');
+      projects = true;
+      continue;
+    }
     if (token === '--static') {
       if (staticDoctor) throw Error('invalid_input');
       staticDoctor = true;
@@ -114,11 +121,15 @@ export function oceanArguments(argv: readonly string[]): OceanArguments {
       if (key === 'tool') tools.push(value);
     } else positional.push(token);
   }
+  if (projects && positional[0] !== 'tui') throw Error('--projects requires tui');
+  if (projects && (flags.has('room') || flags.has('task')))
+    throw Error('--projects cannot be used with --room or --task');
   if (flags.has('task') && !['send', 'tui'].includes(positional[0] ?? ''))
     throw new Error('--task requires send or tui');
   if (flags.has('task') && flags.get('task')!.trim() === '') throw new Error('Missing --task');
   if (staticDoctor && positional[0] !== 'doctor') throw Error('invalid_input');
   return {
+    ...(projects ? { projects: true } : {}),
     ...(staticDoctor ? { staticDoctor: true } : {}),
     command: positional[0] ?? '',
     positional: positional.slice(1),

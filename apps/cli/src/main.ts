@@ -31,7 +31,8 @@ Usage:
   ocean plugin catalog list|inspect|install|enable|disable --plugin github
   ocean plugin connections add|list|preview|consent|discover|disconnect
   ocean plugin access grant|list|revoke (owner references only, never values)
-  ocean history roomId | ocean tui --room roomId
+  ocean history roomId | ocean tui --room roomId [--task taskId]
+  ocean tui --projects [--profile /path]
   ocean run list | ocean run review taskRunId
   ocean run acknowledge taskRunId --text-only --review-version token --reason "..."
   runne                 open TUI in the current directory
@@ -77,7 +78,7 @@ export async function main(argv: readonly string[]): Promise<number> {
       'backup',
       'restore',
     ].includes(command ?? '') ||
-    (command === 'tui' && rest.includes('--room'))
+    (command === 'tui' && (rest.includes('--room') || rest.includes('--projects')))
   ) {
     const { runOceanCommand } = await import('./ocean/command.js');
     return runOceanCommand(argv);

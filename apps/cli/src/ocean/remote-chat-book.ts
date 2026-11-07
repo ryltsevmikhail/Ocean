@@ -9,6 +9,7 @@ import { RemoteRoomView } from './remote-room-view.js';
 import { RemoteBroadcast } from './remote-broadcast.js';
 import { parseBroadcastPrompt } from './broadcast-prompt.js';
 import { RemotePlugins } from './remote-plugins.js';
+import { hasProjectReceipt, type ProjectChatScope } from './project-chat-scope.js';
 
 export class RemoteChatRunBook implements RunBookPort {
   readonly #connection: RoomConnection;
@@ -21,17 +22,29 @@ export class RemoteChatRunBook implements RunBookPort {
     return this.#decisions.panel;
   }
   readonly #taskId: string | undefined;
+  readonly #project: ProjectChatScope | undefined;
   #sync: Promise<void> = Promise.resolve();
   #first = true;
   #resyncAt = 0;
   #confirmed: { prompt: string; receipt: LocalTurnReceipt } | null = null;
   #redraw: (selection?: ScreenEntry) => void = () => {};
-  constructor(connection: RoomConnection, roomId: string, taskId?: string) {
+  constructor(
+    connection: RoomConnection,
+    roomId: string,
+    taskId?: string,
+    project?: ProjectChatScope,
+  ) {
     this.#connection = connection;
-    this.#view = new RemoteRoomView(roomId);
-    this.#taskId = taskId;
-    this.#submission = new RoomSubmission(connection, this.#view.scope, taskId);
-    this.#decisions = new RemoteDecisions(connection, this.#view);
+    this.#project = project;
+    this.#view = new RemoteRoomView(roomId, project);
+    this.#taskId = project?.taskId ?? taskId;
+    this.#submission = new RoomSubmission(
+      connection,
+      this.#view.scope,
+      this.#taskId,
+      project?.devBotId,
+    );
+    this.#decisions = new RemoteDecisions(connection, this.#view, project);
     this.#broadcast = new RemoteBroadcast(connection, this.#view.scope);
     this.#plugins = new RemotePlugins(connection, this.#view.scope);
   }
@@ -72,14 +85,25 @@ export class RemoteChatRunBook implements RunBookPort {
       return 'Draft kept. Press Enter again after the previous message appears in history.';
     return undefined;
   }
+  get roomCommands() {
+    return !this.#project;
+  }
   batchStatus(): string {
     return this.#broadcast.status();
   }
   async turn(_entry: ScreenEntry, prompt: string): Promise<BookOutcome> {
-    const plugin = await this.#plugins.handle(prompt);
-    if (plugin !== null) return { kind: 'notice', status: plugin };
-    const broadcast = await this.#broadcastCommand(prompt);
-    if (broadcast !== null) return { kind: 'notice', status: broadcast };
+    if (this.#project) {
+      if (/^\/(?:broadcast|plugin|review|continue)(?: |$)/.test(prompt))
+        return {
+          kind: 'notice',
+          status: 'Unavailable in project chat. Use the explicit room TUI.',
+        };
+    } else {
+      const plugin = await this.#plugins.handle(prompt);
+      if (plugin !== null) return { kind: 'notice', status: plugin };
+      const broadcast = await this.#broadcastCommand(prompt);
+      if (broadcast !== null) return { kind: 'notice', status: broadcast };
+    }
     const status = await this.#decisions.handle(prompt);
     if (status !== null) return { kind: 'notice', status };
     const hold = this.holdDraft(prompt);
@@ -123,7 +147,12 @@ export class RemoteChatRunBook implements RunBookPort {
       expectedVersion: target.version,
       requestId: randomUUID(),
     };
-    await this.#connection.withClient((c) => c.cancelRun(command));
+    const project = this.#project;
+    await this.#connection.withClient(async (c) => {
+      if (project && !(await hasProjectReceipt(c, this.#view.scope, project, target)))
+        throw Error('project_run_out_of_scope');
+      return c.cancelRun(command);
+    });
     await this.#refresh(false);
     return 'Cancellation requested';
   }
@@ -172,7 +201,7 @@ export class RemoteChatRunBook implements RunBookPort {
   #refresh(reset: boolean, changed = true) {
     const sync = this.#sync.then(async () => {
       await this.#connection.withClient((c) => this.#view.refresh(c, reset));
-      await this.#broadcast.refresh();
+      if (!this.#project) await this.#broadcast.refresh();
       await this.#decisions.refresh(reset || changed);
       if (reset) this.#resyncAt = Date.now() + 30000;
       this.#view.observationError('');

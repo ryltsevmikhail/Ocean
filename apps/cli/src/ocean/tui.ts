@@ -1,3 +1,5 @@
+import type { ProjectChatScope } from './project-chat-scope.js';
+import { LOCAL_CODING_WORKSPACE } from '@runnets/contracts';
 import { connectLocalRuntime } from '@runnets/tools-node';
 import type { Readable, Writable } from 'node:stream';
 import { TuiApp } from '../tui/app.js';
@@ -5,18 +7,33 @@ import { profileDirectory } from './profile.js';
 import { isRestored } from './restored.js';
 import { RoomConnection } from './room-connection.js';
 import { RemoteChatRunBook } from './remote-chat-book.js';
-export interface DirectTuiOptions {
+export interface TuiStreams {
   readonly profile?: string | undefined;
-  readonly roomId: string;
-  readonly taskId?: string;
   readonly input?: Readable;
   readonly output?: Writable;
 }
+type Target =
+  | { readonly roomId: string; readonly taskId?: string; readonly project?: never }
+  | { readonly roomId: string; readonly taskId?: never; readonly project: ProjectChatScope };
+export type DirectTuiSelector = (
+  connection: RoomConnection,
+  input: Readable,
+  output: Writable,
+  signal: AbortSignal,
+) => Promise<Target | undefined>;
+export type DirectTuiOptions = TuiStreams & (Target | { readonly select: DirectTuiSelector });
 /** A room terminal owns only its authenticated connection. */
 export async function runDirectTui(options: DirectTuiOptions): Promise<number> {
   const restored = isRestored(options.profile);
   const profile = profileDirectory(options.profile);
-  const connect = (signal?: AbortSignal) => connectLocalRuntime({ profile, signal });
+  const connect = async (signal?: AbortSignal) => {
+    const client = await connectLocalRuntime({ profile, signal });
+    if ('select' in options && !client.identity.capabilities.includes(LOCAL_CODING_WORKSPACE)) {
+      client.close();
+      throw Error('project_runtime_upgrade_required');
+    }
+    return client;
+  };
   let client: Awaited<ReturnType<typeof connect>>;
   try {
     client = await connect();
@@ -30,18 +47,19 @@ export async function runDirectTui(options: DirectTuiOptions): Promise<number> {
     throw Error('restore_restricted');
   }
   const connection = new RoomConnection(client, connect);
-  const book = new RemoteChatRunBook(connection, options.roomId, options.taskId);
   const input = options.input ?? process.stdin;
-  const app = new TuiApp({
-    book,
-    input,
-    output: options.output ?? process.stdout,
-  });
-  const shutdown = () => app.stop();
+  const output = options.output ?? process.stdout;
+  const selecting = 'select' in options ? new AbortController() : undefined;
+  let app: TuiApp | undefined;
+  const shutdown = () => {
+    selecting?.abort();
+    app?.stop();
+    if (!app) connection.close();
+  };
   let lostTerminal = false;
   const hangup = () => {
     lostTerminal = true;
-    app.stop();
+    shutdown();
     input.destroy();
   };
   const inputError = (error: NodeJS.ErrnoException) => {
@@ -54,13 +72,28 @@ export async function runDirectTui(options: DirectTuiOptions): Promise<number> {
   input.once('close', closed);
   process.on('SIGTERM', shutdown);
   process.on('SIGHUP', hangup);
+  if (selecting) {
+    process.on('SIGINT', shutdown);
+    input.once('end', shutdown);
+    if (input.readableEnded) shutdown();
+  }
   try {
-    await app.start();
+    const target =
+      'select' in options
+        ? await options.select(connection, input, output, selecting!.signal)
+        : options;
+    if (!target || selecting?.signal.aborted) return 0;
+    if (selecting) input.off('end', shutdown);
+    const book = new RemoteChatRunBook(connection, target.roomId, target.taskId, target.project);
+    app = new TuiApp({ book, input, output });
+    const started = app.start();
+    if (selecting) input.resume();
+    await started;
     await app.whenExit();
     return 0;
   } catch (error) {
     if (
-      lostTerminal &&
+      (lostTerminal || selecting?.signal.aborted) &&
       error instanceof Error &&
       (error.name === 'AbortError' || error.message === 'connection_closed')
     )
@@ -69,9 +102,13 @@ export async function runDirectTui(options: DirectTuiOptions): Promise<number> {
   } finally {
     process.off('SIGTERM', shutdown);
     process.off('SIGHUP', hangup);
-    app.stop();
+    if (selecting) {
+      process.off('SIGINT', shutdown);
+      input.off('end', shutdown);
+    }
+    shutdown();
     try {
-      await app.idle();
+      await app?.idle();
     } finally {
       // The command's real terminal may still have an outstanding libuv read after pause().
       // Keep its error handler through the stream close, including after cooked-mode restoration.

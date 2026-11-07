@@ -274,6 +274,7 @@ export class TuiApp {
       model: this.#book.model,
       provider: this.#book.providerId,
       batch: this.#book.batchStatus?.(),
+      roomCommands: this.#book.roomCommands,
       size: this.#terminal.size(),
     };
   }

@@ -9,6 +9,8 @@ import type {
 import { taskRunId } from '@runnets/domain';
 import type { LocalRuntimeClient } from '@runnets/tools-node';
 import type { ScreenEntry } from '../tui/runs.js';
+import type { ProjectChatScope } from './project-chat-scope.js';
+import { visibleControls } from '../tui/decision-panel.js';
 import type { StreamLine } from '../tui/types.js';
 
 /** A frame-budgeted page can be shorter than its limit. Only an empty page ends a scan. */
@@ -54,7 +56,9 @@ export class RemoteRoomView {
   workspace = '';
   model = '';
   providerId: string | null = null;
-  constructor(roomId: string) {
+  readonly #project: ProjectChatScope | undefined;
+  constructor(roomId: string, project?: ProjectChatScope) {
+    this.#project = project;
     this.scope = { workspaceId: 'ws_ocean', roomId };
   }
   async restore(c: LocalRuntimeClient) {
@@ -72,6 +76,16 @@ export class RemoteRoomView {
     for (const m of members) this.#members.set(m.id, m);
     this.model = members.map((m) => '@' + m.handle + ' / ' + m.model).join(', ');
     this.providerId = room.kind === 'group' ? 'group' : (members[0]?.provider ?? null);
+    if (this.#project) {
+      const { projectId, taskId, devBotId } = this.#project;
+      const dev = this.#members.get(devBotId);
+      if (!dev) throw Error('coding_denied');
+      this.workspace = visibleControls(
+        `Project ${projectId} · task ${taskId} · dev @${dev.handle}`,
+      );
+      this.model = '@' + dev.handle + ' / ' + dev.model;
+      this.providerId = dev.provider;
+    }
   }
   get active() {
     return this.#active.size > 0;

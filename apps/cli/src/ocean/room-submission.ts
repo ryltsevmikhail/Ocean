@@ -25,12 +25,14 @@ export class RoomSubmission {
   readonly #connection: RoomConnection;
   readonly #scope: LocalRoomScope;
   readonly #taskId: string | undefined;
+  readonly #target: string | undefined;
   #pending: LocalTurnRequest | null = null;
 
-  constructor(connection: RoomConnection, scope: LocalRoomScope, taskId?: string) {
+  constructor(connection: RoomConnection, scope: LocalRoomScope, taskId?: string, target?: string) {
     this.#connection = connection;
     this.#scope = scope;
     this.#taskId = taskId;
+    this.#target = target;
   }
   async submit(text: string) {
     if (this.#pending && this.#pending.text !== text)
@@ -42,6 +44,7 @@ export class RoomSubmission {
       text,
       requestId: randomUUID(),
       ...(this.#taskId ? { taskId: this.#taskId } : {}),
+      ...(this.#target ? { to: this.#target } : {}),
     }));
     try {
       const receipt = await this.#connection.withClient((c) => c.submit(request));

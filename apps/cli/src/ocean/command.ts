@@ -74,13 +74,20 @@ export async function runOceanCommand(
       options.restoredApproval,
     );
     if (command === 'tui') {
-      const { runDirectTui } = await import('./tui.js');
-      return await runDirectTui({
+      const terminal = {
         profile: flags.get('profile'),
-        roomId: required(flags, 'room'),
-        ...(flags.has('task') ? { taskId: required(flags, 'task') } : {}),
         input: options.input ?? process.stdin,
         output,
+      };
+      if (args.projects) {
+        const { runProjectTui } = await import('./project-tui.js');
+        return await runProjectTui(terminal);
+      }
+      const { runDirectTui } = await import('./tui.js');
+      return await runDirectTui({
+        ...terminal,
+        roomId: required(flags, 'room'),
+        ...(flags.has('task') ? { taskId: required(flags, 'task') } : {}),
       });
     }
     runtime = openOceanProfile(flags.get('profile'), command === 'init', {
