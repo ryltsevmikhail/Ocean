@@ -2858,8 +2858,10 @@ only after actual evidence; retained B results do not qualify E candidate bytes.
       Принято на `77295d7` с точной границей переноса результатов с `50fb569`.
       Native54/58, полный cold source охват 656 файлов; исходные отказы и пределы
       остаются входом независимого выпускного ревью. См. [карту выпуска](../../ocean/platform-stage-f.md).
-- [ ] Независимое ревью runtime/auth/migration и полный branch review;
+- [x] Независимое ревью runtime/auth/migration и полный branch review;
       проверка всех отложенных замечаний прежнего ledger с явным решением.
+      Принято после точечной серии исправлений и проверенного preflight `8bc6ff8`;
+      оставшиеся эксплуатационные границы сохранены в [карте выпуска](../../ocean/platform-stage-f.md).
 - [ ] Одноразовая установка, миграция/backup/restore, reboot/device identity,
       обновление/откат; реальные данные и установленный RC2 не fixtures.
 - [ ] Живой DeepSeek и поддерживаемые новые API-провайдеры, MCP; credentials
