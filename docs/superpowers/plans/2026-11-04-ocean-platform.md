@@ -2852,9 +2852,12 @@ only after actual evidence; retained B results do not qualify E candidate bytes.
       долг test typing; ни удаление SDK, ни docs-only commit не закрывают его автоматически.
       [Карта выпуска](../../ocean/platform-stage-f.md) принята на `f7d5d63`;
       строгие графы проверили все 1712 TypeScript-файлов и 34 Vue-компонента.
-- [ ] Frozen revision: `pnpm check`, `pnpm build`, `pnpm format:check` — exit 0.
+- [x] Frozen revision: `pnpm check`, `pnpm build`, `pnpm format:check` — exit 0.
       Затем native/source-preset shards и лимиты; прежние 2 GiB/256/60 s/32 KiB
       считаются ограничениями текущих presets, не всей автономной задачи.
+      Принято на `77295d7` с точной границей переноса результатов с `50fb569`.
+      Native54/58, полный cold source охват 656 файлов; исходные отказы и пределы
+      остаются входом независимого выпускного ревью. См. [карту выпуска](../../ocean/platform-stage-f.md).
 - [ ] Независимое ревью runtime/auth/migration и полный branch review;
       проверка всех отложенных замечаний прежнего ledger с явным решением.
 - [ ] Одноразовая установка, миграция/backup/restore, reboot/device identity,
