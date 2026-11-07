@@ -25,7 +25,7 @@ const scoped = <T extends { workspaceId: string }>(guard: (v: unknown) => v is T
 export const serviceCommands = [
   z.strictObject({ op: z.literal('service-support') }),
   z.strictObject({ op: z.literal('service-connections') }),
-  z.strictObject({ op: z.literal('service-grants') }),
+  z.strictObject({ op: z.literal('service-grants'), binding: taskBinding.optional() }),
   z.strictObject({ op: z.literal('service-receipt'), input: dto(isLocalServiceReceiptQuery) }),
   z.strictObject({ op: z.literal('service-set'), input: dto(isLocalServiceConnectionSetRequest) }),
   z.strictObject({

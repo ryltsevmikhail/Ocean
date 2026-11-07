@@ -100,7 +100,8 @@ export function createRoomTasks(request: typeof call = call) {
         grants.value = [];
         actions.clear();
       }
-      binding.value = { profileId: support.profileId, instanceId: support.instanceId };
+      const owner = { profileId: support.profileId, instanceId: support.instanceId };
+      binding.value = owner;
       supported.value = support.supported;
       actions.restore();
       if (!support.supported) {
@@ -110,7 +111,7 @@ export function createRoomTasks(request: typeof call = call) {
       }
       const result = await request({
         op: 'task-list',
-        binding: binding.value,
+        binding: owner,
         input: {
           workspaceId: 'ws_ocean',
           roomId: owningRoom,
@@ -125,16 +126,17 @@ export function createRoomTasks(request: typeof call = call) {
       roots.value = merged;
       next.value = result.nextBeforeSeq;
       try {
-        const gs = await request({ op: 'service-grants' });
+        const gs = await request({ op: 'service-grants', binding: owner });
         if (token === epoch && version === listVersion) {
           grants.value = gs;
           grantsUnavailable.value = false;
         }
-      } catch {
+      } catch (e) {
         if (token === epoch && version === listVersion) {
           grants.value = [];
           grantsUnavailable.value = true;
         }
+        if (e instanceof Error && e.message === 'task_identity_changed') throw e;
       }
       if (token !== epoch || version !== listVersion) return;
       stale.value = false;

@@ -71,3 +71,16 @@ it('rejects hidden extra header keys, sparse rows and Unicode rows that are out 
   expect(guard.safeParse({ ...view(), rows: [first, second] }).success).toBe(false);
   expect(guard.safeParse({ ...view(), rows: [second, first] }).success).toBe(true);
 });
+it('accepts optional closed service-grant identity binding while preserving legacy reads and rejecting malformed bindings', () => {
+  expect(commands.safeParse({ op: 'service-grants' }).success).toBe(true);
+  expect(commands.safeParse({ op: 'service-grants', binding }).success).toBe(true);
+  for (const bad of [
+    null,
+    {},
+    { profileId: binding.profileId },
+    { ...binding, profileId: 'foreign' },
+    { ...binding, instanceId: 'invalid' },
+    { ...binding, extra: true },
+  ])
+    expect(commands.safeParse({ op: 'service-grants', binding: bad }).success).toBe(false);
+});
