@@ -71,6 +71,7 @@ it('hands off only the frozen artifact and explicit context then rejects stale e
             verdicts.push(structuredClone(value));
           },
           evidence: () => [],
+          evidenceTreesMatch: () => true,
           evidenceHashes: () => evidence,
         }),
     },
@@ -140,6 +141,7 @@ it.each(['success', 'failure'])(
               request = structuredClone(value);
             },
             putReviewVerdict: () => {},
+            evidenceTreesMatch: () => true,
             evidenceHashes: () => [],
             evidence: () => [],
           }),
@@ -195,6 +197,7 @@ it.each(['finalizing', 'finalized', 'cancelled'] as const)(
               request = structuredClone(value);
             },
             putReviewVerdict: () => {},
+            evidenceTreesMatch: () => true,
             evidenceHashes: () => [],
             evidence: () => [],
           }),

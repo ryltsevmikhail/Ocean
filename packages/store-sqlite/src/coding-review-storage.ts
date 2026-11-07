@@ -31,6 +31,13 @@ export class SqliteCodingReviewStore implements CodingReviewStore {
         changeset: (hash) => changesetStorage(db).changeset(hash),
         reviewRequest: request,
         reviewVerdict: verdict,
+        evidenceTreesMatch: (id, afterTree) =>
+          !db
+            .prepare(
+              `SELECT 1 FROM ocean_coding_test_evidence
+               WHERE task_id=? AND json_extract(payload,'$.afterTreeHash') IS NOT ? LIMIT 1`,
+            )
+            .get(id, afterTree),
         evidence: (id) => new SqliteCodingTestEvidenceStore(db).list(id),
         evidenceHashes: (id) =>
           db

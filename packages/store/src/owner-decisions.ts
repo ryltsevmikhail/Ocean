@@ -40,12 +40,20 @@ export class InMemoryOwnerDecisions implements OwnerDecisionStore {
           .preview.slice(offset, length === undefined ? undefined : offset + length)
       : null;
   }
-  list(scope: OwnerDecisionScope, after: string, limit: number) {
+  list(
+    scope: OwnerDecisionScope,
+    after: string,
+    limit: number,
+    excludeKind?: OwnerDecision['kind'],
+  ) {
     return [...this.#rows.values()]
       .map((r) => r.card)
       .filter(
         (c) =>
-          c.workspaceId === scope.workspaceId && c.roomId === scope.roomId && c.decisionId > after,
+          c.kind !== excludeKind &&
+          c.workspaceId === scope.workspaceId &&
+          c.roomId === scope.roomId &&
+          c.decisionId > after,
       )
       .sort((a, b) => (a.decisionId < b.decisionId ? -1 : 1))
       .slice(0, limit)

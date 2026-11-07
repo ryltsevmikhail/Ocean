@@ -34,10 +34,22 @@ export interface CodingApplyProjectPort {
   sourceTree(task: CodingTask): Promise<string>;
   applyFile(root: string, change: CodingFileChange, context: CodingApplyContext): Promise<void>;
 }
+export interface CodingApplyInput {
+  readonly id: string;
+  readonly workspaceId: string;
+  readonly taskId: string;
+  readonly changesetHash: string;
+  readonly reviewRequestId: string;
+  readonly expectedBase: string;
+  readonly ownerRoomId?: string;
+}
+export interface CodingApplyPreview {
+  readonly task: CodingTask;
+  readonly changeset: Changeset;
+  readonly verdict: CodingReviewVerdict;
+}
 export interface CodingApplyOwnerPort {
-  confirm(
-    preview: Readonly<{ task: CodingTask; changeset: Changeset; verdict: CodingReviewVerdict }>,
-  ): Promise<boolean>;
+  confirm(preview: CodingApplyPreview): Promise<boolean>;
 }
 /** Multi-file effects are recorded individually. Unknown results are never redispatched. */
 export class CodingApplyService {
@@ -69,50 +81,65 @@ export class CodingApplyService {
       }),
     );
   }
+  /** Read recorded effect facts without consulting or modifying either Git tree. */
+  receipt(id: string): CodingApplyReceipt | null {
+    return this.#store.atomic((tx) => tx.application(id));
+  }
+  #resolve(tx: CodingApplyTransaction, i: CodingApplyInput): CodingApplyPreview | null {
+    const task = tx.task(i.taskId),
+      changeset = tx.changeset(i.changesetHash),
+      verdict = tx.verdict(i.reviewRequestId);
+    if (
+      !task ||
+      task.workspaceId !== i.workspaceId ||
+      (i.ownerRoomId !== undefined && i.ownerRoomId !== task.ownerRoomId) ||
+      !this.#admit(task, tx) ||
+      changeset?.hash !== i.changesetHash ||
+      !verdict ||
+      i.expectedBase !== changeset.baseCommit ||
+      !codingApplicationVerified(task, changeset, verdict, tx.evidence(task.id))
+    )
+      return null;
+    return { task, changeset, verdict };
+  }
+  #same(tx: CodingApplyTransaction, i: CodingApplyInput, approved: CodingApplyPreview): boolean {
+    if (tx.application(i.id)) return false;
+    const current = this.#resolve(tx, i);
+    return (
+      current !== null &&
+      current.changeset.hash === approved.changeset.hash &&
+      JSON.stringify(current.task) === JSON.stringify(approved.task) &&
+      JSON.stringify(current.verdict) === JSON.stringify(approved.verdict)
+    );
+  }
+  async #validProject(prepared: CodingApplyPreview): Promise<boolean> {
+    const project = await this.#project.inspect(prepared.task.projectRoot);
+    return (
+      project.clean &&
+      project.baseCommit === prepared.changeset.baseCommit &&
+      (await this.#project.sourceTree(prepared.task)) === prepared.changeset.afterTreeHash
+    );
+  }
+  /** Owner resolution rechecks the exact preview, including changes during the Git reads. */
+  async current(i: CodingApplyInput, approved: CodingApplyPreview): Promise<boolean> {
+    const same = () => this.#store.atomic((tx) => this.#same(tx, i, approved));
+    return same() && (await this.#validProject(approved)) && same();
+  }
   async apply(
-    input: Readonly<{
-      id: string;
-      workspaceId: string;
-      taskId: string;
-      changesetHash: string;
-      reviewRequestId: string;
-      expectedBase: string;
-    }>,
+    input: CodingApplyInput,
     owner: CodingApplyOwnerPort,
   ): Promise<CodingResult<CodingApplyReceipt>> {
     const i = structuredClone(input);
-    const resolve = (tx: CodingApplyTransaction) => {
-      const task = tx.task(i.taskId),
-        changeset = tx.changeset(i.changesetHash),
-        verdict = tx.verdict(i.reviewRequestId);
-      if (
-        !task ||
-        task.workspaceId !== i.workspaceId ||
-        !this.#admit(task, tx) ||
-        !changeset ||
-        !verdict ||
-        i.expectedBase !== changeset.baseCommit ||
-        !codingApplicationVerified(task, changeset, verdict, tx.evidence(task.id))
-      )
-        return null;
-      return { task, changeset, verdict };
-    };
-    const prepared = this.#store.atomic((tx) => (tx.application(i.id) ? null : resolve(tx)));
+    const prepared = this.#store.atomic((tx) =>
+      tx.application(i.id) ? null : this.#resolve(tx, i),
+    );
     if (!prepared) return codingFailure('coding_denied');
-    const validProject = async () => {
-      const project = await this.#project.inspect(prepared.task.projectRoot);
-      return (
-        project.clean &&
-        project.baseCommit === i.expectedBase &&
-        (await this.#project.sourceTree(prepared.task)) === prepared.changeset.afterTreeHash
-      );
-    };
-    if (!(await validProject())) return codingFailure('project_changed');
+    if (!(await this.#validProject(prepared))) return codingFailure('project_changed');
     if (!(await owner.confirm(structuredClone(prepared))))
       return codingFailure('approval_required');
-    if (!(await validProject())) return codingFailure('project_changed');
+    if (!(await this.#validProject(prepared))) return codingFailure('project_changed');
     const claimed = this.#store.atomic((tx) => {
-      if (tx.application(i.id) || !resolve(tx)) return null;
+      if (!this.#same(tx, i, prepared)) return null;
       const receipt: CodingApplyReceipt = {
         recoveryProtocol: 2,
         id: i.id,
@@ -131,7 +158,7 @@ export class CodingApplyService {
     let receipt = claimed;
     try {
       // The shared claim now excludes another runtime writer during observation.
-      if (!(await validProject())) {
+      if (!(await this.#validProject(prepared))) {
         receipt = { ...receipt, status: 'not_started' };
         this.#store.atomic((tx) => tx.putApplication(receipt));
         return codingFailure('project_changed');

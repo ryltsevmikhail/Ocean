@@ -1,6 +1,16 @@
 import { MAX_PANEL_LENGTH } from '@runnets/contracts';
-import { codingTestPassed } from '@runnets/domain';
-import type { CodingReadMethod, LocalCodingRead } from '@runnets/contracts';
+import {
+  codingCapabilities,
+  codingTestPassed,
+  type Changeset,
+  type CodingAccess,
+} from '@runnets/domain';
+import type {
+  CodingChangesetSummary,
+  CodingReadMethod,
+  LocalCodingPanel,
+  LocalCodingRead,
+} from '@runnets/contracts';
 import type { Runtime } from '../runtime.js';
 import type { ProfileReads } from '@runnets/store-sqlite';
 
@@ -95,4 +105,63 @@ export async function codingRead(
   if (!result?.ok) throw Error(result?.error.code ?? 'coding_unavailable');
   if (result.value.receipt.taskId !== taskId) throw Error('coding_denied');
   return { ...result.value, workspaceId: q.workspaceId, roomId };
+}
+
+type CodingOwnerRuntime = Pick<Runtime, 'coding' | 'conversationStore' | 'conversations'>;
+
+/** Resolve current owner/dev scope, independently of eligibility to start new work. */
+export function codingOwnerTask(runtime: CodingOwnerRuntime, q: LocalCodingPanel) {
+  const selected = runtime.coding.inspect(q.workspaceId, q.taskId);
+  if (!selected.ok) throw Error(selected.error.code);
+  const task = selected.value;
+  const workspace = runtime.conversationStore?.atomic((tx) => tx.workspace());
+  if (
+    workspace?.id !== q.workspaceId ||
+    workspace.root !== task.projectRoot ||
+    task.ownerRoomId !== q.roomId
+  )
+    throw Error('coding_denied');
+  const members = runtime.conversations.members(q.workspaceId, q.roomId);
+  if (!members.ok || !members.value.some((b) => b.id === task.devBotId))
+    throw Error('coding_denied');
+  return task;
+}
+
+export function codingSnapshotAccess(
+  runtime: CodingOwnerRuntime,
+  q: LocalCodingPanel & { expectedPolicyVersion?: number },
+): CodingAccess {
+  const task = codingOwnerTask(runtime, q);
+  const access = {
+    taskId: task.id,
+    workspaceId: q.workspaceId,
+    roomId: q.roomId,
+    botId: task.devBotId,
+    policyVersion: task.policyVersion,
+    capability: 'project_read' as const,
+  };
+  if (
+    (q.expectedPolicyVersion !== undefined && q.expectedPolicyVersion !== task.policyVersion) ||
+    (!codingCapabilities(task, access).includes(access.capability) &&
+      task.status !== 'finalizing' &&
+      task.status !== 'finalized')
+  )
+    throw Error('coding_denied');
+  return access;
+}
+
+export function codingSnapshotSummary(
+  scope: LocalCodingPanel,
+  snapshot: Changeset,
+): CodingChangesetSummary {
+  return {
+    workspaceId: scope.workspaceId,
+    roomId: scope.roomId,
+    taskId: snapshot.taskId,
+    hash: snapshot.hash,
+    baseCommit: snapshot.baseCommit,
+    beforeTreeHash: snapshot.beforeTreeHash,
+    afterTreeHash: snapshot.afterTreeHash,
+    fileCount: snapshot.files.length,
+  };
 }

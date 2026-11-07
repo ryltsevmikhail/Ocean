@@ -172,6 +172,8 @@ export class RuntimeDecisions {
     context: RuntimeWireContext,
   ): Promise<RuntimeReply> {
     const compatible = (card: ReturnType<RuntimeOwnerDecisions['get']>) => {
+      if (card.kind === 'project-setup' && !context.codingWorkspace)
+        throw Error('client_upgrade_required');
       if (card.kind === 'project-read' && (!context.roomTasks || !context.addressedHistory))
         throw Error('client_upgrade_required');
       if (card.kind === 'service-call' && !context.serviceConfirmations)
@@ -184,7 +186,12 @@ export class RuntimeDecisions {
           if (isLocalRoomListQuery(p))
             return {
               result: this.owner.store
-                .list(p, p.after ?? '', p.limit ?? 50)
+                .list(
+                  p,
+                  p.after ?? '',
+                  p.limit ?? 50,
+                  context.codingWorkspace ? undefined : 'project-setup',
+                )
                 .map((c) => compatible(this.owner.get(c))),
             };
           break;
@@ -206,7 +213,9 @@ export class RuntimeDecisions {
           break;
         case 'decisions.resolve':
           if (isDecisionReply(p)) {
-            compatible(this.owner.get(p));
+            const current = compatible(this.owner.get(p));
+            if (current.kind === 'project-setup' && current.version !== p.expectedVersion)
+              throw Error('version_conflict');
             const card = await this.owner.resolve(p, p.bindingDigest, p.expectedVersion, p.choice);
             return { result: card };
           }

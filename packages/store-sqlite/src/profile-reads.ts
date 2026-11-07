@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { botRow } from './conversation-rows.js';
 import { unresolvedEffectSql } from './tool-effect-resolution.js';
 import { readText, readInteger } from './rows.js';
+import { readProfileCodingTasks } from './profile-project-reads.js';
 /** Only the authenticated owner's workspace, project lease identity and room membership can bind a coding application. */
 export function profileReads(db: DatabaseSync, ownerId: string) {
   const from = `FROM ocean_coding_applications a JOIN ocean_coding_tasks t ON t.id=json_extract(a.payload,'$.taskId')
@@ -16,6 +17,10 @@ export function profileReads(db: DatabaseSync, ownerId: string) {
       throw Error('unknown_workspace');
   };
   return {
+    codingTasks(workspaceId: string, projectRoot: string, after: string, limit: number) {
+      checkWorkspace(workspaceId);
+      return readProfileCodingTasks(db, workspaceId, projectRoot, ownerId, after, limit);
+    },
     bots(workspaceId: string, after: string, limit: number) {
       checkWorkspace(workspaceId);
       return db

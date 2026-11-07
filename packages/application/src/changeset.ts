@@ -57,6 +57,45 @@ export class CodingChangesetService {
       return null;
     return task;
   }
+  /** Read and verify durable readiness; never plans, confirms or creates a worktree. */
+  async prepared(input: CodingAccess): Promise<CodingResult<CodingWorktree | null>> {
+    const access = structuredClone(input);
+    const selected = this.#deps.store.atomic((tx) => ({
+      task: this.#task(tx, access),
+      worktree: tx.worktree(access.taskId),
+    }));
+    const { task, worktree } = selected;
+    if (!task) return codingFailure('coding_denied');
+    if (!worktree)
+      return task.worktreeRoot === null ? ok(null) : codingFailure('recovery_required');
+    if (
+      worktree.state !== 'ready' ||
+      worktree.taskId !== task.id ||
+      worktree.workspaceId !== task.workspaceId ||
+      worktree.projectRoot !== task.projectRoot ||
+      worktree.baseCommit !== task.baseCommit ||
+      worktree.root !== task.worktreeRoot ||
+      worktree.lease.ownerId !== this.#deps.ownerId ||
+      worktree.lease.taskId !== task.id ||
+      worktree.lease.projectRoot !== worktree.root ||
+      !this.#deps.leases.owns(worktree.lease)
+    )
+      return codingFailure('recovery_required');
+    try {
+      await this.#deps.worktrees.verify(task, worktree);
+    } catch {
+      return codingFailure('recovery_required');
+    }
+    return this.#deps.store.atomic((tx) => {
+      const current = this.#task(tx, access);
+      return current &&
+        JSON.stringify(current) === JSON.stringify(task) &&
+        JSON.stringify(tx.worktree(task.id)) === JSON.stringify(worktree) &&
+        this.#deps.leases.owns(worktree.lease)
+        ? ok(worktree)
+        : codingFailure('recovery_required');
+    });
+  }
   async prepare(
     input: CodingAccess,
     owner: CodingWorktreeOwnerPort,
@@ -64,17 +103,8 @@ export class CodingChangesetService {
     const access = structuredClone(input),
       task = this.#deps.store.atomic((tx) => this.#task(tx, access));
     if (!task) return codingFailure('coding_denied');
-    const existing = this.#deps.store.atomic((tx) => tx.worktree(task.id));
-    if (existing) {
-      if (existing.state !== 'ready' || !this.#deps.leases.owns(existing.lease))
-        return codingFailure('recovery_required');
-      try {
-        await this.#deps.worktrees.verify(task, existing);
-        return ok(existing);
-      } catch {
-        return codingFailure('recovery_required');
-      }
-    }
+    const existing = await this.prepared(access);
+    if (!existing.ok || existing.value) return existing as CodingResult<CodingWorktree>;
     let plan: Awaited<ReturnType<WorktreePort['plan']>>;
     try {
       plan = await this.#deps.worktrees.plan(task);
@@ -230,7 +260,7 @@ export class CodingChangesetService {
   read(access: CodingAccess, hash: string): CodingResult<Changeset> {
     return this.#deps.store.atomic((tx) => {
       const task = this.#task(tx, access, true),
-        snapshot = tx.changeset(hash);
+        snapshot = task ? tx.changeset(hash, task.id) : null;
       return task && snapshot?.taskId === task.id ? ok(snapshot) : codingFailure('coding_denied');
     });
   }

@@ -13,6 +13,11 @@ import {
   LOCAL_MODEL_METHODS,
   LOCAL_ROOM_TASKS,
   LOCAL_ROOM_TASK_LIST,
+  LOCAL_CODING_WORKSPACE,
+  isCodingWorkspaceRead,
+  CODING_REVIEW_REQUEST,
+  CODING_APPLY_REQUEST,
+  isCodingChangesetMethod,
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
   LOCAL_SERVICE_CONFIRMATIONS,
@@ -91,6 +96,9 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
           models: features.includes(LOCAL_MODEL_CONNECTIONS),
           serviceConfirmations: features.includes(LOCAL_SERVICE_CONFIRMATIONS),
           addressedHistory: features.includes(LOCAL_ADDRESSED_HISTORY),
+          codingWorkspace:
+            features.includes(LOCAL_CODING_WORKSPACE) &&
+            operations.identity.capabilities.includes(LOCAL_CODING_WORKSPACE),
           roomTaskList:
             features.includes(LOCAL_ROOM_TASK_LIST) &&
             features.includes(LOCAL_ROOM_TASKS) &&
@@ -116,6 +124,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             context.addressedHistory,
             context.roomTasks,
             context.roomTaskList,
+            context.codingWorkspace,
           ),
         });
         return;
@@ -142,6 +151,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             context.addressedHistory,
             context.roomTasks,
             context.roomTaskList,
+            context.codingWorkspace,
           ),
         });
         return;
@@ -161,6 +171,18 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
         return;
       }
       if (method === 'roomTasks.list' && !context.roomTaskList) {
+        reject('client_upgrade_required');
+        return;
+      }
+      if (
+        (isCodingWorkspaceRead(method) ||
+          isCodingChangesetMethod(method) ||
+          method === 'coding.tasks.reserve' ||
+          method === 'coding.tasks.prepare' ||
+          method === CODING_REVIEW_REQUEST ||
+          method === CODING_APPLY_REQUEST) &&
+        !context.codingWorkspace
+      ) {
         reject('client_upgrade_required');
         return;
       }

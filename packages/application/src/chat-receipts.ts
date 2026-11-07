@@ -9,6 +9,7 @@ export interface ChatRoomScope {
 }
 export interface ReceiptQuery extends ChatRoomScope {
   readonly requestId: string;
+  readonly taskId?: string;
 }
 export interface RunQuery extends ChatRoomScope {
   readonly runId: string;
@@ -48,6 +49,14 @@ export function readChatReceipt(store: ConversationStore, query: ReceiptQuery) {
     const receipt = tx.receipt(query.requestId);
     if (!receipt) return null;
     const reply = receipt.reply;
+    if (
+      query.taskId !== undefined &&
+      (reply.kind !== 'turn' ||
+        reply.data.codingTaskId !== query.taskId ||
+        reply.data.workspaceId !== query.workspaceId ||
+        reply.data.roomId !== query.roomId)
+    )
+      throw Error('coding_denied');
     // Message receipts also exist for the independent RecordUserMessage command.
     if (
       reply.kind !== 'turn' &&

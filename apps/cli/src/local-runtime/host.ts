@@ -1,35 +1,35 @@
 import { failedStartupDrain } from './service-drain.js';
-import {
-  runtimeDesktopAssets,
-  desktopSubmitRefusal,
-  desktopImageResolver,
-} from './desktop-assets.js';
+import { runtimeDesktopAssets } from './desktop-assets.js';
+import { desktopSubmitRefusal, desktopImageResolver } from './desktop-assets.js';
 import { RuntimeRestoration } from './restoration.js';
-import { LOCAL_RESTORE_METHODS } from '@runnets/contracts';
+import {
+  isCodingWorkspaceRead,
+  LOCAL_RESTORE_METHODS,
+  LOCAL_BROADCAST_METHODS,
+  LOCAL_FINALIZATION_METHODS,
+  LOCAL_RUNTIME_MAX_WAIT_MS,
+  PROFILE_METHODS,
+  type LocalRuntimeIdentity,
+  type LocalRuntimeStatus,
+  type LocalRuntimeStop,
+} from '@runnets/contracts';
 import { profileCommand } from './profile-commands.js';
-import { PROFILE_METHODS } from '@runnets/contracts';
+import { projectsRead } from './projects-read.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { closeSync } from 'node:fs';
 import { recoverEndpoint, publishEndpoint } from './endpoint.js';
 import { profileKey, type EndpointLayout } from './endpoint-files.js';
 import type { ImageAssetResolverPort } from '@runnets/application';
-import { LOCAL_RUNTIME_MAX_WAIT_MS } from '@runnets/contracts';
-import type {
-  LocalRuntimeIdentity,
-  LocalRuntimeStatus,
-  LocalRuntimeStop,
-} from '@runnets/contracts';
 import { localRuntimePaths } from '@runnets/tools-node';
-import { CodingPanelQueries } from './coding-panel.js';
+import { CodingPanelQueries, isCodingPanelMethod } from './coding-panel.js';
 import { RuntimeDecisions } from './decisions.js';
 import { registeredCodingTools } from '../ocean/coding-project-host.js';
 import { RuntimeTurns } from './turns.js';
 import { openOceanProfile } from '../ocean/profile.js';
 import { listenLocalRuntime } from './server.js';
 import { assertRuntimeDrained } from './drain-supervision.js';
+import { RuntimeProjectReserve, projectSetupOperation } from './project-reserve.js';
 import { RuntimeFinalization } from './finalization.js';
-import { LOCAL_FINALIZATION_METHODS } from '@runnets/contracts';
-import { LOCAL_BROADCAST_METHODS } from '@runnets/contracts';
 import { hostRoomTasks, wakeRoomTasksAfter } from './host-room-tasks.js';
 import { runtimeCapabilities } from './capabilities.js';
 import { createRestorationCheck, maintenanceRead } from './restoration-check.js';
@@ -37,11 +37,8 @@ import { settingsHosts } from './settings-hosts.js';
 import { hostPluginSettings } from './host-plugin.js';
 import type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
 export type { LocalRuntimeHost, LocalRuntimeHostOptions } from './host-options.js';
-
 /** The existing runtime remains the only SQLite owner and recovery/effect journal executor. */
-export async function startLocalRuntime(
-  options: LocalRuntimeHostOptions,
-): Promise<LocalRuntimeHost> {
+export async function startLocalRuntime(options: LocalRuntimeHostOptions) {
   const drainDeadlineMs = options.drainDeadlineMs ?? LOCAL_RUNTIME_MAX_WAIT_MS - 1000;
   if (
     !Number.isSafeInteger(drainDeadlineMs) ||
@@ -109,6 +106,7 @@ export async function startLocalRuntime(
       providerHttpClient: options.providerHttpClient,
     });
     const { provider, plugins, models, services } = settings;
+    const { resolver } = provider;
     plugin.connections(runtime.plugins?.connections);
     const finalization = new RuntimeFinalization(
       runtime.finalization,
@@ -121,26 +119,25 @@ export async function startLocalRuntime(
     const reads = runtime.openProfileReads?.();
     if (!reads) throw Error('durable_runtime_required');
     const panels = new CodingPanelQueries(runtime, reads);
+    const reserve = new RuntimeProjectReserve(paths.profile, runtime, decisions.owner, resolver);
     if (!runtime.desktopAssets) throw Error('durable_runtime_required');
     const desktop = runtimeDesktopAssets(runtime.desktopAssets, paths.profile, paths.profileId);
     const identity: LocalRuntimeIdentity = {
       protocol: 1,
       profileId: paths.profileId,
       instanceId: randomUUID(),
-      capabilities: runtimeCapabilities(options.restore === true).filter(
-        (c) => !['room.tasks-v1', 'room.task-list-v1'].includes(c) || !restored,
-      ),
+      capabilities: runtimeCapabilities(options.restore === true, restored),
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');
     const turns = new RuntimeTurns(
       runtime.chat,
-      provider.resolver,
+      resolver,
       runtime.openRoomRuns(),
       identity.instanceId,
     );
     const { broadcasts, roomTasks } = hostRoomTasks(
       runtime,
-      provider.resolver,
+      resolver,
       identity.instanceId,
       images,
       options.roomTaskCapacity,
@@ -185,6 +182,7 @@ export async function startLocalRuntime(
                 panels,
                 restoration,
                 finalization,
+                reserve,
                 provider.settings,
                 models,
                 plugins,
@@ -237,6 +235,10 @@ export async function startLocalRuntime(
             return restoration.dispatch(method, params);
           if (options.restore && !maintenanceRead(method))
             return { error: { code: 'restore_restricted' } };
+          const setup = projectSetupOperation(method);
+          if (setup) return reserve.dispatch(params, state !== 'ready', setup);
+          if (isCodingWorkspaceRead(method))
+            return projectsRead(paths.profile, reads, method, params, state !== 'ready');
           if (LOCAL_FINALIZATION_METHODS.some((m) => m === method))
             return finalization.dispatch(method, params);
           const configured = settings.dispatch(method, params, detached);
@@ -252,13 +254,7 @@ export async function startLocalRuntime(
           if (LOCAL_BROADCAST_METHODS.some((m) => m === method))
             return broadcasts.dispatch(method, params, detached);
           if (method === 'desktop.assets') return desktop(params, state !== 'ready');
-          if (
-            method === 'coding.panel' ||
-            method === 'coding.diff' ||
-            method === 'coding.show' ||
-            method === 'coding.inspect-apply'
-          )
-            return panels.dispatch(method, params, detached);
+          if (isCodingPanelMethod(method)) return panels.dispatch(method, params, detached);
           if (PROFILE_METHODS.some((m) => m === method))
             return profileCommand(runtime.conversations, reads, method, params, state !== 'ready');
           if (method.startsWith('roomTasks.'))

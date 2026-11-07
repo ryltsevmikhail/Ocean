@@ -23,7 +23,8 @@ export interface LocalDecision extends LocalDecisionRef {
     | 'test'
     | 'continue-text-only'
     | 'restore-rebind'
-    | 'task-finalization';
+    | 'task-finalization'
+    | 'project-setup';
   readonly status:
     'pending' | 'allowed' | 'denied' | 'cancelled' | 'expired' | 'invalidated' | 'interrupted';
   readonly version: number;
@@ -121,6 +122,7 @@ export function isLocalDecision(v: unknown): v is LocalDecision {
       'continue-text-only',
       'restore-rebind',
       'task-finalization',
+      'project-setup',
     ].some((k) => k === v['kind']) &&
     bindingDigest(v['bindingDigest']) &&
     localPosition(v['previewLength']) &&

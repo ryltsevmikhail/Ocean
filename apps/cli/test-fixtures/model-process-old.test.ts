@@ -15,6 +15,14 @@ export async function oldHosts() {
         await peer.ready;
         await peer.call('status');
         if (mode === 'a3') assert.deepEqual(await peer.call('pluginCatalog'), []);
+        await assert.rejects(
+          peer.call('listCodingProjects', { workspaceId: 'ws_ocean' }),
+          /^Error: client_upgrade_required$/,
+        );
+        await assert.rejects(
+          peer.call('listCodingTasks', { workspaceId: 'ws_ocean', projectId: 'project' }),
+          /^Error: client_upgrade_required$/,
+        );
         for (const method of [
           'listModelConnections',
           'setModelConnection',
@@ -39,6 +47,7 @@ export async function oldHosts() {
         'room.addressed-history-v1',
         'room.tasks-v1',
         'room.task-list-v1',
+        'coding.workspace-v1',
       ]);
       assert.deepEqual(
         observed.methods,
