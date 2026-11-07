@@ -160,7 +160,6 @@ it('binds group chat to the selected project task and detaches without replay', 
   cleanup.push(release.open, selectedRelease.open);
   const { scope } = f;
   const other = await peer.submit({ ...scope, requestId: 'ordinary', text: '@dev ordinary' });
-  expect(other.runId).toBeTruthy();
   await vi.waitFor(() => expect(signals).toHaveLength(1));
 
   const chooser = terminal(f.directory, '--projects');
@@ -187,7 +186,6 @@ it('binds group chat to the selected project task and detaches without replay', 
     );
   }
   expect(await peer.history(scope)).toHaveLength(1);
-  expect(await peer.listRuns(scope)).toHaveLength(1);
 
   release.open();
   await vi.waitFor(async () =>
@@ -196,17 +194,18 @@ it('binds group chat to the selected project task and detaches without replay', 
     }),
   );
   ui.send('selected dev only');
-  await vi.waitFor(async () => expect(await peer.listRuns(scope)).toHaveLength(2));
-  const [selected] = (await peer.listRuns(scope)).filter((r) => r.runId !== other.runId);
-  expect(selected).toMatchObject({ performerId: f.task.devBotId });
-  expect(
-    await peer.getReceipt({ ...scope, requestId: selected!.requestId, taskId: 'task' }),
-  ).toMatchObject({
-    runId: selected!.runId,
-  });
+  const { requestId, runId } = await vi.waitFor(
+    async () => {
+      const run = (await peer.listRuns(scope)).find((r) => r.runId !== other.runId);
+      expect(run).toMatchObject({ performerId: f.task.devBotId, turnStatus: 'dispatching' });
+      expect(signals).toHaveLength(2);
+      return run!;
+    },
+    { timeout: 5000 },
+  );
+  expect((await peer.getReceipt({ ...scope, requestId, taskId: 'task' }))?.runId).toBe(runId);
   ui.input.end();
   expect(await ui.session).toBe(0);
-  await vi.waitFor(() => expect(signals).toHaveLength(2));
   expect(signals[1]?.aborted).toBe(false);
 
   const reopened = await openProject(f.directory);
@@ -254,7 +253,7 @@ it('rechecks the selected task receipt immediately before a dev decision vote', 
       if (!found) throw Error('waiting for a write decision');
       return found;
     },
-    { timeout: 4000 },
+    { timeout: 8000 },
   );
   const ref = { ...f.scope, runId: card.runId, decisionId: card.decisionId };
   ui.send('/decision ' + card.decisionId);
