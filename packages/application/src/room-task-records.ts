@@ -21,11 +21,13 @@ export type RoomTaskMandate = Readonly<{
   codingTaskId: string | null;
   permissions: readonly OwnerPermission[];
 }>;
-export type RoomTaskMemberPin = Readonly<{
+type RoomTaskParticipant = Readonly<{
   botId: string;
   grantReferences: readonly OwnerGrantReference[];
-  identity: Extract<ModelExecutionIdentity, { source: 'connection' }>;
+  peerTools?: false;
 }>;
+export type RoomTaskMemberPin = RoomTaskParticipant &
+  Readonly<{ identity: Extract<ModelExecutionIdentity, { source: 'connection' }> }>;
 export type RoomTaskRootPayload = Readonly<{
   ownerId: string;
   mandate: RoomTaskMandate;
@@ -148,10 +150,7 @@ export type RoomTaskStart = Readonly<{
   requestId: string;
   text: string;
   initialBotIds: readonly string[];
-  participants: readonly Readonly<{
-    botId: string;
-    grantReferences: readonly OwnerGrantReference[];
-  }>[];
+  participants: readonly RoomTaskParticipant[];
   mandate: RoomTaskMandate;
 }>;
 export type RoomTaskActor = Readonly<{

@@ -8,7 +8,7 @@ import { openSqliteStore } from '@runnets/store-sqlite';
 import { ModelConnectionService, unconfiguredModelConnection } from '@runnets/application';
 import { createHash } from 'node:crypto';
 import { createFetchHttpClient, type HttpRequest } from '@runnets/provider-core';
-export async function roomTaskHostFixture(built = false) {
+export async function roomTaskHostFixture(built = false, local = { tools: false }) {
   const { openOceanProfile } = (await import(
     new URL(built ? '../dist/ocean/profile.js' : '../src/ocean/profile.js', import.meta.url).href
   )) as typeof ProfileModule;
@@ -90,7 +90,7 @@ export async function roomTaskHostFixture(built = false) {
         },
         '/api/show': {
           details,
-          capabilities: ['completion'],
+          capabilities: local.tools ? ['completion', 'tools'] : ['completion'],
           model_info: { 'general.architecture': 'qwen3', 'qwen3.context_length': 40960 },
           tensors: [{ name: 'token_embd.weight', type: 'Q4_K', shape: [2048, 151936] }],
         },

@@ -1,7 +1,7 @@
 import type { ConversationTransaction } from './conversation-ports.js';
 import { freezeRoomTask } from './room-task-host.js';
 import { roomTools } from './room-task-tools.js';
-import { admitRoomCount, roomCodingTask } from './room-task-authority.js';
+import { admitRoomCount, roomCodingTask, roomPeerToolsAllowed } from './room-task-authority.js';
 import { admitImageRequest, type ImageAssetResolverPort } from './image-content.js';
 import { createChatCommand } from './commands.js';
 import { roomSliceAuthority, inputEvidence } from './room-delivery-evidence.js';
@@ -153,7 +153,10 @@ export function claimRoomDelivery(d: RoomDeliveryClaimDeps, deliveryId: string):
       provider: activation.value.provider,
       messages: messages.value,
       parentRunId: facts.parent,
-      tools: snapshot.capabilities.tools ? roomTools(d, turn.id) : null,
+      tools:
+        snapshot.capabilities.tools && roomPeerToolsAllowed(root, task.assigneeBotId)
+          ? roomTools(d, turn.id)
+          : null,
     };
   });
 }
@@ -167,7 +170,7 @@ export function recoverUnstartedRoomClaims(
     return tx.chatTurns().flatMap((turn) => {
       const proof = inspectUnstartedRoomClaim(tx, turn, d);
       if (!proof) return [];
-      const { input, facts } = proof;
+      const { input, task, root, facts } = proof;
       const resolved = d.resolver.resolve(
         { bot: turn.bot, binding: turn.modelBinding! },
         turn.activation!.admittedAt,
@@ -196,7 +199,11 @@ export function recoverUnstartedRoomClaims(
               provider: resolved.value.provider,
               messages: messages.value,
               parentRunId: facts.parent,
-              tools: turn.activation!.capabilities.tools ? roomTools(d, turn.id) : null,
+              tools:
+                turn.activation!.capabilities.tools &&
+                roomPeerToolsAllowed(root, task.assigneeBotId)
+                  ? roomTools(d, turn.id)
+                  : null,
             },
           ]
         : [];

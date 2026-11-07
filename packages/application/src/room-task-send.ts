@@ -1,6 +1,6 @@
 import { admitRoomCount, repeatedRoomExchange } from './room-task-authority.js';
 import { freezeRoomTask } from './room-task-host.js';
-import { roomLocalAuthority } from './room-task-authority.js';
+import { roomLocalAuthority, roomPeerToolsAllowed } from './room-task-authority.js';
 import type { RoomHandoff } from '@runnets/domain';
 import {
   canonicalJson,
@@ -123,6 +123,8 @@ export function persistRoomTaskSend(
       if (!facts || facts.root.rootPayload.ownerId !== d.ownerId)
         return conversationFailure('approval_required');
       const { task, root, input, turn, liveRun } = facts;
+      if (!roomPeerToolsAllowed(root, task.assigneeBotId))
+        return conversationFailure('approval_required');
       if (
         !root.hostScope ||
         canonicalJson(root.hostScope) !== canonicalJson(rt.hostScope()) ||

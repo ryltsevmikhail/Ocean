@@ -135,7 +135,7 @@ import { roomAgentRequestKey, validConversationText } from '@runnets/domain';
 import type { ConversationTransaction } from './conversation-ports.js';
 import type { RoomTaskRoot, RoomTaskActor } from './room-task-records.js';
 import type { RoomTaskPersistenceDeps } from './room-task-persistence.js';
-import { admitRoomCount, roomSliceAuthority } from './room-task-authority.js';
+import { admitRoomCount, roomPeerToolsAllowed, roomSliceAuthority } from './room-task-authority.js';
 import { inputEvidence } from './room-delivery-evidence.js';
 export function freezeRoomTask(
   tx: ConversationTransaction,
@@ -191,6 +191,7 @@ export function roomTaskState(
       return { reply: prior.reply.data, fresh: false };
     }
     if (
+      !roomPeerToolsAllowed(facts.root, facts.task.assigneeBotId) ||
       !roomSliceAuthority(tx, facts.root, facts.task, d.clock.now().getTime(), d.sha256) ||
       !facts.turn.activation ||
       d.clock.now().getTime() >= Date.parse(facts.turn.activation.deadlineAt)

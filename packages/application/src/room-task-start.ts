@@ -52,7 +52,11 @@ export function validRoomTaskStart(v: unknown): v is RoomTaskStart {
     !ps.every(
       (p) =>
         object(p) &&
-        keys(p, ['botId', 'grantReferences']) &&
+        (Object.hasOwn(p, 'peerTools')
+          ? keys(p, ['botId', 'grantReferences', 'peerTools']) &&
+            Object.prototype.propertyIsEnumerable.call(p, 'peerTools') &&
+            p['peerTools'] === false
+          : keys(p, ['botId', 'grantReferences'])) &&
         id(p['botId']) &&
         list(p['grantReferences'], 32) &&
         p['grantReferences'].every(validOwnerGrantReference) &&
@@ -73,6 +77,15 @@ export function validRoomTaskStart(v: unknown): v is RoomTaskStart {
     m['permissions'].every(validOwnerPermission) &&
     new TextEncoder().encode(canonicalJson(v)).length <= 262144
   );
+}
+export function roomTaskParticipant(
+  member: RoomTaskStart['participants'][number],
+): RoomTaskStart['participants'][number] {
+  return {
+    botId: member.botId,
+    grantReferences: member.grantReferences,
+    ...(Object.hasOwn(member, 'peerTools') ? { peerTools: false as const } : {}),
+  };
 }
 export function prepareRoomTaskStart(
   tx: ConversationTransaction,
@@ -136,7 +149,11 @@ export function prepareRoomTaskStart(
       )
         return conversationFailure('approval_required');
     }
-    members.push({ botId: p.botId, grantReferences: structuredClone(p.grantReferences), identity });
+    members.push({
+      ...roomTaskParticipant(p),
+      grantReferences: structuredClone(p.grantReferences),
+      identity,
+    });
   }
   return ok({ room, members });
 }

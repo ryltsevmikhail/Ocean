@@ -22,6 +22,9 @@ export type RoomAuthorityRead = Pick<
   | 'activeChatTurn'
   | 'broadcastBatchForRoom'
 >;
+export function roomPeerToolsAllowed(root: RoomTaskRoot, botId: string): boolean {
+  return root.rootPayload.members.some((m) => m.botId === botId && m.peerTools !== false);
+}
 /** Shared current host/room gate; settled local calls retain their recorded sender identity. */
 function currentRoomScope(
   tx: RoomAuthorityRead,

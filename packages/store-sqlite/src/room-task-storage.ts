@@ -81,7 +81,10 @@ export function readRoomTask(db: DatabaseSync, id: string): RoomTaskRecord | nul
       !p.members.every(
         (m: RoomTaskMemberPin) =>
           validConversationText(m.botId, 128) &&
-          Object.keys(m).sort().join() === 'botId,grantReferences,identity' &&
+          (Object.hasOwn(m, 'peerTools')
+            ? m.peerTools === false &&
+              Object.keys(m).sort().join() === 'botId,grantReferences,identity,peerTools'
+            : Object.keys(m).sort().join() === 'botId,grantReferences,identity') &&
           Array.isArray(m.grantReferences) &&
           m.grantReferences.length <= 32 &&
           m.grantReferences.every(validOwnerGrantReference) &&

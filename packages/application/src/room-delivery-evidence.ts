@@ -11,6 +11,7 @@ import {
 import type { ConversationTransaction } from './conversation-ports.js';
 import type { RoomDeliveryRecord, RoomTaskBot, RoomTaskRoot } from './room-task-records.js';
 import { roomTaskReceipt } from './room-task-receipt.js';
+import { roomTaskParticipant } from './room-task-start.js';
 export { roomSliceAuthority } from './room-task-authority.js';
 /** Stored receipts and joins establish meaning; delivery IDs select, never authorize. */
 export function inputEvidence(
@@ -49,7 +50,7 @@ export function inputEvidence(
       root.roomId,
       message.body,
       rows.map((r) => r.recipientBotId),
-      root.rootPayload.members.map((m) => ({ botId: m.botId, grantReferences: m.grantReferences })),
+      root.rootPayload.members.map(roomTaskParticipant),
       root.rootPayload.mandate,
     ]);
     if (

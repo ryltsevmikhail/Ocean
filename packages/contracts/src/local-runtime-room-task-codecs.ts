@@ -82,7 +82,10 @@ export function isRoomTaskStart(v: unknown): v is RoomTaskStart {
     ps.every(
       (p: unknown) =>
         localRuntimeRecord(p) &&
-        exact(p, ['botId', 'grantReferences']) &&
+        exact(p, ['botId', 'grantReferences'], ['peerTools']) &&
+        (!Object.hasOwn(p, 'peerTools') ||
+          (Object.prototype.propertyIsEnumerable.call(p, 'peerTools') &&
+            p['peerTools'] === false)) &&
         localId(p['botId']) &&
         Array.isArray(p['grantReferences']) &&
         p['grantReferences'].length <= 32 &&

@@ -75,6 +75,23 @@ synthetic model to request the exact read. OpenAI and Anthropic live were
 deferred by the owner. This result leaves the real local and mixed team gate
 and final release qualification open.
 
+### Room task SDK option for mixed teams
+
+`roomTaskStart` accepts the optional literal `peerTools: false` on an individual
+`participants` entry. The runtime saves the option in the room task root and
+binds it to the start receipt. Changing it under the same request ID conflicts.
+The selected bot does not receive `room_state`, `room_send` or `room_delegate`,
+including when an unstarted claim is recovered. It can still answer delegated
+input, and the runtime delivers its completed reply to the delegating bot.
+Omission preserves the existing behavior. Other tool grants and coding authority
+keep their own checks. This option is available through the SDK; there is no GUI control.
+
+Earlier SDKs and runtimes reject requests with the new field. The current runtime
+reads existing roots with the field absent. An earlier runtime also rejects a
+saved root containing the new field, so rollback uses a compatible backup. Do
+not remove the field from a saved root to make it readable by an older runtime.
+Scripted coverage for this option does not close the real mixed model gate.
+
 ## Inherited v1.1 obligations
 
 The [v1.1 coding contract](v1.1.md) and its [Tasks 1–7](../superpowers/plans/2026-11-02-ocean-1.1.md)

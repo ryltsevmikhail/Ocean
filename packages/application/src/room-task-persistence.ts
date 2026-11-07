@@ -16,7 +16,11 @@ import type {
   RoomTaskRoot,
   RoomDeliveryRecord,
 } from './room-task-records.js';
-import { prepareRoomTaskStart, validRoomTaskStart } from './room-task-start.js';
+import {
+  prepareRoomTaskStart,
+  roomTaskParticipant,
+  validRoomTaskStart,
+} from './room-task-start.js';
 import { roomTaskReceipt } from './room-task-receipt.js';
 export interface RoomTaskPersistenceDeps {
   readonly store: ConversationStore;
@@ -76,12 +80,8 @@ export class RoomTaskPersistence {
           canonicalJson(receipt.deliveries.map((r) => r.botId)) ===
             canonicalJson(input.initialBotIds) &&
           canonicalJson(root.rootPayload.mandate) === canonicalJson(input.mandate) &&
-          canonicalJson(
-            root.rootPayload.members.map((m) => ({
-              botId: m.botId,
-              grantReferences: m.grantReferences,
-            })),
-          ) === canonicalJson(input.participants)
+          canonicalJson(root.rootPayload.members.map(roomTaskParticipant)) ===
+            canonicalJson(input.participants)
           ? ok(receipt)
           : conversationFailure('request_conflict');
       }

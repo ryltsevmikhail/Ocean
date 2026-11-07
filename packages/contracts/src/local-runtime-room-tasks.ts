@@ -20,6 +20,7 @@ export interface RoomTaskStart {
   readonly participants: readonly {
     readonly botId: string;
     readonly grantReferences: readonly OwnerGrantReference[];
+    readonly peerTools?: false;
   }[];
   readonly mandate: {
     readonly projectId: string | null;
