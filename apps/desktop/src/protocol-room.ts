@@ -50,6 +50,7 @@ export const run = z.object({
     'cancelled',
   ]),
   taskStatus: z.string().max(64),
+  resultMessageId: id.nullable().optional(),
   pendingDecisionIds: z.array(z.string().max(128)).max(200),
 });
 

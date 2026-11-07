@@ -130,3 +130,33 @@ it('does not publish an old room continuation after context changes, or reuse it
     { workspaceId: 'ws_ocean', roomId: 'new', limit: 50 },
   ]);
 });
+it('reports a stale exact decision as refused without silently resolving a newer version', async () => {
+  let writes = 0;
+  const request = vi.fn(async (c) => {
+    if (c.op === 'service-preview') return text;
+    if (c.op === 'service-decisions') return [{ ...card, version: 2 }];
+    if (c.op === 'service-resolve') {
+      ++writes;
+      throw Error('version_conflict');
+    }
+    return card;
+  });
+  const state = createServiceDecisions(request as never);
+  state.context('r');
+  await state.inspect(card as never);
+  await state.resolve('allow-once');
+  expect(writes).toBe(1);
+  expect(state.canResolve.value).toBe(false);
+  expect(state.message.value).toContain('Устаревшее решение отклонено');
+});
+it('refuses a different run or decision returned for an exact scoped reference before preview or vote', async () => {
+  const request = vi.fn(async (c) =>
+    c.op === 'service-decision' ? { ...card, runId: 'foreign' } : text,
+  );
+  const state = createServiceDecisions(request as never);
+  state.context('r');
+  await state.inspect(card as never);
+  expect(state.canResolve.value).toBe(false);
+  expect(state.message.value).toContain('invalid_frame');
+  expect(request.mock.calls.map(([c]) => c.op)).toEqual(['service-decision']);
+});

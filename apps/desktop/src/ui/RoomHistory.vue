@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { addressedTarget } from './room-task-text.js';
 import { historyState } from './runtime-text.js';
 import { useHistoryView } from './history-view.js';
 import type { Message } from '../protocol.js';
@@ -72,8 +73,8 @@ function day(s: string) {
             <span class="author"
               ><Avatar v-if="m.author === 'bot'" :handle="label(m.authorBotId)" />{{
                 m.author === 'bot' ? '@' + label(m.authorBotId) : 'Вы'
-              }}<span v-if="m.author === 'user' && m.targetBotId">
-                → @{{ label(m.targetBotId) }}</span
+              }}<span v-if="addressedTarget(m.authorBotId, m.targetBotId)">
+                → @{{ label(m.targetBotId ?? undefined) }}</span
               ></span
             ><time :datetime="m.createdAt"
               >{{ clock.format(new Date(m.createdAt))

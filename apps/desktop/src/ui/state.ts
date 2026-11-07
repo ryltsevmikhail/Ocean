@@ -1,3 +1,4 @@
+import { createRoomTasks } from './room-task-state.js';
 import { ref, computed, onMounted } from 'vue';
 import type { Bot, Room, Command, Run } from '../protocol.js';
 import { pages, useRoomFeed } from './room-feed.js';
@@ -20,8 +21,8 @@ import {
 import { createOceanTeam } from './ocean-team.js';
 import { BROADCAST_RECIPIENT } from './broadcast-mode.js';
 import { sendBlockedHint } from './broadcast-text.js';
-
 export function useDesktop() {
+  const tasks = createRoomTasks();
   const bots = ref<Bot[]>([]),
     rooms = ref<Room[]>([]);
   const sent = ref(0),
@@ -39,6 +40,7 @@ export function useDesktop() {
         latest.body.slice(0, 120);
     },
     async (id) => readBroadcast(id),
+    tasks.watermark,
   );
   const drafts = new Map<string, string>();
   const room = ref<Room>(),
@@ -56,7 +58,7 @@ export function useDesktop() {
   );
   const members = computed(() => bots.value.filter((b) => memberIds.value.includes(b.id)));
   const label = (id: string | undefined) =>
-    bots.value.find((b) => b.id === id)?.handle ?? 'участник';
+    bots.value.find((b) => b.id === id)?.handle ?? id ?? 'участник';
   const roomName = (r: Room) => (r.kind === 'group' ? r.title : '@' + label(r.botId));
   const roomPreview = (r: Room) =>
     previews.value[r.id] ??
@@ -97,6 +99,7 @@ export function useDesktop() {
       admittedRun.value = null;
     }
     room.value = r;
+    void tasks.context(r?.id ?? '');
     uncertain.value = r ? unconfirmed.has(r.id) || pendingBroadcast(r.id) !== undefined : false;
     if (r) void readBroadcast(r.id);
     open(r?.id);
@@ -150,7 +153,6 @@ export function useDesktop() {
       to: r.kind === 'group' ? recipient.value || null : null,
       requestId: uuid(),
     };
-
     try {
       const result = await submitDraft(command);
       admittedRun.value = result.runId;
@@ -228,6 +230,7 @@ export function useDesktop() {
     room.value?.kind === 'direct' ? label(room.value.botId) : undefined,
   );
   return {
+    tasks,
     roomHandle,
     sections,
     runtimeReady,

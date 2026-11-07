@@ -1,4 +1,5 @@
 import { commands, envelope, outputs, type Command, type SendStage } from '../protocol.js';
+import { isTaskCommand, taskReplyMatches } from '../room-task-protocol.js';
 import type { z } from 'zod';
 declare global {
   interface Window {
@@ -33,7 +34,8 @@ export async function call<K extends Command['op']>(
     throw new Error(code);
   }
   const data = outputs[command.op].safeParse(reply.data.data);
-  if (!data.success) throw new Error('outcome_unknown');
+  if (!data.success || (isTaskCommand(command) && !taskReplyMatches(command, data.data)))
+    throw new Error('outcome_unknown');
   return data.data as z.infer<(typeof outputs)[K]>;
 }
 

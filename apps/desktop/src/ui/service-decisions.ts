@@ -119,6 +119,9 @@ export function createServiceDecisions(request: typeof call = call) {
     try {
       if (card.roomId !== room.value) throw Error('decision_context_changed');
       const before = await request({ op: 'service-decision', input: reference(card) });
+      if (JSON.stringify(reference(before)) !== JSON.stringify(reference(card)))
+        throw Error('invalid_frame');
+      if (token !== epoch) return;
       const text = await request({ op: 'service-preview', input: reference(before) });
       const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
       const digest = Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join(
@@ -159,10 +162,16 @@ export function createServiceDecisions(request: typeof call = call) {
         },
       });
       if (token !== epoch) return;
+      if (JSON.stringify(reference(result)) !== JSON.stringify(reference(c)))
+        throw Error('invalid_frame');
       current.value = result;
       message.value = `Решение: ${decisionStatusText[result.status]}. Разрешение не доказывает завершение эффекта.`;
     } catch (e) {
-      if (token === epoch) message.value = String(e instanceof Error ? e.message : e);
+      if (token === epoch)
+        message.value =
+          e instanceof Error && e.message === 'version_conflict'
+            ? 'Устаревшее решение отклонено. Перечитайте карточку перед новым решением.'
+            : String(e instanceof Error ? e.message : e);
     } finally {
       busy.value = false;
       if (token === epoch) await load();

@@ -5,16 +5,16 @@ import type { Run } from '../protocol.js';
 import Glyph from './Glyph.vue';
 import ModelExecutionFacts from './ModelExecutionFacts.vue';
 defineProps<{ runs: Run[]; roomId: string }>();
-const page = ref<'Задачи комнаты' | 'События' | 'Изменения'>('Задачи комнаты'),
+const page = ref<'Запуски комнаты' | 'События' | 'Изменения'>('Запуски комнаты'),
   panel = ref<HTMLDialogElement>();
 const entries = [
-  ['Задачи комнаты', 'task'],
+  ['Запуски комнаты', 'task'],
   ['События', 'event'],
   ['Изменения', 'diff'],
 ] as const;
 </script>
 <template>
-  <h3>Работа с кодом</h3>
+  <h3>Запуски и журналы</h3>
   <button
     v-for="[name, icon] in entries"
     :key="name"
@@ -28,13 +28,13 @@ const entries = [
   </button>
   <dialog ref="panel" class="room-work" :aria-label="page">
     <header>
-      <small>РАБОТА С КОДОМ</small
+      <small>ЗАПУСКИ И ЖУРНАЛЫ</small
       ><button class="round" aria-label="К разговору" @click="panel?.close()">
         <Glyph name="close" />
       </button>
     </header>
     <h2>{{ page }}</h2>
-    <template v-if="page === 'Задачи комнаты'"
+    <template v-if="page === 'Запуски комнаты'"
       ><p v-if="!runs.length">В этой комнате ещё нет запусков.</p>
       <details v-for="run in runs" :key="run.runId" class="info-card">
         <summary>
@@ -48,7 +48,7 @@ const entries = [
           <dd>{{ run.version }}</dd>
           <dt>Исполнитель</dt>
           <dd>{{ run.performerId }}</dd>
-          <dt>Ожидают решения в TUI</dt>
+          <dt>Ожидают решения · сервисы доступны в настройках комнаты</dt>
           <dd>{{ run.pendingDecisionIds.join(', ') || '—' }}</dd>
         </dl>
         <ModelExecutionFacts :room-id="roomId" :run-id="run.runId" />

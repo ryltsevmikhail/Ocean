@@ -29,6 +29,7 @@ export function readRoomRuns(room: string) {
 export function useRoomFeed(
   preview: (roomId: string, message: Message) => void,
   sync?: (roomId: string) => Promise<void>,
+  changed?: (roomId: string) => void,
 ) {
   const history = ref<Message[]>([]),
     runs = ref<Run[]>([]),
@@ -66,6 +67,7 @@ export function useRoomFeed(
         if (reset) history.value = messages;
         else history.value = history.value.concat(messages);
         runs.value = snapshots;
+        changed?.(room);
         const latest = history.value.at(-1);
         if (latest) preview(room, latest);
         readError.value = '';

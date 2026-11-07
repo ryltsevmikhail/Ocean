@@ -1,3 +1,5 @@
+import { dispatchRoomTask } from './room-task-client.js';
+import { isTaskCommand } from '../room-task-protocol.js';
 import { LOCAL_MODEL_CONNECTIONS } from '@runnets/contracts';
 import type { LocalRuntimeClient } from '@runnets/tools-node/local-runtime-client';
 import { dispatchServiceSettings, historicalServiceWriter } from './service-settings-client.js';
@@ -21,6 +23,7 @@ export async function dispatch(client: LocalRuntimeClient, c: Command) {
     !historicalServiceWriter(client.identity.capabilities)
   )
     throw Error('service_support_changed');
+  if (isTaskCommand(c)) return dispatchRoomTask(client, c);
   const workspaceId = 'ws_ocean';
   const page = {
     workspaceId,

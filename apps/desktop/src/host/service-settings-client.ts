@@ -11,6 +11,13 @@ export const historicalServiceWriter = (caps: readonly string[]) =>
   LOCAL_PLUGIN_METHODS.every((c) => caps.includes(c));
 export function dispatchServiceSettings(client: LocalRuntimeClient, c: ServiceCommand) {
   const caps = client.identity.capabilities;
+  if (
+    'binding' in c &&
+    c.binding &&
+    (c.binding.profileId !== client.identity.profileId ||
+      c.binding.instanceId !== client.identity.instanceId)
+  )
+    throw Error('task_identity_changed');
   const has = (items: readonly string[]) => items.every((x) => caps.includes(x));
   if (c.op === 'service-support')
     return {

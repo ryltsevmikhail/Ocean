@@ -56,6 +56,7 @@ async function open() {
     }
   }
 }
+defineExpose({ open });
 function close() {
   ++epoch;
   opened.value = false;
@@ -86,7 +87,11 @@ function close() {
         <ServiceConnectionForm :state="state" /><ServiceGrantForm
           :state="state"
           :room="room"
-          :bots="bots"
+          :bots="
+            bots.filter((b) =>
+              room?.kind === 'group' ? room.botIds.includes(b.id) : room?.botId === b.id,
+            )
+          "
         />
         <ServiceDecisions
           v-if="decisions"

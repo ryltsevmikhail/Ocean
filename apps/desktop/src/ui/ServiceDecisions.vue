@@ -61,8 +61,8 @@ onBeforeUnmount(() => {
       Исполнитель: {{ run.performerId }} · ход: {{ turnText[run.turnStatus] }} · задача:
       {{ run.taskStatus }}. Факт результата запуска:
       {{
-        run.turnStatus === 'completed'
-          ? 'завершён, результат в истории комнаты'
+        run.resultMessageId
+          ? 'ответ в истории: ' + run.resultMessageId
           : 'завершение не подтверждено'
       }}.
     </p>

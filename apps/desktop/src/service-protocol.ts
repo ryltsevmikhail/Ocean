@@ -18,6 +18,7 @@ import {
   type LocalServiceConnectionView,
   type LocalServiceOwnerReceipt,
 } from '@runnets/contracts';
+import { taskBinding } from './room-task-protocol.js';
 import { dto } from './protocol-dto.js';
 const scoped = <T extends { workspaceId: string }>(guard: (v: unknown) => v is T) =>
   dto((v: unknown): v is T => guard(v) && v.workspaceId === 'ws_ocean');
@@ -42,9 +43,21 @@ export const serviceCommands = [
     input: dto(isLocalServiceOwnerOperationsQuery),
   }),
   z.strictObject({ op: z.literal('service-decisions'), input: scoped(isLocalRoomListQuery) }),
-  z.strictObject({ op: z.literal('service-decision'), input: scoped(isDecisionRef) }),
-  z.strictObject({ op: z.literal('service-preview'), input: scoped(isDecisionRef) }),
-  z.strictObject({ op: z.literal('service-resolve'), input: scoped(isDecisionReply) }),
+  z.strictObject({
+    op: z.literal('service-decision'),
+    binding: taskBinding.optional(),
+    input: scoped(isDecisionRef),
+  }),
+  z.strictObject({
+    op: z.literal('service-preview'),
+    binding: taskBinding.optional(),
+    input: scoped(isDecisionRef),
+  }),
+  z.strictObject({
+    op: z.literal('service-resolve'),
+    binding: taskBinding.optional(),
+    input: scoped(isDecisionReply),
+  }),
 ] as const;
 // A grant's workspace is nested; the public guard validates the complete intent.
 function isLocalServiceGrantSetRequestScope(v: unknown): v is LocalServiceGrantSetRequest {

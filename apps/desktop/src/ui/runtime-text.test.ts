@@ -22,7 +22,7 @@ it('translates every turn status without exposing run metadata', () => {
     accepted: 'Запрос принят',
     dispatching: 'Готовим ответ…',
     prepared: '@review отвечает…',
-    completed: '@review ответил',
+    completed: 'Ход завершён; итоговый ответ не подтверждён',
     failed: 'Не удалось получить ответ',
     uncertain: 'Исход ответа не подтверждён',
     cancelled: 'Остановлено',
