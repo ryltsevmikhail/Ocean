@@ -16,9 +16,9 @@ import {
 import {
   beginProjectOperation,
   projectPreparationAvailable,
+  requestProjectCancel,
   unresolvedProjectOperation,
 } from './project-work-operations.js';
-
 const settled = new Set(['completed', 'failed', 'cancelled']);
 type Memory = { read(): WorkMemory | undefined; write(value: WorkMemory): void };
 export function createProjectWork(
@@ -185,11 +185,15 @@ export function createProjectWork(
       if (!previous.turn || previous.turn.cancelId) return;
       const cancelId = crypto.randomUUID();
       update({ ...previous, turn: { ...previous.turn, cancelId } });
-      await projectAdmission(
-        () => request('cancel', { ...q, cancelId, expectedVersion: snapshot.version }),
-        () => update(previous),
+      await requestProjectCancel(
+        request,
+        { ...q, cancelId, expectedVersion: snapshot.version },
+        refreshRun,
+        () => {
+          update(previous);
+          run.value = null;
+        },
       );
-      await refreshRun();
     });
   const capture = (recover = false) =>
     perform(async () => {

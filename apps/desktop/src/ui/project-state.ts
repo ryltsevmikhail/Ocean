@@ -38,6 +38,10 @@ const errors: Record<string, string> = {
   coding_denied: 'Операция недоступна для выбранной задачи и комнаты.',
   request_conflict: 'Запрос не совпадает с сохранённым. Проверьте исходную операцию.',
   invalid_request: 'Проверьте заполнение полей.',
+  context_limit: 'Сообщение не помещается в контекст комнаты. Сократите текст и отправьте снова.',
+  run_version_conflict: 'Статус запуска изменился. Проверьте его перед новым запросом отмены.',
+  run_not_started: 'Запуск ещё не начался. Дождитесь обновления статуса.',
+  run_not_active: 'У этого запуска больше нет активного выполнения для отмены.',
   project_changed: 'Проект изменился. Обновите состояние и проверьте снимок.',
   recovery_required: 'Сервер требует восстановления перед новым действием.',
   unknown_decision: 'Запись подтверждения пока не найдена. Проверьте состояние исходной операции.',
@@ -110,6 +114,30 @@ const sendRefused = new Set([
   'coding_denied',
   'room_busy',
   'recovery_required',
+  'context_limit',
+  'runtime_draining',
+  'workspace_conflict',
+  'unknown_room',
+  'unknown_bot',
+  'not_member',
+  'batch_open',
+  'model_policy_unavailable',
+  'model_transfer_denied',
+  'model_image_unsupported',
+  'image_unavailable',
+  'image_too_large',
+  'request_too_large',
+  'client_busy',
+  'project_identity_changed',
+  'project_runtime_upgrade_required',
 ]);
 export const projectSendRefused = (error: unknown) =>
   error instanceof Error && sendRefused.has(error.message);
+
+// Do not parse and re-serialize owner previews: that can turn visible JSON
+// escapes back into formatting controls and change how a bound path looks.
+export const projectDecisionText = (text: string) =>
+  text.replace(
+    /[\p{Bidi_Control}\u2028\u2029]/gu,
+    (char) => '\\u' + char.charCodeAt(0).toString(16).padStart(4, '0'),
+  );

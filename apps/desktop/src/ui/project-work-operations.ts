@@ -1,4 +1,9 @@
-import type { OperationKey, OperationStatus, ProjectReplies } from '../project-protocol.js';
+import type {
+  OperationKey,
+  OperationStatus,
+  ProjectInput,
+  ProjectReplies,
+} from '../project-protocol.js';
 import type { ProjectRequest } from './project-bridge.js';
 import type { WorkMemory } from './project-memory.js';
 
@@ -67,4 +72,33 @@ export function projectPreparationAvailable(
           previous.result.status,
         )))
   );
+}
+
+export async function requestProjectCancel(
+  request: ProjectRequest,
+  input: ProjectInput<'cancel'>,
+  refresh: () => Promise<void>,
+  restore: () => void,
+) {
+  try {
+    await request('cancel', input);
+  } catch (error) {
+    // These responses occur before any cancellation command or controller signal.
+    if (
+      error instanceof Error &&
+      [
+        'version_conflict',
+        'run_not_started',
+        'run_not_active',
+        'terminal_state',
+        'invalid_transition',
+      ].includes(error.message)
+    ) {
+      restore();
+      await refresh();
+      if (error.message === 'version_conflict') throw Error('run_version_conflict');
+    }
+    throw error;
+  }
+  await refresh();
 }

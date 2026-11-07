@@ -52,3 +52,10 @@ it('restores a prior handle only when a new request is definitively refused', as
   ).rejects.toThrow('outcome_unknown');
   expect(handle).toBe('new');
 });
+
+it('keeps an owner preview’s visible directional escapes intact', async () => {
+  const { projectDecisionText } = await import('./project-state.js');
+  const escaped = '{"path":"safe\\u202ereversed.txt"}';
+  expect(projectDecisionText(escaped)).toBe(escaped);
+  expect(projectDecisionText('unsafe\u202Epath')).toBe('unsafe\\u202epath');
+});

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import type { LocalDecision } from '@runnets/contracts';
 import type { ProjectCard } from '../project-protocol.js';
 import { decisionStatusText } from './service-decisions.js';
-import { projectError } from './project-state.js';
+import { projectDecisionText, projectError } from './project-state.js';
 
 const props = defineProps<{
   title: string;
@@ -28,14 +28,6 @@ const timer = setInterval(() => {
 onBeforeUnmount(() => {
   alive = false;
   clearInterval(timer);
-});
-const display = computed(() => {
-  const raw = card.value?.preview ?? '';
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
-  } catch {
-    return raw;
-  }
 });
 const canVote = computed(
   () =>
@@ -88,7 +80,7 @@ async function decide(choice: 'allow-once' | 'deny') {
         Версия {{ card.decision.version }} · {{ decisionStatusText[card.decision.status] }}
       </p>
       <p class="muted project-hash">{{ card.decision.bindingDigest }}</p>
-      <pre tabindex="0">{{ display }}</pre>
+      <pre tabindex="0">{{ projectDecisionText(card.preview) }}</pre>
       <div v-if="card.decision.status === 'pending'" class="project-row">
         <button
           type="button"
