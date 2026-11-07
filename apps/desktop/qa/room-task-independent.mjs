@@ -143,15 +143,13 @@ export async function ordinaryNativePhase(s, setup, step) {
   return { assetsRoom: group, message };
 }
 export async function taskGeometry(s, setup, step) {
-  const {
-    page,
-    peer,
-    fixture: { root },
-  } = s;
+  const { page, peer, fixture } = s;
   await selectRoom(page, setup.room.title, step);
   const panel = page.getByRole('dialog', { name: 'Задачи команды', exact: true });
   const draft = 'ordinary task-dialog preservation';
-  await step(() => page.getByLabel('Сообщение', { exact: true }).fill(draft));
+  const composer = page.getByLabel('Сообщение', { exact: true }),
+    chips = page.locator('#composer .attachment-card');
+  await step(() => composer.fill(draft));
   await step(() => page.locator('#composer input[type=file]').setInputFiles(image));
   await step(() => button(page, 'Убрать diagram.png').waitFor());
   const facts = [];
@@ -221,7 +219,7 @@ export async function taskGeometry(s, setup, step) {
           })),
       })),
     );
-    saveProof(root, 'team-form-' + width + '.json', layout);
+    saveProof(fixture.root, 'team-form-' + width + '.json', layout);
     assert.ok(layout.panel.left >= 0 && layout.panel.right <= width);
     assert.ok(
       layout.controls.every(
@@ -262,7 +260,7 @@ export async function taskGeometry(s, setup, step) {
           };
         }),
       );
-      saveProof(root, 'focus-' + width + '-' + i + '.json', focus);
+      saveProof(fixture.root, 'focus-' + width + '-' + i + '.json', focus);
       assert.ok(focus.index >= 0, 'keyboard left task form before visiting required controls');
       assert.ok(
         focus.rect.top >= focus.dialog.top && focus.rect.bottom <= focus.dialog.bottom,
@@ -281,11 +279,8 @@ export async function taskGeometry(s, setup, step) {
       await step(() => entry.evaluate((el) => el === globalThis.document.activeElement)),
       true,
     );
-    assert.equal(
-      await step(() => page.getByLabel('Сообщение', { exact: true }).inputValue()),
-      draft,
-    );
-    assert.equal(await step(() => page.locator('#composer .attachment-card').count()), 1);
+    assert.equal(await step(() => composer.inputValue()), draft);
+    assert.equal(await step(() => chips.count()), 1);
     const { pid, size, mapped, hidden, xwayland } = own[0];
     facts.push({
       width,
@@ -295,6 +290,11 @@ export async function taskGeometry(s, setup, step) {
       escapeFocusReturned: true,
     });
   }
-  saveProof(root, 'team-layout.json', facts);
+  await step(() => button(page, 'Убрать diagram.png').click());
+  await step(() => composer.fill(''));
+  const remaining = await step(() => Promise.all([composer.inputValue(), chips.count()]));
+  assert.deepEqual(remaining, ['', 0]);
+  saveProof(fixture.root, 'geometry-composer-cleanup.json', { roomId: setup.room.id, remaining });
+  saveProof(fixture.root, 'team-layout.json', facts);
   assert.deepEqual((await step(() => peer.roomTaskList(setup.scope))).roots, []);
 }
