@@ -6,6 +6,7 @@ import type {
 } from '../project-protocol.js';
 import type { ProjectRequest } from './project-bridge.js';
 import type { WorkMemory } from './project-memory.js';
+import { projectAdmission } from './project-state.js';
 
 const unresolved = new Set([
   'allowed',
@@ -80,23 +81,30 @@ export async function requestProjectCancel(
   refresh: () => Promise<void>,
   restore: () => void,
 ) {
+  let refused = false;
   try {
-    await request('cancel', input);
+    await projectAdmission(
+      () => request('cancel', input),
+      () => {
+        refused = true;
+      },
+    );
   } catch (error) {
-    // These responses occur before any cancellation command or controller signal.
+    const code = error instanceof Error ? error.message : '';
+    // These responses also precede any cancellation command or controller signal.
     if (
-      error instanceof Error &&
+      refused ||
       [
         'version_conflict',
         'run_not_started',
         'run_not_active',
         'terminal_state',
         'invalid_transition',
-      ].includes(error.message)
+      ].includes(code)
     ) {
       restore();
       await refresh();
-      if (error.message === 'version_conflict') throw Error('run_version_conflict');
+      if (code === 'version_conflict') throw Error('run_version_conflict');
     }
     throw error;
   }

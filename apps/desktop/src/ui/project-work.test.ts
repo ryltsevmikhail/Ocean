@@ -116,6 +116,7 @@ it('restores the prior receipt and accepts an edited dev message after a context
 it.each([
   { firstVersion: 3, refusal: 'version_conflict' },
   { firstVersion: 0, refusal: 'run_not_started' },
+  { firstVersion: 3, refusal: 'client_busy' },
 ])(
   'allows explicit cancel after $refusal but preserves an unknown attempt',
   async ({ firstVersion, refusal }) => {
@@ -134,17 +135,13 @@ it.each([
       if (op === 'cancel') throw Error('outcome_unknown');
       throw Error('unexpected_effect');
     });
-    const work = createProjectWork(
-      request as ProjectRequest,
-      {
-        read: () => data,
-        write: (value) => {
-          data = value;
-        },
+    const storage = {
+      read: () => data,
+      write: (value: WorkMemory) => {
+        data = value;
       },
-      'task',
-      'dev',
-    );
+    };
+    const work = createProjectWork(request as ProjectRequest, storage, 'task', 'dev');
     await work.refresh();
     await work.cancel();
     expect(work.run.value?.version).toBe(4);
@@ -153,8 +150,11 @@ it.each([
     expect(work.cancelRequested.value).toBe(true);
     const retainedId = data.turn?.cancelId;
     expect(retainedId).toBeTruthy();
-    await work.refresh();
-    await work.cancel();
+    work.close();
+    const reattached = createProjectWork(request as ProjectRequest, storage, 'task', 'dev');
+    await reattached.refresh();
+    expect(reattached.cancelRequested.value).toBe(true);
+    await reattached.cancel();
     const cancels = request.mock.calls.filter(([op]) => op === 'cancel').map(([, input]) => input);
     expect(cancels).toEqual([
       {
