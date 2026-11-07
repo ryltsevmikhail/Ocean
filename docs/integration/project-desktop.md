@@ -67,7 +67,8 @@ shutdown cancels pending cards and joins active jobs.
 
 Preparation uses the existing durable worktree intent and source mutation guard.
 It does not run a dev turn, edit source files, capture a review or apply changes.
-The prepare implementation awaits independent acceptance; native/GUI and live
+The preparation implementation at `b0f6dec` passed independent review and
+root check/build/format (4,226 source and 199 process tests). Native/GUI and live
 provider qualification remain separate.
 
 ## Planned

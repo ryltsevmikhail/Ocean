@@ -67,13 +67,17 @@ Accepted after independent review at `c438756`: root check/build/format 0
       project selection and explicit dev/review room + bot IDs. Accepted
       independently at `7eaa1c1`; root check/build/format passed (4,212 source
       and 193 process tests).
-- [ ] Reuse `CodingChangesetService.prepare` for a separate exact owner
-      decision and a verified worktree result. Reuse runtime `turns.submit`
-      with `taskId` for dev, including receipts, observation and cancellation.
-- [ ] Use the current preview read and explicit immutable capture, then
-      `CodingReviewService.request/dispatch` on the exact hash via the assigned
-      bot's current authorized binding and existing review-only provider path.
-      Present review state and tests, including stale status.
+- [x] Reuse `CodingChangesetService.prepare` for a separate exact owner
+      decision and verified worktree result. Accepted independently at
+      `b0f6dec`; root check/build/format passed (4,226 source and 199 process
+      tests). Ready reads are bounded and joined on stop.
+- [ ] Reuse runtime `turns.submit` with `taskId` for dev, including receipts,
+      observation and cancellation.
+- [ ] Expose explicit immutable capture and exact-hash diff reading through
+      the existing changeset service and bounded chunk protocol.
+- [ ] Use `CodingReviewService.request/dispatch` on the selected immutable
+      hash via the assigned bot's current authorized binding and existing
+      review-only provider path. Present review state and tests, including stale status.
 - [ ] Route apply to the existing apply service with exact base, changeset and
       review. Use the runtime's durable owner cards and existing operation
       receipts/journal for result reads. Show a decision result separately
