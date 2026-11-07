@@ -1,4 +1,5 @@
 import type { McpDiscoveryOptions, McpServiceTransportOptions } from './contracts.js';
+import type { ServiceResourceEvidence } from '@runnets/application';
 import { InvocationSend } from './send.js';
 
 /** No transport gets authority from an SDK connection or an AsyncLocalStorage token. */
@@ -12,6 +13,38 @@ export class SessionWriter {
       () => this.pending.delete(promise),
     );
     return promise;
+  }
+  ownResources(work: () => Promise<ServiceResourceEvidence>): Promise<ServiceResourceEvidence> {
+    let ready!: (value: ServiceResourceEvidence) => void, fail!: (error: unknown) => void;
+    const result = new Promise<ServiceResourceEvidence>((resolve, reject) => {
+      ready = resolve;
+      fail = reject;
+    });
+    void this.track(async () => {
+      try {
+        const evidence = await work();
+        let release!: () => void, closing: Promise<void> | undefined;
+        const released = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        ready({
+          facts: evidence.facts,
+          inspect: () => evidence.inspect(),
+          close: () =>
+            (closing ??= (async () => {
+              try {
+                await evidence.close();
+              } finally {
+                release();
+              }
+            })()),
+        });
+        await released;
+      } catch (error) {
+        fail(error);
+      }
+    }).catch(() => {});
+    return result;
   }
   async afterWork(): Promise<void> {
     while (this.pending.size) await Promise.allSettled([...this.pending]);

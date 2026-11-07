@@ -15,7 +15,9 @@ vi.mock('@runnets/tools-node', async (original) => ({
   prepareManagedStdio: async (r: Parameters<typeof Platform.prepareManagedStdio>[0]) => {
     expect(createHash('sha256').update(readFileSync(r.artifact)).digest('hex')).toBe(r.sha256);
     prepared.calls++;
-    const witness = (await original<typeof Platform>()).openManagedWorkspace(r.workspace, r.signal);
+    const witness = await (
+      await original<typeof Platform>()
+    ).openManagedWorkspace(r.workspace, r.signal);
     const nonce = randomUUID(),
       unit = 'ocean-mcp-' + 'a'.repeat(32) + '-' + nonce + '.service';
     return {
@@ -31,7 +33,7 @@ vi.mock('@runnets/tools-node', async (original) => ({
       start() {},
       async observe() {},
       async cleanup() {
-        witness.close();
+        await witness.close();
         return 'confirmed';
       },
     };

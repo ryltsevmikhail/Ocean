@@ -24,13 +24,13 @@ import type {
   McpServiceTransportOptions,
 } from '@runnets/integrations-mcp';
 /** This capability exists only in the owning runtime, never in the service protocol. */
-function prepareRuntimeManagedLifetime(
+async function prepareRuntimeManagedLifetime(
   store: ServiceAuthorityStorePort,
   c: ServiceConnection,
   handle: ManagedStdioHandle,
   signal: AbortSignal,
   current: () => boolean,
-): McpManagedLifetime {
+): Promise<McpManagedLifetime> {
   if (
     c.configuration.kind !== 'stdio' ||
     !c.configuration.workspaceRoot ||
@@ -68,7 +68,7 @@ function prepareRuntimeManagedLifetime(
     outcome: 'started',
     fingerprint: createHash('sha256').update(managedLifetimeFingerprint(identity)).digest('hex'),
   };
-  const evidence = prepareManagedResourceEvidence(
+  const evidence = await prepareManagedResourceEvidence(
     admission,
     store.atomic((tx) => tx.pending()),
     signal,
@@ -77,6 +77,8 @@ function prepareRuntimeManagedLifetime(
   );
   let claimed = false,
     finished = false;
+  let closing: Promise<void> | undefined;
+  const close = () => (closing ??= Promise.resolve(evidence.close()));
   return {
     record,
     begin() {
@@ -86,11 +88,11 @@ function prepareRuntimeManagedLifetime(
         claimed = store.atomic((tx) => tx.claimLifetime(identity, evidence.facts));
         return claimed;
       } finally {
-        evidence.close();
+        void close().catch(() => {});
       }
     },
-    finish(status, lost) {
-      evidence.close();
+    async finish(status, lost) {
+      await close();
       if (!claimed || finished) return;
       store.atomic((tx) =>
         tx.settleLifetime(
@@ -177,11 +179,11 @@ export function runtimeManagedAuthority(
         const managed = c && getManaged(c);
         if (!managed || managed.lifetime.record.fingerprint !== binding['managedSession'])
           throw Error('managed generation unavailable');
-        return Promise.resolve(
+        return managed.prepareResources(() =>
           prepareManagedResourceEvidence(
             admitted,
             store.atomic((tx) => tx.pending()),
-            signal,
+            AbortSignal.any([signal, managed.signal]),
             managed.lifetime.record,
             deadline,
           ),

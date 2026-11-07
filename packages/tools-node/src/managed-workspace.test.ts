@@ -11,35 +11,35 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openManagedWorkspace } from './managed-workspace.js';
-it('holds the actual root and refuses symlinks, hardlinks and stale path reuse', () => {
+it('holds the actual root and refuses symlinks, hardlinks and stale path reuse', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'managed-witness-'));
   const root = join(dir, 'root');
   mkdirSync(root);
   try {
-    const held = openManagedWorkspace(root, new AbortController().signal);
+    const held = await openManagedWorkspace(root, new AbortController().signal);
     expect(held.inspect()).toBe(true);
     writeFileSync(join(root, 'legitimate'), 'x');
     expect(held.inspect()).toBe(true);
     renameSync(root, join(dir, 'old'));
     mkdirSync(root);
     expect(held.inspect()).toBe(false);
-    held.close();
+    await held.close();
     symlinkSync(join(dir, 'old'), join(root, 'alias'));
-    expect(() => openManagedWorkspace(root, new AbortController().signal)).toThrow();
+    await expect(openManagedWorkspace(root, new AbortController().signal)).rejects.toThrow();
     rmSync(join(root, 'alias'));
     writeFileSync(join(root, 'a'), 'x');
     linkSync(join(root, 'a'), join(root, 'b'));
-    expect(() => openManagedWorkspace(root, new AbortController().signal)).toThrow();
+    await expect(openManagedWorkspace(root, new AbortController().signal)).rejects.toThrow();
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
-it('refuses expired physical preparation before traversing a workspace', () => {
+it('refuses expired physical preparation before traversing a workspace', async () => {
   const root = mkdtempSync(join(tmpdir(), 'managed-deadline-'));
   try {
-    expect(() =>
+    await expect(
       openManagedWorkspace(root, new AbortController().signal, [], Date.now() - 1),
-    ).toThrow('deadline');
+    ).rejects.toThrow('deadline');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

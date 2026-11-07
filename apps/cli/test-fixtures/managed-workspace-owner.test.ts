@@ -37,6 +37,34 @@ if (process.argv[4] === 'barrier') {
   };
 }
 
+if (process.argv[4] === 'close-barrier') {
+  const sdk = (await import(
+    new URL(
+      '../../../packages/integrations-mcp/node_modules/@modelcontextprotocol/client/dist/index.mjs',
+      import.meta.url,
+    ).href
+  )) as { Client: { prototype: { close(): Promise<void> } } };
+  const close = sdk.Client.prototype.close;
+  sdk.Client.prototype.close = async function () {
+    if (existsSync(join(proof, 'hold-close')) && !existsSync(join(proof, 'retire-release'))) {
+      writeFileSync(
+        join(proof, 'retire-barrier'),
+        'actual SDK close held before exact unit cleanup',
+      );
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (existsSync(join(proof, 'retire-release'))) {
+            watcher.close();
+            resolve();
+          }
+        };
+        const watcher = watch(proof, check);
+        check();
+      });
+    }
+    return Reflect.apply(close, this, []);
+  };
+}
 let setup: {
   profile: string;
   root: string;

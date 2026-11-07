@@ -1,12 +1,16 @@
 import * as fs from 'node:fs';
+import * as io from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { canonicalJson, managedCanonicalRoot, type ManagedWorkspace } from '@runnets/domain';
-import { desktopBtrfsAnchor } from './desktop-btrfs-anchor.js';
+import { managedBudget, managedWorkspaceAnchor } from './managed-workspace-anchor.js';
 import { blockedName } from './backend.js';
 import {
   managedCoordinate,
   managedMount,
   managedMounts,
+  managedMountAsync,
+  managedMountsAsync,
   managedTopology,
   mountedPath,
   overlap,
@@ -14,20 +18,24 @@ import {
 } from './managed-workspace-mounts.js';
 const flags = fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK;
 const fdPath = (fd: number) => '/proc/self/fd/' + fd;
-function canonicalDirectory(root: string) {
+async function canonicalDirectory(root: string, signal: AbortSignal, deadline: number) {
   if (!managedCanonicalRoot(root) || root === '/' || root.split('/').length > 128)
     throw Error('invalid managed root');
-  let fd = fs.openSync('/', flags | fs.constants.O_DIRECTORY);
+  managedBudget(signal, deadline);
+  let file = await io.open('/', flags | fs.constants.O_DIRECTORY);
   try {
     for (const part of root.slice(1).split('/')) {
-      const next = fs.openSync(join(fdPath(fd), part), flags | fs.constants.O_DIRECTORY);
-      fs.closeSync(fd);
-      fd = next;
+      managedBudget(signal, deadline);
+      const next = await io.open(join(fdPath(file.fd), part), flags | fs.constants.O_DIRECTORY),
+        prior = file;
+      file = next;
+      await prior.close();
     }
-    if (fs.realpathSync(fdPath(fd)) !== root) throw Error('managed path changed');
-    return fd;
+    managedBudget(signal, deadline);
+    if ((await io.realpath(fdPath(file.fd))) !== root) throw Error('managed path changed');
+    return file;
   } catch (error) {
-    fs.closeSync(fd);
+    await file.close();
     throw error;
   }
 }
@@ -35,108 +43,142 @@ export interface ManagedWorkspaceWitness {
   readonly footprint: ManagedWorkspace;
   readonly coordinate: string;
   readonly fd: number;
+  recheck(): Promise<boolean>;
+  /** Cheap final held-fd/name continuity only. Expensive topology/anchor checks run in recheck. */
   inspect(): boolean;
-  close(): void;
+  close(): Promise<void>;
 }
-/** Held no-follow directory chain; stable identity deliberately excludes mutable directory timestamps. */
-export function openManagedWorkspace(
+/** Asynchronous held-fd preparation; every pending I/O retains ownership through actual unwind. */
+export async function openManagedWorkspace(
   root: string,
   signal: AbortSignal,
   forbidden: readonly string[] = [],
   deadline = Date.now() + 15000,
-): ManagedWorkspaceWitness {
-  signal.throwIfAborted();
-  if (Date.now() >= deadline) throw Error('managed inventory deadline');
-  const fd = canonicalDirectory(root);
+): Promise<ManagedWorkspaceWitness> {
+  managedBudget(signal, deadline);
+  const file = await canonicalDirectory(root, signal, deadline),
+    fd = file.fd;
   try {
-    const rows = managedMounts(),
-      mount = managedMount(fd, rows);
+    managedBudget(signal, deadline);
+    const rows = await managedMountsAsync(),
+      mount = await managedMountAsync(fd, rows);
     const coordinate = managedTopology(mount, root, rows);
     for (const path of forbidden) {
-      const other = mountedPath(fs.realpathSync(path), rows);
+      managedBudget(signal, deadline);
+      const other = mountedPath(await io.realpath(path), rows);
       if (mount.dev === other.mount.dev && overlap(coordinate, other.coordinate))
         throw Error('protected physical managed root');
     }
-    const stat = fs.fstatSync(fd, { bigint: true });
+    const stat = await file.stat({ bigint: true });
     const footprint: ManagedWorkspace = {
       version: 1,
       root,
-      boot: fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim(),
-      mountNamespace: fs.readlinkSync('/proc/self/ns/mnt'),
+      boot: (await io.readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim(),
+      mountNamespace: await io.readlink('/proc/self/ns/mnt'),
       mountId: mount.id,
       dev: String(stat.dev),
       ino: String(stat.ino),
-      anchor: desktopBtrfsAnchor(fd),
+      anchor: await managedWorkspaceAnchor(fd, signal, deadline),
     };
     let count = 0;
-    function walk(directory: number) {
-      signal.throwIfAborted();
-      if (Date.now() >= deadline) throw Error('managed inventory deadline');
-      const before = fs.fstatSync(directory, { bigint: true });
-      const listing = fs.opendirSync(fdPath(directory), { bufferSize: 32 });
+    async function walk(directory: FileHandle): Promise<void> {
+      managedBudget(signal, deadline);
+      const before = await directory.stat({ bigint: true }),
+        listing = await io.opendir(fdPath(directory.fd), { encoding: 'latin1', bufferSize: 32 });
       try {
-        for (let entry = listing.readSync(); entry; entry = listing.readSync()) {
-          signal.throwIfAborted();
-          if (Date.now() >= deadline) throw Error('managed inventory deadline');
-          if (++count > 50000 || blockedName(entry.name)) throw Error('managed inventory denied');
-          const child = fs.openSync(join(fdPath(directory), entry.name), flags);
+        managedBudget(signal, deadline);
+        for (let entry = await listing.read(); entry; entry = await listing.read()) {
+          managedBudget(signal, deadline);
+          const raw = Buffer.from(entry.name, 'latin1'),
+            name = raw.toString('utf8');
+          if (!raw.equals(Buffer.from(name, 'utf8'))) throw Error('unsupported managed filename');
+          if (++count > 50000 || blockedName(name)) throw Error('managed inventory denied');
+          const child = await io.open(join(fdPath(directory.fd), name), flags);
           try {
-            const st = fs.fstatSync(child, { bigint: true });
+            managedBudget(signal, deadline);
+            const st = await child.stat({ bigint: true });
             if (
-              managedMount(child, rows).id !== mount.id ||
+              (await managedMountAsync(child.fd, rows)).id !== mount.id ||
               st.dev !== stat.dev ||
-              fs.realpathSync(fdPath(child)) !==
-                join(fs.realpathSync(fdPath(directory)), entry.name)
+              (await io.realpath(fdPath(child.fd))) !==
+                join(await io.realpath(fdPath(directory.fd)), name)
             )
               throw Error('managed entry changed');
-            if (st.isDirectory()) walk(child);
+            if (st.isDirectory()) await walk(child);
             else if (!st.isFile() || st.nlink !== 1n) throw Error('unsupported managed file');
           } finally {
-            fs.closeSync(child);
+            await child.close();
           }
         }
       } finally {
-        listing.closeSync();
+        await listing.close();
       }
-      if (before.ctimeNs !== fs.fstatSync(directory, { bigint: true }).ctimeNs)
+      if (before.ctimeNs !== (await directory.stat({ bigint: true })).ctimeNs)
         throw Error('managed inventory changed');
     }
-    walk(fd);
-    let closed = false;
-    return {
+    await walk(file);
+    let closed = false,
+      fresh = false;
+    const witness: ManagedWorkspaceWitness = {
       footprint,
       coordinate,
       fd,
-      inspect() {
+      async recheck() {
+        fresh = false;
         if (closed) return false;
-        let current: number | undefined;
+        let current: FileHandle | undefined;
         try {
-          current = canonicalDirectory(root);
-          const next = fs.fstatSync(current, { bigint: true }),
-            mounts = managedMounts();
-          return (
-            String(next.dev) === footprint.dev &&
-            String(next.ino) === footprint.ino &&
-            managedMount(current, mounts).id === footprint.mountId &&
-            managedTopology(managedMount(current, mounts), root, mounts) === coordinate &&
-            fs.realpathSync(fdPath(fd)) === root &&
-            desktopBtrfsAnchor(current) === footprint.anchor
-          );
+          current = await canonicalDirectory(root, signal, deadline);
+          managedBudget(signal, deadline);
+          const next = await current.stat({ bigint: true }),
+            mounts = await managedMountsAsync(),
+            currentMount = await managedMountAsync(current.fd, mounts);
+          managedBudget(signal, deadline);
+          if (
+            String(next.dev) !== footprint.dev ||
+            String(next.ino) !== footprint.ino ||
+            currentMount.id !== footprint.mountId ||
+            managedTopology(currentMount, root, mounts) !== coordinate ||
+            (await io.realpath(fdPath(fd))) !== root
+          )
+            return false;
+          fresh = (await managedWorkspaceAnchor(current.fd, signal, deadline)) === footprint.anchor;
+          managedBudget(signal, deadline);
+          return fresh;
         } catch {
           return false;
         } finally {
-          if (current !== undefined) fs.closeSync(current);
+          if (current) await current.close();
         }
       },
-      close() {
+      inspect() {
+        if (closed || !fresh || signal.aborted || Date.now() >= deadline) return false;
+        try {
+          const held = fs.fstatSync(fd, { bigint: true }),
+            named = fs.lstatSync(root, { bigint: true });
+          return (
+            held.dev === named.dev &&
+            held.ino === named.ino &&
+            String(held.dev) === footprint.dev &&
+            String(held.ino) === footprint.ino &&
+            fs.readlinkSync(fdPath(fd)) === root &&
+            Date.now() < deadline
+          );
+        } catch {
+          return false;
+        }
+      },
+      async close() {
         if (!closed) {
           closed = true;
-          fs.closeSync(fd);
+          await file.close();
         }
       },
     };
+    if (!(await witness.recheck())) throw Error('managed workspace stale');
+    return witness;
   } catch (error) {
-    fs.closeSync(fd);
+    await file.close();
     throw error;
   }
 }

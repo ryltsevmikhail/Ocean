@@ -9,37 +9,44 @@ import {
   sameManagedWorkspace,
   type ManagedWorkspaceWitness,
 } from './managed-workspace.js';
-/** No I/O occurs inside journal transactions; all exemptions bind exact pending snapshots. */
-export function prepareManagedResourceEvidence(
+import { managedBudget } from './managed-workspace-anchor.js';
+/** Bounded asynchronous evidence outside SQLite; no helper or scan in the final synchronous guard. */
+export async function prepareManagedResourceEvidence(
   incoming: ToolEffectAdmission,
   pending: readonly ToolEffectRecord[],
   signal: AbortSignal,
   own?: ToolEffectRecord,
   deadline = Date.now() + 15000,
-): ServiceResourceEvidence {
+): Promise<ServiceResourceEvidence> {
   const opened = new Map<string, ManagedWorkspaceWitness>();
   const pairs: ServiceResourceFacts['pairs'][number][] = [];
   let components = 0;
-  const open = (a: ToolEffectAdmission | undefined) => {
+  const open = async (a: ToolEffectAdmission | undefined) => {
+    managedBudget(signal, deadline);
     const saved = managedWorkspaceOf(a);
     if (!saved) return null;
     let witness = opened.get(saved.root);
     if (!witness) {
       components += saved.root.split('/').length;
       if (opened.size >= 32 || components > 128) throw Error('managed comparison limit');
-      witness = openManagedWorkspace(saved.root, signal, [], deadline);
+      witness = await openManagedWorkspace(saved.root, signal, [], deadline);
       opened.set(saved.root, witness);
     }
     return sameManagedWorkspace(saved, witness.footprint) ? witness : null;
   };
+  const close = async () => {
+    await Promise.all([...opened.values()].map((v) => v.close()));
+  };
   try {
-    const current = open(incoming);
+    const current = await open(incoming);
     if (!current) throw Error('managed workspace stale');
     for (const row of pending) {
+      managedBudget(signal, deadline);
       let prior: ManagedWorkspaceWitness | null;
       try {
-        prior = open(row.admission);
+        prior = await open(row.admission);
       } catch {
+        managedBudget(signal, deadline);
         prior = null;
       }
       if (prior)
@@ -53,16 +60,23 @@ export function prepareManagedResourceEvidence(
           },
         });
     }
+    for (const witness of opened.values()) {
+      managedBudget(signal, deadline);
+      if (!(await witness.recheck())) throw Error('managed workspace stale');
+    }
+    managedBudget(signal, deadline);
     return {
       facts: { pairs, ...(own ? { own: structuredClone(own) } : {}) },
-      inspect: () =>
-        !signal.aborted && [...opened.values()].every((v) => v.inspect()) && Date.now() < deadline,
-      close: () => {
-        for (const v of opened.values()) v.close();
+      inspect: () => {
+        for (const witness of opened.values()) {
+          if (signal.aborted || Date.now() >= deadline || !witness.inspect()) return false;
+        }
+        return !signal.aborted && Date.now() < deadline;
       },
+      close,
     };
   } catch (error) {
-    for (const v of opened.values()) v.close();
+    await close();
     throw error;
   }
 }

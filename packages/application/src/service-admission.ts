@@ -91,11 +91,12 @@ export class ServiceCallAdmissionService {
         expire,
       );
       if (closed || lifetime.signal.aborted || Date.now() >= expire) {
-        next?.close();
+        await next?.close();
         throw Error('resource preparation expired');
       }
-      resource?.close();
+      const prior = resource;
       resource = next;
+      await prior?.close();
     };
     const admitted = prepared;
     const managedSession = (admitted.admission.binding as { managedSession?: unknown })
@@ -123,7 +124,15 @@ export class ServiceCallAdmissionService {
             detail: 'dispatch guard did not admit the invocation',
           };
     try {
-      await refreshResources();
+      const preparation = refreshResources();
+      const interrupted = new Promise<never>((_, reject) => {
+        if (lifetime.signal.aborted) reject(Error('preparation expired'));
+        else
+          lifetime.signal.addEventListener('abort', () => reject(Error('preparation expired')), {
+            once: true,
+          });
+      });
+      await Promise.race([preparation, interrupted]);
       const claimed =
         (!resource || resource.inspect()) &&
         this.options.store.atomic((tx) => {
@@ -145,13 +154,15 @@ export class ServiceCallAdmissionService {
       if (!claimed) {
         clearTimeout(timer);
         signal?.removeEventListener('abort', abort);
-        resource?.close();
+        await resource?.close();
         return { code: 'claim_refused', outcome: null };
       }
     } catch {
+      closed = true;
+      abort();
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
-      resource?.close();
+      await resource?.close();
       return { code: 'claim_refused', outcome: null };
     }
     const authorizeDispatch = () => {
@@ -198,7 +209,8 @@ export class ServiceCallAdmissionService {
       closed = true;
       return false;
     };
-    let outcome: ServicePluginInvokeOutcome;
+    let outcome: ServicePluginInvokeOutcome = lost();
+    let retirement: Promise<void> | undefined;
     try {
       const interrupted = new Promise<ServicePluginInvokeOutcome>((resolve) => {
         if (lifetime.signal.aborted) resolve(lost());
@@ -231,13 +243,19 @@ export class ServiceCallAdmissionService {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       abort();
-      resource?.close();
+      if (outcome.kind === 'uncertain') {
+        retirement = this.options.transport.retireUncertain?.(
+          admitted.connection,
+          typeof managedSession === 'string' ? managedSession : undefined,
+        );
+        void retirement?.catch(() => {});
+      }
+      await resource?.close();
     }
     const settlement =
       outcome.kind === 'observed' ? (outcome.code === 'ok' ? 'completed' : 'failed') : outcome.kind;
     this.options.store.atomic((tx) => tx.settle(r, settlement));
-    if (outcome.kind === 'uncertain')
-      await this.options.transport.retireUncertain?.(admitted.connection);
+    await retirement;
     return { code: outcome.code, outcome };
   }
 }

@@ -1,3 +1,5 @@
+import { managedBusinessFingerprint } from './managed-journal-evidence.js';
+import { hasManagedMarkers } from '@runnets/domain';
 import {
   serviceResourceFactsCurrent,
   serviceResourceConflicts,
@@ -94,7 +96,11 @@ export class SqliteToolJournal implements ToolJournalPort {
           .get(context.taskRunId, context.attemptId, id)
       )
         return false;
-      if (admission && !serviceResourceFactsCurrent(this.inspectPending(), admission, facts))
+      if (
+        admission &&
+        context.taskRunId !== MANAGED_LIFETIME_RUN &&
+        !serviceResourceFactsCurrent(this.inspectPending(), admission, facts)
+      )
         return false;
       if (!roomHostToolAllowed(this.#db, this.#host, context.taskRunId, at ?? NaN, admission))
         return false;
@@ -116,7 +122,9 @@ export class SqliteToolJournal implements ToolJournalPort {
             tool,
             context.taskRunId,
             context.attemptId,
-            createHash('sha256').update(fingerprint).digest('hex'),
+            admission && hasManagedMarkers(admission) && context.taskRunId !== MANAGED_LIFETIME_RUN
+              ? managedBusinessFingerprint({ ...context, id, tool }, admission, fingerprint)
+              : createHash('sha256').update(fingerprint).digest('hex'),
             admission ? JSON.stringify(admission) : null,
           ).changes === 1
       );

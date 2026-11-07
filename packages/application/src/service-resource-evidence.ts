@@ -1,5 +1,7 @@
 import {
   canonicalJson,
+  hasManagedMarkers,
+  validManagedBusinessAdmission,
   effectResourcesConflict,
   validManagedLifetime,
   managedWorkspaceOf,
@@ -18,7 +20,7 @@ export interface ServiceResourceFacts {
 export interface ServiceResourceEvidence {
   readonly facts: ServiceResourceFacts;
   inspect(): boolean;
-  close(): void;
+  close(): void | Promise<void>;
 }
 export function serviceResourceConflicts(
   row: ToolEffectRecord,
@@ -50,14 +52,8 @@ export function serviceResourceFactsCurrent(
   incoming: ToolEffectAdmission,
   facts?: ServiceResourceFacts,
 ): boolean {
-  const binding = incoming.binding;
-  if (
-    !binding ||
-    typeof binding !== 'object' ||
-    Array.isArray(binding) ||
-    !('managedSession' in binding)
-  )
-    return true;
+  if (!hasManagedMarkers(incoming)) return true;
+  if (!validManagedBusinessAdmission(incoming)) return false;
   return (
     !!facts?.own &&
     pending.some(

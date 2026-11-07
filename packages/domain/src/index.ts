@@ -92,3 +92,5 @@ export * from './room-task.js';
 export { validRoomAgentRequest, roomAgentRequestKey, roomAgentBinding } from './room-delivery.js';
 
 export * from './managed-workspace.js';
+
+export * from './managed-business.js';

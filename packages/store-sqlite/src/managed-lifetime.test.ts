@@ -75,7 +75,14 @@ it('allows only the exact live lifetime when claiming business authority; uncert
   const incoming = {
     ...a,
     grantReference: { grantId: 'grant', revision: 1 },
-    binding: { ...binding, managedSession: row.fingerprint },
+    binding: {
+      ...binding,
+      managedSession: row.fingerprint,
+      configRevision: 1,
+      trustRevision: 1,
+      credentialRevision: 1,
+      tool: 'write',
+    },
   };
   expect(serviceResourceConflicts(row, incoming, { pairs: [], own: row })).toBe(false);
   expect(

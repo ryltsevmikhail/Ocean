@@ -1,3 +1,5 @@
+import { exactManagedBusiness } from './managed-journal-evidence.js';
+import { hasManagedMarkers } from '@runnets/domain';
 import { createHash } from 'node:crypto';
 import {
   MANAGED_LIFETIME_RUN,
@@ -85,6 +87,8 @@ export function readEffectiveToolAdmission(
       ? admission
       : undefined;
   }
+  if (hasManagedMarkers(admission))
+    return exactManagedBusiness(db, row, admission) ? admission : undefined;
   const a = journalCodingApproval(db, row);
   if (a !== undefined) return a && exactCodingReceipt(a, admission) ? admission : undefined;
   const codingWorktree =

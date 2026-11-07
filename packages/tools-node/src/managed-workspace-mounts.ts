@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import * as fs from 'node:fs';
 import { posix } from 'node:path';
 export interface ManagedMount {
@@ -13,7 +14,12 @@ const decode = (s: string) =>
 export const within = (a: string, b: string) => a === b || a.startsWith(b === '/' ? '/' : b + '/');
 export const overlap = (a: string, b: string) => within(a, b) || within(b, a);
 export function managedMounts(): readonly ManagedMount[] {
-  const bytes = fs.readFileSync('/proc/self/mountinfo');
+  return parseManagedMounts(fs.readFileSync('/proc/self/mountinfo'));
+}
+export async function managedMountsAsync(): Promise<readonly ManagedMount[]> {
+  return parseManagedMounts(await readFile('/proc/self/mountinfo'));
+}
+function parseManagedMounts(bytes: Buffer): readonly ManagedMount[] {
   if (bytes.length > 1048576) throw Error('managed mount inventory limit');
   const rows = bytes.toString('utf8').trim().split('\n');
   if (rows.length > 4096) throw Error('managed mount inventory limit');
@@ -46,6 +52,15 @@ export function managedMounts(): readonly ManagedMount[] {
 }
 export function managedMount(fd: number, rows: readonly ManagedMount[]): ManagedMount {
   const id = /^mnt_id:\s+([0-9]+)$/m.exec(fs.readFileSync('/proc/self/fdinfo/' + fd, 'utf8'))?.[1];
+  const found = rows.filter((m) => m.id === id);
+  if (found.length !== 1) throw Error('missing managed mount');
+  return found[0]!;
+}
+export async function managedMountAsync(
+  fd: number,
+  rows: readonly ManagedMount[],
+): Promise<ManagedMount> {
+  const id = /^mnt_id:\s+([0-9]+)$/m.exec(await readFile('/proc/self/fdinfo/' + fd, 'utf8'))?.[1];
   const found = rows.filter((m) => m.id === id);
   if (found.length !== 1) throw Error('missing managed mount');
   return found[0]!;

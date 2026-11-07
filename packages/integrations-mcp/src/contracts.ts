@@ -1,5 +1,5 @@
 import type { ManagedStdioHandle } from '@runnets/tools-node';
-import type { ToolEffectRecord } from '@runnets/application';
+import type { ServiceResourceEvidence, ToolEffectRecord } from '@runnets/application';
 import type { ServiceCatalogSnapshot, ServiceConnection } from '@runnets/domain';
 import type { ServiceCallTransportPort } from '@runnets/application';
 
@@ -14,11 +14,13 @@ export type McpCleanupEvidence = { readonly status: 'confirmed' | 'never_started
 export interface McpManagedLifetime {
   readonly record: ToolEffectRecord;
   begin(): boolean;
-  finish(status: McpCleanupEvidence['status'], lost: boolean): void;
+  finish(status: McpCleanupEvidence['status'], lost: boolean): void | Promise<void>;
 }
 export interface McpManagedSession {
   readonly handle: ManagedStdioHandle;
   readonly lifetime: McpManagedLifetime;
+  readonly signal: AbortSignal;
+  prepareResources(work: () => Promise<ServiceResourceEvidence>): Promise<ServiceResourceEvidence>;
 }
 export interface McpServiceTransportOptions {
   /** Private owner-enrolled process claim, committed synchronously before executable start. */

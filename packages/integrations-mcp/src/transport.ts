@@ -23,6 +23,7 @@ export function createMcpServiceTransport(
   options: McpServiceTransportOptions,
 ): McpServiceTransport {
   const sessions = new Set<Session>();
+  const replacing = new Set<Session>();
   const candidates = new WeakMap<McpCatalogCandidate, Session>();
   const active = new Map<string, Session>();
   const pending = new Set<Promise<unknown>>();
@@ -36,7 +37,7 @@ export function createMcpServiceTransport(
       for (const session of sessions) session.stop.abort();
     }
     if (result.status !== 'never_started') started = true;
-    sessions.delete(s);
+    if (!replacing.has(s)) sessions.delete(s);
     if (active.get(s.connection.id) === s) active.delete(s.connection.id);
     return result;
   };
@@ -44,7 +45,6 @@ export function createMcpServiceTransport(
     if (
       closed ||
       unknown ||
-      sessions.size >= 8 ||
       !validServiceConnection(connection) ||
       connection.state !== 'active' ||
       connection.trust.metadataPermission !== 'allow' ||
@@ -52,55 +52,78 @@ export function createMcpServiceTransport(
       opts.deadlineMs < 1
     )
       throw new ServicePluginDiscoveryRefusedError('execution_disabled', 'discovery unavailable');
+    const previous =
+      connection.configuration.kind === 'stdio' || sessions.size >= 8
+        ? [...sessions].filter((old) => old.connection.id === connection.id)
+        : [];
+    const reuse = sessions.size >= 8 ? previous.find((old) => !replacing.has(old)) : undefined;
+    if ((sessions.size >= 8 && !reuse) || previous.some((old) => replacing.has(old)))
+      throw new ServicePluginDiscoveryRefusedError('execution_disabled', 'discovery unavailable');
+    if (reuse) replacing.add(reuse);
     const deadlineMs = Math.min(opts.deadlineMs, SERVICE_PLUGIN_DISCOVERY_DEADLINE_MS);
     const signal = AbortSignal.any([opts.signal, AbortSignal.timeout(deadlineMs)]);
-    const s = new Session(
-      freezeJson(structuredClone(connection)),
-      { ...opts, signal, deadlineMs },
-      {
-        ...options,
-        refreshNeeded: (id) => {
-          if (!closed && !unknown) options.refreshNeeded?.(id);
+    const create = () => {
+      const next = new Session(
+        freezeJson(structuredClone(connection)),
+        { ...opts, signal, deadlineMs },
+        {
+          ...options,
+          refreshNeeded: (id) => {
+            if (!closed && !unknown) options.refreshNeeded?.(id);
+          },
         },
-      },
-    );
-    sessions.add(s);
-    s.onLoss = () => {
-      void retire(s);
+      );
+      sessions.add(next);
+      next.onLoss = () => {
+        void retire(next);
+      };
+      return next;
     };
+    let s = reuse ? undefined : create();
     const work = (async () => {
       try {
-        if (connection.configuration.kind === 'stdio') {
-          for (const old of [...sessions])
-            if (old !== s && old.connection.id === connection.id) {
-              old.deactivate();
-              active.delete(connection.id);
-              await old.afterCalls();
-              await retire(old);
-            }
-          if (closed || unknown || s.stop.signal.aborted) throw Error('retired before launch');
+        if (connection.configuration.kind === 'stdio' || reuse) {
+          for (const old of previous) {
+            old.deactivate();
+            active.delete(connection.id);
+            await old.afterCalls();
+            await retire(old);
+          }
+          if (closed || unknown || signal.aborted || s?.stop.signal.aborted)
+            throw Error('retired before launch');
+          if (reuse) {
+            sessions.delete(reuse);
+            replacing.delete(reuse);
+            s = create();
+          }
         }
+        if (!s) throw Error('session unavailable');
         const candidate = await s.discover();
         if (closed || unknown) throw Error('closed');
         candidates.set(candidate, s);
         return candidate;
       } catch {
-        await retire(s);
+        if (s) await retire(s);
         throw new ServicePluginDiscoveryRefusedError(
           'catalog_incomplete',
           'no qualified complete catalog',
         );
+      } finally {
+        if (reuse) {
+          replacing.delete(reuse);
+          sessions.delete(reuse);
+        }
       }
     })();
     pending.add(work);
     const joined = work.finally(() => pending.delete(work));
-    if (connection.configuration.kind !== 'stdio') return joined;
+    if (connection.configuration.kind !== 'stdio' && !reuse) return joined;
 
     // A kernel file operation may not be interruptible. Release the caller at expiry,
     // but keep the session slot and close() join until that preflight actually unwinds.
     return new Promise<McpCatalogCandidate>((resolve, reject) => {
       const abort = () => {
-        if (s.preparingStdio)
+        if (!s || s.preparingStdio)
           reject(
             new ServicePluginDiscoveryRefusedError(
               'catalog_incomplete',
@@ -198,10 +221,16 @@ export function createMcpServiceTransport(
         pending.delete(work);
       }
     },
-    async retireUncertain(connection) {
-      const s = active.get(connection.id);
+    async retireUncertain(connection, generation) {
+      if (!generation) return;
+      const s = [...sessions].find(
+        (candidate) =>
+          candidate.connection.id === connection.id &&
+          candidate.managed?.lifetime.record.fingerprint === generation &&
+          managedEnrollment(candidate.connection) === managedEnrollment(connection),
+      );
       if (!s || s.connection.configuration.kind !== 'stdio') return;
-      active.delete(connection.id);
+      if (active.get(connection.id) === s) active.delete(connection.id);
       s.markUncertain();
       await retire(s);
     },

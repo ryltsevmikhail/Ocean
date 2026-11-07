@@ -40,6 +40,7 @@ export async function serviceStdio(
   });
   let lifetime: McpManagedSession['lifetime'] | undefined;
   let lost = false;
+  const unavailable = new AbortController();
   try {
     if (cfg.workspaceRoot && options.prepareManagedLifetime)
       lifetime = await options.prepareManagedLifetime(c, handle);
@@ -62,6 +63,16 @@ export async function serviceStdio(
         !lifetime.begin()
       )
         throw Error('launch denied');
+      const closed = this.onclose,
+        failed = this.onerror;
+      this.onclose = () => {
+        unavailable.abort();
+        closed?.();
+      };
+      this.onerror = (error) => {
+        unavailable.abort();
+        failed?.(error);
+      };
       const receive = this.onmessage;
       this.onmessage = (message) => {
         if (writer.discovering) {
@@ -84,7 +95,32 @@ export async function serviceStdio(
         const method = 'method' in message ? message.method : 'response';
         const send = await writer.prepare(method);
         writer.admit(method, send);
-        return super.send(message);
+        const signal = AbortSignal.any([
+          writer.lifetime,
+          unavailable.signal,
+          ...(writer.discovering ? [writer.discovery.signal] : []),
+        ]);
+        signal.throwIfAborted();
+        // Pinned SDK send writes once synchronously, then only waits for drain.
+        // EOF/abort must end that wait; session retirement still joins SDK close,
+        // all owned proof work and exact unit cleanup before settling its lifetime.
+        return new Promise<void>((resolve, reject) => {
+          const abort = () => {
+            signal.removeEventListener('abort', abort);
+            reject(Error('stdio send interrupted'));
+          };
+          signal.addEventListener('abort', abort, { once: true });
+          void super.send(message).then(
+            () => {
+              signal.removeEventListener('abort', abort);
+              resolve();
+            },
+            (error: unknown) => {
+              signal.removeEventListener('abort', abort);
+              reject(error instanceof Error ? error : Error('stdio send failed'));
+            },
+          );
+        });
       });
     }
   }
@@ -99,7 +135,14 @@ export async function serviceStdio(
   });
   return {
     transport,
-    managed: lifetime ? { handle, lifetime } : null,
+    managed: lifetime
+      ? {
+          handle,
+          lifetime,
+          signal: writer.lifetime,
+          prepareResources: (work) => writer.ownResources(work),
+        }
+      : null,
     prepareRetirement: async () => {
       if (!(await handle.running())) lost = true;
     },
@@ -108,7 +151,7 @@ export async function serviceStdio(
     },
     cleanup: async () => {
       const status = await handle.cleanup();
-      lifetime?.finish(status, lost);
+      await lifetime?.finish(status, lost);
       return { status };
     },
   };

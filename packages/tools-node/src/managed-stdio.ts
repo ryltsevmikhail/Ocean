@@ -79,7 +79,7 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
   )
     throw Error('invalid stdio enrollment');
   const metadata = join(dirname(r.artifact), 'package.json');
-  const workspace = openManagedWorkspace(
+  const workspace = await openManagedWorkspace(
     root,
     r.signal,
     [
@@ -170,7 +170,7 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
     try {
       launcher = guardian + (await sandboxLauncher(argv, expected, r.signal, workspace.footprint));
     } catch (error) {
-      workspace.close();
+      await workspace.close();
       throw error;
     }
     const args = [
@@ -199,7 +199,7 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
       launcher,
     ];
     if (r.signal.aborted) {
-      workspace.close();
+      await workspace.close();
       r.signal.throwIfAborted();
     }
     let launchedAt = Infinity;
@@ -260,7 +260,7 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
         throw Error('server unit not observed');
       },
       async cleanup(): Promise<'never_started' | 'unknown' | 'confirmed'> {
-        workspace.close();
+        await workspace.close();
         if (!attempted) return 'never_started';
         // Unit names have a fresh nonce. Never stop by prefix or a reused process ID.
         await control(['stop', unit]).catch(() => {});
@@ -270,7 +270,7 @@ export async function prepareManagedStdio(r: ManagedStdioRequest) {
       },
     };
   } catch (error) {
-    workspace.close();
+    await workspace.close();
     throw error;
   }
 }

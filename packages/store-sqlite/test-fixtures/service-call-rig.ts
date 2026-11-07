@@ -65,10 +65,11 @@ export function rig(
     limits: ownerGrant.limits,
   };
   const issued = owners.issue(intent);
+  const transport: ServiceCallTransportPort = { invoke };
   const service = new ServiceCallAdmissionService({
     restored: false,
     store: authority,
-    transport: { invoke },
+    transport,
     now: () => Date.parse(authorityAt),
     deadlineMs,
     ...options,
@@ -91,6 +92,7 @@ export function rig(
     owners,
     issued,
     service,
+    transport,
     request,
     intent,
     journal: new SqliteToolJournal(db),

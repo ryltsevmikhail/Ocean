@@ -74,10 +74,11 @@ export function nativeJournal(profile: string) {
     db.close();
   }
 }
-export const counter = (root: string, name: string) =>
-  existsSync(join(root, name))
-    ? readFileSync(join(root, name), 'utf8').trim().split('\n').length
-    : 0;
+export const counter = (root: string, name: string) => {
+  if (!existsSync(join(root, name))) return 0;
+  const content = readFileSync(join(root, name), 'utf8').trim();
+  return content ? content.split('\n').length : 0;
+};
 export async function enrollManaged(
   setup: ManagedSetup,
   fixture: Awaited<ReturnType<typeof managedNativeFixture>>,
@@ -209,12 +210,15 @@ export async function recordManagedCleanup(profile: string, proof: string) {
     return life ? [life] : [];
   });
   const evidence = [];
-  for (const life of groups)
-    evidence.push({
-      unit: life.unit,
-      cgroup: life.cgroup,
-      retired: await retiredGroup(life.cgroup),
-    });
+  const { setTimeout: delay } = await import('node:timers/promises');
+  for (const life of groups) {
+    let retired = await retiredGroup(life.cgroup);
+    for (let n = 0; !retired && n < 80; n++) {
+      await delay(25);
+      retired = await retiredGroup(life.cgroup);
+    }
+    evidence.push({ unit: life.unit, cgroup: life.cgroup, retired });
+  }
   writeFileSync(
     join(proof, 'cleanup.json'),
     JSON.stringify(

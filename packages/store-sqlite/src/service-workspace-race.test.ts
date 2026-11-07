@@ -150,3 +150,120 @@ it('closes physical evidence that finishes preparing after its outer call deadli
   await joined;
   expect(lateClosed).toBe(1);
 });
+it('returns a proved preclaim deadline refusal while held preparation remains owned until late unwind', async () => {
+  let release!: () => void,
+    enter!: () => void,
+    abortObserved!: () => void,
+    closeObserved!: () => void,
+    settled = false,
+    closed = 0;
+  const unwound = new Promise<void>((r) => {
+    closeObserved = r;
+  });
+  const hold = new Promise<void>((r) => {
+      release = r;
+    }),
+    entered = new Promise<void>((r) => {
+      enter = r;
+    }),
+    aborted = new Promise<void>((r) => {
+      abortObserved = r;
+    });
+  const f = rig(
+    async () => {
+      throw Error('no dispatch allowed');
+    },
+    30,
+    {
+      prepareResources: async (_a, signal) => {
+        signal.addEventListener('abort', abortObserved, { once: true });
+        enter();
+        await hold;
+        return {
+          facts: { pairs: [] },
+          inspect: () => true,
+          close: () => {
+            closed++;
+            closeObserved();
+          },
+        };
+      },
+    },
+  );
+  const call = f.service.call(f.request).then((value) => {
+    settled = true;
+    return value;
+  });
+  try {
+    await entered;
+    expect(f.authority.atomic((tx) => tx.connection('third')?.id)).toBe('third');
+    await aborted;
+    await new Promise<void>((r) => setImmediate(r));
+    expect(settled).toBe(true);
+    expect(f.journal.inspectPending()).toEqual([]);
+    expect(closed).toBe(0);
+  } finally {
+    release();
+    await call;
+    await unwound;
+  }
+  expect(closed).toBe(1);
+});
+
+it('fences the sent-uncertain generation before held proof close and awaits its joined retirement after unwind', async () => {
+  let release!: () => void,
+    entered!: () => void,
+    unwound!: () => void,
+    fenced = false,
+    done = false;
+  const held = new Promise<void>((r) => {
+      release = r;
+    }),
+    closing = new Promise<void>((r) => {
+      entered = r;
+    }),
+    closed = new Promise<void>((r) => {
+      unwound = r;
+    });
+  const f = rig(
+    async (i) => {
+      expect(i.authorizeDispatch()).toBe(true);
+      return {
+        kind: 'uncertain',
+        code: 'transport_failure',
+        invocationId: i.invocationId,
+        detail: 'sent reply lost',
+      };
+    },
+    2000,
+    {
+      prepareResources: async () => ({
+        facts: { pairs: [] },
+        inspect: () => true,
+        close: async () => {
+          entered();
+          await held;
+          unwound();
+        },
+      }),
+    },
+  );
+  f.transport.retireUncertain = async () => {
+    fenced = true;
+    await closed;
+  };
+  const call = f.service.call(f.request).then((v) => {
+    done = true;
+    return v;
+  });
+  try {
+    await closing;
+    expect(fenced).toBe(true);
+    expect(done).toBe(false);
+  } finally {
+    release();
+    await call;
+  }
+  expect((await call).outcome?.kind).toBe('uncertain');
+  expect(f.journal.inspectPending().map((r) => r.outcome)).toEqual(['uncertain']);
+});

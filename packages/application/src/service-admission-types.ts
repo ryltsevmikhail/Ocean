@@ -39,7 +39,7 @@ export interface ServiceCallInvocation {
 }
 export interface ServiceCallTransportPort {
   invoke(input: ServiceCallInvocation): Promise<ServicePluginInvokeOutcome>;
-  retireUncertain?(connection: ServiceConnection): Promise<void>;
+  retireUncertain?(connection: ServiceConnection, managedSession?: string): Promise<void>;
 }
 /** Exact semantic facts only; metadata lifetime fields never confer permission. */
 export interface ServiceCallConfirmation {

@@ -34,12 +34,14 @@ export function managedWorkspaceBootstrap(expected: ManagedWorkspace): string {
       let count=0;const deadline=Date.now()+15000;
       function walk(dir){
         if(Date.now()>=deadline)throw Error('managed inventory deadline');
-        const before=fs.fstatSync(dir,{bigint:true}), listing=fs.opendirSync('/proc/self/fd/'+dir,{bufferSize:32});
+        const before=fs.fstatSync(dir,{bigint:true}), listing=fs.opendirSync('/proc/self/fd/'+dir,{encoding:'latin1',bufferSize:32});
         try{for(let entry=listing.readSync();entry;entry=listing.readSync()){
-          if(++count>50000 || ['.git','node_modules','.ssh','.aws','.config','.npmrc','.netrc','.DS_Store'].includes(entry.name) || /^\\.env(?:\\.|$)/i.test(entry.name) || /\\.(?:pem|key|p12|pfx)$/i.test(entry.name) || /^id_(?:rsa|ed25519)/.test(entry.name) || /^\\.ocean-(?:recovery-|.*\\.tmp$)/.test(entry.name))throw Error('managed file denied');
-          const name=path.join('/proc/self/fd/'+dir,entry.name), child=fs.openSync(name,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
+          const rawName=Buffer.from(entry.name,'latin1'), decodedName=rawName.toString('utf8');
+          if(!rawName.equals(Buffer.from(decodedName,'utf8')))throw Error('unsupported managed filename');
+          if(++count>50000 || ['.git','node_modules','.ssh','.aws','.config','.npmrc','.netrc','.DS_Store'].includes(decodedName) || /^\\.env(?:\\.|$)/i.test(decodedName) || /\\.(?:pem|key|p12|pfx)$/i.test(decodedName) || /^id_(?:rsa|ed25519)/.test(decodedName) || /^\\.ocean-(?:recovery-|.*\\.tmp$)/.test(decodedName))throw Error('managed file denied');
+          const name=path.join('/proc/self/fd/'+dir,decodedName), child=fs.openSync(name,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
           try{const s=fs.fstatSync(child,{bigint:true});
-            if(mountId(child)!==id || s.dev!==st.dev || fs.realpathSync('/proc/self/fd/'+child)!==path.join(fs.realpathSync('/proc/self/fd/'+dir),entry.name))throw Error('managed mount changed');
+            if(mountId(child)!==id || s.dev!==st.dev || fs.realpathSync('/proc/self/fd/'+child)!==path.join(fs.realpathSync('/proc/self/fd/'+dir),decodedName))throw Error('managed mount changed');
             if(s.isDirectory())walk(child);else if(!s.isFile() || s.nlink!==1n)throw Error('managed file alias');
           }finally{fs.closeSync(child);}
         }}finally{listing.closeSync();}
