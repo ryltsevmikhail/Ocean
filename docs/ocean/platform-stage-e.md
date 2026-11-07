@@ -1,8 +1,9 @@
 # Platform stage E — bot chat in the existing Desktop
 
 E20.1 server/public-SDK discovery is accepted at `fdb8d2b` after independent review
-without findings. Desktop integration E20.2 and installed GUI acceptance E20.3 remain
-planned. This milestone does not qualify an installed build or stable Ocean 1.1.
+without findings. Desktop source integration E20.2 is accepted at `ccf021b` after
+one scoped correction and clean re-review. Installed GUI acceptance E20.3 remains
+planned. These milestones do not qualify an installed build or stable Ocean 1.1.
 
 ## Implemented: a scoped room task index
 
@@ -51,13 +52,38 @@ Assistant qualification uses the unchanged private runner for these commands and
 root gates. Earlier failed lint/exact negotiation-fixture runs were retained; the final
 corrected frozen candidate passed. Native/live behavior is not inferred from these tests.
 
-## Planned: current Desktop and installed acceptance
+## Implemented source: team tasks in the existing Desktop
 
-E20.2 adds the server-backed team dialog, separate text-only task input, truthful
-work/wait/result/decision states and reconnect/two-client behavior. Existing chat drafts,
-attachments, vision, settings and finite broadcast remain. No renderer database or tool
-loop is added. E20.3 qualifies actual paired installed GUI bytes at three widths with
-two windows, keyboard/focus, attachments, restart, receipts and one-effect witnesses.
+The room header opens one team-task dialog with the server index, a selected root,
+and a separate text-only start form. Ordinary chat, drafts, attachments, vision,
+finite broadcast and existing model/service settings retain their paths. Participants
+and current service grants are explicit; an empty mandate permits conversation only.
+No renderer database, provider SDK, new wire RPC or tool loop was added.
+
+Typed IPC uses the existing authenticated SDK. Profile/instance and room/root scope
+fence task reads, grants and actions; an identity mismatch leaves the task view stale.
+The assembled Desktop view validates up to 512 rows separately from the 50-row wire
+page. One selected root keeps at most one physical observer. Closing a window only
+detaches the client. An unknown start retains its exact payload/request ID for explicit
+identical replay; refresh never writes. An acknowledged root stop proves its fence,
+while unknown cleanup and yielded versus answered slices remain distinct.
+
+Service decisions reuse exact room/run/decision references and version/digest checks.
+Stale decisions are visibly refused, and non-service decisions remain read-only with
+the supported owner-client route. The independent review's grant-identity gap was
+corrected with the existing optional binding/host guard; legacy settings reads stay
+compatible. Empty-index, profile/instance mismatch and legacy positive controls passed.
+
+Frozen `ccf021b` passed root `pnpm check`, `pnpm build`, `pnpm format:check` and
+`pnpm --filter @ocean/desktop bundle` (actual Vue typecheck, Vite and preload build).
+4158 source and 174 process tests passed, with 44/58 configured skips. All changed
+source files are within 300 physical lines. These checks establish source integration,
+not an installed window, compositor geometry or live-provider behavior.
+
+## Planned: installed GUI acceptance
+
+E20.3 qualifies actual paired installed GUI bytes at three widths with two windows,
+keyboard/focus, attachments, restart, receipts and one-effect witnesses.
 
 F still owns final native/preset, device identity, backup, install/rollback, live models,
 whole-branch review and release. All historical deferred findings/rulings remain inputs.

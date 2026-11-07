@@ -55,7 +55,7 @@
 ## Статус и способ исполнения
 
 Этап A принят на `1a99fcb` после независимых ревью;
-[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`, локальное долговечное исполнение D19.2.4 — на `c3d7c21`, общий room-task host D19.2.5 — на `0f7435b` после двух раундов исправлений; нативная приёмка D19.3 принята на `62bd51e` после трёх раундов исправлений и независимых ревью; E20.1 принят на `fdb8d2b` без замечаний; Desktop E20.2/20.3 и этапы F–H запланированы.
+[результаты и ограничения](../../ocean/platform-stage-a.md). B1 принят на `6633439`, B2 — на `ca25fa6`, B3 — на `14a4931`, B4 — на `72afcb3`, B5 — на `fbaa413`, B6 — на `88039a1`, B7 — на `f533252`, B8 — на `039a819`, B9 — на `d42481c`, B10 — на `05d91a8`, B11 — на `26e9a02`; прикладная часть B12 (задача 15.1) — на `caf79ec`. Серверный контракт 15.2 принят на `aa7e7ed`, межпроцессная приёмка 15.3 и весь контракт B12 — на `a42ff73` после двух раундов исправления тестовых доказательств. Настройки Desktop (16) приняты на `b5e7ece` после двух раундов исправления восстановления и асинхронных состояний. Проверка типов 17.1 принята на `4597744`, долговечность и восстановление 17.2 — на `a8d2755` после исправления гонки публикации. Установленная Linux-приёмка 17.3 принята на `652dd56` после двух раундов исправлений проверочной обвязки; исходная ревизия артефакта — `ec1e5d5`. Реальный local backend и живая смешанная команда (17.4) приняты на `de70683` после трёх раундов исправлений проверочной обвязки; исходная ревизия артефакта — `28909ea`. Установленный GUI настроек и нативные размеры (17.5.1) приняты на `ba92b56`; восстановление GUI (17.5.2) принято на `69bdf1e`; совместная работа клиентов (17.5.3) и применимые проверки B приняты на `67a7833`. Квалификационный прототип C18.1 принят на `79bbce9`; нейтральные контракты и инертное хранилище C18.2 — на `7bbb502` после одного раунда исправлений. Application/store-допуск и normal coding consumers C18.3 приняты на `b868d32`; production MCP-host C18.4 принят на `b17bf8a`, owner settings C18.5.1 — на `f1547c4`, точные подтверждения C18.5.2 — на `64c9140`, общий клиент C18.5.3.1 — на `925db6f`. Desktop и консервативный импорт C18.5.3.2 приняты на `83c0719` после двух раундов исправления. Настройки C18.5 завершены; установленная MCP-замена C18.6.1 принята на `5450b4d`; удаление Executor C18.6.2 и весь C приняты на `fa91907` после одного scoped исправления тестов. D19.1 принят на `ba6ec5c`, инертное хранилище D19.2.1 — на `698c6ba`, совместимость истории D19.2.2 — на `486df4f`, движок локального завершения D19.2.3 — на `dc78dbf`, локальное долговечное исполнение D19.2.4 — на `c3d7c21`, общий room-task host D19.2.5 — на `0f7435b` после двух раундов исправлений; нативная приёмка D19.3 принята на `62bd51e` после трёх раундов исправлений и независимых ревью; E20.1 принят на `fdb8d2b` без замечаний, исходная интеграция Desktop E20.2 — на `ccf021b` после одного раунда исправлений; установленный GUI E20.3 и этапы F–H запланированы.
 Долг сохранённых регрессий Executor закрыт в C18.6: чистые root gates прошли
 на квалифицированном `1f31974`; финальные проверки текущего выпуска остаются F.
 Пользователь утвердил архитектуру и разрешил реализацию по порядку, commit/push/merge.
@@ -2770,17 +2770,17 @@ SDK `roomTaskGet` assembles at most 512 rows; the socket guard accepts at most 5
 page. Define a separate closed assembled-view IPC guard (`nextPage:null`, at most 512
 validated strictly ordered unique rows); do not relax the existing wire-page guard.
 
-- [ ] **RED:** both IPC boundaries reject foreign/stale/oversized frames; accept a valid
+- [x] **RED:** both IPC boundaries reject foreign/stale/oversized frames; accept a valid
       51+ row assembled view. Pin room/selection/profile/instance epoch changes, held
       responses, lost ACK exact-payload replay, downgrade, stale decision and stopped-root
       cleanup truth. Ordinary drafts/file chips survive opening, cancelling and submitting
       the separate task form. Addressed A→B differs from an ordinary self-targeted reply.
-- [ ] **Implement existing UI:** one keyboard-reachable “Задачи команды” room-header
+- [x] **Implement existing UI:** one keyboard-reachable “Задачи команды” room-header
       entry and one dialog for the server index, selected root and “Новое поручение”.
       Reuse current styling; keep direct/@bot/note/broadcast composer unchanged. The
       separate task text field is explicitly text-only, UTF-8 limit 16384 bytes, no hidden
       attachment envelope. Reuse per-bot cloud/local/model/capability and grant settings.
-- [ ] **Start:** explicit room participants and nonempty initial subset; bot IDs on wire,
+- [x] **Start:** explicit room participants and nonempty initial subset; bot IDs on wire,
       handles in UI. Select optional current active room/bot service grants with exact
       revisions, permissions, modes and limits. Mandate has null project/codingTask IDs;
       conversation-only uses empty refs/permissions. No synthetic coding authority,
@@ -2788,13 +2788,13 @@ validated strictly ordered unique rows); do not relax the existing wire-page gua
       Show actual root/message/delivery receipt; clear only task form after confirmation.
       Lost ACK freezes exact payload/request ID; allow only explicit identical replay in
       the same verified profile. No automatic writes/reconstructed draft on restart.
-- [ ] **Observe/read:** load server index on room open, explicit refresh and room watermark
+- [x] **Observe/read:** load server index on room open, explicit refresh and room watermark
       changes; page older roots explicitly. One selected-root observer, short waits around
       1s; watermark then full SDK get on snapshot/change/resync. Retry reads on changed
       page revision, never expose partial rows as complete. Ignore late scoped responses;
       stale/disconnected state disables writes without erasing chat. Historical roots and
       unsupported peers stay read-only, not falsely empty or newly enrolled.
-- [ ] **Truth/decisions:** show assignee, peer wait, queued/held delivery, yielded slice,
+- [x] **Truth/decisions:** show assignee, peer wait, queued/held delivery, yielded slice,
       actual result, unknown/authority/limit fence. Preserve `resultMessageId` in ordinary
       run DTO; completed without a result is not “Ответил”. Root stop uses exact current
       ready/paused revision and fresh request ID; receipt proves fence, not cleanup.
@@ -2802,8 +2802,12 @@ validated strictly ordered unique rows); do not relax the existing wire-page gua
       Slice service decisions reuse exact room/run/ID/version/digest preview and resolve;
       display “Устаревшее решение отклонено” on conflict. Other decision kinds remain
       honest read-only with their supported owner-client route; project approvals stay G.
-- [ ] Run meaningful UI/bridge regressions and root gates via unchanged runner, self-review,
+- [x] Run meaningful UI/bridge regressions and root gates via unchanged runner, self-review,
       exact-path commit and independent task review. Native installed acceptance is 20.3.
+
+20.2 принят на `ccf021b` после исправления привязки чтения прав и чистого scoped-ревью.
+Root check/build/format и реальный Desktop bundle — exit 0; 4158 source и 174 process
+прошли (44/58 opt-in пропусков). Это исходники и сборка, установленный GUI — 20.3.
 
 ### Task 20.3: Qualify the installed bot GUI and two clients
 
