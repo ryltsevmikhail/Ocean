@@ -73,8 +73,10 @@ Accepted after independent review at `c438756`: root check/build/format 0
       tests). Ready reads are bounded and joined on stop.
 - [ ] Reuse runtime `turns.submit` with `taskId` for dev, including receipts,
       observation and cancellation.
-- [ ] Expose explicit immutable capture and exact-hash diff reading through
-      the existing changeset service and bounded chunk protocol.
+- [x] Expose explicit immutable capture and exact-hash diff reading through
+      the existing changeset service and bounded chunk protocol. Accepted
+      independently at `0c8d5e4`; root check/build/format passed (4,227 source
+      and 202 process tests).
 - [ ] Use `CodingReviewService.request/dispatch` on the selected immutable
       hash via the assigned bot's current authorized binding and existing
       review-only provider path. Present review state and tests, including stale status.

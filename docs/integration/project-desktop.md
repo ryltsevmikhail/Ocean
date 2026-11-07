@@ -89,6 +89,11 @@ unauthorized scopes refuse. Capture leaves the Git worktree and source
 checkout unchanged; it does not run a model or apply the diff.
 `coding.diff` continues to provide the existing live preview and history.
 
+The capture implementation at `0c8d5e4` passed independent review and root
+check/build/format (4,227 source and 202 process tests). Built SDK tests use
+two clients and a disposable Git repository to verify that exact-hash reads
+return the saved bytes after edits and restart.
+
 ## Planned
 
 Remaining owner operations, the separate project window and its installed acceptance
