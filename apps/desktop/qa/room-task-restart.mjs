@@ -213,6 +213,7 @@ export function taskArguments() {
     options: {
       'task-only': { type: 'boolean' },
       'edge-only': { type: 'boolean' },
+      'geometry-only': { type: 'boolean' },
       ...Object.fromEntries(
         ['installed-root', 'desktop', 'root', 'wayland-socket', 'hypr-command-socket'].map((k) => [
           k,

@@ -6,7 +6,7 @@ import { openModelNativeSession, saveProof } from './model-native-session.mjs';
 import { currentWindow, wait } from './current-window.mjs';
 import { setupTask, button, selectRoom } from './room-task-setup.mjs';
 import { files } from './model-handoff-assets.mjs';
-import { ordinaryNativePhase, restartAssets } from './room-task-independent.mjs';
+import { ordinaryNativePhase, restartAssets, taskGeometry } from './room-task-independent.mjs';
 import { digest } from './model-native-paths.mjs';
 import { taskEdges } from './room-task-edges.mjs';
 import {
@@ -51,6 +51,7 @@ try {
     });
     const setup = await setupTask(s, mcp, step),
       { scope, room, grant } = setup;
+    if (v['geometry-only']) return taskGeometry(s, setup, step);
     if (v['edge-only']) {
       mcp.releaseResponse();
       writeFileSync(join(v.root, 'release-b'), '');
@@ -292,4 +293,5 @@ try {
   assert.deepEqual(errors, []);
 }
 
-await restartTask(inputs, v.root + '-restart', fixture, evidence, independent);
+if (!v['geometry-only'])
+  await restartTask(inputs, v.root + '-restart', fixture, evidence, independent);

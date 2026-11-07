@@ -1,5 +1,5 @@
-// Supplemental single-window facts; never qualifies the separate two-window gate.
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -50,7 +50,6 @@ export async function ordinaryNativePhase(s, setup, step) {
       fixture: { root },
     } = s,
     { room } = setup;
-  const panel = page.getByRole('dialog', { name: 'Задачи команды', exact: true });
   const group = (
     await step(() =>
       peer.createGroup({
@@ -71,97 +70,7 @@ export async function ordinaryNativePhase(s, setup, step) {
       }),
     );
   const message = await handoffAssets(s, group, step);
-  // Measure task controls at each native size, after the shared composer/chip measurements.
-  const draft = 'ordinary task-dialog preservation';
-  await step(() => page.getByLabel('Сообщение', { exact: true }).fill(draft));
-  await step(() => page.locator('#composer input[type=file]').setInputFiles(image));
-  await step(() => button(page, 'Убрать diagram.png').waitFor());
-  const facts = [];
-  for (const width of [1024, 1280, 1920]) {
-    await step(() => s.inspectMain('win.setBounds({width:' + width + ',height:800})'));
-    await wait(
-      async () => (await step(() => page.evaluate(() => globalThis.innerWidth))) === width,
-    );
-    let own = JSON.parse(
-      step(() => execFileSync('hyprctl', ['-j', 'clients'], { encoding: 'utf8', timeout: 2500 })),
-    ).filter((x) => x.pid === s.desktop.pid);
-    assert.equal(own.length, 1);
-    const address = own[0].address;
-    assert.match(address, /^0x[0-9a-f]+$/);
-    step(() =>
-      execFileSync(
-        'hyprctl',
-        [
-          'eval',
-          `local w=hl.get_window("address:${address}"); assert(w and w.pid==${s.desktop.pid}); hl.dispatch(hl.dsp.window.resize({x=${width},y=800,relative=false,window=w})); return "ok"`,
-        ],
-        { encoding: 'utf8', timeout: 2500 },
-      ),
-    );
-    await wait(() => {
-      own = JSON.parse(
-        step(() => execFileSync('hyprctl', ['-j', 'clients'], { encoding: 'utf8', timeout: 2500 })),
-      ).filter((x) => x.pid === s.desktop.pid);
-      return own.length === 1 && own[0].size[0] === width && own[0].size[1] === 800;
-    }, 5000);
-    assert.equal(own.length, 1);
-    assert.deepEqual(own[0].size, [width, 800]);
-    const entry = button(page, 'Задачи команды');
-    await step(() => entry.focus());
-    await step(() => page.keyboard.press('Enter'));
-    if (!(await step(() => button(panel, 'Новое поручение').isDisabled()))) {
-      await step(() => button(panel, 'Новое поручение').click());
-      await step(() =>
-        panel.getByLabel('Текст поручения').fill('A separate text-only task draft '.repeat(25)),
-      );
-    }
-    const layout = await step(() =>
-      panel.evaluate((el) => ({
-        width: globalThis.innerWidth,
-        height: globalThis.innerHeight,
-        panel: el.getBoundingClientRect().toJSON(),
-        controls: [...el.querySelectorAll('button,input,textarea')]
-          .filter((x) => x.getBoundingClientRect().width)
-          .map((x) => ({
-            tag: x.tagName,
-            label: x.textContent || x.getAttribute('aria-label'),
-            rect: x.getBoundingClientRect().toJSON(),
-          })),
-      })),
-    );
-    assert.ok(layout.panel.left >= 0 && layout.panel.right <= width);
-    assert.ok(
-      layout.controls.every(
-        (c) => c.rect.left >= layout.panel.left && c.rect.right <= layout.panel.right,
-      ),
-    );
-    const disabled = await step(() => button(panel, 'Новое поручение').isDisabled());
-    const support = await step(() =>
-      page.evaluate(() => globalThis.ocean.request({ op: 'task-support' })),
-    );
-    layout.taskSupport = support;
-    layout.taskStartDisabled = disabled;
-    await step(() => page.keyboard.press('Escape'));
-    assert.equal(
-      await step(() => entry.evaluate((el) => el === globalThis.document.activeElement)),
-      true,
-    );
-    assert.equal(
-      await step(() => page.getByLabel('Сообщение', { exact: true }).inputValue()),
-      draft,
-    );
-    assert.equal(await step(() => page.locator('#composer .attachment-card').count()), 1);
-    const { pid, size, mapped, hidden, xwayland } = own[0];
-    facts.push({
-      width,
-      compositor: { pid, address, size, mapped, hidden, xwayland },
-      layout,
-      keyboardEnter: true,
-      escapeFocusReturned: true,
-    });
-  }
-  saveProof(root, 'team-layout.json', facts);
-  // Exact ordinary eligible image route; no task envelope or attachment mutation.
+  await taskGeometry(s, setup, step);
   const direct = (
     await step(() =>
       peer.openDirect({
@@ -232,4 +141,160 @@ export async function ordinaryNativePhase(s, setup, step) {
   });
   await step(() => button(page, room.title).click());
   return { assetsRoom: group, message };
+}
+export async function taskGeometry(s, setup, step) {
+  const {
+    page,
+    peer,
+    fixture: { root },
+  } = s;
+  await selectRoom(page, setup.room.title, step);
+  const panel = page.getByRole('dialog', { name: 'Задачи команды', exact: true });
+  const draft = 'ordinary task-dialog preservation';
+  await step(() => page.getByLabel('Сообщение', { exact: true }).fill(draft));
+  await step(() => page.locator('#composer input[type=file]').setInputFiles(image));
+  await step(() => button(page, 'Убрать diagram.png').waitFor());
+  const facts = [];
+  for (const width of [1024, 1280, 1920]) {
+    await step(() => s.inspectMain('win.setBounds({width:' + width + ',height:800})'));
+    await wait(
+      async () => (await step(() => page.evaluate(() => globalThis.innerWidth))) === width,
+    );
+    let own = JSON.parse(
+      step(() => execFileSync('hyprctl', ['-j', 'clients'], { encoding: 'utf8', timeout: 2500 })),
+    ).filter((x) => x.pid === s.desktop.pid);
+    assert.equal(own.length, 1);
+    const address = own[0].address;
+    assert.match(address, /^0x[0-9a-f]+$/);
+    step(() =>
+      execFileSync(
+        'hyprctl',
+        [
+          'eval',
+          `local w=hl.get_window("address:${address}"); assert(w and w.pid==${s.desktop.pid}); hl.dispatch(hl.dsp.window.resize({x=${width},y=800,relative=false,window=w})); return "ok"`,
+        ],
+        { encoding: 'utf8', timeout: 2500 },
+      ),
+    );
+    await wait(() => {
+      own = JSON.parse(
+        step(() => execFileSync('hyprctl', ['-j', 'clients'], { encoding: 'utf8', timeout: 2500 })),
+      ).filter((x) => x.pid === s.desktop.pid);
+      return own.length === 1 && own[0].size[0] === width && own[0].size[1] === 800;
+    }, 5000);
+    const entry = button(page, 'Задачи команды');
+    await step(() => entry.focus());
+    await step(() => page.keyboard.press('Enter'));
+    await wait(async () => !(await step(() => button(panel, 'Новое поручение').isDisabled())));
+    const support = await step(() =>
+      page.evaluate(() => globalThis.ocean.request({ op: 'task-support' })),
+    );
+    assert.equal(support.ok, true);
+    assert.equal(support.data.supported, true);
+    await step(() => button(panel, 'Новое поручение').click());
+    const taskText = panel.getByLabel('Текст поручения');
+    const longText = 'A separate text-only task draft '.repeat(25);
+    await step(() => taskText.fill(longText));
+    for (const handle of ['a', 'b'])
+      await step(() => panel.getByLabel('Участник @' + handle, { exact: true }).check());
+    const grant = panel.getByRole('checkbox', { name: new RegExp(setup.grant.id) });
+    await step(() => grant.check());
+    const summary = panel.locator('form details summary');
+    await step(() => summary.focus());
+    await step(() => page.keyboard.press('Enter'));
+    assert.equal(await step(() => panel.locator('form details').evaluate((el) => el.open)), true);
+    await step(() => panel.locator('form pre').waitFor());
+    assert.equal(await step(() => taskText.inputValue()), longText);
+    assert.equal(await step(() => grant.isChecked()), true);
+    assert.equal(await step(() => button(panel, 'Начать поручение').isEnabled()), true);
+    const layout = await step(() =>
+      panel.evaluate((el) => ({
+        width: globalThis.innerWidth,
+        height: globalThis.innerHeight,
+        panel: el.getBoundingClientRect().toJSON(),
+        controls: [...el.querySelectorAll('button,input,textarea')]
+          .filter((x) => x.getBoundingClientRect().width)
+          .map((x) => ({
+            tag: x.tagName,
+            label: x.closest('label')?.innerText || x.textContent,
+            rect: x.getBoundingClientRect().toJSON(),
+          })),
+      })),
+    );
+    saveProof(root, 'team-form-' + width + '.json', layout);
+    assert.ok(layout.panel.left >= 0 && layout.panel.right <= width);
+    assert.ok(
+      layout.controls.every(
+        (c) => c.rect.left >= layout.panel.left && c.rect.right <= layout.panel.right,
+      ),
+    );
+    layout.taskSupport = support;
+    layout.taskStartDisabled = await step(() => button(panel, 'Новое поручение').isDisabled());
+    assert.equal(layout.taskStartDisabled, false);
+    layout.longTaskDraftBytes = Buffer.byteLength(longText);
+    const form = panel.locator('form'),
+      keyboard = [];
+    const required = await step(() =>
+      form.evaluate((el) =>
+        [...el.querySelectorAll('textarea,input,button,summary')]
+          .map((c, index) => ({
+            index,
+            disabled: !!c.disabled,
+            width: c.getBoundingClientRect().width,
+          }))
+          .filter((c) => !c.disabled && c.width)
+          .map((c) => c.index),
+      ),
+    );
+    await step(() => taskText.scrollIntoViewIfNeeded());
+    await step(() => taskText.focus());
+    for (let i = 0; i < 24; i++) {
+      const focus = await step(() =>
+        form.evaluate((el) => {
+          const active = globalThis.document.activeElement,
+            dlg = el.closest('dialog');
+          return {
+            index: [...el.querySelectorAll('textarea,input,button,summary')].indexOf(active),
+            label: active.closest('label')?.innerText ?? active.textContent,
+            rect: active.getBoundingClientRect().toJSON(),
+            dialog: dlg.getBoundingClientRect().toJSON(),
+            scrollTop: dlg.scrollTop,
+          };
+        }),
+      );
+      saveProof(root, 'focus-' + width + '-' + i + '.json', focus);
+      assert.ok(focus.index >= 0, 'keyboard left task form before visiting required controls');
+      assert.ok(
+        focus.rect.top >= focus.dialog.top && focus.rect.bottom <= focus.dialog.bottom,
+        'focused task control is clipped',
+      );
+      keyboard.push(focus);
+      if (required.every((index) => keyboard.some((k) => k.index === index))) break;
+      await step(() => page.keyboard.press('Tab'));
+    }
+    assert.ok(required.length >= 9);
+    assert.ok(required.every((index) => keyboard.some((k) => k.index === index)));
+    layout.keyboard = keyboard;
+    layout.requiredKeyboardIndices = required;
+    await step(() => page.keyboard.press('Escape'));
+    assert.equal(
+      await step(() => entry.evaluate((el) => el === globalThis.document.activeElement)),
+      true,
+    );
+    assert.equal(
+      await step(() => page.getByLabel('Сообщение', { exact: true }).inputValue()),
+      draft,
+    );
+    assert.equal(await step(() => page.locator('#composer .attachment-card').count()), 1);
+    const { pid, size, mapped, hidden, xwayland } = own[0];
+    facts.push({
+      width,
+      compositor: { pid, address, size, mapped, hidden, xwayland },
+      layout,
+      keyboardEnter: true,
+      escapeFocusReturned: true,
+    });
+  }
+  saveProof(root, 'team-layout.json', facts);
+  assert.deepEqual((await step(() => peer.roomTaskList(setup.scope))).roots, []);
 }
