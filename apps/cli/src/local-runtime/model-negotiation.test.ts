@@ -15,7 +15,7 @@ const identity = {
   capabilities: runtimeCapabilities(false),
 };
 it('projects independent RC2/A3/model capability identities without shared negotiation state', () => {
-  expect(identity.capabilities).toHaveLength(79);
+  expect(identity.capabilities).toHaveLength(80);
   for (let i = 0; i < 3; i++) {
     const a3 = clientIdentity(identity, true, false);
     expect(a3.capabilities).toHaveLength(65);
@@ -35,4 +35,16 @@ it('projects independent RC2/A3/model capability identities without shared negot
     expect(current.capabilities).toContain(LOCAL_MODEL_CONNECTIONS);
     expect(current.capabilities).toContain(LOCAL_ADDRESSED_HISTORY);
   }
+});
+
+it('negotiates the list only with both D features and suppresses restore list support', () => {
+  for (const d of [false, true])
+    for (const addressed of [false, true])
+      for (const list of [false, true]) {
+        const projected = clientIdentity(identity, true, true, true, true, addressed, d, list);
+        expect(projected.capabilities.includes('room.task-list-v1')).toBe(d && addressed && list);
+        expect(projected.capabilities.includes('room.tasks-v1')).toBe(d && addressed);
+      }
+  expect(runtimeCapabilities(true)).not.toContain('room.tasks-v1');
+  expect(runtimeCapabilities(true)).not.toContain('room.task-list-v1');
 });

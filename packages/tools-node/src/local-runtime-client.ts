@@ -22,6 +22,7 @@ import {
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_ADDRESSED_HISTORY,
   LOCAL_ROOM_TASKS,
+  LOCAL_ROOM_TASK_LIST,
   isLocalRuntimeIdentity,
   isLocalReceiptQuery,
   isLocalRunQuery,
@@ -166,6 +167,7 @@ async function connectDescriptor(
         LOCAL_SERVICE_AUTHORITY,
         LOCAL_ADDRESSED_HISTORY,
         LOCAL_ROOM_TASKS,
+        LOCAL_ROOM_TASK_LIST,
       ],
     });
     if (

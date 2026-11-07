@@ -1,5 +1,10 @@
 import {
   LOCAL_ROOM_TASKS,
+  LOCAL_ROOM_TASK_LIST,
+  isRoomTaskList,
+  isRoomTaskListPage,
+  type RoomTaskList,
+  type RoomTaskListPage,
   LOCAL_ADDRESSED_HISTORY,
   LOCAL_RUNTIME_MAX_WAIT_MS,
   isRoomTaskStart,
@@ -22,6 +27,7 @@ import {
 } from '@runnets/contracts';
 import { validatedParams } from './local-room-client.js';
 export interface LocalRoomTasksClient {
+  roomTaskList(input: RoomTaskList): Promise<RoomTaskListPage>;
   roomTaskStart(input: RoomTaskStart): Promise<RoomTaskReceipt>;
   roomTaskGet(input: RoomTaskGet): Promise<RoomTaskRootView>;
   roomTaskStop(input: RoomTaskStop): Promise<RoomTaskStopReceipt>;
@@ -43,6 +49,23 @@ export function localRoomTasksClient(
     q: { workspaceId: string; roomId: string; rootId: string },
   ) => v.workspaceId === q.workspaceId && v.roomId === q.roomId && v.rootId === q.rootId;
   return {
+    async roomTaskList(input) {
+      requireFeature();
+      if (!identity.capabilities.includes(LOCAL_ROOM_TASK_LIST))
+        throw Error('client_upgrade_required');
+      const q = validatedParams(input, isRoomTaskList);
+      const v = await request('roomTasks.list', q);
+      if (
+        !isRoomTaskListPage(v) ||
+        v.workspaceId !== q.workspaceId ||
+        v.roomId !== q.roomId ||
+        v.roots.length > (q.limit ?? 50) ||
+        (q.beforeSeq !== undefined && v.roots.some((r) => r.startSeq >= q.beforeSeq!)) ||
+        (v.nextBeforeSeq !== null && v.roots.length !== (q.limit ?? 50))
+      )
+        throw Error('invalid_frame');
+      return v;
+    },
     async roomTaskStart(input) {
       requireFeature();
       const q = validatedParams(input, isRoomTaskStart);

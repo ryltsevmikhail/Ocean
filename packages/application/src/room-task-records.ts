@@ -87,7 +87,27 @@ export type RoomRunEvidence =
       run: TaskRunState;
       headEvent: TaskRunEvent;
     }>;
+export type RoomTaskList = Readonly<{
+  workspaceId: string;
+  roomId: string;
+  beforeSeq?: number;
+  limit?: number;
+}>;
+export type RoomTaskListPage = Readonly<{
+  workspaceId: string;
+  roomId: string;
+  roots: readonly Readonly<{
+    rootId: string;
+    startMessageId: string;
+    startSeq: number;
+    status: RoomTaskAddress['status'];
+    revision: number;
+    authority: 'current' | 'historical';
+  }>[];
+  nextBeforeSeq: number | null;
+}>;
 export interface RoomTaskTransaction {
+  list(input: RoomTaskList, ownerId: string): RoomTaskListPage;
   sourceTurn(id: string): ChatTurn | null;
   hostScope(): RoomHostScope | null;
   authorizeModel(runId: string, at: number): boolean;

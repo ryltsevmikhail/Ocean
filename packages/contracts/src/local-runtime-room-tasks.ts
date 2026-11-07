@@ -118,3 +118,4 @@ export interface RoomTaskObservation {
 }
 
 export * from './local-runtime-room-task-codecs.js';
+export * from './local-runtime-room-task-list.js';

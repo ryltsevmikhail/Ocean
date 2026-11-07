@@ -16,7 +16,7 @@ export async function negotiationWaves(
     for (const [peer, size, plugins, models] of [
       [rc2, 45, false, false],
       [a3, 65, true, false],
-      [sdk, 79, true, true],
+      [sdk, 80, true, true],
       [modelOnly, 46, false, true],
       [unknown, 45, false, false],
     ] as const) {

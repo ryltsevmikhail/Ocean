@@ -14,17 +14,27 @@ afterEach(async () => {
   vi.restoreAllMocks();
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
-async function fixture() {
+async function fixture(restore = false) {
   const root = mkdtempSync(join(tmpdir(), 'oc-compat-'));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   const profile = join(root, 'profile');
   const offline = openOceanProfile(profile, true);
   await offline.ready;
+  offline.conversations.execute({
+    type: 'BindWorkspace',
+    requestId: 'fixture',
+    workspaceId: 'ws_ocean',
+    root,
+  });
   offline.close();
-  const host = await startLocalRuntime({ profile, provider: null });
+  const host = await startLocalRuntime({ profile, provider: null, restore });
   cleanups.push(() => host.stop());
   const descriptor = readLocalRuntimeDescriptor(profile);
-  const raw = async (params: unknown, methods = ['status']) => {
+  const raw = async (
+    params: unknown,
+    methods = ['status'],
+    queries: Record<string, unknown> = {},
+  ) => {
     const socket = connect(descriptor.endpoint);
     let text = '';
     const replies: { result?: unknown; error?: { code: string } }[] = [];
@@ -43,7 +53,7 @@ async function fixture() {
       socket.setTimeout(2000, () => socket.destroy(Error('test wire timeout')));
       socket.write(JSON.stringify({ id: 'hello', method: 'hello', params }) + '\n');
       for (const method of methods)
-        socket.write(JSON.stringify({ id: method, method, params: {} }) + '\n');
+        socket.write(JSON.stringify({ id: method, method, params: queries[method] ?? {} }) + '\n');
     });
   };
   return { profile, descriptor, raw };
@@ -140,4 +150,45 @@ it('negotiates addressed history without enabling independent plugin, model or s
     ),
   ).toBe(false);
   expect(status?.result).toMatchObject({ ...(hello?.result as object), state: 'ready' });
+});
+it.each([
+  ['room.task-list-v1'],
+  ['room.task-list-v1', 'room.tasks-v1'],
+  ['room.task-list-v1', 'room.addressed-history-v1'],
+  ['room.tasks-v1', 'room.addressed-history-v1'],
+  ['room.task-list-v1', 'room.tasks-v1', 'room.addressed-history-v1'],
+])('gates list independently for negotiated features %j', async (...clientFeatures) => {
+  const { descriptor, raw } = await fixture();
+  const [hello, status, list, get, chat] = await raw(
+    { ...descriptor, clientFeatures },
+    ['status', 'roomTasks.list', 'roomTasks.get', 'rooms.list'],
+    { 'rooms.list': { workspaceId: 'ws_ocean' } },
+  );
+  const full = clientFeatures.length === 3;
+  const d =
+    clientFeatures.includes('room.tasks-v1') &&
+    clientFeatures.includes('room.addressed-history-v1');
+  expect(
+    (hello?.result as { capabilities: string[] }).capabilities.includes('room.task-list-v1'),
+  ).toBe(full);
+  expect(status?.result).toMatchObject({ ...(hello?.result as object), state: 'ready' });
+  expect(list?.error?.code).toBe(full ? 'invalid_params' : 'client_upgrade_required');
+  expect(get?.error?.code).toBe(d ? 'invalid_params' : 'client_upgrade_required');
+  expect(chat?.error).toBeUndefined();
+  expect(chat?.result).toEqual([]);
+});
+
+it('suppresses both room task features and explicitly refuses SDK listing on a restore host', async () => {
+  const { profile } = await fixture(true);
+  const client = await connectLocalRuntime({ profile });
+  try {
+    expect(client.identity.capabilities).not.toContain('room.tasks-v1');
+    expect(client.identity.capabilities).not.toContain('room.task-list-v1');
+    await expect(client.roomTaskList({ workspaceId: 'ws_ocean', roomId: 'room' })).rejects.toThrow(
+      'client_upgrade_required',
+    );
+    expect(await client.listRooms({ workspaceId: 'ws_ocean' })).toEqual([]);
+  } finally {
+    client.close();
+  }
 });

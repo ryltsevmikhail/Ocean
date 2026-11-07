@@ -128,7 +128,7 @@ export async function startLocalRuntime(
       profileId: paths.profileId,
       instanceId: randomUUID(),
       capabilities: runtimeCapabilities(options.restore === true).filter(
-        (c) => c !== 'room.tasks-v1' || !restored,
+        (c) => !['room.tasks-v1', 'room.task-list-v1'].includes(c) || !restored,
       ),
     };
     if (!runtime.openRoomRuns) throw Error('durable_runtime_required');

@@ -60,3 +60,77 @@ it('follows typed ordered scope-bound root pages', async () => {
   expect((await sdk.roomTaskGet(scope)).rows).toEqual([task('a'), task('b')]);
   expect(calls).toBe(2);
 });
+const listScope = { workspaceId: 'ws', roomId: 'room' };
+const summary = {
+  rootId: 'root',
+  startMessageId: 'message',
+  startSeq: 4,
+  status: 'ready',
+  revision: 1,
+  authority: 'current',
+};
+const listIdentity = {
+  protocol: 1 as const,
+  profileId: 'a'.repeat(64),
+  instanceId: 'a'.repeat(36),
+  capabilities: ['room.tasks-v1', 'room.addressed-history-v1', 'room.task-list-v1'],
+};
+it.each(['room.tasks-v1', 'room.addressed-history-v1', 'room.task-list-v1'])(
+  'refuses list without negotiated %s before sending',
+  async (missing) => {
+    let calls = 0;
+    const sdk = localRoomTasksClient(
+      async () => {
+        calls++;
+        return null;
+      },
+      {
+        ...listIdentity,
+        capabilities: listIdentity.capabilities.filter((c) => c !== missing),
+      },
+    );
+    await expect(sdk.roomTaskList(listScope)).rejects.toThrow('client_upgrade_required');
+    expect(calls).toBe(0);
+  },
+);
+it.each(['foreign', 'workspace', 'overflow', 'cursor', 'duplicate', 'order', 'extra'])(
+  'rejects %s list replies without downgrading',
+  async (mode) => {
+    const page = {
+      ...listScope,
+      workspaceId: mode === 'workspace' ? 'other' : 'ws',
+      roomId: mode === 'foreign' ? 'other' : 'room',
+      roots:
+        mode === 'overflow' || mode === 'duplicate' || mode === 'order'
+          ? [
+              summary,
+              {
+                ...summary,
+                rootId: mode === 'duplicate' ? 'root' : 'other',
+                startMessageId: 'other',
+                startSeq: mode === 'order' ? 5 : 3,
+              },
+            ]
+          : [{ ...summary, ...(mode === 'extra' ? { prompt: 'secret' } : {}) }],
+      nextBeforeSeq: null,
+    };
+    const sdk = localRoomTasksClient(async () => page, listIdentity);
+    await expect(
+      sdk.roomTaskList({
+        ...listScope,
+        limit: mode === 'overflow' ? 1 : 50,
+        beforeSeq: mode === 'cursor' ? 4 : 6,
+      }),
+    ).rejects.toThrow('invalid_frame');
+  },
+);
+it('sends one bounded exclusive list request and preserves the typed page', async () => {
+  const q = { ...listScope, beforeSeq: 5, limit: 1 };
+  const page = { ...listScope, roots: [summary], nextBeforeSeq: 4 };
+  const sdk = localRoomTasksClient(async (method, params) => {
+    expect(method).toBe('roomTasks.list');
+    expect(params).toEqual(q);
+    return page;
+  }, listIdentity);
+  expect(await sdk.roomTaskList(q)).toEqual(page);
+});

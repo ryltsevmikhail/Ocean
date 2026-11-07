@@ -12,6 +12,7 @@ import {
   type RoomRunReadPort,
 } from '@runnets/application';
 import {
+  isRoomTaskList,
   isRoomTaskStart,
   isRoomTaskGet,
   isRoomTaskStop,
@@ -70,6 +71,13 @@ export class RuntimeRoomTasks {
     if (!context.roomTasks || !context.addressedHistory)
       return { error: { code: 'client_upgrade_required' } };
     try {
+      if (method === 'roomTasks.list') {
+        if (!context.roomTaskList) return { error: { code: 'client_upgrade_required' } };
+        if (!isRoomTaskList(params)) return { error: { code: 'invalid_params' } };
+        return {
+          result: this.#deps.store.atomic((tx) => tx.roomTasks!.list(params, this.#deps.ownerId)),
+        };
+      }
       if (method === 'roomTasks.start' && isRoomTaskStart(params)) {
         const replay = this.#deps.store.atomic((tx) => tx.receipt(params.requestId) !== null);
         if (this.#draining && !replay) return { error: { code: 'runtime_draining' } };

@@ -15,6 +15,11 @@ it.each([
     accepted: true,
   },
   { label: 'minimal non-plugin peer', capabilities: [], accepted: true },
+  {
+    label: 'D peer without task list',
+    capabilities: ['room.tasks-v1', 'room.addressed-history-v1'],
+    accepted: true,
+  },
 ])(
   'checks $label during hello before any command or effect',
   async ({ capabilities, accepted }) => {
@@ -90,7 +95,10 @@ it.each([
         await expect(peer?.listModelConnections()).rejects.toThrow(
           'model_runtime_upgrade_required',
         );
-        if (capabilities.length === 0)
+        await expect(peer?.roomTaskList({ workspaceId: 'ws', roomId: 'room' })).rejects.toThrow(
+          'client_upgrade_required',
+        );
+        if (capabilities.length === 0 || capabilities.includes('room.tasks-v1'))
           expect(await peer?.history({ workspaceId: 'ws', roomId: 'room' })).toEqual([
             {
               workspaceId: 'ws',
@@ -117,7 +125,11 @@ it.each([
           ]);
         peer?.close();
       } else await expect(connected).rejects.toThrow('plugin_runtime_upgrade_required');
-      expect(methods).toEqual(capabilities.length === 0 ? ['hello', 'history.list'] : ['hello']);
+      expect(methods).toEqual(
+        capabilities.length === 0 || capabilities.includes('room.tasks-v1')
+          ? ['hello', 'history.list']
+          : ['hello'],
+      );
       expect(hellos).toEqual([
         {
           ...descriptor,
@@ -128,6 +140,7 @@ it.each([
             'service.authority-v2',
             'room.addressed-history-v1',
             'room.tasks-v1',
+            'room.task-list-v1',
           ],
         },
       ]);

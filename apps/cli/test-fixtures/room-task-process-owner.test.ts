@@ -6,6 +6,8 @@ import { roomTaskHostFixture } from './room-task-host.ts';
 import { serve } from './model-process-rpc.ts';
 import { join } from 'node:path';
 import { Socket } from 'node:net';
+import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 const { startLocalRuntime } = (await import(
   new URL('../dist/local-runtime/host.js', import.meta.url).href
 )) as typeof ModuleType1;
@@ -129,6 +131,33 @@ serve(async (method) => {
   if (method === 'drop-stop') {
     drop = 'stop';
     return true;
+  }
+  if (method === 'snapshot') {
+    const db = new DatabaseSync(join(f.profile, 'runtime.sqlite'), { readOnly: true });
+    try {
+      db.exec('BEGIN');
+      const hash = createHash('sha256');
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        .all();
+      for (const row of tables) {
+        const name = String(row['name']);
+        hash.update(name);
+        hash.update(
+          JSON.stringify(
+            db.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '" ORDER BY rowid').all(),
+          ),
+        );
+      }
+      db.exec('COMMIT');
+      return {
+        durable: hash.digest('hex'),
+        providerRequests: f.requests.length,
+        metadataRequests: f.metadata.length,
+      };
+    } finally {
+      db.close();
+    }
   }
   if (method === 'requests') return f.requests;
   if (method === 'attempts') return outage.attempts;

@@ -12,6 +12,7 @@ import {
   isLocalRuntimeRequest,
   LOCAL_MODEL_METHODS,
   LOCAL_ROOM_TASKS,
+  LOCAL_ROOM_TASK_LIST,
   LOCAL_SERVICE_AUTHORITY,
   LOCAL_MODEL_CONNECTIONS,
   LOCAL_SERVICE_CONFIRMATIONS,
@@ -90,6 +91,13 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
           models: features.includes(LOCAL_MODEL_CONNECTIONS),
           serviceConfirmations: features.includes(LOCAL_SERVICE_CONFIRMATIONS),
           addressedHistory: features.includes(LOCAL_ADDRESSED_HISTORY),
+          roomTaskList:
+            features.includes(LOCAL_ROOM_TASK_LIST) &&
+            features.includes(LOCAL_ROOM_TASKS) &&
+            features.includes(LOCAL_ADDRESSED_HISTORY) &&
+            operations.identity.capabilities.includes(LOCAL_ROOM_TASKS) &&
+            operations.identity.capabilities.includes(LOCAL_ROOM_TASK_LIST) &&
+            operations.identity.capabilities.includes(LOCAL_ADDRESSED_HISTORY),
           roomTasks:
             features.includes(LOCAL_ROOM_TASKS) &&
             features.includes(LOCAL_ADDRESSED_HISTORY) &&
@@ -107,6 +115,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             context.serviceConfirmations,
             context.addressedHistory,
             context.roomTasks,
+            context.roomTaskList,
           ),
         });
         return;
@@ -132,6 +141,7 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             context.serviceConfirmations,
             context.addressedHistory,
             context.roomTasks,
+            context.roomTaskList,
           ),
         });
         return;
@@ -148,6 +158,10 @@ export async function listenLocalRuntime(operations: LifecycleOperations, layout
             reject('stop_incomplete');
             socket.end();
           });
+        return;
+      }
+      if (method === 'roomTasks.list' && !context.roomTaskList) {
+        reject('client_upgrade_required');
         return;
       }
       if (method.startsWith('roomTasks.') && !context.roomTasks) {

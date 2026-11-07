@@ -38,6 +38,7 @@ export async function oldHosts() {
         'service.authority-v2',
         'room.addressed-history-v1',
         'room.tasks-v1',
+        'room.task-list-v1',
       ]);
       assert.deepEqual(
         observed.methods,

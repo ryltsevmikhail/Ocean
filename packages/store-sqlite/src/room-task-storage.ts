@@ -1,3 +1,4 @@
+import { roomTaskList } from './room-task-list.js';
 import type { RoomHostScope } from '@runnets/application';
 import { changesetStorage } from './changeset-storage.js';
 import { chatStorage } from './chat-storage.js';
@@ -167,6 +168,7 @@ export function roomTaskStorage(
     authorizeModel: (run, at) => roomHostModelAllowed(db, host, run, at),
     counts: (id) => roomHostCounts(db, id),
     projection: (id) => roomHostProjection(db, id),
+    list: (input, ownerId) => roomTaskList(db, host, input, ownerId),
     roots: () =>
       db
         .prepare('SELECT id FROM ocean_room_tasks WHERE id=root_id ORDER BY id COLLATE BINARY')
